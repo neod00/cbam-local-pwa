@@ -10,6 +10,7 @@ const pageTitles: Record<string, string> = {
     '/products': '품목 관리',
     '/periods': '보고기간',
     '/processes': '생산공정',
+    '/source-streams': '배출원 자료',
     '/precursors': '구매 전구물질',
     '/upload': '자료 업로드',
     '/results': '산정결과',

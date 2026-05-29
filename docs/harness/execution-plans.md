@@ -42,10 +42,11 @@ Completed:
 - Corrected EU Export writes to target unlocked official template input cells and documented the current export map.
 - Added first-pass `A_InstData` export for reporting-period dates and basic installation identity.
 - Expanded the installation model and UI for `A_InstData` address/contact fields, including local/internal and English installation names.
+- Added the source-stream data model and Korean-first `배출원 자료` screen for future `B_EmInst` and `C_Emissions&Energy` export work.
 
 Next:
 
-- Add a dedicated source-stream and energy model before writing `B_EmInst` and `C_Emissions&Energy`.
+- Map unlocked `B_EmInst` and `C_Emissions&Energy` cells against the official workbook before writing source-stream data into the EU template.
 
 ## Decision Log
 

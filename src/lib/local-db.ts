@@ -3,6 +3,7 @@ export type StoreName =
   | "products"
   | "periods"
   | "processes"
+  | "source_streams"
   | "precursors"
   | "settings";
 
@@ -61,6 +62,23 @@ export interface ProductionProcess extends LocalEntity {
   electricity_ef_tco2e_per_mwh: number;
 }
 
+export interface SourceStream extends LocalEntity {
+  period_id?: string;
+  process_id?: string;
+  name: string;
+  stream_type: "FUEL" | "PROCESS_MATERIAL" | "OTHER";
+  method: string;
+  activity_data: number;
+  activity_unit: string;
+  ncv_gj_per_unit: number;
+  emission_factor_tco2e_per_unit: number;
+  oxidation_factor: number;
+  conversion_factor: number;
+  fossil_fraction: number;
+  biomass_fraction: number;
+  source: string;
+}
+
 export interface PurchasedPrecursor extends LocalEntity {
   period_id?: string;
   process_id?: string;
@@ -103,17 +121,19 @@ type StoreEntityMap = {
   products: Product;
   periods: ReportingPeriod;
   processes: ProductionProcess;
+  source_streams: SourceStream;
   precursors: PurchasedPrecursor;
   settings: AppSetting;
 };
 
 const DB_NAME = "cbam-local";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE_NAMES: StoreName[] = [
   "installations",
   "products",
   "periods",
   "processes",
+  "source_streams",
   "precursors",
   "settings",
 ];
@@ -249,6 +269,7 @@ export async function exportLocalBackup(): Promise<CbamBackupFile> {
     products: await listLocalItems("products"),
     periods: await listLocalItems("periods"),
     processes: await listLocalItems("processes"),
+    source_streams: await listLocalItems("source_streams"),
     precursors: await listLocalItems("precursors"),
     settings: await listLocalItems("settings"),
   };
@@ -265,6 +286,7 @@ export async function exportLocalBackup(): Promise<CbamBackupFile> {
         products: data.products.length,
         periods: data.periods.length,
         processes: data.processes.length,
+        source_streams: data.source_streams.length,
         precursors: data.precursors.length,
         settings: data.settings.length,
       },
@@ -304,6 +326,7 @@ export function parseBackupFile(content: string): CbamBackupFile {
         products: data.products?.length ?? 0,
         periods: data.periods?.length ?? 0,
         processes: data.processes?.length ?? 0,
+        source_streams: data.source_streams?.length ?? 0,
         precursors: data.precursors?.length ?? 0,
         settings: data.settings?.length ?? 0,
       },
@@ -349,11 +372,12 @@ export async function clearLocalData(): Promise<void> {
 }
 
 export async function seedLocalData(): Promise<void> {
-  const [installations, products, periods, processes, precursors] = await Promise.all([
+  const [installations, products, periods, processes, sourceStreams, precursors] = await Promise.all([
     listLocalItems("installations"),
     listLocalItems("products"),
     listLocalItems("periods"),
     listLocalItems("processes"),
+    listLocalItems("source_streams"),
     listLocalItems("precursors"),
   ]);
 
@@ -442,12 +466,33 @@ export async function seedLocalData(): Promise<void> {
         default_value_justification: "",
       });
     }
+
+    if (sourceStreams.length === 0) {
+      await createLocalItem("source_streams", {
+        period_id: periodId,
+        process_id: processId,
+        name: "Natural gas combustion",
+        stream_type: "FUEL",
+        method: "Standard method",
+        activity_data: 250,
+        activity_unit: "MWh",
+        ncv_gj_per_unit: 3.6,
+        emission_factor_tco2e_per_unit: 0.202,
+        oxidation_factor: 1,
+        conversion_factor: 1,
+        fossil_fraction: 1,
+        biomass_fraction: 0,
+        source: "Monthly fuel invoice",
+      });
+    }
   }
 
-  const [currentInstallations, currentProducts, currentProcesses, currentPrecursors] = await Promise.all([
+  const [currentInstallations, currentProducts, currentPeriods, currentProcesses, currentSourceStreams, currentPrecursors] = await Promise.all([
     listLocalItems("installations"),
     listLocalItems("products"),
+    listLocalItems("periods"),
     listLocalItems("processes"),
+    listLocalItems("source_streams"),
     listLocalItems("precursors"),
   ]);
   const demoInstallation = currentInstallations.find((installation) => installation.name === "Main Factory A");
@@ -467,6 +512,7 @@ export async function seedLocalData(): Promise<void> {
     });
   }
   const defaultProduct = currentProducts.find((product) => product.name === "Hot Rolled Coil") ?? currentProducts[0];
+  const defaultPeriod = currentPeriods.find((period) => period.name === "2024 Annual") ?? currentPeriods[0];
   const demoProcess = currentProcesses.find((process) => process.name === "Rolling and finishing");
 
   if (defaultProduct && demoProcess && !demoProcess.product_id) {
@@ -483,6 +529,34 @@ export async function seedLocalData(): Promise<void> {
       ...demoPrecursor,
       product_id: demoPrecursor.product_id ?? defaultProduct.id,
       process_id: demoPrecursor.process_id ?? demoProcess?.id,
+    });
+  }
+
+  const demoSourceStream = currentSourceStreams.find((sourceStream) => sourceStream.name === "Natural gas combustion");
+
+  if (currentSourceStreams.length === 0 && demoProcess) {
+    await createLocalItem("source_streams", {
+      period_id: defaultPeriod?.id,
+      process_id: demoProcess.id,
+      name: "Natural gas combustion",
+      stream_type: "FUEL",
+      method: "Standard method",
+      activity_data: 250,
+      activity_unit: "MWh",
+      ncv_gj_per_unit: 3.6,
+      emission_factor_tco2e_per_unit: 0.202,
+      oxidation_factor: 1,
+      conversion_factor: 1,
+      fossil_fraction: 1,
+      biomass_fraction: 0,
+      source: "Monthly fuel invoice",
+    });
+  }
+
+  if (demoSourceStream && !demoSourceStream.process_id) {
+    await updateLocalItem("source_streams", {
+      ...demoSourceStream,
+      process_id: demoProcess?.id,
     });
   }
 }

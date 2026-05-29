@@ -23,22 +23,23 @@ The app UI may localize these concepts into Korean, but any EU submission/export
 - `ReportingPeriod`: period lifecycle, currently DRAFT/READY/CALCULATED.
 - `Product`: HS72/HS73 product master data.
 - `ProductionProcess`: early `D_Processes` model for output quantity, direct attributable emissions, electricity, and production route.
+- `SourceStream`: early `B_EmInst`/`C_Emissions&Energy` model for source-stream activity data, units, NCV, emission factors, correction factors, fractions, and evidence source.
 - `PurchasedPrecursor`: early `E_PurchPrec` model for consumed precursor quantities and direct/indirect SEE values.
 - `CalculationResult`: early direct/indirect/precursor/total SEE shape.
 
 ## Next Domain Concepts To Add
 
-1. Source stream
-   - Template anchor: `B_EmInst`.
-   - Needs method, activity data, unit, NCV, EF, carbon content, fossil fraction, biomass fraction, emissions.
-
-2. CN code master
+1. CN code master
    - Template/reference anchors: `c_CodeLists`, `Parameters_CNCodes`, `CBAM Self Assessment Tool Version 1.1.xlsx`, `CN CBAM codes.pdf`.
    - Needs sector, aggregated category, CN code, description, direct/indirect applicability.
 
-3. Process refinements
+2. Process refinements
    - Template anchor: `D_Processes`.
    - Needs heat, waste gas, internal consumption matrix, and quality warnings.
+
+3. Source-stream export mapping
+   - Template anchors: `B_EmInst`, `C_Emissions&Energy`.
+   - Needs official unlocked-cell mapping before writing source stream data into the EU workbook.
 
 ## Calculation Principle
 

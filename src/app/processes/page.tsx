@@ -10,6 +10,7 @@ import {
     PurchasedPrecursor,
     ReportingPeriod,
     seedLocalData,
+    SourceStream,
     updateLocalItem,
 } from '@/lib/local-db';
 import { Factory, Gauge, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
@@ -46,6 +47,7 @@ function formatNumber(value: number) {
 export default function ProcessesPage() {
     const [processes, setProcesses] = useState<ProductionProcess[]>([]);
     const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
+    const [sourceStreams, setSourceStreams] = useState<SourceStream[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
     const [loading, setLoading] = useState(true);
@@ -58,11 +60,12 @@ export default function ProcessesPage() {
         async function loadData() {
             setLoading(true);
             await seedLocalData();
-            const [processData, productData, periodData, precursorData] = await Promise.all([
+            const [processData, productData, periodData, precursorData, sourceStreamData] = await Promise.all([
                 listLocalItems('processes'),
                 listLocalItems('products'),
                 listLocalItems('periods'),
                 listLocalItems('precursors'),
+                listLocalItems('source_streams'),
             ]);
             const sortedProcesses = processData.sort((a, b) => b.created_at.localeCompare(a.created_at));
             const editProcessId = new URLSearchParams(window.location.search).get('edit');
@@ -70,6 +73,7 @@ export default function ProcessesPage() {
 
             setProcesses(sortedProcesses);
             setPrecursors(precursorData);
+            setSourceStreams(sourceStreamData);
             setProducts(productData.sort((a, b) => a.name.localeCompare(b.name)));
             setPeriods(periodData.sort((a, b) => b.start_date.localeCompare(a.start_date)));
             if (editProcess) {
@@ -247,15 +251,17 @@ export default function ProcessesPage() {
 
     async function handleDeleteProcess(process: ProductionProcess) {
         const linkedPrecursors = precursors.filter((precursor) => precursor.process_id === process.id);
+        const linkedSourceStreams = sourceStreams.filter((sourceStream) => sourceStream.process_id === process.id);
 
-        if (linkedPrecursors.length > 0) {
+        if (linkedPrecursors.length > 0 || linkedSourceStreams.length > 0) {
             window.alert(
                 [
-                    '이 생산공정은 전구물질 데이터에 연결되어 있어 삭제할 수 없습니다.',
+                    '이 생산공정은 하위 데이터에 연결되어 있어 삭제할 수 없습니다.',
                     '',
                     `연결된 전구물질: ${linkedPrecursors.length}건`,
+                    `연결된 배출원 자료: ${linkedSourceStreams.length}건`,
                     '',
-                    '먼저 전구물질 데이터를 수정하거나 삭제한 뒤 다시 시도하세요.',
+                    '먼저 연결된 전구물질 또는 배출원 자료를 수정하거나 삭제한 뒤 다시 시도하세요.',
                 ].join('\n')
             );
             return;
