@@ -50,26 +50,26 @@ export default function ProductsPage() {
     return (
         <div>
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-gray-900">Products (HS72/73)</h1>
+                <h1 className="text-2xl font-bold text-gray-900">제품 등록(HS72/73)</h1>
                 <button
                     onClick={() => setShowForm(!showForm)}
                     className="flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                 >
                     <Plus className="mr-2 h-4 w-4" />
-                    Add Product
+                    제품 추가
                 </button>
             </div>
             <p className="mt-2 text-sm text-gray-600">
-                Saved locally in this browser. No product or production data is sent to a server.
+                제품과 생산 관련 데이터는 이 브라우저에만 저장되며 서버로 전송되지 않습니다.
             </p>
 
             {/* Add Form */}
             {showForm && (
                 <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <h2 className="mb-4 text-lg font-medium">New Product Registration</h2>
+                    <h2 className="mb-4 text-lg font-medium">신규 제품 등록</h2>
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Name</label>
+                            <label className="block text-sm font-medium text-gray-700">제품명</label>
                             <input
                                 type="text"
                                 required
@@ -79,7 +79,7 @@ export default function ProductsPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">HS Code</label>
+                            <label className="block text-sm font-medium text-gray-700">HS 코드</label>
                             <input
                                 type="text"
                                 required
@@ -89,18 +89,18 @@ export default function ProductsPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">HS Group</label>
+                            <label className="block text-sm font-medium text-gray-700">HS 그룹</label>
                             <select
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                 value={newItem.hs_group}
                                 onChange={(e) => setNewItem({ ...newItem, hs_group: e.target.value as HsGroup })}
                             >
-                                <option value="72">HS 72 (Iron & Steel)</option>
-                                <option value="73">HS 73 (Articles of Iron & Steel)</option>
+                                <option value="72">HS 72 (철강)</option>
+                                <option value="73">HS 73 (철강 제품)</option>
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Type Enum</label>
+                            <label className="block text-sm font-medium text-gray-700">제품군 템플릿</label>
                             <select
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                 value={newItem.product_type_enum}
@@ -121,7 +121,7 @@ export default function ProductsPage() {
                                 type="submit"
                                 className="items-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
                             >
-                                Save Product
+                                제품 저장
                             </button>
                         </div>
                     </form>
@@ -136,18 +136,18 @@ export default function ProductsPage() {
                             <table className="min-w-full divide-y divide-gray-300">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Name</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">HS Code</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Group</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Type</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Unit</th>
+                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">제품명</th>
+                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">HS 코드</th>
+                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">그룹</th>
+                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">제품군</th>
+                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">단위</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200 bg-white">
                                     {loading ? (
-                                        <tr><td colSpan={5} className="p-4 text-center">Loading...</td></tr>
+                                        <tr><td colSpan={5} className="p-4 text-center">불러오는 중...</td></tr>
                                     ) : products.length === 0 ? (
-                                        <tr><td colSpan={5} className="p-4 text-center text-gray-500">No products found.</td></tr>
+                                        <tr><td colSpan={5} className="p-4 text-center text-gray-500">등록된 제품이 없습니다.</td></tr>
                                     ) : (
                                         products.map((product) => (
                                             <tr key={product.id}>

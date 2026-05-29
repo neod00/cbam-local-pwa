@@ -27,6 +27,8 @@ CBAM Local is a free, local-first PWA that helps companies calculate and organiz
 - Calculation results must be reproducible from input snapshots and version metadata.
 - EU template compatibility is a core workflow, not an export afterthought.
 - The app should be understandable by non-IT environmental, ESG, production, and sales support teams.
+- The app UI is Korean-first for domestic SME/mid-market users. English should appear only for official EU terms, abbreviations, or template references where it improves accuracy.
+- EU submission templates must preserve the original workbook structure, sheet names, field labels, formulas, and language. Localized UI labels must not modify official EU template artifacts.
 
 ## Non-Goals For The PWA Edition
 

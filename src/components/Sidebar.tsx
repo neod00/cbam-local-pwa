@@ -16,15 +16,15 @@ import {
 import clsx from 'clsx';
 
 const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home },
-    { name: 'Products (HS72/73)', href: '/products', icon: Package },
-    { name: 'Periods', href: '/periods', icon: Calendar },
-    { name: 'Processes', href: '/processes', icon: Workflow },
-    { name: 'Precursors', href: '/precursors', icon: Boxes },
-    { name: 'Data Upload', href: '/upload', icon: Upload },
-    { name: 'Results', href: '/results', icon: BarChart },
-    { name: 'Installations', href: '/installations', icon: Settings },
-    { name: 'Data Safety', href: '/settings', icon: ShieldCheck },
+    { name: '대시보드', href: '/', icon: Home },
+    { name: '제품(HS72/73)', href: '/products', icon: Package },
+    { name: '보고기간', href: '/periods', icon: Calendar },
+    { name: '생산공정', href: '/processes', icon: Workflow },
+    { name: '구매 전구물질', href: '/precursors', icon: Boxes },
+    { name: '자료 업로드', href: '/upload', icon: Upload },
+    { name: '산정결과', href: '/results', icon: BarChart },
+    { name: '사업장', href: '/installations', icon: Settings },
+    { name: '데이터 안전', href: '/settings', icon: ShieldCheck },
 ];
 
 export default function Sidebar() {
@@ -33,7 +33,7 @@ export default function Sidebar() {
     return (
         <div className="flex h-full w-64 flex-col bg-gray-900 text-white">
             <div className="flex h-16 items-center justify-center border-b border-gray-800">
-                <h1 className="text-xl font-bold">CBAM Platform</h1>
+                <h1 className="text-xl font-bold">CBAM Local</h1>
             </div>
             <nav className="flex-1 space-y-1 px-2 py-4">
                 {navigation.map((item) => {
@@ -63,8 +63,8 @@ export default function Sidebar() {
             <div className="border-t border-gray-800 p-4">
                 <div className="flex items-center">
                     <div className="ml-3">
-                        <p className="text-sm font-medium text-white">User</p>
-                        <p className="text-xs text-gray-400">user@example.com</p>
+                        <p className="text-sm font-medium text-white">로컬 사용자</p>
+                        <p className="text-xs text-gray-400">서버 전송 없음</p>
                     </div>
                 </div>
             </div>

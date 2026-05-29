@@ -15,6 +15,7 @@ Completed:
 - Created this harness documentation set for agent-first development.
 - Added Production Processes local data model and UI, mapped to EU template `D_Processes`.
 - Added Purchased Precursors local data model and UI, mapped to EU template `E_PurchPrec`.
+- Set Korean-first UI direction for domestic SME/mid-market users while preserving original EU submission template language and workbook structure.
 
 Next:
 

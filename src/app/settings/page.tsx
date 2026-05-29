@@ -13,7 +13,7 @@ import { AlertTriangle, Database, Download, FileUp, ShieldCheck, Trash2 } from '
 
 function formatDateTime(value?: string) {
     if (!value) {
-        return 'Not yet backed up';
+        return '아직 백업하지 않음';
     }
 
     return new Intl.DateTimeFormat(undefined, {
@@ -26,6 +26,15 @@ function createBackupFilename() {
     const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
     return `cbam-local-backup-${stamp}.cbam`;
 }
+
+const storeLabels: Record<string, string> = {
+    installations: '사업장',
+    products: '제품',
+    periods: '보고기간',
+    processes: '생산공정',
+    precursors: '구매 전구물질',
+    settings: '설정',
+};
 
 export default function SettingsPage() {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -62,7 +71,7 @@ export default function SettingsPage() {
 
         window.localStorage.setItem('cbam-local:last-backup-at', backup.manifest.exported_at);
         setLastBackupAt(backup.manifest.exported_at);
-        setMessage('Backup file exported. Store it in a secure company folder.');
+        setMessage('백업 파일을 내보냈습니다. 회사의 안전한 폴더에 보관하세요.');
     }
 
     async function handleFileSelected(event: ChangeEvent<HTMLInputElement>) {
@@ -76,11 +85,11 @@ export default function SettingsPage() {
             const parsed = parseBackupFile(content);
             setBackupPreview(parsed);
             setImportContent(content);
-            setMessage('Backup file loaded. Review the counts before restoring.');
+            setMessage('백업 파일을 불러왔습니다. 복원 전 데이터 건수를 확인하세요.');
         } catch (error) {
             setBackupPreview(null);
             setImportContent('');
-            setMessage(error instanceof Error ? error.message : 'Could not read the backup file.');
+            setMessage(error instanceof Error ? error.message : '백업 파일을 읽을 수 없습니다.');
         } finally {
             event.target.value = '';
         }
@@ -92,7 +101,7 @@ export default function SettingsPage() {
         }
 
         const confirmed = window.confirm(
-            'Restore this .cbam backup? This replaces all local CBAM Local data in this browser.'
+            '이 .cbam 백업을 복원할까요? 현재 브라우저의 모든 CBAM Local 데이터가 백업 내용으로 교체됩니다.'
         );
 
         if (!confirmed) {
@@ -100,14 +109,14 @@ export default function SettingsPage() {
         }
 
         await importLocalBackup(parseBackupFile(importContent));
-        setMessage('Backup restored. Reloading local project data is recommended.');
+        setMessage('백업을 복원했습니다. 화면을 새로고침해 로컬 데이터를 다시 불러오는 것을 권장합니다.');
         setBackupPreview(null);
         setImportContent('');
     }
 
     async function handleClearData() {
         const confirmed = window.confirm(
-            'Delete all local CBAM Local data from this browser? Export a .cbam backup first if you need to keep it.'
+            '이 브라우저의 모든 CBAM Local 데이터를 삭제할까요? 보관이 필요하면 먼저 .cbam 백업을 내보내세요.'
         );
 
         if (!confirmed) {
@@ -116,16 +125,16 @@ export default function SettingsPage() {
 
         await clearLocalData();
         await seedLocalData();
-        setMessage('Local data was cleared and demo starter data was recreated.');
+        setMessage('로컬 데이터를 삭제하고 시작용 예시 데이터를 다시 생성했습니다.');
     }
 
     return (
         <div className="space-y-8">
             <div>
-                <h1 className="text-2xl font-bold text-gray-900">Settings & Data Safety</h1>
+                <h1 className="text-2xl font-bold text-gray-900">설정 및 데이터 안전</h1>
                 <p className="mt-2 max-w-3xl text-sm text-gray-600">
-                    CBAM Local stores company data in this browser&apos;s local database. Use .cbam backups
-                    for long-term retention, PC migration, and audit support.
+                    CBAM Local은 기업 데이터를 이 브라우저의 로컬 DB에 저장합니다. 장기 보관, PC 교체,
+                    검증 대응을 위해 .cbam 백업을 사용하세요.
                 </p>
             </div>
 
@@ -139,42 +148,41 @@ export default function SettingsPage() {
                 <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                     <div className="flex items-center gap-3">
                         <ShieldCheck className="h-5 w-5 text-green-600" />
-                        <h2 className="text-base font-semibold text-gray-900">Server transfer</h2>
+                        <h2 className="text-base font-semibold text-gray-900">서버 전송</h2>
                     </div>
                     <p className="mt-3 text-sm text-gray-600">
-                        Production, precursor, installation, and result data are handled locally in this PWA
-                        edition. Do not enter real company data into shared demo deployments.
+                        생산, 전구물질, 사업장, 결과 데이터는 이 PWA 버전에서 로컬로 처리됩니다.
+                        공유 데모 환경에는 실제 기업 데이터를 입력하지 마세요.
                     </p>
                 </div>
 
                 <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                     <div className="flex items-center gap-3">
                         <Database className="h-5 w-5 text-sky-600" />
-                        <h2 className="text-base font-semibold text-gray-900">Local storage</h2>
+                        <h2 className="text-base font-semibold text-gray-900">로컬 저장</h2>
                     </div>
                     <p className="mt-3 text-sm text-gray-600">
-                        Browser data cleanup, profile reset, or domain changes can remove local data. Keep a
-                        current .cbam backup outside the browser.
+                        브라우저 데이터 삭제, 프로필 초기화, 도메인 변경 시 로컬 데이터가 사라질 수 있습니다.
+                        최신 .cbam 백업을 브라우저 밖에 보관하세요.
                     </p>
                 </div>
 
                 <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                     <div className="flex items-center gap-3">
                         <AlertTriangle className="h-5 w-5 text-amber-600" />
-                        <h2 className="text-base font-semibold text-gray-900">Last backup</h2>
+                        <h2 className="text-base font-semibold text-gray-900">마지막 백업</h2>
                     </div>
                     <p className="mt-3 text-sm font-medium text-gray-900">{formatDateTime(lastBackupAt)}</p>
-                    <p className="mt-1 text-sm text-gray-600">Back up after each material data update.</p>
+                    <p className="mt-1 text-sm text-gray-600">중요한 데이터 변경 후에는 백업하세요.</p>
                 </div>
             </section>
 
             <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
-                        <h2 className="text-lg font-semibold text-gray-900">Export .cbam backup</h2>
+                        <h2 className="text-lg font-semibold text-gray-900">.cbam 백업 내보내기</h2>
                         <p className="mt-1 text-sm text-gray-600">
-                            Download all local installations, products, reporting periods, settings, and future
-                            calculation data into one portable backup file.
+                            사업장, 제품, 보고기간, 생산공정, 전구물질, 설정과 향후 산정 데이터를 하나의 백업 파일로 내려받습니다.
                         </p>
                     </div>
                     <button
@@ -182,7 +190,7 @@ export default function SettingsPage() {
                         className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                     >
                         <Download className="mr-2 h-4 w-4" />
-                        Export Backup
+                        백업 내보내기
                     </button>
                 </div>
             </section>
@@ -190,10 +198,9 @@ export default function SettingsPage() {
             <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div>
-                        <h2 className="text-lg font-semibold text-gray-900">Import .cbam backup</h2>
+                        <h2 className="text-lg font-semibold text-gray-900">.cbam 백업 가져오기</h2>
                         <p className="mt-1 text-sm text-gray-600">
-                            Load a backup file, review its contents, then restore it into this browser. Restore
-                            replaces the current local data.
+                            백업 파일을 불러와 내용을 확인한 뒤 이 브라우저에 복원합니다. 복원하면 현재 로컬 데이터가 교체됩니다.
                         </p>
                     </div>
                     <div className="flex gap-3">
@@ -209,43 +216,43 @@ export default function SettingsPage() {
                             className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                         >
                             <FileUp className="mr-2 h-4 w-4" />
-                            Select Backup
+                            백업 선택
                         </button>
                         <button
                             onClick={handleImport}
                             disabled={!backupPreview}
                             className="inline-flex items-center justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                         >
-                            Restore
+                            복원
                         </button>
                     </div>
                 </div>
 
                 {backupPreview && (
                     <div className="mt-5 rounded-md border border-gray-200 bg-gray-50 p-4">
-                        <h3 className="text-sm font-semibold text-gray-900">Backup preview</h3>
+                        <h3 className="text-sm font-semibold text-gray-900">백업 미리보기</h3>
                         <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
                             <div>
-                                <dt className="text-gray-500">Exported</dt>
+                                <dt className="text-gray-500">내보낸 시각</dt>
                                 <dd className="font-medium text-gray-900">
                                     {formatDateTime(backupPreview.manifest.exported_at)}
                                 </dd>
                             </div>
                             <div>
-                                <dt className="text-gray-500">Format</dt>
+                                <dt className="text-gray-500">형식</dt>
                                 <dd className="font-medium text-gray-900">
                                     v{backupPreview.manifest.format_version}
                                 </dd>
                             </div>
                             <div>
-                                <dt className="text-gray-500">Records</dt>
+                                <dt className="text-gray-500">데이터 건수</dt>
                                 <dd className="font-medium text-gray-900">{totalPreviewItems}</dd>
                             </div>
                         </dl>
                         <div className="mt-4 grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
                             {Object.entries(backupPreview.manifest.counts).map(([store, count]) => (
                                 <div key={store} className="rounded border border-gray-200 bg-white px-3 py-2">
-                                    <div className="text-gray-500">{store}</div>
+                                    <div className="text-gray-500">{storeLabels[store] ?? store}</div>
                                     <div className="font-semibold text-gray-900">{count}</div>
                                 </div>
                             ))}
@@ -257,10 +264,9 @@ export default function SettingsPage() {
             <section className="rounded-lg border border-red-200 bg-white p-6 shadow-sm">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
-                        <h2 className="text-lg font-semibold text-red-900">Clear local data</h2>
+                        <h2 className="text-lg font-semibold text-red-900">로컬 데이터 삭제</h2>
                         <p className="mt-1 text-sm text-red-700">
-                            Removes all CBAM Local data from this browser. Export a backup first if this data
-                            must be retained.
+                            이 브라우저의 모든 CBAM Local 데이터를 삭제합니다. 보관이 필요하면 먼저 백업을 내보내세요.
                         </p>
                     </div>
                     <button
@@ -268,7 +274,7 @@ export default function SettingsPage() {
                         className="inline-flex items-center justify-center rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
                     >
                         <Trash2 className="mr-2 h-4 w-4" />
-                        Clear Data
+                        데이터 삭제
                     </button>
                 </div>
             </section>

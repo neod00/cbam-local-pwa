@@ -33,25 +33,25 @@ export default function InstallationsPage() {
     return (
         <div>
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-gray-900">Installations</h1>
+                <h1 className="text-2xl font-bold text-gray-900">사업장</h1>
                 <button
                     onClick={() => setShowForm(!showForm)}
                     className="flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                 >
                     <Plus className="mr-2 h-4 w-4" />
-                    Add Installation
+                    사업장 추가
                 </button>
             </div>
             <p className="mt-2 text-sm text-gray-600">
-                Installation data stays in the browser local database for this PWA edition.
+                사업장 정보는 이 PWA 버전에서 브라우저 로컬 DB에 저장됩니다.
             </p>
 
             {showForm && (
                 <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <h2 className="mb-4 text-lg font-medium">New Installation</h2>
+                    <h2 className="mb-4 text-lg font-medium">신규 사업장</h2>
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Name</label>
+                            <label className="block text-sm font-medium text-gray-700">사업장명</label>
                             <input
                                 required
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
@@ -60,7 +60,7 @@ export default function InstallationsPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Country</label>
+                            <label className="block text-sm font-medium text-gray-700">국가코드</label>
                             <input
                                 required
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
@@ -74,7 +74,7 @@ export default function InstallationsPage() {
                                 type="submit"
                                 className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
                             >
-                                Save Installation
+                                사업장 저장
                             </button>
                         </div>
                     </form>

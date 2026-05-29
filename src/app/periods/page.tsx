@@ -32,28 +32,34 @@ export default function PeriodsPage() {
         setShowForm(false);
     }
 
+    function formatStatus(status: ReportingPeriod['status']) {
+        if (status === 'DRAFT') return '작성중';
+        if (status === 'READY') return '계산준비';
+        return '계산완료';
+    }
+
     return (
         <div>
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-gray-900">Reporting Periods</h1>
+                <h1 className="text-2xl font-bold text-gray-900">보고기간</h1>
                 <button
                     onClick={() => setShowForm(!showForm)}
                     className="flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                 >
                     <Plus className="mr-2 h-4 w-4" />
-                    New Period
+                    기간 추가
                 </button>
             </div>
             <p className="mt-2 text-sm text-gray-600">
-                Reporting periods are stored locally and will be included in future .cbam backups.
+                보고기간은 로컬에 저장되며 .cbam 백업 파일에 포함됩니다.
             </p>
 
             {showForm && (
                 <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <h2 className="mb-4 text-lg font-medium">New Reporting Period</h2>
+                    <h2 className="mb-4 text-lg font-medium">신규 보고기간</h2>
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Name</label>
+                            <label className="block text-sm font-medium text-gray-700">기간명</label>
                             <input
                                 required
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
@@ -62,7 +68,7 @@ export default function PeriodsPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Start Date</label>
+                            <label className="block text-sm font-medium text-gray-700">시작일</label>
                             <input
                                 required
                                 type="date"
@@ -72,7 +78,7 @@ export default function PeriodsPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">End Date</label>
+                            <label className="block text-sm font-medium text-gray-700">종료일</label>
                             <input
                                 required
                                 type="date"
@@ -86,7 +92,7 @@ export default function PeriodsPage() {
                                 type="submit"
                                 className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
                             >
-                                Save Period
+                                기간 저장
                             </button>
                         </div>
                     </form>
@@ -100,10 +106,10 @@ export default function PeriodsPage() {
                             <table className="min-w-full divide-y divide-gray-300">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Name</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Start Date</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">End Date</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Status</th>
+                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">기간명</th>
+                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">시작일</th>
+                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">종료일</th>
+                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">상태</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200 bg-white">
@@ -114,7 +120,7 @@ export default function PeriodsPage() {
                                             <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{period.end_date}</td>
                                             <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                                                 <span className="inline-flex rounded-full bg-blue-100 px-2 text-xs font-semibold leading-5 text-blue-800">
-                                                    {period.status}
+                                                    {formatStatus(period.status)}
                                                 </span>
                                             </td>
                                         </tr>

@@ -246,7 +246,7 @@ export function parseBackupFile(content: string): CbamBackupFile {
     parsed.manifest.format_version !== 1 ||
     !parsed.data
   ) {
-    throw new Error("Invalid or unsupported .cbam backup file.");
+    throw new Error("유효하지 않거나 지원하지 않는 .cbam 백업 파일입니다.");
   }
 
   const data = parsed.data as Partial<CbamBackupFile["data"]>;
@@ -256,7 +256,7 @@ export function parseBackupFile(content: string): CbamBackupFile {
     }
 
     if (!Array.isArray(data[storeName])) {
-      throw new Error(`Backup file has an invalid ${storeName} data store.`);
+      throw new Error(`백업 파일의 ${storeName} 데이터 저장소 형식이 올바르지 않습니다.`);
     }
   }
 

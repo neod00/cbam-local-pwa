@@ -22,29 +22,29 @@ export default function ResultsPage() {
 
     return (
         <div>
-            <h1 className="text-2xl font-bold text-gray-900">Calculation Results</h1>
+            <h1 className="text-2xl font-bold text-gray-900">산정결과</h1>
 
             <div className="mt-6 rounded-lg bg-white p-6 shadow">
-                <h2 className="text-lg font-medium text-gray-900 mb-4">Demo Result (Client-side Calculation)</h2>
+                <h2 className="text-lg font-medium text-gray-900 mb-4">예시 결과(브라우저 내 산정)</h2>
 
                 <dl className="grid grid-cols-1 gap-5 sm:grid-cols-4">
                     <div className="overflow-hidden rounded-lg bg-gray-50 px-4 py-5 sm:p-6">
-                        <dt className="truncate text-sm font-medium text-gray-500">Total SEE</dt>
+                        <dt className="truncate text-sm font-medium text-gray-500">총 SEE</dt>
                         <dd className="mt-1 text-3xl font-semibold text-gray-900">{result.total_see.toFixed(3)}</dd>
                         <dd className="text-xs text-gray-400">tCO2e/t</dd>
                     </div>
                     <div className="overflow-hidden rounded-lg bg-gray-50 px-4 py-5 sm:p-6">
-                        <dt className="truncate text-sm font-medium text-gray-500">Direct SEE</dt>
+                        <dt className="truncate text-sm font-medium text-gray-500">직접 SEE</dt>
                         <dd className="mt-1 text-3xl font-semibold text-gray-900">{result.direct_see.toFixed(3)}</dd>
                         <dd className="text-xs text-gray-400">tCO2e/t</dd>
                     </div>
                     <div className="overflow-hidden rounded-lg bg-gray-50 px-4 py-5 sm:p-6">
-                        <dt className="truncate text-sm font-medium text-gray-500">Indirect SEE</dt>
+                        <dt className="truncate text-sm font-medium text-gray-500">간접 SEE</dt>
                         <dd className="mt-1 text-3xl font-semibold text-gray-900">{result.indirect_see.toFixed(3)}</dd>
                         <dd className="text-xs text-gray-400">tCO2e/t</dd>
                     </div>
                     <div className="overflow-hidden rounded-lg bg-gray-50 px-4 py-5 sm:p-6">
-                        <dt className="truncate text-sm font-medium text-gray-500">Precursor SEE</dt>
+                        <dt className="truncate text-sm font-medium text-gray-500">전구물질 SEE</dt>
                         <dd className="mt-1 text-3xl font-semibold text-gray-900">{result.precursor_see.toFixed(3)}</dd>
                         <dd className="text-xs text-gray-400">tCO2e/t</dd>
                     </div>

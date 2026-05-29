@@ -42,3 +42,5 @@ For changes touching calculation or domain data:
 - Avoid marketing-style landing pages; this is an operational tool.
 - Prefer dense but readable forms/tables for ESG, production, and compliance users.
 - Keep data safety messaging visible where users handle local data.
+- User-facing app UI should be Korean-first. Keep English only for official EU terms, acronyms, or labels that are intentionally shown for mapping.
+- Do not translate or alter official EU submission template sheets or field labels in exported workbook files.

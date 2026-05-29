@@ -4,8 +4,8 @@ import Sidebar from "@/components/Sidebar";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 
 export const metadata: Metadata = {
-  title: "CBAM Platform",
-  description: "Local-first CBAM Emission Calculation for SME Steel Companies",
+  title: "CBAM Local",
+  description: "국내 중소·중견기업을 위한 로컬 우선 CBAM 내재배출량 산정 도구",
   manifest: "/manifest.webmanifest",
 };
 
@@ -15,7 +15,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full bg-gray-100">
+    <html lang="ko" className="h-full bg-gray-100">
       <body className="h-full">
         <ServiceWorkerRegistration />
         <div className="flex h-full">

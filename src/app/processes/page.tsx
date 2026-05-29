@@ -98,10 +98,9 @@ export default function ProcessesPage() {
         <div>
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Production Processes</h1>
+                    <h1 className="text-2xl font-bold text-gray-900">생산공정</h1>
                     <p className="mt-2 max-w-3xl text-sm text-gray-600">
-                        Capture the EU template D_Processes inputs that drive process-level direct and
-                        indirect SEE attribution.
+                        EU 템플릿의 D_Processes 입력 구조에 맞춰 공정별 생산량, 직접귀속배출, 전력 사용량을 관리합니다.
                     </p>
                 </div>
                 <button
@@ -109,16 +108,16 @@ export default function ProcessesPage() {
                     className="flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                 >
                     <Plus className="mr-2 h-4 w-4" />
-                    Add Process
+                    공정 추가
                 </button>
             </div>
 
             {showForm && (
                 <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <h2 className="mb-4 text-lg font-medium text-gray-900">New Production Process</h2>
+                    <h2 className="mb-4 text-lg font-medium text-gray-900">신규 생산공정</h2>
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Process Name</label>
+                            <label className="block text-sm font-medium text-gray-700">공정명</label>
                             <input
                                 required
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
@@ -127,7 +126,7 @@ export default function ProcessesPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Production Route</label>
+                            <label className="block text-sm font-medium text-gray-700">생산경로(Route)</label>
                             <input
                                 required
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
@@ -138,13 +137,13 @@ export default function ProcessesPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Reporting Period</label>
+                            <label className="block text-sm font-medium text-gray-700">보고기간</label>
                             <select
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
                                 value={newItem.period_id}
                                 onChange={(event) => setNewItem({ ...newItem, period_id: event.target.value })}
                             >
-                                <option value="">Unassigned</option>
+                                <option value="">미지정</option>
                                 {periods.map((period) => (
                                     <option key={period.id} value={period.id}>
                                         {period.name}
@@ -153,13 +152,13 @@ export default function ProcessesPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Linked Product</label>
+                            <label className="block text-sm font-medium text-gray-700">연결 제품</label>
                             <select
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
                                 value={newItem.product_id}
                                 onChange={(event) => setNewItem({ ...newItem, product_id: event.target.value })}
                             >
-                                <option value="">Unassigned</option>
+                                <option value="">미지정</option>
                                 {products.map((product) => (
                                     <option key={product.id} value={product.id}>
                                         {product.name} ({product.hs_code})
@@ -168,7 +167,7 @@ export default function ProcessesPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Output Mass (t)</label>
+                            <label className="block text-sm font-medium text-gray-700">총 생산량(t)</label>
                             <input
                                 required
                                 type="number"
@@ -182,7 +181,7 @@ export default function ProcessesPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Market Output (t)</label>
+                            <label className="block text-sm font-medium text-gray-700">시장 출하량(t)</label>
                             <input
                                 type="number"
                                 min="0"
@@ -195,7 +194,7 @@ export default function ProcessesPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Internal Consumption (t)</label>
+                            <label className="block text-sm font-medium text-gray-700">내부 소비량(t)</label>
                             <input
                                 type="number"
                                 min="0"
@@ -212,7 +211,7 @@ export default function ProcessesPage() {
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700">
-                                Direct Attributable Emissions (tCO2e)
+                                직접귀속배출량(tCO2e)
                             </label>
                             <input
                                 type="number"
@@ -229,7 +228,7 @@ export default function ProcessesPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Electricity (MWh)</label>
+                            <label className="block text-sm font-medium text-gray-700">전력 사용량(MWh)</label>
                             <input
                                 type="number"
                                 min="0"
@@ -243,7 +242,7 @@ export default function ProcessesPage() {
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700">
-                                Electricity EF (tCO2e/MWh)
+                                전력 배출계수(tCO2e/MWh)
                             </label>
                             <input
                                 type="number"
@@ -264,7 +263,7 @@ export default function ProcessesPage() {
                                 type="submit"
                                 className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
                             >
-                                Save Process
+                                공정 저장
                             </button>
                         </div>
                     </form>
@@ -275,26 +274,26 @@ export default function ProcessesPage() {
                 <table className="min-w-full divide-y divide-gray-300">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Process</th>
-                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Route</th>
-                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Period</th>
-                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Product</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Output t</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Direct SEE</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Indirect SEE</th>
+                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">공정</th>
+                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">경로</th>
+                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">보고기간</th>
+                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">제품</th>
+                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">생산량(t)</th>
+                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">직접 SEE</th>
+                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">간접 SEE</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white">
                         {loading ? (
                             <tr>
                                 <td colSpan={7} className="p-4 text-center text-sm text-gray-500">
-                                    Loading...
+                                    불러오는 중...
                                 </td>
                             </tr>
                         ) : processes.length === 0 ? (
                             <tr>
                                 <td colSpan={7} className="p-4 text-center text-sm text-gray-500">
-                                    No production processes found.
+                                    등록된 생산공정이 없습니다.
                                 </td>
                             </tr>
                         ) : (
@@ -319,11 +318,11 @@ export default function ProcessesPage() {
                                             {process.production_route}
                                         </td>
                                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                            {process.period_id ? periodNames.get(process.period_id) ?? 'Unknown' : '-'}
+                                            {process.period_id ? periodNames.get(process.period_id) ?? '알 수 없음' : '-'}
                                         </td>
                                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                                             {process.product_id
-                                                ? productNames.get(process.product_id) ?? 'Unknown'
+                                                ? productNames.get(process.product_id) ?? '알 수 없음'
                                                 : '-'}
                                         </td>
                                         <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">

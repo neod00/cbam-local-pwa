@@ -4,6 +4,8 @@ This project should follow the EU CBAM communication template structure where pr
 
 `CBAM_documents/CBAM Communication template for installations_en_20241213.xlsx`
 
+The app UI may localize these concepts into Korean, but any EU submission/export workbook must preserve the original template structure, sheet names, formulas, and official English labels.
+
 ## EU Template Sheets
 
 - `A_InstData`: installation, reporting period, verifier, aggregated goods, production routes, purchased precursors.

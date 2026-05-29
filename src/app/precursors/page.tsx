@@ -111,10 +111,9 @@ export default function PrecursorsPage() {
         <div>
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Purchased Precursors</h1>
+                    <h1 className="text-2xl font-bold text-gray-900">구매 전구물질</h1>
                     <p className="mt-2 max-w-3xl text-sm text-gray-600">
-                        Capture EU template E_PurchPrec inputs for purchased precursor consumption and
-                        embedded emissions.
+                        EU 템플릿의 E_PurchPrec 입력 구조에 맞춰 구매 전구물질의 소비량과 내재배출량(SEE)을 관리합니다.
                     </p>
                 </div>
                 <button
@@ -122,16 +121,16 @@ export default function PrecursorsPage() {
                     className="flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                 >
                     <Plus className="mr-2 h-4 w-4" />
-                    Add Precursor
+                    전구물질 추가
                 </button>
             </div>
 
             {showForm && (
                 <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <h2 className="mb-4 text-lg font-medium text-gray-900">New Purchased Precursor</h2>
+                    <h2 className="mb-4 text-lg font-medium text-gray-900">신규 구매 전구물질</h2>
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Precursor Name</label>
+                            <label className="block text-sm font-medium text-gray-700">전구물질명</label>
                             <input
                                 required
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
@@ -141,7 +140,7 @@ export default function PrecursorsPage() {
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700">
-                                Aggregated Goods Category
+                                통합 상품군(Aggregated Goods)
                             </label>
                             <input
                                 required
@@ -153,7 +152,7 @@ export default function PrecursorsPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Production Route</label>
+                            <label className="block text-sm font-medium text-gray-700">생산경로(Route)</label>
                             <input
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
                                 value={newItem.production_route}
@@ -163,13 +162,13 @@ export default function PrecursorsPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Reporting Period</label>
+                            <label className="block text-sm font-medium text-gray-700">보고기간</label>
                             <select
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
                                 value={newItem.period_id}
                                 onChange={(event) => setNewItem({ ...newItem, period_id: event.target.value })}
                             >
-                                <option value="">Unassigned</option>
+                                <option value="">미지정</option>
                                 {periods.map((period) => (
                                     <option key={period.id} value={period.id}>
                                         {period.name}
@@ -178,13 +177,13 @@ export default function PrecursorsPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Consumed Process</label>
+                            <label className="block text-sm font-medium text-gray-700">소비 공정</label>
                             <select
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
                                 value={newItem.process_id}
                                 onChange={(event) => setNewItem({ ...newItem, process_id: event.target.value })}
                             >
-                                <option value="">Unassigned</option>
+                                <option value="">미지정</option>
                                 {processes.map((process) => (
                                     <option key={process.id} value={process.id}>
                                         {process.name}
@@ -193,13 +192,13 @@ export default function PrecursorsPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Linked Product</label>
+                            <label className="block text-sm font-medium text-gray-700">연결 제품</label>
                             <select
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
                                 value={newItem.product_id}
                                 onChange={(event) => setNewItem({ ...newItem, product_id: event.target.value })}
                             >
-                                <option value="">Unassigned</option>
+                                <option value="">미지정</option>
                                 {products.map((product) => (
                                     <option key={product.id} value={product.id}>
                                         {product.name} ({product.hs_code})
@@ -208,7 +207,7 @@ export default function PrecursorsPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Purchased Mass (t)</label>
+                            <label className="block text-sm font-medium text-gray-700">구매량(t)</label>
                             <input
                                 type="number"
                                 min="0"
@@ -221,7 +220,7 @@ export default function PrecursorsPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Consumed Mass (t)</label>
+                            <label className="block text-sm font-medium text-gray-700">소비량(t)</label>
                             <input
                                 required
                                 type="number"
@@ -235,7 +234,7 @@ export default function PrecursorsPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Non-CBAM Use (t)</label>
+                            <label className="block text-sm font-medium text-gray-700">비CBAM 용도(t)</label>
                             <input
                                 type="number"
                                 min="0"
@@ -252,7 +251,7 @@ export default function PrecursorsPage() {
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700">
-                                SEE Direct (tCO2e/t)
+                                직접 SEE(tCO2e/t)
                             </label>
                             <input
                                 required
@@ -271,7 +270,7 @@ export default function PrecursorsPage() {
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700">
-                                SEE Indirect (tCO2e/t)
+                                간접 SEE(tCO2e/t)
                             </label>
                             <input
                                 required
@@ -289,7 +288,7 @@ export default function PrecursorsPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Source</label>
+                            <label className="block text-sm font-medium text-gray-700">출처</label>
                             <input
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
                                 value={newItem.source}
@@ -298,7 +297,7 @@ export default function PrecursorsPage() {
                         </div>
                         <div className="md:col-span-3">
                             <label className="block text-sm font-medium text-gray-700">
-                                Default Value Justification
+                                기본값 사용 사유
                             </label>
                             <textarea
                                 rows={3}
@@ -317,7 +316,7 @@ export default function PrecursorsPage() {
                                 type="submit"
                                 className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
                             >
-                                Save Precursor
+                                전구물질 저장
                             </button>
                         </div>
                     </form>
@@ -328,27 +327,27 @@ export default function PrecursorsPage() {
                 <table className="min-w-full divide-y divide-gray-300">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Precursor</th>
-                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Process</th>
-                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Period</th>
-                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Product</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Consumed t</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">SEE Direct</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">SEE Indirect</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">SEE Total</th>
+                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">전구물질</th>
+                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">공정</th>
+                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">보고기간</th>
+                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">제품</th>
+                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">소비량(t)</th>
+                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">직접 SEE</th>
+                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">간접 SEE</th>
+                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">총 SEE</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white">
                         {loading ? (
                             <tr>
                                 <td colSpan={8} className="p-4 text-center text-sm text-gray-500">
-                                    Loading...
+                                    불러오는 중...
                                 </td>
                             </tr>
                         ) : precursors.length === 0 ? (
                             <tr>
                                 <td colSpan={8} className="p-4 text-center text-sm text-gray-500">
-                                    No purchased precursors found.
+                                    등록된 구매 전구물질이 없습니다.
                                 </td>
                             </tr>
                         ) : (
@@ -363,17 +362,17 @@ export default function PrecursorsPage() {
                                         </td>
                                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                                             {precursor.process_id
-                                                ? processNames.get(precursor.process_id) ?? 'Unknown'
+                                                ? processNames.get(precursor.process_id) ?? '알 수 없음'
                                                 : '-'}
                                         </td>
                                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                                             {precursor.period_id
-                                                ? periodNames.get(precursor.period_id) ?? 'Unknown'
+                                                ? periodNames.get(precursor.period_id) ?? '알 수 없음'
                                                 : '-'}
                                         </td>
                                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                                             {precursor.product_id
-                                                ? productNames.get(precursor.product_id) ?? 'Unknown'
+                                                ? productNames.get(precursor.product_id) ?? '알 수 없음'
                                                 : '-'}
                                         </td>
                                         <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">
