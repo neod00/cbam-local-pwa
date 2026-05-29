@@ -5,6 +5,7 @@ import {
     createEuExportFilename,
     createEuTemplateExportCopy,
     downloadBlob,
+    evaluateEuExportReadiness,
     REQUIRED_EU_TEMPLATE_SHEETS,
     validateEuTemplateFile,
     type EuTemplateValidationResult,
@@ -61,6 +62,11 @@ export default function ExportPage() {
             warningCount,
         };
     }, [results]);
+
+    const readiness = useMemo(
+        () => evaluateEuExportReadiness({ processes, precursors, products }),
+        [processes, precursors, products]
+    );
 
     async function handleTemplateFileChange(file: File | undefined) {
         setTemplateFile(file);
@@ -128,7 +134,10 @@ export default function ExportPage() {
                 </div>
                 <div className="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
                     <dt className="truncate text-sm font-medium text-gray-500">검토 경고</dt>
-                    <dd className="mt-1 text-3xl font-semibold text-gray-900">{summary.warningCount}</dd>
+                    <dd className="mt-1 text-3xl font-semibold text-gray-900">
+                        {summary.warningCount + readiness.warningCount}
+                    </dd>
+                    <dd className="text-xs text-gray-400">산정 + Export</dd>
                 </div>
             </dl>
 
@@ -218,7 +227,7 @@ export default function ExportPage() {
                     <button
                         type="button"
                         onClick={handleDownloadCopy}
-                        disabled={!validation?.isValid}
+                        disabled={!validation?.isValid || !readiness.canExportDraft}
                         className="mt-5 inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
                         <Download className="mr-2 h-4 w-4" />
@@ -248,6 +257,49 @@ export default function ExportPage() {
                     </div>
                 </aside>
             </div>
+
+            <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                        <h2 className="text-lg font-semibold text-gray-900">EU 코드 매핑 검토</h2>
+                        <p className="mt-1 text-sm text-gray-600">
+                            제품군, CN/HS 코드, 생산공정/전구물질 연결 상태를 Export 전에 확인합니다.
+                        </p>
+                    </div>
+                    <div className="flex gap-2">
+                        <span className="inline-flex rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20">
+                            오류 {readiness.errorCount}
+                        </span>
+                        <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                            경고 {readiness.warningCount}
+                        </span>
+                    </div>
+                </div>
+
+                {readiness.issues.length === 0 ? (
+                    <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                        현재 로컬 데이터는 Export 매핑 검토를 통과했습니다.
+                    </div>
+                ) : (
+                    <ul className="mt-4 divide-y divide-gray-100 rounded-md border border-gray-200">
+                        {readiness.issues.map((issue, index) => (
+                            <li key={`${issue.area}-${issue.message}-${index}`} className="flex gap-3 px-4 py-3 text-sm">
+                                <AlertTriangle
+                                    className={
+                                        issue.severity === 'error'
+                                            ? 'mt-0.5 h-4 w-4 flex-shrink-0 text-red-600'
+                                            : 'mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600'
+                                    }
+                                />
+                                <div>
+                                    <span className="font-medium text-gray-900">[{issue.area}]</span>{' '}
+                                    <span className="text-gray-700">{issue.message}</span>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </section>
 
             <div className="mt-8 overflow-hidden rounded-lg bg-white shadow ring-1 ring-black ring-opacity-5">
                 <table className="min-w-full divide-y divide-gray-300">

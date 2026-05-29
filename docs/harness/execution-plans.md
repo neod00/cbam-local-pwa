@@ -20,10 +20,11 @@ Completed:
 - Added the EU template Export entry point with browser-local validation of required official sheets and copy-download flow.
 - Added a Korean-first completed-product design preview page for dashboard, workflow, calculation, validation, and export states.
 - Added controlled browser-side value injection into EU template `D_Processes` and `E_PurchPrec` copies using local process and precursor data.
+- Added EU Export readiness checks for goods category mapping, CN/HS code precision, linked products, precursor sources, and current template row limits.
 
 Next:
 
-- Tighten EU dropdown/code mapping for product category, production route, CN/HS code, and template-specific list values before treating exports as submission-ready.
+- Add explicit CN 8-digit product master support and map `Parameters_CNCodes` values instead of relying on HS-prefix fallback mapping.
 
 ## Decision Log
 

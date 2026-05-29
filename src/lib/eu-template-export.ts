@@ -35,6 +35,192 @@ export interface EuTemplateExportData {
     products: Product[];
 }
 
+export interface EuExportReadinessIssue {
+    severity: 'error' | 'warning';
+    area: '제품' | '생산공정' | '구매 전구물질' | '템플릿 한계';
+    message: string;
+}
+
+export interface EuExportReadinessResult {
+    issues: EuExportReadinessIssue[];
+    errorCount: number;
+    warningCount: number;
+    canExportDraft: boolean;
+    isSubmissionReady: boolean;
+}
+
+const EU_GOODS = [
+    'Cement',
+    'Cement clinker',
+    'Calcined clays ',
+    'Aluminous cement',
+    'Iron or steel products',
+    'Crude steel',
+    'Direct reduced iron',
+    'Pig iron',
+    'Alloys (FeMn, FeCr, FeNi)',
+    'Sintered Ore',
+    'Hydrogen',
+    'Ammonia',
+    'Nitric acid',
+    'Urea',
+    'Mixed fertilisers',
+    'Aluminium products',
+    'Unwrought aluminium',
+    'Electricity (export to EU)',
+];
+
+const EU_GOODS_SET = new Set(EU_GOODS);
+const STEEL_FINISHED_GOODS_PREFIXES = ['7208', '7209', '7210', '7211', '7212', '7213', '7214', '7215', '7216', '7217', '7218', '7219', '7220', '7221', '7222', '7223', '7224', '7225', '7226', '7227', '7228', '7229', '73'];
+const CRUDE_STEEL_PREFIXES = ['7206', '7207'];
+const PIG_IRON_PREFIXES = ['7201'];
+const DIRECT_REDUCED_IRON_PREFIXES = ['7203'];
+
+function normalizeHsCode(hsCode: string): string {
+    return hsCode.replace(/\D/g, '');
+}
+
+function mapProductToEuGood(product: Product | undefined): string | undefined {
+    if (!product) {
+        return undefined;
+    }
+
+    if (EU_GOODS_SET.has(product.product_type_enum)) {
+        return product.product_type_enum;
+    }
+
+    const hsCode = normalizeHsCode(product.hs_code);
+
+    if (PIG_IRON_PREFIXES.some((prefix) => hsCode.startsWith(prefix))) {
+        return 'Pig iron';
+    }
+
+    if (DIRECT_REDUCED_IRON_PREFIXES.some((prefix) => hsCode.startsWith(prefix))) {
+        return 'Direct reduced iron';
+    }
+
+    if (CRUDE_STEEL_PREFIXES.some((prefix) => hsCode.startsWith(prefix))) {
+        return 'Crude steel';
+    }
+
+    if (STEEL_FINISHED_GOODS_PREFIXES.some((prefix) => hsCode.startsWith(prefix))) {
+        return 'Iron or steel products';
+    }
+
+    return undefined;
+}
+
+function mapPrecursorToEuGood(precursor: PurchasedPrecursor, product: Product | undefined): string | undefined {
+    if (EU_GOODS_SET.has(precursor.aggregated_goods_category)) {
+        return precursor.aggregated_goods_category;
+    }
+
+    return mapProductToEuGood(product);
+}
+
+export function evaluateEuExportReadiness(data: EuTemplateExportData): EuExportReadinessResult {
+    const issues: EuExportReadinessIssue[] = [];
+    const productById = new Map(data.products.map((product) => [product.id, product]));
+
+    if (data.processes.length > 10) {
+        issues.push({
+            severity: 'error',
+            area: '템플릿 한계',
+            message: `현재 Export MVP는 생산공정 10개까지 지원합니다. 현재 ${data.processes.length}개입니다.`,
+        });
+    }
+
+    if (data.precursors.length > 20) {
+        issues.push({
+            severity: 'error',
+            area: '템플릿 한계',
+            message: `현재 Export MVP는 구매 전구물질 20개까지 지원합니다. 현재 ${data.precursors.length}개입니다.`,
+        });
+    }
+
+    for (const product of data.products) {
+        const hsCode = normalizeHsCode(product.hs_code);
+
+        if (hsCode.length < 8) {
+            issues.push({
+                severity: 'warning',
+                area: '제품',
+                message: `${product.name}: EU 템플릿 제출에는 CN 8자리 수준의 코드 확인이 필요합니다. 현재 값은 ${product.hs_code}입니다.`,
+            });
+        }
+
+        if (!mapProductToEuGood(product)) {
+            issues.push({
+                severity: 'error',
+                area: '제품',
+                message: `${product.name}: EU CBAM goods category로 매핑할 수 없습니다.`,
+            });
+        }
+    }
+
+    for (const process of data.processes) {
+        const product = process.product_id ? productById.get(process.product_id) : undefined;
+
+        if (!product) {
+            issues.push({
+                severity: 'error',
+                area: '생산공정',
+                message: `${process.name}: 연결된 제품이 없어 EU goods category를 확정할 수 없습니다.`,
+            });
+            continue;
+        }
+
+        const euGood = mapProductToEuGood(product);
+
+        if (!euGood) {
+            issues.push({
+                severity: 'error',
+                area: '생산공정',
+                message: `${process.name}: 제품 ${product.name}의 EU goods category 매핑이 필요합니다.`,
+            });
+        }
+
+        if (!process.production_route || process.production_route.trim().length === 0) {
+            issues.push({
+                severity: 'warning',
+                area: '생산공정',
+                message: `${process.name}: 생산경로가 비어 있습니다. EU 템플릿 드롭다운 값과 대조가 필요합니다.`,
+            });
+        }
+    }
+
+    for (const precursor of data.precursors) {
+        const product = precursor.product_id ? productById.get(precursor.product_id) : undefined;
+
+        if (!mapPrecursorToEuGood(precursor, product)) {
+            issues.push({
+                severity: 'error',
+                area: '구매 전구물질',
+                message: `${precursor.name}: EU goods category로 매핑할 수 없습니다.`,
+            });
+        }
+
+        if (!precursor.source) {
+            issues.push({
+                severity: 'warning',
+                area: '구매 전구물질',
+                message: `${precursor.name}: SEE 출처가 비어 있습니다.`,
+            });
+        }
+    }
+
+    const errorCount = issues.filter((issue) => issue.severity === 'error').length;
+    const warningCount = issues.filter((issue) => issue.severity === 'warning').length;
+
+    return {
+        issues,
+        errorCount,
+        warningCount,
+        canExportDraft: errorCount === 0,
+        isSubmissionReady: issues.length === 0,
+    };
+}
+
 function parseWorkbookSheetNames(workbookXml: string): string[] {
     const document = new DOMParser().parseFromString(workbookXml, 'application/xml');
     const parseError = document.getElementsByTagName('parsererror')[0];
@@ -189,7 +375,7 @@ function injectProcesses(sheetXml: string, processes: ProductionProcess[], produ
         const product = process.product_id ? productById.get(process.product_id) : undefined;
 
         output = setCellValue(output, `G${startRow}`, process.name);
-        output = setCellValue(output, `L${startRow}`, product?.product_type_enum ?? product?.name ?? process.production_route);
+        output = setCellValue(output, `L${startRow}`, mapProductToEuGood(product) ?? product?.name ?? process.production_route);
         output = setCellValue(output, `L${startRow + 13}`, process.output_mass_t);
         output = setCellValue(output, `L${startRow + 16}`, process.market_output_mass_t);
         output = setCellValue(output, `L${startRow + 31}`, process.internal_consumption_mass_t);
@@ -210,7 +396,7 @@ function injectPrecursors(sheetXml: string, precursors: PurchasedPrecursor[], pr
         const product = precursor.product_id ? productById.get(precursor.product_id) : undefined;
 
         output = setCellValue(output, `G${startRow}`, precursor.name);
-        output = setCellValue(output, `L${startRow}`, product?.product_type_enum ?? precursor.aggregated_goods_category);
+        output = setCellValue(output, `L${startRow}`, mapPrecursorToEuGood(precursor, product) ?? precursor.aggregated_goods_category);
         output = setCellValue(output, `L${startRow + 11}`, precursor.purchased_mass_t);
         output = setCellValue(output, `L${startRow + 14}`, precursor.consumed_mass_t);
         output = setCellValue(output, `L${startRow + 25}`, precursor.consumed_for_non_cbam_mass_t);
@@ -222,6 +408,12 @@ function injectPrecursors(sheetXml: string, precursors: PurchasedPrecursor[], pr
 }
 
 export async function createEuTemplateExportCopy(file: File, data: EuTemplateExportData): Promise<Blob> {
+    const readiness = evaluateEuExportReadiness(data);
+
+    if (!readiness.canExportDraft) {
+        throw new Error('EU 템플릿 Export 전에 오류 항목을 먼저 해결해야 합니다.');
+    }
+
     const workbookBytes = new Uint8Array(await file.arrayBuffer());
     const zip = unzipSync(workbookBytes);
     const sheetTargetByName = parseWorkbookSheetTargets(zip);
