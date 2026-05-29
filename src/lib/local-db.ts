@@ -34,6 +34,22 @@ export interface AppSetting extends LocalEntity {
   value: unknown;
 }
 
+export interface CbamBackupManifest {
+  format: "cbam-local-backup";
+  format_version: 1;
+  app_name: "CBAM Local";
+  exported_at: string;
+  stores: StoreName[];
+  counts: Record<StoreName, number>;
+}
+
+export interface CbamBackupFile {
+  manifest: CbamBackupManifest;
+  data: {
+    [K in StoreName]: StoreEntityMap[K][];
+  };
+}
+
 type StoreEntityMap = {
   installations: Installation;
   products: Product;
@@ -146,6 +162,88 @@ export async function updateLocalItem<TStoreName extends StoreName>(
 
 export async function deleteLocalItem(storeName: StoreName, id: string): Promise<void> {
   await runTransaction(storeName, "readwrite", (store) => store.delete(id));
+}
+
+export async function exportLocalBackup(): Promise<CbamBackupFile> {
+  const data = {
+    installations: await listLocalItems("installations"),
+    products: await listLocalItems("products"),
+    periods: await listLocalItems("periods"),
+    settings: await listLocalItems("settings"),
+  };
+
+  return {
+    manifest: {
+      format: "cbam-local-backup",
+      format_version: 1,
+      app_name: "CBAM Local",
+      exported_at: nowIso(),
+      stores: STORE_NAMES,
+      counts: {
+        installations: data.installations.length,
+        products: data.products.length,
+        periods: data.periods.length,
+        settings: data.settings.length,
+      },
+    },
+    data,
+  };
+}
+
+export function parseBackupFile(content: string): CbamBackupFile {
+  const parsed = JSON.parse(content) as Partial<CbamBackupFile>;
+
+  if (
+    parsed.manifest?.format !== "cbam-local-backup" ||
+    parsed.manifest.format_version !== 1 ||
+    !parsed.data
+  ) {
+    throw new Error("Invalid or unsupported .cbam backup file.");
+  }
+
+  for (const storeName of STORE_NAMES) {
+    if (!Array.isArray(parsed.data[storeName])) {
+      throw new Error(`Backup file is missing the ${storeName} data store.`);
+    }
+  }
+
+  return parsed as CbamBackupFile;
+}
+
+export async function importLocalBackup(backup: CbamBackupFile): Promise<void> {
+  const db = await openDatabase();
+
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAMES, "readwrite");
+
+    for (const storeName of STORE_NAMES) {
+      const store = transaction.objectStore(storeName);
+      store.clear();
+      for (const item of backup.data[storeName]) {
+        store.put(item);
+      }
+    }
+
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+}
+
+export async function clearLocalData(): Promise<void> {
+  const db = await openDatabase();
+
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAMES, "readwrite");
+
+    for (const storeName of STORE_NAMES) {
+      transaction.objectStore(storeName).clear();
+    }
+
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
 }
 
 export async function seedLocalData(): Promise<void> {

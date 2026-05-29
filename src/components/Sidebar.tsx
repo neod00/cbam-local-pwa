@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Package, Calendar, Upload, BarChart, Settings } from 'lucide-react';
+import { Home, Package, Calendar, Upload, BarChart, Settings, ShieldCheck } from 'lucide-react';
 import clsx from 'clsx';
 
 const navigation = [
@@ -12,6 +12,7 @@ const navigation = [
     { name: 'Data Upload', href: '/upload', icon: Upload },
     { name: 'Results', href: '/results', icon: BarChart },
     { name: 'Installations', href: '/installations', icon: Settings },
+    { name: 'Data Safety', href: '/settings', icon: ShieldCheck },
 ];
 
 export default function Sidebar() {
