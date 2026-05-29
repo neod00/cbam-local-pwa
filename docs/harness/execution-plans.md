@@ -23,10 +23,11 @@ Completed:
 - Added EU Export readiness checks for goods category mapping, CN/HS code precision, linked products, precursor sources, and current template row limits.
 - Added optional CN 8-digit product code support and wired it into product entry, calculation results, and EU Export readiness checks.
 - Added uploaded-template `Parameters_CNCodes` parsing so CN 8-digit codes resolve against the user's current EU template before Export.
+- Added representative CN 8-digit search/select helpers on the product entry form while keeping final validation tied to the uploaded EU template.
 
 Next:
 
-- Add product master helpers for searching/selecting valid CN 8-digit codes from the uploaded EU template instead of manual entry only.
+- Add an import/update flow so products can be matched against a full CN code list from the uploaded EU template rather than only representative helper options.
 
 ## Decision Log
 

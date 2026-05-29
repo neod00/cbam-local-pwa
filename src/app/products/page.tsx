@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createLocalItem, listLocalItems, Product, seedLocalData } from '@/lib/local-db';
+import { CN_CODE_OPTIONS } from '@/lib/cn-code-options';
 import { Plus } from 'lucide-react';
 
 type HsGroup = Product['hs_group'];
@@ -11,6 +12,7 @@ export default function ProductsPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
+    const [cnSearch, setCnSearch] = useState('');
 
     // Form State
     const [newItem, setNewItem] = useState<ProductDraft>({
@@ -48,6 +50,21 @@ export default function ProductsPage() {
         });
         setShowForm(false);
     }
+
+    const filteredCnOptions = CN_CODE_OPTIONS.filter((option) => {
+        const query = cnSearch.trim().toLowerCase();
+
+        if (!query) {
+            return true;
+        }
+
+        return (
+            option.code.includes(query) ||
+            option.labelKo.toLowerCase().includes(query) ||
+            option.description.toLowerCase().includes(query) ||
+            option.goodsCategory.toLowerCase().includes(query)
+        );
+    }).slice(0, 8);
 
     return (
         <div>
@@ -108,6 +125,44 @@ export default function ProductsPage() {
                                 placeholder="예: 72083900"
                             />
                             <p className="mt-1 text-xs text-gray-500">EU 템플릿 제출 검증은 CN 8자리 기준으로 수행합니다.</p>
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700">CN 코드 검색</label>
+                            <input
+                                type="search"
+                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                value={cnSearch}
+                                onChange={(event) => setCnSearch(event.target.value)}
+                                placeholder="예: 열연, 강관, 볼트, 7208, 7318"
+                            />
+                            <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
+                                {filteredCnOptions.map((option) => (
+                                    <button
+                                        key={option.code}
+                                        type="button"
+                                        onClick={() =>
+                                            setNewItem({
+                                                ...newItem,
+                                                cn_code: option.code,
+                                                hs_code: option.code.slice(0, 4),
+                                                hs_group: option.code.startsWith('73') ? '73' : '72',
+                                                product_type_enum: option.goodsCategory,
+                                            })
+                                        }
+                                        className="rounded-md border border-gray-200 bg-gray-50 p-3 text-left hover:border-blue-300 hover:bg-blue-50"
+                                    >
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-sm font-semibold text-gray-900">{option.code}</span>
+                                            <span className="text-xs text-gray-500">{option.goodsCategory}</span>
+                                        </div>
+                                        <div className="mt-1 text-sm text-gray-700">{option.labelKo}</div>
+                                        <div className="mt-1 line-clamp-1 text-xs text-gray-500">{option.description}</div>
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="mt-2 text-xs text-gray-500">
+                                이 목록은 입력 보조용 대표 코드입니다. 최종 Export 검증은 사용자가 업로드한 최신 EU 템플릿의 Parameters_CNCodes를 기준으로 합니다.
+                            </p>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700">HS 그룹</label>
