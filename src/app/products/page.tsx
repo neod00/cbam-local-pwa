@@ -1,9 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createLocalItem, listLocalItems, Product, seedLocalData } from '@/lib/local-db';
-import { CN_CODE_OPTIONS } from '@/lib/cn-code-options';
-import { Plus } from 'lucide-react';
+import {
+    createLocalItem,
+    getLocalSetting,
+    listLocalItems,
+    Product,
+    seedLocalData,
+    setLocalSetting,
+} from '@/lib/local-db';
+import { CN_CODE_OPTIONS, type CnCodeOption } from '@/lib/cn-code-options';
+import { parseEuTemplateCnCodeOptions } from '@/lib/eu-template-export';
+import { FileSpreadsheet, Plus } from 'lucide-react';
 
 type HsGroup = Product['hs_group'];
 type ProductDraft = Pick<Product, 'name' | 'hs_code' | 'cn_code' | 'hs_group' | 'product_type_enum' | 'unit'>;
@@ -13,6 +21,9 @@ export default function ProductsPage() {
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [cnSearch, setCnSearch] = useState('');
+    const [cnOptions, setCnOptions] = useState<CnCodeOption[]>(CN_CODE_OPTIONS);
+    const [cnImportMessage, setCnImportMessage] = useState('');
+    const [cnImportError, setCnImportError] = useState('');
 
     // Form State
     const [newItem, setNewItem] = useState<ProductDraft>({
@@ -28,8 +39,14 @@ export default function ProductsPage() {
         async function fetchProducts() {
             setLoading(true);
             await seedLocalData();
-            const data = await listLocalItems('products');
+            const [data, storedCnOptions] = await Promise.all([
+                listLocalItems('products'),
+                getLocalSetting<CnCodeOption[]>('cn-code-options'),
+            ]);
             setProducts(data.sort((a, b) => b.created_at.localeCompare(a.created_at)));
+            if (storedCnOptions?.length) {
+                setCnOptions(storedCnOptions);
+            }
             setLoading(false);
         }
 
@@ -51,7 +68,25 @@ export default function ProductsPage() {
         setShowForm(false);
     }
 
-    const filteredCnOptions = CN_CODE_OPTIONS.filter((option) => {
+    async function handleCnTemplateImport(file: File | undefined) {
+        setCnImportMessage('');
+        setCnImportError('');
+
+        if (!file) {
+            return;
+        }
+
+        try {
+            const importedOptions = await parseEuTemplateCnCodeOptions(file);
+            await setLocalSetting('cn-code-options', importedOptions);
+            setCnOptions(importedOptions);
+            setCnImportMessage(`EU 템플릿에서 CN 코드 ${importedOptions.length}개를 가져왔습니다.`);
+        } catch (error) {
+            setCnImportError(error instanceof Error ? error.message : 'CN 코드 목록을 가져오지 못했습니다.');
+        }
+    }
+
+    const filteredCnOptions = cnOptions.filter((option) => {
         const query = cnSearch.trim().toLowerCase();
 
         if (!query) {
@@ -64,7 +99,7 @@ export default function ProductsPage() {
             option.description.toLowerCase().includes(query) ||
             option.goodsCategory.toLowerCase().includes(query)
         );
-    }).slice(0, 8);
+    }).slice(0, 12);
 
     return (
         <div>
@@ -81,6 +116,40 @@ export default function ProductsPage() {
             <p className="mt-2 text-sm text-gray-600">
                 제품과 생산 관련 데이터는 이 브라우저에만 저장됩니다. EU Export 정확도를 위해 CN 8자리 코드를 우선 입력하세요.
             </p>
+
+            <div className="mt-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <h2 className="text-base font-semibold text-gray-900">EU 템플릿 CN 코드 목록</h2>
+                        <p className="mt-1 text-sm text-gray-600">
+                            최신 EU 템플릿을 선택하면 `Parameters_CNCodes`의 전체 CN 코드 목록을 로컬에 저장해 제품 등록 검색에 사용합니다.
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500">
+                            현재 검색 목록: {cnOptions.length}개 {cnOptions === CN_CODE_OPTIONS ? '(대표 코드)' : '(EU 템플릿에서 가져옴)'}
+                        </p>
+                    </div>
+                    <label className="inline-flex cursor-pointer items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50">
+                        <FileSpreadsheet className="mr-2 h-4 w-4 text-gray-500" />
+                        EU 템플릿에서 가져오기
+                        <input
+                            type="file"
+                            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            className="sr-only"
+                            onChange={(event) => handleCnTemplateImport(event.target.files?.[0])}
+                        />
+                    </label>
+                </div>
+                {cnImportMessage && (
+                    <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+                        {cnImportMessage}
+                    </div>
+                )}
+                {cnImportError && (
+                    <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                        {cnImportError}
+                    </div>
+                )}
+            </div>
 
             {/* Add Form */}
             {showForm && (
@@ -161,7 +230,7 @@ export default function ProductsPage() {
                                 ))}
                             </div>
                             <p className="mt-2 text-xs text-gray-500">
-                                이 목록은 입력 보조용 대표 코드입니다. 최종 Export 검증은 사용자가 업로드한 최신 EU 템플릿의 Parameters_CNCodes를 기준으로 합니다.
+                                EU 템플릿에서 가져온 목록이 있으면 전체 목록을 검색합니다. 최종 Export 검증도 업로드한 최신 EU 템플릿의 Parameters_CNCodes를 기준으로 합니다.
                             </p>
                         </div>
                         <div>

@@ -3,6 +3,7 @@ export interface CnCodeOption {
     goodsCategory: string;
     labelKo: string;
     description: string;
+    source?: string;
 }
 
 export const CN_CODE_OPTIONS: CnCodeOption[] = [

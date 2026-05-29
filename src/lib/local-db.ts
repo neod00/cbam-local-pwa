@@ -209,6 +209,28 @@ export async function deleteLocalItem(storeName: StoreName, id: string): Promise
   await runTransaction(storeName, "readwrite", (store) => store.delete(id));
 }
 
+export async function getLocalSetting<T = unknown>(key: string): Promise<T | undefined> {
+  const settings = await listLocalItems("settings");
+  return settings.find((setting) => setting.key === key)?.value as T | undefined;
+}
+
+export async function setLocalSetting(key: string, value: unknown): Promise<AppSetting> {
+  const settings = await listLocalItems("settings");
+  const existing = settings.find((setting) => setting.key === key);
+
+  if (existing) {
+    return updateLocalItem("settings", {
+      ...existing,
+      value,
+    });
+  }
+
+  return createLocalItem("settings", {
+    key,
+    value,
+  });
+}
+
 export async function exportLocalBackup(): Promise<CbamBackupFile> {
   const data = {
     installations: await listLocalItems("installations"),

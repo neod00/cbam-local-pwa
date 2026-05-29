@@ -1,5 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import type { Product, ProductionProcess, PurchasedPrecursor } from './local-db';
+import type { CnCodeOption } from './cn-code-options';
 
 export const REQUIRED_EU_TEMPLATE_SHEETS = [
     '0_Versions',
@@ -298,18 +299,18 @@ function readCellText(cell: Element, sharedStrings: string[]): string {
     return cell.getElementsByTagName('v')[0]?.textContent ?? '';
 }
 
-function parseCnCodeMap(zip: Record<string, Uint8Array>): EuCnCodeMap {
+function parseCnCodeOptions(zip: Record<string, Uint8Array>): CnCodeOption[] {
     const sheetTargetByName = parseWorkbookSheetTargets(zip);
     const cnCodeSheetPath = sheetTargetByName.get('Parameters_CNCodes');
     const cnCodeSheetXml = cnCodeSheetPath ? zip[cnCodeSheetPath] : undefined;
 
     if (!cnCodeSheetXml) {
-        return new Map();
+        return [];
     }
 
     const sharedStrings = parseSharedStrings(zip);
     const document = new DOMParser().parseFromString(strFromU8(cnCodeSheetXml), 'application/xml');
-    const cnCodeMap: EuCnCodeMap = new Map();
+    const options: CnCodeOption[] = [];
 
     for (const row of Array.from(document.getElementsByTagName('row'))) {
         const rowNumber = Number(row.getAttribute('r') ?? 0);
@@ -331,14 +332,47 @@ function parseCnCodeMap(zip: Record<string, Uint8Array>): EuCnCodeMap {
         }
 
         const cnCode = normalizeHsCode(valuesByColumn.get('D') ?? '');
+        const description = valuesByColumn.get('C') ?? '';
         const cbamGood = valuesByColumn.get('E') ?? '';
 
         if (cnCode.length === 8 && EU_GOODS_SET.has(cbamGood)) {
-            cnCodeMap.set(cnCode, cbamGood);
+            options.push({
+                code: cnCode,
+                goodsCategory: cbamGood,
+                labelKo: cbamGood,
+                description,
+                source: 'EU template Parameters_CNCodes',
+            });
         }
     }
 
+    return options;
+}
+
+function parseCnCodeMap(zip: Record<string, Uint8Array>): EuCnCodeMap {
+    const cnCodeMap: EuCnCodeMap = new Map();
+
+    for (const option of parseCnCodeOptions(zip)) {
+        cnCodeMap.set(option.code, option.goodsCategory);
+    }
+
     return cnCodeMap;
+}
+
+export async function parseEuTemplateCnCodeOptions(file: File): Promise<CnCodeOption[]> {
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+        throw new Error('EU 원본 템플릿은 .xlsx 파일이어야 합니다.');
+    }
+
+    const workbookBytes = new Uint8Array(await file.arrayBuffer());
+    const zip = unzipSync(workbookBytes);
+    const options = parseCnCodeOptions(zip);
+
+    if (options.length === 0) {
+        throw new Error('EU 템플릿의 Parameters_CNCodes에서 CN 코드 목록을 찾을 수 없습니다.');
+    }
+
+    return options;
 }
 
 export async function validateEuTemplateFile(file: File): Promise<EuTemplateValidationResult> {
