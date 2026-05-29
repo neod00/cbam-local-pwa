@@ -1,4 +1,10 @@
-export type StoreName = "installations" | "products" | "periods" | "processes" | "settings";
+export type StoreName =
+  | "installations"
+  | "products"
+  | "periods"
+  | "processes"
+  | "precursors"
+  | "settings";
 
 export interface LocalEntity {
   id: string;
@@ -42,6 +48,22 @@ export interface ProductionProcess extends LocalEntity {
   electricity_ef_tco2e_per_mwh: number;
 }
 
+export interface PurchasedPrecursor extends LocalEntity {
+  period_id?: string;
+  process_id?: string;
+  product_id?: string;
+  name: string;
+  aggregated_goods_category: string;
+  production_route: string;
+  purchased_mass_t: number;
+  consumed_mass_t: number;
+  consumed_for_non_cbam_mass_t: number;
+  direct_see_tco2e_per_t: number;
+  indirect_see_tco2e_per_t: number;
+  source: string;
+  default_value_justification: string;
+}
+
 export interface AppSetting extends LocalEntity {
   key: string;
   value: unknown;
@@ -68,12 +90,20 @@ type StoreEntityMap = {
   products: Product;
   periods: ReportingPeriod;
   processes: ProductionProcess;
+  precursors: PurchasedPrecursor;
   settings: AppSetting;
 };
 
 const DB_NAME = "cbam-local";
-const DB_VERSION = 2;
-const STORE_NAMES: StoreName[] = ["installations", "products", "periods", "processes", "settings"];
+const DB_VERSION = 3;
+const STORE_NAMES: StoreName[] = [
+  "installations",
+  "products",
+  "periods",
+  "processes",
+  "precursors",
+  "settings",
+];
 
 let dbPromise: Promise<IDBDatabase> | undefined;
 
@@ -184,6 +214,7 @@ export async function exportLocalBackup(): Promise<CbamBackupFile> {
     products: await listLocalItems("products"),
     periods: await listLocalItems("periods"),
     processes: await listLocalItems("processes"),
+    precursors: await listLocalItems("precursors"),
     settings: await listLocalItems("settings"),
   };
 
@@ -199,6 +230,7 @@ export async function exportLocalBackup(): Promise<CbamBackupFile> {
         products: data.products.length,
         periods: data.periods.length,
         processes: data.processes.length,
+        precursors: data.precursors.length,
         settings: data.settings.length,
       },
     },
@@ -237,6 +269,7 @@ export function parseBackupFile(content: string): CbamBackupFile {
         products: data.products?.length ?? 0,
         periods: data.periods?.length ?? 0,
         processes: data.processes?.length ?? 0,
+        precursors: data.precursors?.length ?? 0,
         settings: data.settings?.length ?? 0,
       },
     },
@@ -281,11 +314,12 @@ export async function clearLocalData(): Promise<void> {
 }
 
 export async function seedLocalData(): Promise<void> {
-  const [installations, products, periods, processes] = await Promise.all([
+  const [installations, products, periods, processes, precursors] = await Promise.all([
     listLocalItems("installations"),
     listLocalItems("products"),
     listLocalItems("periods"),
     listLocalItems("processes"),
+    listLocalItems("precursors"),
   ]);
 
   if (installations.length === 0) {
@@ -326,8 +360,10 @@ export async function seedLocalData(): Promise<void> {
       periodId = period.id;
     }
 
+    let processId: string | undefined = processes[0]?.id;
+
     if (processes.length === 0) {
-      await createLocalItem("processes", {
+      const process = await createLocalItem("processes", {
         period_id: periodId,
         name: "Rolling and finishing",
         production_route: "Flat steel processing",
@@ -337,6 +373,24 @@ export async function seedLocalData(): Promise<void> {
         direct_attributable_emissions_tco2e: 120,
         electricity_mwh: 500,
         electricity_ef_tco2e_per_mwh: 0.47,
+      });
+      processId = process.id;
+    }
+
+    if (precursors.length === 0) {
+      await createLocalItem("precursors", {
+        period_id: periodId,
+        process_id: processId,
+        name: "Purchased hot rolled coil",
+        aggregated_goods_category: "Iron or steel products",
+        production_route: "External precursor",
+        purchased_mass_t: 1100,
+        consumed_mass_t: 1000,
+        consumed_for_non_cbam_mass_t: 0,
+        direct_see_tco2e_per_t: 1.2,
+        indirect_see_tco2e_per_t: 0.25,
+        source: "Supplier communication template",
+        default_value_justification: "",
       });
     }
   }

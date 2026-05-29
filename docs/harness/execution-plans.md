@@ -14,11 +14,10 @@ Completed:
 - Added Settings & Data Safety page with `.cbam` backup export/import and local data clearing.
 - Created this harness documentation set for agent-first development.
 - Added Production Processes local data model and UI, mapped to EU template `D_Processes`.
+- Added Purchased Precursors local data model and UI, mapped to EU template `E_PurchPrec`.
 
 Next:
 
-- Add Purchased Precursors page and local data model.
-- Update backup format when new stores are added.
 - Extend calculation engine toward process and precursor attribution.
 - Add EU template export, starting with product summary.
 

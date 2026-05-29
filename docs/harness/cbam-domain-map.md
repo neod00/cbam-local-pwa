@@ -20,25 +20,23 @@ This project should follow the EU CBAM communication template structure where pr
 - `Installation`: early version of installation master data.
 - `ReportingPeriod`: period lifecycle, currently DRAFT/READY/CALCULATED.
 - `Product`: HS72/HS73 product master data.
+- `ProductionProcess`: early `D_Processes` model for output quantity, direct attributable emissions, electricity, and production route.
+- `PurchasedPrecursor`: early `E_PurchPrec` model for consumed precursor quantities and direct/indirect SEE values.
 - `CalculationResult`: early direct/indirect/precursor/total SEE shape.
 
 ## Next Domain Concepts To Add
 
-1. Production process
-   - Template anchor: `D_Processes`.
-   - Needs route, output quantity, market output, internal consumption, direct emissions, electricity, heat/waste gas flags.
-
-2. Purchased precursor
-   - Template anchor: `E_PurchPrec`.
-   - Needs name, aggregated goods category, purchase quantity, consumption by process, direct SEE, indirect SEE, source/justification.
-
-3. Source stream
+1. Source stream
    - Template anchor: `B_EmInst`.
    - Needs method, activity data, unit, NCV, EF, carbon content, fossil fraction, biomass fraction, emissions.
 
-4. CN code master
+2. CN code master
    - Template/reference anchors: `c_CodeLists`, `Parameters_CNCodes`, `CBAM Self Assessment Tool Version 1.1.xlsx`, `CN CBAM codes.pdf`.
    - Needs sector, aggregated category, CN code, description, direct/indirect applicability.
+
+3. Process refinements
+   - Template anchor: `D_Processes`.
+   - Needs heat, waste gas, internal consumption matrix, and quality warnings.
 
 ## Calculation Principle
 
