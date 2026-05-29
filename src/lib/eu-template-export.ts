@@ -40,10 +40,16 @@ export interface EuTemplateExportData {
 
 type EuCnCodeMap = Map<string, string>;
 
+export type EuExportIssueTarget =
+    | { type: 'product'; id: string }
+    | { type: 'process'; id: string }
+    | { type: 'precursor'; id: string };
+
 export interface EuExportReadinessIssue {
     severity: 'error' | 'warning';
     area: '제품' | '생산공정' | '구매 전구물질' | '템플릿 한계';
     message: string;
+    target?: EuExportIssueTarget;
 }
 
 export interface EuExportReadinessResult {
@@ -167,6 +173,7 @@ export function evaluateEuExportReadiness(
                 severity: 'warning',
                 area: '제품',
                 message: `${product.name}: EU 템플릿 제출에는 CN 8자리 코드가 필요합니다. 현재 값은 ${product.cn_code || product.hs_code}입니다.`,
+                target: { type: 'product', id: product.id },
             });
         }
 
@@ -175,6 +182,7 @@ export function evaluateEuExportReadiness(
                 severity: 'error',
                 area: '제품',
                 message: `${product.name}: 업로드한 EU 템플릿의 Parameters_CNCodes에서 CN ${hsCode}를 찾을 수 없습니다.`,
+                target: { type: 'product', id: product.id },
             });
         }
 
@@ -183,6 +191,7 @@ export function evaluateEuExportReadiness(
                 severity: 'error',
                 area: '제품',
                 message: `${product.name}: EU CBAM goods category로 매핑할 수 없습니다.`,
+                target: { type: 'product', id: product.id },
             });
         }
     }
@@ -195,6 +204,7 @@ export function evaluateEuExportReadiness(
                 severity: 'error',
                 area: '생산공정',
                 message: `${process.name}: 연결된 제품이 없어 EU goods category를 확정할 수 없습니다.`,
+                target: { type: 'process', id: process.id },
             });
             continue;
         }
@@ -206,6 +216,7 @@ export function evaluateEuExportReadiness(
                 severity: 'error',
                 area: '생산공정',
                 message: `${process.name}: 제품 ${product.name}의 EU goods category 매핑이 필요합니다.`,
+                target: { type: 'process', id: process.id },
             });
         }
 
@@ -214,6 +225,7 @@ export function evaluateEuExportReadiness(
                 severity: 'warning',
                 area: '생산공정',
                 message: `${process.name}: 생산경로가 비어 있습니다. EU 템플릿 드롭다운 값과 대조가 필요합니다.`,
+                target: { type: 'process', id: process.id },
             });
         }
     }
@@ -226,6 +238,7 @@ export function evaluateEuExportReadiness(
                 severity: 'error',
                 area: '구매 전구물질',
                 message: `${precursor.name}: EU goods category로 매핑할 수 없습니다.`,
+                target: { type: 'precursor', id: precursor.id },
             });
         }
 
@@ -234,6 +247,7 @@ export function evaluateEuExportReadiness(
                 severity: 'warning',
                 area: '구매 전구물질',
                 message: `${precursor.name}: SEE 출처가 비어 있습니다.`,
+                target: { type: 'precursor', id: precursor.id },
             });
         }
     }

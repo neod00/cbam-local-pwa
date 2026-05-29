@@ -9,16 +9,36 @@ import {
     evaluateEuExportReadiness,
     REQUIRED_EU_TEMPLATE_SHEETS,
     validateEuTemplateFile,
+    type EuExportReadinessIssue,
     type EuTemplateValidationResult,
 } from '@/lib/eu-template-export';
 import { listLocalItems, seedLocalData, type Product, type ProductionProcess, type PurchasedPrecursor } from '@/lib/local-db';
 import { AlertTriangle, Download, FileCheck2, FileSpreadsheet, PackageCheck, ShieldCheck, Workflow } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 function formatNumber(value: number) {
     return new Intl.NumberFormat(undefined, {
         maximumFractionDigits: 4,
     }).format(value);
+}
+
+function getIssueEditHref(issue: EuExportReadinessIssue) {
+    if (!issue.target) {
+        return undefined;
+    }
+
+    const encodedId = encodeURIComponent(issue.target.id);
+
+    if (issue.target.type === 'product') {
+        return `/products?edit=${encodedId}`;
+    }
+
+    if (issue.target.type === 'process') {
+        return `/processes?edit=${encodedId}`;
+    }
+
+    return `/precursors?edit=${encodedId}`;
 }
 
 export default function ExportPage() {
@@ -262,21 +282,35 @@ export default function ExportPage() {
                     </div>
                 ) : (
                     <ul className="mt-4 divide-y divide-gray-100 rounded-md border border-gray-200">
-                        {readiness.issues.map((issue, index) => (
-                            <li key={`${issue.area}-${issue.message}-${index}`} className="flex gap-3 px-4 py-3 text-sm">
-                                <AlertTriangle
-                                    className={
-                                        issue.severity === 'error'
-                                            ? 'mt-0.5 h-4 w-4 flex-shrink-0 text-red-600'
-                                            : 'mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600'
-                                    }
-                                />
-                                <div>
-                                    <span className="font-medium text-gray-900">[{issue.area}]</span>{' '}
-                                    <span className="text-gray-700">{issue.message}</span>
-                                </div>
-                            </li>
-                        ))}
+                        {readiness.issues.map((issue, index) => {
+                            const issueEditHref = getIssueEditHref(issue);
+
+                            return (
+                                <li key={`${issue.area}-${issue.message}-${index}`} className="flex gap-3 px-4 py-3 text-sm">
+                                    <AlertTriangle
+                                        className={
+                                            issue.severity === 'error'
+                                                ? 'mt-0.5 h-4 w-4 flex-shrink-0 text-red-600'
+                                                : 'mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600'
+                                        }
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div>
+                                            <span className="font-medium text-gray-900">[{issue.area}]</span>{' '}
+                                            <span className="text-gray-700">{issue.message}</span>
+                                        </div>
+                                        {issueEditHref && (
+                                            <Link
+                                                href={issueEditHref}
+                                                className="mt-2 inline-flex min-h-9 items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                                            >
+                                                수정하기
+                                            </Link>
+                                        )}
+                                    </div>
+                                </li>
+                            );
+                        })}
                     </ul>
                 )}
             </SectionCard>

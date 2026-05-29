@@ -67,17 +67,40 @@ export default function PrecursorsPage() {
                 listLocalItems('processes'),
                 listLocalItems('products'),
             ]);
+            const sortedPrecursors = precursorData.sort((a, b) => b.created_at.localeCompare(a.created_at));
+            const editPrecursorId = new URLSearchParams(window.location.search).get('edit');
+            const editPrecursor = editPrecursorId ? sortedPrecursors.find((item) => item.id === editPrecursorId) : undefined;
 
-            setPrecursors(precursorData.sort((a, b) => b.created_at.localeCompare(a.created_at)));
+            setPrecursors(sortedPrecursors);
             setPeriods(periodData.sort((a, b) => b.start_date.localeCompare(a.start_date)));
             setProcesses(processData.sort((a, b) => a.name.localeCompare(b.name)));
             setProducts(productData.sort((a, b) => a.name.localeCompare(b.name)));
-            setNewItem({
-                ...emptyDraft,
-                period_id: periodData[0]?.id ?? '',
-                process_id: processData[0]?.id ?? '',
-                product_id: productData[0]?.id ?? '',
-            });
+            if (editPrecursor) {
+                setNewItem({
+                    period_id: editPrecursor.period_id ?? '',
+                    process_id: editPrecursor.process_id ?? '',
+                    product_id: editPrecursor.product_id ?? '',
+                    name: editPrecursor.name,
+                    aggregated_goods_category: editPrecursor.aggregated_goods_category,
+                    production_route: editPrecursor.production_route,
+                    purchased_mass_t: editPrecursor.purchased_mass_t,
+                    consumed_mass_t: editPrecursor.consumed_mass_t,
+                    consumed_for_non_cbam_mass_t: editPrecursor.consumed_for_non_cbam_mass_t,
+                    direct_see_tco2e_per_t: editPrecursor.direct_see_tco2e_per_t,
+                    indirect_see_tco2e_per_t: editPrecursor.indirect_see_tco2e_per_t,
+                    source: editPrecursor.source,
+                    default_value_justification: editPrecursor.default_value_justification,
+                });
+                setEditingPrecursorId(editPrecursor.id);
+                setShowForm(true);
+            } else {
+                setNewItem({
+                    ...emptyDraft,
+                    period_id: periodData[0]?.id ?? '',
+                    process_id: processData[0]?.id ?? '',
+                    product_id: productData[0]?.id ?? '',
+                });
+            }
             setLoading(false);
         }
 

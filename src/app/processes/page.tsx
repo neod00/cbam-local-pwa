@@ -64,16 +64,36 @@ export default function ProcessesPage() {
                 listLocalItems('periods'),
                 listLocalItems('precursors'),
             ]);
+            const sortedProcesses = processData.sort((a, b) => b.created_at.localeCompare(a.created_at));
+            const editProcessId = new URLSearchParams(window.location.search).get('edit');
+            const editProcess = editProcessId ? sortedProcesses.find((item) => item.id === editProcessId) : undefined;
 
-            setProcesses(processData.sort((a, b) => b.created_at.localeCompare(a.created_at)));
+            setProcesses(sortedProcesses);
             setPrecursors(precursorData);
             setProducts(productData.sort((a, b) => a.name.localeCompare(b.name)));
             setPeriods(periodData.sort((a, b) => b.start_date.localeCompare(a.start_date)));
-            setNewItem({
-                ...emptyDraft,
-                product_id: productData[0]?.id ?? '',
-                period_id: periodData[0]?.id ?? '',
-            });
+            if (editProcess) {
+                setNewItem({
+                    period_id: editProcess.period_id ?? '',
+                    product_id: editProcess.product_id ?? '',
+                    name: editProcess.name,
+                    production_route: editProcess.production_route,
+                    output_mass_t: editProcess.output_mass_t,
+                    market_output_mass_t: editProcess.market_output_mass_t,
+                    internal_consumption_mass_t: editProcess.internal_consumption_mass_t,
+                    direct_attributable_emissions_tco2e: editProcess.direct_attributable_emissions_tco2e,
+                    electricity_mwh: editProcess.electricity_mwh,
+                    electricity_ef_tco2e_per_mwh: editProcess.electricity_ef_tco2e_per_mwh,
+                });
+                setEditingProcessId(editProcess.id);
+                setShowForm(true);
+            } else {
+                setNewItem({
+                    ...emptyDraft,
+                    product_id: productData[0]?.id ?? '',
+                    period_id: periodData[0]?.id ?? '',
+                });
+            }
             setLoading(false);
         }
 

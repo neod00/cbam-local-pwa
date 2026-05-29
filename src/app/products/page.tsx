@@ -58,11 +58,28 @@ export default function ProductsPage() {
                 listLocalItems('processes'),
                 listLocalItems('precursors'),
             ]);
-            setProducts(data.sort((a, b) => b.created_at.localeCompare(a.created_at)));
+            const sortedProducts = data.sort((a, b) => b.created_at.localeCompare(a.created_at));
+            const editProductId = new URLSearchParams(window.location.search).get('edit');
+            const editProduct = editProductId ? sortedProducts.find((item) => item.id === editProductId) : undefined;
+
+            setProducts(sortedProducts);
             setProcesses(processData);
             setPrecursors(precursorData);
             if (storedCnOptions?.length) {
                 setCnOptions(storedCnOptions);
+            }
+            if (editProduct) {
+                setDraft({
+                    name: editProduct.name,
+                    hs_code: editProduct.hs_code,
+                    cn_code: editProduct.cn_code ?? '',
+                    hs_group: editProduct.hs_group,
+                    product_type_enum: editProduct.product_type_enum,
+                    unit: editProduct.unit,
+                });
+                setEditingProductId(editProduct.id);
+                setCnSearch(editProduct.cn_code ?? editProduct.hs_code);
+                setShowForm(true);
             }
             setLoading(false);
         }
