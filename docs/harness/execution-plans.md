@@ -39,10 +39,11 @@ Completed:
 - Added `npm run verify:export`, a synthetic workbook verification script for EU template validation and `D_Processes`/`E_PurchPrec` cell injection.
 - Added `npm run verify` as the standard local quality gate combining Export verification, lint, and production build.
 - Added Export success feedback that shows the generated copy filename, timestamp, and verified cell counts after download starts.
+- Corrected EU Export writes to target unlocked official template input cells and documented the current export map.
 
 Next:
 
-- Expand EU template coverage beyond the first MVP cells once more official workbook sections are mapped.
+- Model `A_InstData` installation/reporting-period inputs before expanding into emissions source-stream sheets.
 
 ## Decision Log
 

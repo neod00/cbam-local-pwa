@@ -284,20 +284,24 @@ const validation = await euExport.validateEuTemplateFile(file);
 
 assertEqual(String(validation.isValid), 'true', 'synthetic workbook validity');
 assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
-assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '15', 'planned cell writes');
+assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '12', 'planned cell writes');
 
 const exportedBlob = await euExport.createEuTemplateExportCopy(file, data);
 const exportedZip = fflate.unzipSync(new Uint8Array(await exportedBlob.arrayBuffer()));
 const processSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet8.xml']);
 const precursorSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet9.xml']);
 
-assertEqual(readCell(processSheet, 'G11'), 'Rolling and finishing', 'D_Processes G11');
-assertEqual(readCell(processSheet, 'L11'), 'Iron or steel products', 'D_Processes L11');
-assertEqual(readCell(processSheet, 'L24'), '1000', 'D_Processes L24');
+assertEqual(readCell(processSheet, 'L16'), '1000', 'D_Processes L16');
+assertEqual(readCell(processSheet, 'L27'), '950', 'D_Processes L27');
+assertEqual(readCell(processSheet, 'L32'), '50', 'D_Processes L32');
+assertEqual(readCell(processSheet, 'L54'), '120', 'D_Processes L54');
+assertEqual(readCell(processSheet, 'L65'), '500', 'D_Processes L65');
 assertEqual(readCell(processSheet, 'L66'), '0.47', 'D_Processes L66');
-assertEqual(readCell(precursorSheet, 'G14'), 'Purchased hot rolled coil', 'E_PurchPrec G14');
-assertEqual(readCell(precursorSheet, 'L14'), 'Iron or steel products', 'E_PurchPrec L14');
-assertEqual(readCell(precursorSheet, 'L25'), '1100', 'E_PurchPrec L25');
-assertEqual(readCell(precursorSheet, 'L52'), '0.25', 'E_PurchPrec L52');
+assertEqual(readCell(precursorSheet, 'L17'), '1100', 'E_PurchPrec L17');
+assertEqual(readCell(precursorSheet, 'L28'), '1000', 'E_PurchPrec L28');
+assertEqual(readCell(precursorSheet, 'L38'), '0', 'E_PurchPrec L38');
+assertEqual(readCell(precursorSheet, 'L49'), '1.2', 'E_PurchPrec L49');
+assertEqual(readCell(precursorSheet, 'M49'), 'Supplier communication template', 'E_PurchPrec M49');
+assertEqual(readCell(precursorSheet, 'L54'), '', 'E_PurchPrec L54');
 
 console.log('EU export synthetic workbook verification passed.');

@@ -575,30 +575,16 @@ function parseWorkbookSheetTargets(zip: Record<string, Uint8Array>): Map<string,
     return sheetTargetByName;
 }
 
-function createProcessCellWrites(
-    processes: ProductionProcess[],
-    products: Product[],
-    cnCodeMap?: EuCnCodeMap
-): EuTemplateExportCellWrite[] {
-    const productById = new Map(products.map((product) => [product.id, product]));
+function createProcessCellWrites(processes: ProductionProcess[]): EuTemplateExportCellWrite[] {
     const writes: EuTemplateExportCellWrite[] = [];
 
     processes.slice(0, 10).forEach((process, index) => {
         const startRow = 11 + index * 65;
-        const product = process.product_id ? productById.get(process.product_id) : undefined;
 
         writes.push(
-            { sheetName: 'D_Processes', cell: `G${startRow}`, label: '공정명', value: process.name, sourceId: process.id },
-            {
-                sheetName: 'D_Processes',
-                cell: `L${startRow}`,
-                label: 'EU goods category',
-                value: mapProductToEuGood(product, cnCodeMap) ?? product?.name ?? process.production_route,
-                sourceId: process.id,
-            },
-            { sheetName: 'D_Processes', cell: `L${startRow + 13}`, label: '총 생산량', value: process.output_mass_t, sourceId: process.id },
+            { sheetName: 'D_Processes', cell: `L${startRow + 5}`, label: '총 생산량', value: process.output_mass_t, sourceId: process.id },
             { sheetName: 'D_Processes', cell: `L${startRow + 16}`, label: '시장 출하량', value: process.market_output_mass_t, sourceId: process.id },
-            { sheetName: 'D_Processes', cell: `L${startRow + 31}`, label: '내부 소비량', value: process.internal_consumption_mass_t, sourceId: process.id },
+            { sheetName: 'D_Processes', cell: `L${startRow + 21}`, label: '내부 소비량', value: process.internal_consumption_mass_t, sourceId: process.id },
             {
                 sheetName: 'D_Processes',
                 cell: `L${startRow + 43}`,
@@ -620,38 +606,31 @@ function createProcessCellWrites(
     return writes;
 }
 
-function createPrecursorCellWrites(
-    precursors: PurchasedPrecursor[],
-    products: Product[],
-    cnCodeMap?: EuCnCodeMap
-): EuTemplateExportCellWrite[] {
-    const productById = new Map(products.map((product) => [product.id, product]));
+function createPrecursorCellWrites(precursors: PurchasedPrecursor[]): EuTemplateExportCellWrite[] {
     const writes: EuTemplateExportCellWrite[] = [];
 
     precursors.slice(0, 20).forEach((precursor, index) => {
         const startRow = 14 + index * 44;
-        const product = precursor.product_id ? productById.get(precursor.product_id) : undefined;
 
         writes.push(
-            { sheetName: 'E_PurchPrec', cell: `G${startRow}`, label: '전구물질명', value: precursor.name, sourceId: precursor.id },
-            {
-                sheetName: 'E_PurchPrec',
-                cell: `L${startRow}`,
-                label: 'EU goods category',
-                value: mapPrecursorToEuGood(precursor, product, cnCodeMap) ?? precursor.aggregated_goods_category,
-                sourceId: precursor.id,
-            },
-            { sheetName: 'E_PurchPrec', cell: `L${startRow + 11}`, label: '구매량', value: precursor.purchased_mass_t, sourceId: precursor.id },
+            { sheetName: 'E_PurchPrec', cell: `L${startRow + 3}`, label: '구매량', value: precursor.purchased_mass_t, sourceId: precursor.id },
             { sheetName: 'E_PurchPrec', cell: `L${startRow + 14}`, label: '소비량', value: precursor.consumed_mass_t, sourceId: precursor.id },
             {
                 sheetName: 'E_PurchPrec',
-                cell: `L${startRow + 25}`,
+                cell: `L${startRow + 24}`,
                 label: '비CBAM 용도 소비량',
                 value: precursor.consumed_for_non_cbam_mass_t,
                 sourceId: precursor.id,
             },
             { sheetName: 'E_PurchPrec', cell: `L${startRow + 35}`, label: '직접 SEE', value: precursor.direct_see_tco2e_per_t, sourceId: precursor.id },
-            { sheetName: 'E_PurchPrec', cell: `L${startRow + 38}`, label: '간접 SEE', value: precursor.indirect_see_tco2e_per_t, sourceId: precursor.id }
+            { sheetName: 'E_PurchPrec', cell: `M${startRow + 35}`, label: '직접 SEE 출처', value: precursor.source, sourceId: precursor.id },
+            {
+                sheetName: 'E_PurchPrec',
+                cell: `L${startRow + 40}`,
+                label: '기본값 사용 근거',
+                value: precursor.default_value_justification,
+                sourceId: precursor.id,
+            }
         );
     });
 
@@ -662,9 +641,11 @@ export function createEuTemplateExportCellWrites(
     data: EuTemplateExportData,
     cnCodeMap?: EuCnCodeMap
 ): EuTemplateExportCellWrite[] {
+    void cnCodeMap;
+
     return [
-        ...createProcessCellWrites(data.processes, data.products, cnCodeMap),
-        ...createPrecursorCellWrites(data.precursors, data.products, cnCodeMap),
+        ...createProcessCellWrites(data.processes),
+        ...createPrecursorCellWrites(data.precursors),
     ];
 }
 

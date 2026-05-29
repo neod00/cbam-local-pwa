@@ -8,6 +8,7 @@ This folder is the project knowledge base for agent-assisted development. It kee
 - `architecture.md`: technical structure and dependency boundaries.
 - `data-safety.md`: local-first security and backup rules.
 - `cbam-domain-map.md`: EU CBAM template concepts mapped to app concepts.
+- `eu-template-export-map.md`: current official workbook export targets and known gaps.
 - `quality-gates.md`: checks required before finishing changes.
 - `execution-plans.md`: current roadmap and completed milestones.
 
