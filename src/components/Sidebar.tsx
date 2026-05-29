@@ -9,6 +9,7 @@ import {
     Upload,
     FileSpreadsheet,
     BarChart,
+    Monitor,
     Settings,
     ShieldCheck,
     Workflow,
@@ -18,6 +19,7 @@ import clsx from 'clsx';
 
 const navigation = [
     { name: '대시보드', href: '/', icon: Home },
+    { name: '완성 디자인', href: '/design-preview', icon: Monitor },
     { name: '제품(HS72/73)', href: '/products', icon: Package },
     { name: '보고기간', href: '/periods', icon: Calendar },
     { name: '생산공정', href: '/processes', icon: Workflow },

@@ -18,6 +18,7 @@ Completed:
 - Set Korean-first UI direction for domestic SME/mid-market users while preserving original EU submission template language and workbook structure.
 - Connected the Results page to local production process, purchased precursor, product, and reporting period data for process-level SEE calculation.
 - Added the EU template Export entry point with browser-local validation of required official sheets and copy-download flow.
+- Added a Korean-first completed-product design preview page for dashboard, workflow, calculation, validation, and export states.
 
 Next:
 
