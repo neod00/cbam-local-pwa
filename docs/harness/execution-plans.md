@@ -35,6 +35,7 @@ Completed:
 - Added readiness-linked navigation from EU Export validation warnings to the exact product, process, or precursor edit form.
 - Added an EU Export pre-submission checklist so users can see template, data, error, and warning readiness before downloading a copy.
 - Added generated workbook cell-write planning and post-injection verification for `D_Processes` and `E_PurchPrec`.
+- Linked and repaired default sample process/precursor records to the sample product so first-run Export readiness demonstrates a valid workflow.
 
 Next:
 

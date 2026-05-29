@@ -350,9 +350,10 @@ export async function seedLocalData(): Promise<void> {
       name: "Main Factory A",
       country: "KR",
     });
+    let defaultProductId = products[0]?.id;
 
     if (products.length === 0) {
-      await createLocalItem("products", {
+      const hotRolledCoil = await createLocalItem("products", {
         installation_id: installation.id,
         name: "Hot Rolled Coil",
         hs_code: "7208",
@@ -361,6 +362,7 @@ export async function seedLocalData(): Promise<void> {
         product_type_enum: "HS72_PLATE_SHEET",
         unit: "tonne",
       });
+      defaultProductId = hotRolledCoil.id;
       await createLocalItem("products", {
         installation_id: installation.id,
         name: "Steel Pipe",
@@ -390,6 +392,7 @@ export async function seedLocalData(): Promise<void> {
     if (processes.length === 0) {
       const process = await createLocalItem("processes", {
         period_id: periodId,
+        product_id: defaultProductId,
         name: "Rolling and finishing",
         production_route: "Flat steel processing",
         output_mass_t: 1000,
@@ -406,6 +409,7 @@ export async function seedLocalData(): Promise<void> {
       await createLocalItem("precursors", {
         period_id: periodId,
         process_id: processId,
+        product_id: defaultProductId,
         name: "Purchased hot rolled coil",
         aggregated_goods_category: "Iron or steel products",
         production_route: "External precursor",
@@ -418,5 +422,30 @@ export async function seedLocalData(): Promise<void> {
         default_value_justification: "",
       });
     }
+  }
+
+  const [currentProducts, currentProcesses, currentPrecursors] = await Promise.all([
+    listLocalItems("products"),
+    listLocalItems("processes"),
+    listLocalItems("precursors"),
+  ]);
+  const defaultProduct = currentProducts.find((product) => product.name === "Hot Rolled Coil") ?? currentProducts[0];
+  const demoProcess = currentProcesses.find((process) => process.name === "Rolling and finishing");
+
+  if (defaultProduct && demoProcess && !demoProcess.product_id) {
+    await updateLocalItem("processes", {
+      ...demoProcess,
+      product_id: defaultProduct.id,
+    });
+  }
+
+  const demoPrecursor = currentPrecursors.find((precursor) => precursor.name === "Purchased hot rolled coil");
+
+  if (defaultProduct && demoPrecursor && (!demoPrecursor.product_id || !demoPrecursor.process_id)) {
+    await updateLocalItem("precursors", {
+      ...demoPrecursor,
+      product_id: demoPrecursor.product_id ?? defaultProduct.id,
+      process_id: demoPrecursor.process_id ?? demoProcess?.id,
+    });
   }
 }
