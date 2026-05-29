@@ -1,3 +1,5 @@
+import type { Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod } from './local-db';
+
 export type ActivityData = Record<string, number>;
 
 export interface CalcInput {
@@ -22,6 +24,24 @@ export interface CalcResult {
     precursor_see: number;
     total_see: number;
     yield_ratio?: number;
+}
+
+export interface LocalCalculationResult {
+    id: string;
+    period_id?: string;
+    period_name?: string;
+    process_id: string;
+    process_name: string;
+    product_id?: string;
+    product_name: string;
+    hs_code?: string;
+    production_route: string;
+    output_mass_t: number;
+    direct_see: number;
+    indirect_see: number;
+    precursor_see: number;
+    total_see: number;
+    warnings: string[];
 }
 
 export function calculateEmission(input: CalcInput): CalcResult {
@@ -69,4 +89,86 @@ export function calculateEmission(input: CalcInput): CalcResult {
         total_see,
         yield_ratio
     };
+}
+
+export function calculateLocalResults(input: {
+    processes: ProductionProcess[];
+    precursors: PurchasedPrecursor[];
+    products: Product[];
+    periods: ReportingPeriod[];
+}): LocalCalculationResult[] {
+    const productById = new Map(input.products.map((product) => [product.id, product]));
+    const periodById = new Map(input.periods.map((period) => [period.id, period]));
+    const precursorsByProcess = new Map<string, PurchasedPrecursor[]>();
+
+    for (const precursor of input.precursors) {
+        if (!precursor.process_id) {
+            continue;
+        }
+
+        const group = precursorsByProcess.get(precursor.process_id) ?? [];
+        group.push(precursor);
+        precursorsByProcess.set(precursor.process_id, group);
+    }
+
+    return input.processes.map((process) => {
+        const warnings: string[] = [];
+        const product = process.product_id ? productById.get(process.product_id) : undefined;
+        const period = process.period_id ? periodById.get(process.period_id) : undefined;
+        const processPrecursors = precursorsByProcess.get(process.id) ?? [];
+
+        if (process.output_mass_t <= 0) {
+            warnings.push('생산량이 0 이하입니다. SEE 산정이 제한됩니다.');
+        }
+
+        if (!process.product_id) {
+            warnings.push('연결 제품이 지정되지 않았습니다.');
+        }
+
+        if (!process.period_id) {
+            warnings.push('보고기간이 지정되지 않았습니다.');
+        }
+
+        const output = process.output_mass_t > 0 ? process.output_mass_t : 0;
+        const directEmissions = process.direct_attributable_emissions_tco2e;
+        const indirectEmissions = process.electricity_mwh * process.electricity_ef_tco2e_per_mwh;
+        const precursorEmissions = processPrecursors.reduce((sum, precursor) => {
+            const precursorSee =
+                precursor.direct_see_tco2e_per_t + precursor.indirect_see_tco2e_per_t;
+            return sum + precursor.consumed_mass_t * precursorSee;
+        }, 0);
+
+        for (const precursor of processPrecursors) {
+            if (precursor.consumed_mass_t > process.output_mass_t && process.output_mass_t > 0) {
+                warnings.push(`${precursor.name} 소비량이 공정 생산량보다 큽니다.`);
+            }
+
+            if (!precursor.source) {
+                warnings.push(`${precursor.name}의 SEE 출처가 비어 있습니다.`);
+            }
+        }
+
+        const direct_see = output > 0 ? directEmissions / output : 0;
+        const indirect_see = output > 0 ? indirectEmissions / output : 0;
+        const precursor_see = output > 0 ? precursorEmissions / output : 0;
+        const total_see = direct_see + indirect_see + precursor_see;
+
+        return {
+            id: `result_${process.id}`,
+            period_id: process.period_id,
+            period_name: period?.name,
+            process_id: process.id,
+            process_name: process.name,
+            product_id: process.product_id,
+            product_name: product?.name ?? '미지정 제품',
+            hs_code: product?.hs_code,
+            production_route: process.production_route,
+            output_mass_t: process.output_mass_t,
+            direct_see,
+            indirect_see,
+            precursor_see,
+            total_see,
+            warnings,
+        };
+    });
 }

@@ -16,10 +16,10 @@ Completed:
 - Added Production Processes local data model and UI, mapped to EU template `D_Processes`.
 - Added Purchased Precursors local data model and UI, mapped to EU template `E_PurchPrec`.
 - Set Korean-first UI direction for domestic SME/mid-market users while preserving original EU submission template language and workbook structure.
+- Connected the Results page to local production process, purchased precursor, product, and reporting period data for process-level SEE calculation.
 
 Next:
 
-- Extend calculation engine toward process and precursor attribution.
 - Add EU template export, starting with product summary.
 
 ## Decision Log
