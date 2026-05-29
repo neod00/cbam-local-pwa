@@ -15,6 +15,17 @@ export interface LocalEntity {
 export interface Installation extends LocalEntity {
   name: string;
   country: string;
+  street?: string;
+  economic_activity?: string;
+  postcode?: string;
+  po_box?: string;
+  city?: string;
+  unlocode?: string;
+  latitude?: string;
+  longitude?: string;
+  authorized_representative_name?: string;
+  email?: string;
+  telephone?: string;
   boundary_json?: Record<string, unknown>;
 }
 
@@ -349,6 +360,13 @@ export async function seedLocalData(): Promise<void> {
     const installation = await createLocalItem("installations", {
       name: "Main Factory A",
       country: "KR",
+      street: "1 Steel Road",
+      economic_activity: "Steel processing",
+      postcode: "21990",
+      city: "Incheon",
+      authorized_representative_name: "Local CBAM Manager",
+      email: "cbam@example.com",
+      telephone: "+82-32-000-0000",
     });
     let defaultProductId = products[0]?.id;
 
@@ -424,11 +442,27 @@ export async function seedLocalData(): Promise<void> {
     }
   }
 
-  const [currentProducts, currentProcesses, currentPrecursors] = await Promise.all([
+  const [currentInstallations, currentProducts, currentProcesses, currentPrecursors] = await Promise.all([
+    listLocalItems("installations"),
     listLocalItems("products"),
     listLocalItems("processes"),
     listLocalItems("precursors"),
   ]);
+  const demoInstallation = currentInstallations.find((installation) => installation.name === "Main Factory A");
+
+  if (demoInstallation && !demoInstallation.city) {
+    await updateLocalItem("installations", {
+      ...demoInstallation,
+      street: demoInstallation.street ?? "1 Steel Road",
+      economic_activity: demoInstallation.economic_activity ?? "Steel processing",
+      postcode: demoInstallation.postcode ?? "21990",
+      city: demoInstallation.city ?? "Incheon",
+      authorized_representative_name:
+        demoInstallation.authorized_representative_name ?? "Local CBAM Manager",
+      email: demoInstallation.email ?? "cbam@example.com",
+      telephone: demoInstallation.telephone ?? "+82-32-000-0000",
+    });
+  }
   const defaultProduct = currentProducts.find((product) => product.name === "Hot Rolled Coil") ?? currentProducts[0];
   const demoProcess = currentProcesses.find((process) => process.name === "Rolling and finishing");
 

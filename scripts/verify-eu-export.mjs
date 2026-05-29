@@ -249,6 +249,13 @@ const installation = {
   updated_at: '2026-01-01T00:00:00.000Z',
   name: 'Main Factory A',
   country: 'KR',
+  street: '1 Steel Road',
+  economic_activity: 'Steel processing',
+  postcode: '21990',
+  city: 'Incheon',
+  authorized_representative_name: 'Local CBAM Manager',
+  email: 'cbam@example.com',
+  telephone: '+82-32-000-0000',
 };
 const period = {
   id: 'period-1',
@@ -303,7 +310,7 @@ const validation = await euExport.validateEuTemplateFile(file);
 
 assertEqual(String(validation.isValid), 'true', 'synthetic workbook validity');
 assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
-assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '16', 'planned cell writes');
+assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '23', 'planned cell writes');
 
 const exportedBlob = await euExport.createEuTemplateExportCopy(file, data);
 const exportedZip = fflate.unzipSync(new Uint8Array(await exportedBlob.arrayBuffer()));
@@ -314,7 +321,14 @@ const precursorSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet9.xml'])
 assertEqual(readCell(installationSheet, 'I9'), '45292', 'A_InstData I9');
 assertEqual(readCell(installationSheet, 'L9'), '45657', 'A_InstData L9');
 assertEqual(readCell(installationSheet, 'I20'), 'Main Factory A', 'A_InstData I20');
+assertEqual(readCell(installationSheet, 'I21'), '1 Steel Road', 'A_InstData I21');
+assertEqual(readCell(installationSheet, 'I22'), 'Steel processing', 'A_InstData I22');
+assertEqual(readCell(installationSheet, 'I23'), '21990', 'A_InstData I23');
+assertEqual(readCell(installationSheet, 'I25'), 'Incheon', 'A_InstData I25');
 assertEqual(readCell(installationSheet, 'I26'), 'KR', 'A_InstData I26');
+assertEqual(readCell(installationSheet, 'I30'), 'Local CBAM Manager', 'A_InstData I30');
+assertEqual(readCell(installationSheet, 'I31'), 'cbam@example.com', 'A_InstData I31');
+assertEqual(readCell(installationSheet, 'I32'), '+82-32-000-0000', 'A_InstData I32');
 assertEqual(readCell(processSheet, 'L16'), '1000', 'D_Processes L16');
 assertEqual(readCell(processSheet, 'L27'), '950', 'D_Processes L27');
 assertEqual(readCell(processSheet, 'L32'), '50', 'D_Processes L32');

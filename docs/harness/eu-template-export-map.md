@@ -15,14 +15,25 @@ The official workbook itself must stay outside the repository. The app should al
 
 ### `A_InstData`
 
-The app writes only basic reporting-period and installation identity fields.
+The app writes reporting-period, installation identity, address, location, and contact fields that are stored in the local installation record.
 
 | App field | Official cell | Notes |
 | --- | --- | --- |
 | `ReportingPeriod.start_date` | `I9` | Start date, written as an Excel serial date. |
 | `ReportingPeriod.end_date` | `L9` | End date, written as an Excel serial date. |
 | `Installation.name` | `I20` | Installation English name field. |
+| `Installation.street` | `I21` | Street and number. |
+| `Installation.economic_activity` | `I22` | Economic activity. |
+| `Installation.postcode` | `I23` | Post code. |
+| `Installation.po_box` | `I24` | Optional P.O. Box. |
+| `Installation.city` | `I25` | City. |
 | `Installation.country` | `I26` | Country code/name field currently stores the local country value. |
+| `Installation.unlocode` | `I27` | Optional UN/LOCODE. |
+| `Installation.latitude` | `I28` | Optional latitude. |
+| `Installation.longitude` | `I29` | Optional longitude. |
+| `Installation.authorized_representative_name` | `I30` | Authorized representative name. |
+| `Installation.email` | `I31` | Contact email. |
+| `Installation.telephone` | `I32` | Contact telephone. |
 
 ### `D_Processes`
 
@@ -56,6 +67,6 @@ The app does not currently write `indirect_see_tco2e_per_t` directly into `E_Pur
 
 ## Known Gaps
 
-- `A_InstData` only includes the first-pass reporting-period and installation fields.
+- `A_InstData` still does not write the optional local-language installation name at `I19`.
 - `B_EmInst` and `C_Emissions&Energy` require a more detailed source-stream and energy model before reliable export.
 - Production routes and aggregated goods categories should be driven through `A_InstData` and official dropdown/code-list relationships rather than by overwriting protected labels.

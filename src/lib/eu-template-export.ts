@@ -664,9 +664,55 @@ function createInstallationCellWrites(
                 sourceId: installation.id,
             }
         );
+        addOptionalInstallationWrite(writes, installation, 'street', 'I21', '사업장 주소');
+        addOptionalInstallationWrite(writes, installation, 'economic_activity', 'I22', '경제활동');
+        addOptionalInstallationWrite(writes, installation, 'postcode', 'I23', '우편번호');
+        addOptionalInstallationWrite(writes, installation, 'po_box', 'I24', 'P.O. Box');
+        addOptionalInstallationWrite(writes, installation, 'city', 'I25', '도시');
+        addOptionalInstallationWrite(writes, installation, 'unlocode', 'I27', 'UN/LOCODE');
+        addOptionalInstallationWrite(writes, installation, 'latitude', 'I28', '위도');
+        addOptionalInstallationWrite(writes, installation, 'longitude', 'I29', '경도');
+        addOptionalInstallationWrite(writes, installation, 'authorized_representative_name', 'I30', '담당자명');
+        addOptionalInstallationWrite(writes, installation, 'email', 'I31', '담당자 이메일');
+        addOptionalInstallationWrite(writes, installation, 'telephone', 'I32', '담당자 전화번호');
     }
 
     return writes;
+}
+
+function addOptionalInstallationWrite(
+    writes: EuTemplateExportCellWrite[],
+    installation: Installation,
+    field: keyof Pick<
+        Installation,
+        | 'street'
+        | 'economic_activity'
+        | 'postcode'
+        | 'po_box'
+        | 'city'
+        | 'unlocode'
+        | 'latitude'
+        | 'longitude'
+        | 'authorized_representative_name'
+        | 'email'
+        | 'telephone'
+    >,
+    cell: string,
+    label: string
+): void {
+    const value = installation[field];
+
+    if (value === undefined || value === '') {
+        return;
+    }
+
+    writes.push({
+        sheetName: 'A_InstData',
+        cell,
+        label,
+        value,
+        sourceId: installation.id,
+    });
 }
 
 function createPrecursorCellWrites(precursors: PurchasedPrecursor[]): EuTemplateExportCellWrite[] {
