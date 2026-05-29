@@ -38,6 +38,7 @@ Completed:
 - Linked and repaired default sample process/precursor records to the sample product so first-run Export readiness demonstrates a valid workflow.
 - Added `npm run verify:export`, a synthetic workbook verification script for EU template validation and `D_Processes`/`E_PurchPrec` cell injection.
 - Added `npm run verify` as the standard local quality gate combining Export verification, lint, and production build.
+- Added Export success feedback that shows the generated copy filename, timestamp, and verified cell counts after download starts.
 
 Next:
 

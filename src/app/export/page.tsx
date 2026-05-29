@@ -5,7 +5,7 @@ import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calcul
 import {
     createEuExportFilename,
     createEuTemplateExportCellWrites,
-    createEuTemplateExportCopy,
+    createEuTemplateExportCopyResult,
     downloadBlob,
     evaluateEuExportReadiness,
     REQUIRED_EU_TEMPLATE_SHEETS,
@@ -24,6 +24,13 @@ type ExportChecklistItem = {
     status: string;
     tone: 'success' | 'warning' | 'danger' | 'pending';
     complete: boolean;
+};
+
+type LastExportResult = {
+    filename: string;
+    generatedAt: string;
+    checkedCellCount: number;
+    writtenCellCount: number;
 };
 
 function formatNumber(value: number) {
@@ -60,6 +67,7 @@ export default function ExportPage() {
     const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [exportError, setExportError] = useState('');
+    const [lastExportResult, setLastExportResult] = useState<LastExportResult | undefined>();
 
     useEffect(() => {
         async function loadPreviewData() {
@@ -155,16 +163,17 @@ export default function ExportPage() {
             },
             {
                 label: '반영 셀 검증',
-                description:
-                    plannedCellWrites.length > 0
-                        ? `D_Processes와 E_PurchPrec에 반영할 셀 ${plannedCellWrites.length}개를 생성 후 검증합니다.`
-                        : '반영할 공정 또는 전구물질 데이터가 없습니다.',
-                status: plannedCellWrites.length > 0 ? '대기' : '확인 필요',
-                tone: plannedCellWrites.length > 0 ? 'pending' : 'warning',
-                complete: false,
+                description: lastExportResult
+                    ? `복사본 생성 중 ${lastExportResult.checkedCellCount}개 셀을 검증했습니다.`
+                    : plannedCellWrites.length > 0
+                      ? `D_Processes와 E_PurchPrec에 반영할 셀 ${plannedCellWrites.length}개를 생성 후 검증합니다.`
+                      : '반영할 공정 또는 전구물질 데이터가 없습니다.',
+                status: lastExportResult ? '완료' : plannedCellWrites.length > 0 ? '대기' : '확인 필요',
+                tone: lastExportResult ? 'success' : plannedCellWrites.length > 0 ? 'pending' : 'warning',
+                complete: Boolean(lastExportResult),
             },
         ],
-        [plannedCellWrites.length, readiness.errorCount, readiness.warningCount, results.length, templateFile, validation]
+        [lastExportResult, plannedCellWrites.length, readiness.errorCount, readiness.warningCount, results.length, templateFile, validation]
     );
 
     const downloadStatusMessage = useMemo(() => {
@@ -191,6 +200,8 @@ export default function ExportPage() {
         setTemplateFile(file);
         setValidation(undefined);
         setValidationError('');
+        setExportError('');
+        setLastExportResult(undefined);
 
         if (!file) {
             return;
@@ -212,14 +223,22 @@ export default function ExportPage() {
         }
 
         setExportError('');
+        setLastExportResult(undefined);
 
         try {
-            const copy = await createEuTemplateExportCopy(templateFile, {
+            const exportResult = await createEuTemplateExportCopyResult(templateFile, {
                 processes,
                 precursors,
                 products,
             });
-            downloadBlob(copy, createEuExportFilename(templateFile.name));
+            const filename = createEuExportFilename(templateFile.name);
+            downloadBlob(exportResult.blob, filename);
+            setLastExportResult({
+                filename,
+                generatedAt: new Date().toLocaleString('ko-KR'),
+                checkedCellCount: exportResult.verification.checkedCellCount,
+                writtenCellCount: exportResult.writtenCellCount,
+            });
         } catch (error) {
             setExportError(error instanceof Error ? error.message : 'EU 템플릿 Export 중 오류가 발생했습니다.');
         }
@@ -341,6 +360,33 @@ export default function ExportPage() {
                         <div className="mt-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
                             <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
                             <span>{exportError}</span>
+                        </div>
+                    )}
+
+                    {lastExportResult && (
+                        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                            <div className="flex items-start gap-2">
+                                <FileCheck2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-700" />
+                                <div>
+                                    <p className="text-sm font-semibold text-emerald-900">복사본 생성 및 셀 검증 완료</p>
+                                    <dl className="mt-2 grid gap-1 text-xs leading-5 text-emerald-900/80">
+                                        <div>
+                                            <dt className="inline font-medium">파일명: </dt>
+                                            <dd className="inline break-all">{lastExportResult.filename}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="inline font-medium">생성 시각: </dt>
+                                            <dd className="inline">{lastExportResult.generatedAt}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="inline font-medium">검증 셀: </dt>
+                                            <dd className="inline">
+                                                {lastExportResult.checkedCellCount}개 확인, {lastExportResult.writtenCellCount}개 반영
+                                            </dd>
+                                        </div>
+                                    </dl>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </SectionCard>

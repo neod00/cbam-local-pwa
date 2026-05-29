@@ -61,6 +61,12 @@ export interface EuTemplateExportVerificationResult {
     isValid: boolean;
 }
 
+export interface EuTemplateExportCopyResult {
+    blob: Blob;
+    verification: EuTemplateExportVerificationResult;
+    writtenCellCount: number;
+}
+
 export type EuExportIssueTarget =
     | { type: 'product'; id: string }
     | { type: 'process'; id: string }
@@ -694,7 +700,7 @@ function verifyExportCellWrites(
     };
 }
 
-export async function createEuTemplateExportCopy(file: File, data: EuTemplateExportData): Promise<Blob> {
+export async function createEuTemplateExportCopyResult(file: File, data: EuTemplateExportData): Promise<EuTemplateExportCopyResult> {
     const workbookBytes = new Uint8Array(await file.arrayBuffer());
     const zip = unzipSync(workbookBytes);
     const cnCodeMap = parseCnCodeMap(zip);
@@ -728,9 +734,17 @@ export async function createEuTemplateExportCopy(file: File, data: EuTemplateExp
         );
     }
 
-    return new Blob([zipSync(zip)], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    });
+    return {
+        blob: new Blob([zipSync(zip)], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }),
+        verification,
+        writtenCellCount: cellWrites.length,
+    };
+}
+
+export async function createEuTemplateExportCopy(file: File, data: EuTemplateExportData): Promise<Blob> {
+    return (await createEuTemplateExportCopyResult(file, data)).blob;
 }
 
 export function createEuExportFilename(originalFilename: string): string {
