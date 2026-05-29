@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Button, DataTable, PageHeader, SectionCard, StatusBadge } from '@/components/ui';
+import { CN_CODE_OPTIONS, type CnCodeOption } from '@/lib/cn-code-options';
+import { parseEuTemplateCnCodeOptions } from '@/lib/eu-template-export';
 import {
     createLocalItem,
     getLocalSetting,
@@ -10,9 +12,8 @@ import {
     setLocalSetting,
     updateLocalItem,
 } from '@/lib/local-db';
-import { CN_CODE_OPTIONS, type CnCodeOption } from '@/lib/cn-code-options';
-import { parseEuTemplateCnCodeOptions } from '@/lib/eu-template-export';
-import { FileSpreadsheet, Pencil, Plus, X } from 'lucide-react';
+import { FileSpreadsheet, Pencil, Plus, Search, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 type HsGroup = Product['hs_group'];
 type ProductDraft = Pick<Product, 'name' | 'hs_code' | 'cn_code' | 'hs_group' | 'product_type_enum' | 'unit'>;
@@ -26,6 +27,9 @@ const EMPTY_PRODUCT_DRAFT: ProductDraft = {
     unit: 'tonne',
 };
 
+const fieldClass =
+    'mt-1 block h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-4 focus:ring-teal-100';
+
 export default function ProductsPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
@@ -35,7 +39,6 @@ export default function ProductsPage() {
     const [cnOptions, setCnOptions] = useState<CnCodeOption[]>(CN_CODE_OPTIONS);
     const [cnImportMessage, setCnImportMessage] = useState('');
     const [cnImportError, setCnImportError] = useState('');
-
     const [draft, setDraft] = useState<ProductDraft>(EMPTY_PRODUCT_DRAFT);
 
     useEffect(() => {
@@ -55,6 +58,25 @@ export default function ProductsPage() {
 
         fetchProducts();
     }, []);
+
+    const filteredCnOptions = useMemo(() => {
+        const query = cnSearch.trim().toLowerCase();
+
+        return cnOptions
+            .filter((option) => {
+                if (!query) {
+                    return true;
+                }
+
+                return (
+                    option.code.includes(query) ||
+                    option.labelKo.toLowerCase().includes(query) ||
+                    option.description.toLowerCase().includes(query) ||
+                    option.goodsCategory.toLowerCase().includes(query)
+                );
+            })
+            .slice(0, 12);
+    }, [cnOptions, cnSearch]);
 
     function resetForm() {
         setDraft(EMPTY_PRODUCT_DRAFT);
@@ -91,6 +113,7 @@ export default function ProductsPage() {
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
+
         if (editingProductId) {
             const existingProduct = products.find((product) => product.id === editingProductId);
 
@@ -130,50 +153,36 @@ export default function ProductsPage() {
         }
     }
 
-    const filteredCnOptions = cnOptions.filter((option) => {
-        const query = cnSearch.trim().toLowerCase();
-
-        if (!query) {
-            return true;
-        }
-
-        return (
-            option.code.includes(query) ||
-            option.labelKo.toLowerCase().includes(query) ||
-            option.description.toLowerCase().includes(query) ||
-            option.goodsCategory.toLowerCase().includes(query)
-        );
-    }).slice(0, 12);
+    function applyCnOption(option: CnCodeOption) {
+        setDraft({
+            ...draft,
+            cn_code: option.code,
+            hs_code: option.code.slice(0, 4),
+            hs_group: option.code.startsWith('73') ? '73' : '72',
+            product_type_enum: option.goodsCategory,
+        });
+    }
 
     return (
-        <div>
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-gray-900">제품 등록(CN/HS 72·73)</h1>
-                <button
-                    onClick={startNewProduct}
-                    className="flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                >
-                    <Plus className="mr-2 h-4 w-4" />
-                    제품 추가
-                </button>
-            </div>
-            <p className="mt-2 text-sm text-gray-600">
-                제품과 생산 관련 데이터는 이 브라우저에만 저장됩니다. EU Export 정확도를 위해 CN 8자리 코드를 우선 입력하세요.
-            </p>
+        <div className="space-y-6">
+            <PageHeader
+                eyebrow="품목 기준 데이터"
+                title="CBAM 대상 품목 관리"
+                description="CN 코드 기준으로 대상 여부와 산정 상태를 관리합니다. 제품 데이터는 이 브라우저에만 저장됩니다."
+                actions={
+                    <Button type="button" onClick={startNewProduct}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        품목 추가
+                    </Button>
+                }
+            />
 
-            <div className="mt-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                        <h2 className="text-base font-semibold text-gray-900">EU 템플릿 CN 코드 목록</h2>
-                        <p className="mt-1 text-sm text-gray-600">
-                            최신 EU 템플릿을 선택하면 `Parameters_CNCodes`의 전체 CN 코드 목록을 로컬에 저장해 제품 등록 검색에 사용합니다.
-                        </p>
-                        <p className="mt-1 text-xs text-gray-500">
-                            현재 검색 목록: {cnOptions.length}개 {cnOptions === CN_CODE_OPTIONS ? '(대표 코드)' : '(EU 템플릿에서 가져옴)'}
-                        </p>
-                    </div>
-                    <label className="inline-flex cursor-pointer items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50">
-                        <FileSpreadsheet className="mr-2 h-4 w-4 text-gray-500" />
+            <SectionCard
+                title="EU 템플릿 CN 코드 목록"
+                description="최신 EU 템플릿을 선택하면 Parameters_CNCodes의 전체 CN 코드 목록을 로컬에 저장해 제품 검색에 사용합니다."
+                actions={
+                    <label className="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50">
+                        <FileSpreadsheet className="mr-2 h-4 w-4 text-teal-700" />
                         EU 템플릿에서 가져오기
                         <input
                             type="file"
@@ -182,62 +191,66 @@ export default function ProductsPage() {
                             onChange={(event) => handleCnTemplateImport(event.target.files?.[0])}
                         />
                     </label>
+                }
+            >
+                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                    <StatusBadge tone={cnOptions === CN_CODE_OPTIONS ? 'neutral' : 'success'}>
+                        {cnOptions === CN_CODE_OPTIONS ? '대표 코드 목록' : 'EU 템플릿 기준'}
+                    </StatusBadge>
+                    <span>현재 검색 목록: {cnOptions.length}개</span>
                 </div>
                 {cnImportMessage && (
-                    <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+                    <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                         {cnImportMessage}
                     </div>
                 )}
                 {cnImportError && (
-                    <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                    <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
                         {cnImportError}
                     </div>
                 )}
-            </div>
+            </SectionCard>
 
-            {/* Add Form */}
             {showForm && (
-                <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <div className="mb-4 flex items-center justify-between gap-3">
-                        <h2 className="text-lg font-medium">{editingProductId ? '제품 정보 수정' : '신규 제품 등록'}</h2>
-                        <button
-                            type="button"
-                            onClick={resetForm}
-                            className="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                        >
+                <SectionCard
+                    title={editingProductId ? '제품 정보 수정' : '신규 제품 등록'}
+                    description="EU Export 정확도를 위해 CN 8자리 코드를 우선 입력하세요."
+                    actions={
+                        <Button type="button" variant="secondary" onClick={resetForm}>
                             <X className="mr-2 h-4 w-4" />
                             취소
-                        </button>
-                    </div>
+                        </Button>
+                    }
+                >
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">제품명</label>
+                            <label className="text-sm font-semibold text-slate-700">제품명</label>
                             <input
                                 type="text"
                                 required
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                className={fieldClass}
                                 value={draft.name}
                                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">HS 코드</label>
+                            <label className="text-sm font-semibold text-slate-700">HS 코드</label>
                             <input
                                 type="text"
                                 required
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                className={fieldClass}
                                 value={draft.hs_code}
                                 onChange={(e) => setDraft({ ...draft, hs_code: e.target.value })}
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">CN 8자리 코드</label>
+                            <label className="text-sm font-semibold text-slate-700">CN 8자리 코드</label>
                             <input
                                 type="text"
                                 inputMode="numeric"
                                 pattern="[0-9]{8}"
                                 maxLength={8}
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                className={fieldClass}
                                 value={draft.cn_code}
                                 onChange={(e) =>
                                     setDraft({
@@ -247,50 +260,46 @@ export default function ProductsPage() {
                                 }
                                 placeholder="예: 72083900"
                             />
-                            <p className="mt-1 text-xs text-gray-500">EU 템플릿 제출 검증은 CN 8자리 기준으로 수행합니다.</p>
+                            <p className="mt-1 text-xs text-slate-500">EU 템플릿 제출 검증은 CN 8자리 기준으로 수행합니다.</p>
                         </div>
+                        <div>
+                            <label className="text-sm font-semibold text-slate-700">CN 코드 검색</label>
+                            <div className="relative">
+                                <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                                <input
+                                    type="search"
+                                    className={`${fieldClass} pl-9`}
+                                    value={cnSearch}
+                                    onChange={(event) => setCnSearch(event.target.value)}
+                                    placeholder="예: 열연, 강관, 볼트, 7208, 7318"
+                                />
+                            </div>
+                        </div>
+
                         <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-gray-700">CN 코드 검색</label>
-                            <input
-                                type="search"
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                value={cnSearch}
-                                onChange={(event) => setCnSearch(event.target.value)}
-                                placeholder="예: 열연, 강관, 볼트, 7208, 7318"
-                            />
-                            <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
+                            <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                                 {filteredCnOptions.map((option) => (
                                     <button
                                         key={option.code}
                                         type="button"
-                                        onClick={() =>
-                                            setDraft({
-                                                ...draft,
-                                                cn_code: option.code,
-                                                hs_code: option.code.slice(0, 4),
-                                                hs_group: option.code.startsWith('73') ? '73' : '72',
-                                                product_type_enum: option.goodsCategory,
-                                            })
-                                        }
-                                        className="rounded-md border border-gray-200 bg-gray-50 p-3 text-left hover:border-blue-300 hover:bg-blue-50"
+                                        onClick={() => applyCnOption(option)}
+                                        className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-teal-300 hover:bg-teal-50"
                                     >
                                         <div className="flex items-center justify-between gap-3">
-                                            <span className="text-sm font-semibold text-gray-900">{option.code}</span>
-                                            <span className="text-xs text-gray-500">{option.goodsCategory}</span>
+                                            <span className="text-sm font-semibold text-slate-950">{option.code}</span>
+                                            <span className="text-xs text-slate-500">{option.goodsCategory}</span>
                                         </div>
-                                        <div className="mt-1 text-sm text-gray-700">{option.labelKo}</div>
-                                        <div className="mt-1 line-clamp-1 text-xs text-gray-500">{option.description}</div>
+                                        <div className="mt-1 text-sm text-slate-700">{option.labelKo}</div>
+                                        <div className="mt-1 line-clamp-1 text-xs text-slate-500">{option.description}</div>
                                     </button>
                                 ))}
                             </div>
-                            <p className="mt-2 text-xs text-gray-500">
-                                EU 템플릿에서 가져온 목록이 있으면 전체 목록을 검색합니다. 최종 Export 검증도 업로드한 최신 EU 템플릿의 Parameters_CNCodes를 기준으로 합니다.
-                            </p>
                         </div>
+
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">HS 그룹</label>
+                            <label className="text-sm font-semibold text-slate-700">HS 그룹</label>
                             <select
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                className={fieldClass}
                                 value={draft.hs_group}
                                 onChange={(e) => setDraft({ ...draft, hs_group: e.target.value as HsGroup })}
                             >
@@ -299,9 +308,9 @@ export default function ProductsPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">제품군 템플릿</label>
+                            <label className="text-sm font-semibold text-slate-700">제품군 템플릿</label>
                             <select
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                className={fieldClass}
                                 value={draft.product_type_enum}
                                 onChange={(e) => setDraft({ ...draft, product_type_enum: e.target.value })}
                             >
@@ -316,67 +325,65 @@ export default function ProductsPage() {
                             </select>
                         </div>
                         <div className="md:col-span-2">
-                            <button
-                                type="submit"
-                                className="items-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-                            >
-                                {editingProductId ? '수정 저장' : '제품 저장'}
-                            </button>
+                            <Button type="submit">{editingProductId ? '수정 저장' : '제품 저장'}</Button>
                         </div>
                     </form>
-                </div>
+                </SectionCard>
             )}
 
-            {/* List */}
-            <div className="mt-6 flow-root">
-                <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-                    <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-                        <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
-                            <table className="min-w-full divide-y divide-gray-300">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">제품명</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">HS 코드</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">CN 8자리</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">그룹</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">제품군</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">단위</th>
-                                        <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">관리</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200 bg-white">
-                                    {loading ? (
-                                        <tr><td colSpan={7} className="p-4 text-center">불러오는 중...</td></tr>
-                                    ) : products.length === 0 ? (
-                                        <tr><td colSpan={7} className="p-4 text-center text-gray-500">등록된 제품이 없습니다.</td></tr>
-                                    ) : (
-                                        products.map((product) => (
-                                            <tr key={product.id}>
-                                                <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-900">{product.name}</td>
-                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{product.hs_code}</td>
-                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{product.cn_code || '미입력'}</td>
-                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">HS {product.hs_group}</td>
-                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{product.product_type_enum}</td>
-                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{product.unit}</td>
-                                                <td className="whitespace-nowrap px-3 py-4 text-right text-sm">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => startEditProduct(product)}
-                                                        className="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                                                    >
-                                                        <Pencil className="mr-1.5 h-4 w-4" />
-                                                        수정
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <DataTable>
+                <table className="min-w-full divide-y divide-slate-200">
+                    <thead className="bg-slate-50">
+                        <tr>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">상태</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">CN 코드</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">제품명</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">품목군</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">HS 코드</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">단위</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">작업</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                        {loading ? (
+                            <tr>
+                                <td colSpan={7} className="p-6 text-center text-sm text-slate-500">
+                                    불러오는 중...
+                                </td>
+                            </tr>
+                        ) : products.length === 0 ? (
+                            <tr>
+                                <td colSpan={7} className="p-6 text-center text-sm text-slate-500">
+                                    등록된 제품이 없습니다.
+                                </td>
+                            </tr>
+                        ) : (
+                            products.map((product) => (
+                                <tr key={product.id} className="transition hover:bg-slate-50">
+                                    <td className="whitespace-nowrap px-4 py-4 text-sm">
+                                        <StatusBadge tone={product.cn_code?.length === 8 ? 'success' : 'warning'}>
+                                            {product.cn_code?.length === 8 ? '산정 준비' : 'CN 확인 필요'}
+                                        </StatusBadge>
+                                    </td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-slate-950">
+                                        {product.cn_code || '미입력'}
+                                    </td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-700">{product.name}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{product.product_type_enum}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{product.hs_code}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{product.unit}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm">
+                                        <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => startEditProduct(product)}>
+                                            <Pencil className="mr-1.5 h-4 w-4" />
+                                            수정
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </DataTable>
         </div>
     );
 }

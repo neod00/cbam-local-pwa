@@ -1,5 +1,6 @@
 'use client';
 
+import { Button, PageHeader, SectionCard, StatCard } from '@/components/ui';
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
     CbamBackupFile,
@@ -129,77 +130,47 @@ export default function SettingsPage() {
     }
 
     return (
-        <div className="space-y-8">
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900">설정 및 데이터 안전</h1>
-                <p className="mt-2 max-w-3xl text-sm text-gray-600">
-                    CBAM Local은 기업 데이터를 이 브라우저의 로컬 DB에 저장합니다. 장기 보관, PC 교체,
-                    검증 대응을 위해 .cbam 백업을 사용하세요.
-                </p>
-            </div>
+        <div className="space-y-6">
+            <PageHeader
+                eyebrow="로컬 데이터 보호"
+                title="설정 및 데이터 안전"
+                description="CBAM Local은 기업 데이터를 이 브라우저의 로컬 DB에 저장합니다. 장기 보관, PC 교체, 검증 대응을 위해 .cbam 백업을 사용하세요."
+            />
 
             {message && (
-                <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
                     {message}
                 </div>
             )}
 
-            <section className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-                <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <ShieldCheck className="h-5 w-5 text-green-600" />
-                        <h2 className="text-base font-semibold text-gray-900">서버 전송</h2>
-                    </div>
-                    <p className="mt-3 text-sm text-gray-600">
-                        생산, 전구물질, 사업장, 결과 데이터는 이 PWA 버전에서 로컬로 처리됩니다.
-                        공유 데모 환경에는 실제 기업 데이터를 입력하지 마세요.
-                    </p>
-                </div>
-
-                <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <Database className="h-5 w-5 text-sky-600" />
-                        <h2 className="text-base font-semibold text-gray-900">로컬 저장</h2>
-                    </div>
-                    <p className="mt-3 text-sm text-gray-600">
-                        브라우저 데이터 삭제, 프로필 초기화, 도메인 변경 시 로컬 데이터가 사라질 수 있습니다.
-                        최신 .cbam 백업을 브라우저 밖에 보관하세요.
-                    </p>
-                </div>
-
-                <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <AlertTriangle className="h-5 w-5 text-amber-600" />
-                        <h2 className="text-base font-semibold text-gray-900">마지막 백업</h2>
-                    </div>
-                    <p className="mt-3 text-sm font-medium text-gray-900">{formatDateTime(lastBackupAt)}</p>
-                    <p className="mt-1 text-sm text-gray-600">중요한 데이터 변경 후에는 백업하세요.</p>
-                </div>
+            <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <StatCard label="서버 전송" value="없음" helper="PWA 버전은 로컬 처리" icon={ShieldCheck} tone="success" />
+                <StatCard label="로컬 저장" value="IndexedDB" helper="브라우저 데이터 삭제에 주의" icon={Database} tone="info" />
+                <StatCard label="마지막 백업" value={formatDateTime(lastBackupAt)} helper="중요 변경 후 백업 권장" icon={AlertTriangle} tone="warning" />
             </section>
 
-            <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <SectionCard>
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
-                        <h2 className="text-lg font-semibold text-gray-900">.cbam 백업 내보내기</h2>
-                        <p className="mt-1 text-sm text-gray-600">
+                        <h2 className="text-lg font-semibold text-slate-950">.cbam 백업 내보내기</h2>
+                        <p className="mt-1 text-sm text-slate-600">
                             사업장, 제품, 보고기간, 생산공정, 전구물질, 설정과 향후 산정 데이터를 하나의 백업 파일로 내려받습니다.
                         </p>
                     </div>
-                    <button
+                    <Button
                         onClick={handleExport}
-                        className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                     >
                         <Download className="mr-2 h-4 w-4" />
                         백업 내보내기
-                    </button>
+                    </Button>
                 </div>
-            </section>
+            </SectionCard>
 
-            <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <SectionCard>
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div>
-                        <h2 className="text-lg font-semibold text-gray-900">.cbam 백업 가져오기</h2>
-                        <p className="mt-1 text-sm text-gray-600">
+                        <h2 className="text-lg font-semibold text-slate-950">.cbam 백업 가져오기</h2>
+                        <p className="mt-1 text-sm text-slate-600">
                             백업 파일을 불러와 내용을 확인한 뒤 이 브라우저에 복원합니다. 복원하면 현재 로컬 데이터가 교체됩니다.
                         </p>
                     </div>
@@ -211,25 +182,26 @@ export default function SettingsPage() {
                             className="hidden"
                             onChange={handleFileSelected}
                         />
-                        <button
+                        <Button
+                            type="button"
+                            variant="secondary"
                             onClick={() => fileInputRef.current?.click()}
-                            className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                         >
                             <FileUp className="mr-2 h-4 w-4" />
                             백업 선택
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                            type="button"
                             onClick={handleImport}
                             disabled={!backupPreview}
-                            className="inline-flex items-center justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                         >
                             복원
-                        </button>
+                        </Button>
                     </div>
                 </div>
 
                 {backupPreview && (
-                    <div className="mt-5 rounded-md border border-gray-200 bg-gray-50 p-4">
+                    <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <h3 className="text-sm font-semibold text-gray-900">백업 미리보기</h3>
                         <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
                             <div>
@@ -251,7 +223,7 @@ export default function SettingsPage() {
                         </dl>
                         <div className="mt-4 grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
                             {Object.entries(backupPreview.manifest.counts).map(([store, count]) => (
-                                <div key={store} className="rounded border border-gray-200 bg-white px-3 py-2">
+                                <div key={store} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                                     <div className="text-gray-500">{storeLabels[store] ?? store}</div>
                                     <div className="font-semibold text-gray-900">{count}</div>
                                 </div>
@@ -259,9 +231,9 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 )}
-            </section>
+            </SectionCard>
 
-            <section className="rounded-lg border border-red-200 bg-white p-6 shadow-sm">
+            <SectionCard className="border-red-200">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h2 className="text-lg font-semibold text-red-900">로컬 데이터 삭제</h2>
@@ -269,15 +241,16 @@ export default function SettingsPage() {
                             이 브라우저의 모든 CBAM Local 데이터를 삭제합니다. 보관이 필요하면 먼저 백업을 내보내세요.
                         </p>
                     </div>
-                    <button
+                    <Button
+                        type="button"
+                        variant="danger"
                         onClick={handleClearData}
-                        className="inline-flex items-center justify-center rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
                     >
                         <Trash2 className="mr-2 h-4 w-4" />
                         데이터 삭제
-                    </button>
+                    </Button>
                 </div>
-            </section>
+            </SectionCard>
         </div>
     );
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 
 export const metadata: Metadata = {
@@ -15,15 +15,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className="h-full bg-gray-100">
-      <body className="h-full">
+    <html lang="ko" className="h-full bg-[#F6F8F7]">
+      <body className="min-h-full">
         <ServiceWorkerRegistration />
-        <div className="flex h-full">
-          <Sidebar />
-          <main className="flex-1 overflow-auto p-8">
-            {children}
-          </main>
-        </div>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

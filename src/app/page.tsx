@@ -1,39 +1,89 @@
+import { PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { AlertTriangle, CheckCircle2, Factory, FileSpreadsheet, Package, TrendingUp } from 'lucide-react';
+
+const steps = [
+  { name: '품목 식별', status: '완료', tone: 'success' as const },
+  { name: '생산공정 설정', status: '진행중', tone: 'info' as const },
+  { name: '직접배출량 입력', status: '확인필요', tone: 'warning' as const },
+  { name: '간접배출량 입력', status: '미완료', tone: 'neutral' as const },
+  { name: '전구물질 입력', status: '진행중', tone: 'info' as const },
+  { name: 'EU Export', status: '대기', tone: 'pending' as const },
+];
+
+const recentTasks = [
+  'EU 템플릿 Parameters_CNCodes 기준으로 제품 CN 코드 확인',
+  '생산공정별 전력 사용량 입력',
+  '구매 전구물질 공급업체 자료 출처 확인',
+  '.cbam 백업 파일 최신화',
+];
+
 export default function Home() {
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900">대시보드</h1>
-      <p className="mt-4 text-gray-600">
-        국내 중소·중견 기업을 위한 로컬 우선 CBAM 내재배출량 산정 도구입니다.
-      </p>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Local-first CBAM 산정"
+        title="2025년 4분기 CBAM 산정 현황"
+        description="사업장, 제품, 생산공정, 전구물질 데이터를 로컬에서 관리하고 EU 원본 템플릿으로 제출용 파일을 준비합니다."
+      />
 
-      <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-lg bg-white p-6 shadow">
-          <h3 className="text-lg font-medium text-gray-900">앱 상태</h3>
-          <p className="mt-2 text-sm text-gray-500">
-            입력, 백업, 산정 준비가 가능한 로컬 PWA 모드입니다.
-          </p>
-          <div className="mt-4">
-            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-              정상
-            </span>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="CBAM 대상 품목" value="2개" helper="CN 8자리 기준 관리" icon={Package} tone="pending" />
+        <StatCard label="총 생산량" value="1,950t" helper="등록된 공정 기준" icon={Factory} tone="info" />
+        <StatCard label="보고 준비율" value="72%" helper="Export 전 검토 필요" icon={TrendingUp} tone="success" />
+        <StatCard label="확인 필요 항목" value="5건" helper="입력 누락과 경고 포함" icon={AlertTriangle} tone="warning" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
+        <SectionCard
+          title="산정 진행 단계"
+          description="EU 제출용 파일을 만들기 전 필요한 업무 흐름을 단계별로 확인합니다."
+        >
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {steps.map((step, index) => (
+              <div key={step.name} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
+                    {index + 1}
+                  </div>
+                  <div className="font-semibold text-slate-900">{step.name}</div>
+                </div>
+                <StatusBadge tone={step.tone}>{step.status}</StatusBadge>
+              </div>
+            ))}
           </div>
-        </div>
+        </SectionCard>
 
-        <div className="rounded-lg bg-white p-6 shadow">
-          <h3 className="text-lg font-medium text-gray-900">주요 작업</h3>
-          <ul className="mt-2 list-disc pl-5 text-sm text-gray-500">
-            <li>HS72/73 제품 등록</li>
-            <li>보고기간 생성</li>
-            <li>활동자료 엑셀 업로드 준비</li>
+        <SectionCard title="최근 작업 항목" description="다음 작업을 우선 처리하면 Export 준비율이 올라갑니다.">
+          <ul className="space-y-3">
+            {recentTasks.map((task) => (
+              <li key={task} className="flex gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-700" />
+                <span>{task}</span>
+              </li>
+            ))}
           </ul>
-        </div>
+        </SectionCard>
+      </div>
 
-        <div className="rounded-lg bg-white p-6 shadow">
-          <h3 className="text-lg font-medium text-gray-900">데이터 보관</h3>
-          <p className="mt-2 text-sm text-gray-500">
-            기업 데이터는 브라우저 로컬 DB에 저장됩니다. 중요한 입력 후에는 .cbam 백업 파일을 내려받으세요.
-          </p>
-        </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <SectionCard title="데이터 보관 원칙" description="무료 PWA 버전은 기업 데이터를 서버로 전송하지 않는 구조를 우선합니다.">
+          <div className="rounded-2xl bg-teal-50 p-4 text-sm leading-6 text-teal-900">
+            입력 데이터는 브라우저 로컬 DB에 저장됩니다. PC 교체나 브라우저 데이터 삭제에 대비해 중요한 입력 후에는
+            `.cbam` 백업을 내려받아 회사의 안전한 폴더에 보관하세요.
+          </div>
+        </SectionCard>
+
+        <SectionCard title="EU 제출 준비" description="원본 EU 템플릿을 업로드한 뒤 앱의 산정 데이터를 복사본에 반영합니다.">
+          <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+            <FileSpreadsheet className="mt-1 h-5 w-5 text-teal-700" />
+            <div>
+              <div className="font-semibold text-slate-950">원본 템플릿 유지</div>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                공식 시트명, 영문 라벨, 수식은 변경하지 않고 `D_Processes`, `E_PurchPrec` 입력 영역에만 데이터를 반영합니다.
+              </p>
+            </div>
+          </div>
+        </SectionCard>
       </div>
     </div>
   );

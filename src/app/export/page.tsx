@@ -1,5 +1,6 @@
 'use client';
 
+import { Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import {
     createEuExportFilename,
@@ -11,7 +12,7 @@ import {
     type EuTemplateValidationResult,
 } from '@/lib/eu-template-export';
 import { listLocalItems, seedLocalData, type Product, type ProductionProcess, type PurchasedPrecursor } from '@/lib/local-db';
-import { AlertTriangle, Download, FileCheck2, FileSpreadsheet, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Download, FileCheck2, FileSpreadsheet, PackageCheck, ShieldCheck, Workflow } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 function formatNumber(value: number) {
@@ -107,59 +108,39 @@ export default function ExportPage() {
     }
 
     return (
-        <div>
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900">EU 템플릿 Export</h1>
-                <p className="mt-2 max-w-3xl text-sm text-gray-600">
-                    사용자가 보유한 EU 원본 Communication template을 브라우저에서만 검증하고, 원본 구조를
-                    유지한 복사본을 생성합니다. 공식 시트명과 수식은 한국어로 바꾸지 않습니다.
-                </p>
+        <div className="space-y-6">
+            <PageHeader
+                eyebrow="제출 파일 준비"
+                title="EU 템플릿 Export"
+                description="사용자가 보유한 EU 원본 Communication template을 브라우저에서만 검증하고, 원본 구조를 유지한 복사본을 생성합니다."
+            />
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard label="제품 수" value={summary.productCount} helper="Export 대상" icon={PackageCheck} tone="pending" />
+                <StatCard label="공정 수" value={summary.processCount} helper="D_Processes 반영" icon={Workflow} tone="info" />
+                <StatCard label="총 생산량" value={formatNumber(summary.totalOutput)} helper="tonne" icon={FileSpreadsheet} tone="success" />
+                <StatCard label="검토 경고" value={summary.warningCount + readiness.warningCount} helper="산정 + Export" icon={AlertTriangle} tone="warning" />
             </div>
 
-            <dl className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-4">
-                <div className="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
-                    <dt className="truncate text-sm font-medium text-gray-500">제품 수</dt>
-                    <dd className="mt-1 text-3xl font-semibold text-gray-900">{summary.productCount}</dd>
-                </div>
-                <div className="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
-                    <dt className="truncate text-sm font-medium text-gray-500">공정 수</dt>
-                    <dd className="mt-1 text-3xl font-semibold text-gray-900">{summary.processCount}</dd>
-                </div>
-                <div className="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
-                    <dt className="truncate text-sm font-medium text-gray-500">총 생산량</dt>
-                    <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                        {formatNumber(summary.totalOutput)}
-                    </dd>
-                    <dd className="text-xs text-gray-400">t</dd>
-                </div>
-                <div className="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
-                    <dt className="truncate text-sm font-medium text-gray-500">검토 경고</dt>
-                    <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                        {summary.warningCount + readiness.warningCount}
-                    </dd>
-                    <dd className="text-xs text-gray-400">산정 + Export</dd>
-                </div>
-            </dl>
-
-            <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-                <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+                <SectionCard>
                     <div className="flex items-start gap-3">
-                        <FileSpreadsheet className="mt-1 h-5 w-5 text-blue-600" />
+                        <FileSpreadsheet className="mt-1 h-5 w-5 text-teal-700" />
                         <div>
-                            <h2 className="text-lg font-semibold text-gray-900">EU 원본 템플릿 선택</h2>
-                            <p className="mt-1 text-sm text-gray-600">
+                            <h2 className="text-lg font-semibold text-slate-950">EU 원본 템플릿 선택</h2>
+                            <p className="mt-1 text-sm text-slate-600">
                                 `CBAM Communication template for installations_en_20241213.xlsx` 같은 EU 원본
                                 `.xlsx` 파일을 선택합니다. 파일은 서버로 전송되지 않습니다.
                             </p>
                         </div>
                     </div>
 
-                    <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 px-6 py-8 text-center hover:bg-gray-100">
-                        <FileSpreadsheet className="h-10 w-10 text-gray-400" />
-                        <span className="mt-3 text-sm font-medium text-blue-700">
+                    <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center hover:bg-teal-50">
+                        <FileSpreadsheet className="h-10 w-10 text-teal-700" />
+                        <span className="mt-3 text-sm font-semibold text-teal-800">
                             EU 원본 템플릿 파일 선택
                         </span>
-                        <span className="mt-1 text-xs text-gray-500">XLSX 파일만 지원</span>
+                        <span className="mt-1 text-xs text-slate-500">XLSX 파일만 지원</span>
                         <input
                             type="file"
                             accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -169,13 +150,13 @@ export default function ExportPage() {
                     </label>
 
                     {templateFile && (
-                        <div className="mt-4 rounded-md bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                        <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
                             선택된 파일: <span className="font-medium">{templateFile.name}</span>
                         </div>
                     )}
 
                     {isValidating && (
-                        <div className="mt-4 rounded-md bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                        <div className="mt-4 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-800">
                             템플릿 구조를 확인하는 중입니다.
                         </div>
                     )}
@@ -191,8 +172,8 @@ export default function ExportPage() {
                         <div
                             className={
                                 validation.isValid
-                                    ? 'mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3'
-                                    : 'mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3'
+                                    ? 'mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3'
+                                    : 'mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3'
                             }
                         >
                             <div className="flex items-start gap-2">
@@ -227,15 +208,15 @@ export default function ExportPage() {
                         </div>
                     )}
 
-                    <button
+                    <Button
                         type="button"
                         onClick={handleDownloadCopy}
                         disabled={!validation?.isValid || !readiness.canExportDraft}
-                        className="mt-5 inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-300"
+                        className="mt-5"
                     >
                         <Download className="mr-2 h-4 w-4" />
                         산정 데이터가 반영된 복사본 다운로드
-                    </button>
+                    </Button>
 
                     {exportError && (
                         <div className="mt-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -243,14 +224,14 @@ export default function ExportPage() {
                             <span>{exportError}</span>
                         </div>
                     )}
-                </section>
+                </SectionCard>
 
-                <aside className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                <SectionCard>
                     <div className="flex items-start gap-3">
                         <ShieldCheck className="mt-1 h-5 w-5 text-emerald-600" />
                         <div>
-                            <h2 className="text-lg font-semibold text-gray-900">Export 원칙</h2>
-                            <ul className="mt-3 space-y-3 text-sm text-gray-600">
+                            <h2 className="text-lg font-semibold text-slate-950">Export 원칙</h2>
+                            <ul className="mt-3 space-y-3 text-sm text-slate-600">
                                 <li>원본 EU 템플릿 파일은 앱에 내장하지 않습니다.</li>
                                 <li>업로드된 파일은 브라우저 메모리에서만 처리합니다.</li>
                                 <li>공식 시트명, 수식, 영문 라벨은 유지합니다.</li>
@@ -258,24 +239,20 @@ export default function ExportPage() {
                             </ul>
                         </div>
                     </div>
-                </aside>
+                </SectionCard>
             </div>
 
-            <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <SectionCard>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <h2 className="text-lg font-semibold text-gray-900">EU 코드 매핑 검토</h2>
-                        <p className="mt-1 text-sm text-gray-600">
+                        <h2 className="text-lg font-semibold text-slate-950">EU 코드 매핑 검토</h2>
+                        <p className="mt-1 text-sm text-slate-600">
                             제품군, CN/HS 코드, 생산공정/전구물질 연결 상태를 Export 전에 확인합니다.
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <span className="inline-flex rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20">
-                            오류 {readiness.errorCount}
-                        </span>
-                        <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
-                            경고 {readiness.warningCount}
-                        </span>
+                        <StatusBadge tone="danger">오류 {readiness.errorCount}</StatusBadge>
+                        <StatusBadge tone="warning">경고 {readiness.warningCount}</StatusBadge>
                     </div>
                 </div>
 
@@ -302,18 +279,18 @@ export default function ExportPage() {
                         ))}
                     </ul>
                 )}
-            </section>
+            </SectionCard>
 
-            <div className="mt-8 overflow-hidden rounded-lg bg-white shadow ring-1 ring-black ring-opacity-5">
+            <DataTable>
                 <table className="min-w-full divide-y divide-gray-300">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-slate-50">
                         <tr>
-                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">공정</th>
-                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">제품</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">생산량(t)</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">직접 SEE</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">간접 SEE</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">총 SEE</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">공정</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">제품</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">생산량(t)</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">간접 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">총 SEE</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white">
@@ -349,7 +326,7 @@ export default function ExportPage() {
                         )}
                     </tbody>
                 </table>
-            </div>
+            </DataTable>
         </div>
     );
 }
