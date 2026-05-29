@@ -1,4 +1,4 @@
-export type StoreName = "installations" | "products" | "periods" | "settings";
+export type StoreName = "installations" | "products" | "periods" | "processes" | "settings";
 
 export interface LocalEntity {
   id: string;
@@ -29,6 +29,19 @@ export interface ReportingPeriod extends LocalEntity {
   status: "DRAFT" | "READY" | "CALCULATED";
 }
 
+export interface ProductionProcess extends LocalEntity {
+  period_id?: string;
+  product_id?: string;
+  name: string;
+  production_route: string;
+  output_mass_t: number;
+  market_output_mass_t: number;
+  internal_consumption_mass_t: number;
+  direct_attributable_emissions_tco2e: number;
+  electricity_mwh: number;
+  electricity_ef_tco2e_per_mwh: number;
+}
+
 export interface AppSetting extends LocalEntity {
   key: string;
   value: unknown;
@@ -54,12 +67,13 @@ type StoreEntityMap = {
   installations: Installation;
   products: Product;
   periods: ReportingPeriod;
+  processes: ProductionProcess;
   settings: AppSetting;
 };
 
 const DB_NAME = "cbam-local";
-const DB_VERSION = 1;
-const STORE_NAMES: StoreName[] = ["installations", "products", "periods", "settings"];
+const DB_VERSION = 2;
+const STORE_NAMES: StoreName[] = ["installations", "products", "periods", "processes", "settings"];
 
 let dbPromise: Promise<IDBDatabase> | undefined;
 
@@ -169,6 +183,7 @@ export async function exportLocalBackup(): Promise<CbamBackupFile> {
     installations: await listLocalItems("installations"),
     products: await listLocalItems("products"),
     periods: await listLocalItems("periods"),
+    processes: await listLocalItems("processes"),
     settings: await listLocalItems("settings"),
   };
 
@@ -183,6 +198,7 @@ export async function exportLocalBackup(): Promise<CbamBackupFile> {
         installations: data.installations.length,
         products: data.products.length,
         periods: data.periods.length,
+        processes: data.processes.length,
         settings: data.settings.length,
       },
     },
@@ -201,13 +217,31 @@ export function parseBackupFile(content: string): CbamBackupFile {
     throw new Error("Invalid or unsupported .cbam backup file.");
   }
 
+  const data = parsed.data as Partial<CbamBackupFile["data"]>;
   for (const storeName of STORE_NAMES) {
-    if (!Array.isArray(parsed.data[storeName])) {
-      throw new Error(`Backup file is missing the ${storeName} data store.`);
+    if (data[storeName] === undefined) {
+      data[storeName] = [];
+    }
+
+    if (!Array.isArray(data[storeName])) {
+      throw new Error(`Backup file has an invalid ${storeName} data store.`);
     }
   }
 
-  return parsed as CbamBackupFile;
+  return {
+    manifest: {
+      ...parsed.manifest,
+      stores: STORE_NAMES,
+      counts: {
+        installations: data.installations?.length ?? 0,
+        products: data.products?.length ?? 0,
+        periods: data.periods?.length ?? 0,
+        processes: data.processes?.length ?? 0,
+        settings: data.settings?.length ?? 0,
+      },
+    },
+    data: data as CbamBackupFile["data"],
+  };
 }
 
 export async function importLocalBackup(backup: CbamBackupFile): Promise<void> {
@@ -247,10 +281,11 @@ export async function clearLocalData(): Promise<void> {
 }
 
 export async function seedLocalData(): Promise<void> {
-  const [installations, products, periods] = await Promise.all([
+  const [installations, products, periods, processes] = await Promise.all([
     listLocalItems("installations"),
     listLocalItems("products"),
     listLocalItems("periods"),
+    listLocalItems("processes"),
   ]);
 
   if (installations.length === 0) {
@@ -278,13 +313,30 @@ export async function seedLocalData(): Promise<void> {
       });
     }
 
+    let periodId: string | undefined = periods[0]?.id;
+
     if (periods.length === 0) {
-      await createLocalItem("periods", {
+      const period = await createLocalItem("periods", {
         installation_id: installation.id,
         name: "2024 Annual",
         start_date: "2024-01-01",
         end_date: "2024-12-31",
         status: "DRAFT",
+      });
+      periodId = period.id;
+    }
+
+    if (processes.length === 0) {
+      await createLocalItem("processes", {
+        period_id: periodId,
+        name: "Rolling and finishing",
+        production_route: "Flat steel processing",
+        output_mass_t: 1000,
+        market_output_mass_t: 950,
+        internal_consumption_mass_t: 50,
+        direct_attributable_emissions_tco2e: 120,
+        electricity_mwh: 500,
+        electricity_ef_tco2e_per_mwh: 0.47,
       });
     }
   }

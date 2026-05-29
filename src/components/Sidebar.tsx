@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Package, Calendar, Upload, BarChart, Settings, ShieldCheck } from 'lucide-react';
+import { Home, Package, Calendar, Upload, BarChart, Settings, ShieldCheck, Workflow } from 'lucide-react';
 import clsx from 'clsx';
 
 const navigation = [
     { name: 'Dashboard', href: '/', icon: Home },
     { name: 'Products (HS72/73)', href: '/products', icon: Package },
     { name: 'Periods', href: '/periods', icon: Calendar },
+    { name: 'Processes', href: '/processes', icon: Workflow },
     { name: 'Data Upload', href: '/upload', icon: Upload },
     { name: 'Results', href: '/results', icon: BarChart },
     { name: 'Installations', href: '/installations', icon: Settings },

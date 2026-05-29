@@ -13,10 +13,10 @@ Completed:
 - Removed remote Google Fonts dependency for offline-friendly builds.
 - Added Settings & Data Safety page with `.cbam` backup export/import and local data clearing.
 - Created this harness documentation set for agent-first development.
+- Added Production Processes local data model and UI, mapped to EU template `D_Processes`.
 
 Next:
 
-- Add Production Processes page and local data model.
 - Add Purchased Precursors page and local data model.
 - Update backup format when new stores are added.
 - Extend calculation engine toward process and precursor attribution.
