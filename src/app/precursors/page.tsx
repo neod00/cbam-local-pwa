@@ -227,45 +227,45 @@ export default function PrecursorsPage() {
                 >
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">전구물질명</label>
-                            <input required className={fieldClass} value={newItem.name} onChange={(event) => setNewItem({ ...newItem, name: event.target.value })} />
+                            <label htmlFor="precursor-name" className="text-sm font-semibold text-slate-700">전구물질명</label>
+                            <input id="precursor-name" required className={fieldClass} value={newItem.name} onChange={(event) => setNewItem({ ...newItem, name: event.target.value })} />
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">통합 상품군(Aggregated Goods)</label>
-                            <input required className={fieldClass} value={newItem.aggregated_goods_category} onChange={(event) => setNewItem({ ...newItem, aggregated_goods_category: event.target.value })} />
+                            <label htmlFor="precursor-goods-category" className="text-sm font-semibold text-slate-700">통합 상품군(Aggregated Goods)</label>
+                            <input id="precursor-goods-category" required className={fieldClass} value={newItem.aggregated_goods_category} onChange={(event) => setNewItem({ ...newItem, aggregated_goods_category: event.target.value })} />
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">생산경로(Route)</label>
-                            <input className={fieldClass} value={newItem.production_route} onChange={(event) => setNewItem({ ...newItem, production_route: event.target.value })} />
+                            <label htmlFor="precursor-route" className="text-sm font-semibold text-slate-700">생산경로(Route)</label>
+                            <input id="precursor-route" className={fieldClass} value={newItem.production_route} onChange={(event) => setNewItem({ ...newItem, production_route: event.target.value })} />
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">보고기간</label>
-                            <select className={fieldClass} value={newItem.period_id} onChange={(event) => setNewItem({ ...newItem, period_id: event.target.value })}>
+                            <label htmlFor="precursor-period" className="text-sm font-semibold text-slate-700">보고기간</label>
+                            <select id="precursor-period" className={fieldClass} value={newItem.period_id} onChange={(event) => setNewItem({ ...newItem, period_id: event.target.value })}>
                                 <option value="">미지정</option>
                                 {periods.map((period) => <option key={period.id} value={period.id}>{period.name}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">소비 공정</label>
-                            <select className={fieldClass} value={newItem.process_id} onChange={(event) => setNewItem({ ...newItem, process_id: event.target.value })}>
+                            <label htmlFor="precursor-process" className="text-sm font-semibold text-slate-700">소비 공정</label>
+                            <select id="precursor-process" className={fieldClass} value={newItem.process_id} onChange={(event) => setNewItem({ ...newItem, process_id: event.target.value })}>
                                 <option value="">미지정</option>
                                 {processes.map((process) => <option key={process.id} value={process.id}>{process.name}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">연결 제품</label>
-                            <select className={fieldClass} value={newItem.product_id} onChange={(event) => setNewItem({ ...newItem, product_id: event.target.value })}>
+                            <label htmlFor="precursor-product" className="text-sm font-semibold text-slate-700">연결 제품</label>
+                            <select id="precursor-product" className={fieldClass} value={newItem.product_id} onChange={(event) => setNewItem({ ...newItem, product_id: event.target.value })}>
                                 <option value="">미지정</option>
                                 {products.map((product) => <option key={product.id} value={product.id}>{product.name} ({product.hs_code})</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">구매량(t)</label>
-                            <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.purchased_mass_t} onChange={(event) => setNewItem({ ...newItem, purchased_mass_t: toNumber(event.target.value) })} />
+                            <label htmlFor="precursor-purchased-mass" className="text-sm font-semibold text-slate-700">구매량(t)</label>
+                            <input id="precursor-purchased-mass" type="number" min="0" step="0.0001" className={fieldClass} value={newItem.purchased_mass_t} onChange={(event) => setNewItem({ ...newItem, purchased_mass_t: toNumber(event.target.value) })} />
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">소비량(t)</label>
-                            <input required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.consumed_mass_t} onChange={(event) => setNewItem({ ...newItem, consumed_mass_t: toNumber(event.target.value) })} />
+                            <label htmlFor="precursor-consumed-mass" className="text-sm font-semibold text-slate-700">소비량(t)</label>
+                            <input id="precursor-consumed-mass" required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.consumed_mass_t} onChange={(event) => setNewItem({ ...newItem, consumed_mass_t: toNumber(event.target.value) })} />
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">비CBAM 용도(t)</label>

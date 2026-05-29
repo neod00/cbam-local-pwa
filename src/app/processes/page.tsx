@@ -232,30 +232,30 @@ export default function ProcessesPage() {
                 >
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">공정명</label>
-                            <input required className={fieldClass} value={newItem.name} onChange={(event) => setNewItem({ ...newItem, name: event.target.value })} />
+                            <label htmlFor="process-name" className="text-sm font-semibold text-slate-700">공정명</label>
+                            <input id="process-name" required className={fieldClass} value={newItem.name} onChange={(event) => setNewItem({ ...newItem, name: event.target.value })} />
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">생산경로(Route)</label>
-                            <input required className={fieldClass} value={newItem.production_route} onChange={(event) => setNewItem({ ...newItem, production_route: event.target.value })} />
+                            <label htmlFor="process-route" className="text-sm font-semibold text-slate-700">생산경로(Route)</label>
+                            <input id="process-route" required className={fieldClass} value={newItem.production_route} onChange={(event) => setNewItem({ ...newItem, production_route: event.target.value })} />
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">보고기간</label>
-                            <select className={fieldClass} value={newItem.period_id} onChange={(event) => setNewItem({ ...newItem, period_id: event.target.value })}>
+                            <label htmlFor="process-period" className="text-sm font-semibold text-slate-700">보고기간</label>
+                            <select id="process-period" className={fieldClass} value={newItem.period_id} onChange={(event) => setNewItem({ ...newItem, period_id: event.target.value })}>
                                 <option value="">미지정</option>
                                 {periods.map((period) => <option key={period.id} value={period.id}>{period.name}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">연결 제품</label>
-                            <select className={fieldClass} value={newItem.product_id} onChange={(event) => setNewItem({ ...newItem, product_id: event.target.value })}>
+                            <label htmlFor="process-product" className="text-sm font-semibold text-slate-700">연결 제품</label>
+                            <select id="process-product" className={fieldClass} value={newItem.product_id} onChange={(event) => setNewItem({ ...newItem, product_id: event.target.value })}>
                                 <option value="">미지정</option>
                                 {products.map((product) => <option key={product.id} value={product.id}>{product.name} ({product.hs_code})</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">총 생산량(t)</label>
-                            <input required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.output_mass_t} onChange={(event) => setNewItem({ ...newItem, output_mass_t: toNumber(event.target.value) })} />
+                            <label htmlFor="process-output-mass" className="text-sm font-semibold text-slate-700">총 생산량(t)</label>
+                            <input id="process-output-mass" required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.output_mass_t} onChange={(event) => setNewItem({ ...newItem, output_mass_t: toNumber(event.target.value) })} />
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">시장 출하량(t)</label>
