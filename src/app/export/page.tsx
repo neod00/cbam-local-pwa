@@ -13,9 +13,17 @@ import {
     type EuTemplateValidationResult,
 } from '@/lib/eu-template-export';
 import { listLocalItems, seedLocalData, type Product, type ProductionProcess, type PurchasedPrecursor } from '@/lib/local-db';
-import { AlertTriangle, Download, FileCheck2, FileSpreadsheet, PackageCheck, ShieldCheck, Workflow } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle, Download, FileCheck2, FileSpreadsheet, PackageCheck, ShieldCheck, Workflow } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+
+type ExportChecklistItem = {
+    label: string;
+    description: string;
+    status: string;
+    tone: 'success' | 'warning' | 'danger' | 'pending';
+    complete: boolean;
+};
 
 function formatNumber(value: number) {
     return new Intl.NumberFormat(undefined, {
@@ -88,6 +96,80 @@ export default function ExportPage() {
         () => evaluateEuExportReadiness({ processes, precursors, products }, validation?.cnCodeMap),
         [processes, precursors, products, validation?.cnCodeMap]
     );
+
+    const exportChecklist = useMemo<ExportChecklistItem[]>(
+        () => [
+            {
+                label: '산정 데이터 준비',
+                description:
+                    results.length > 0
+                        ? `${results.length}개 공정의 산정 미리보기를 확인했습니다.`
+                        : '제품과 생산공정 데이터를 입력하면 산정 미리보기가 생성됩니다.',
+                status: results.length > 0 ? '완료' : '확인 필요',
+                tone: results.length > 0 ? 'success' : 'warning',
+                complete: results.length > 0,
+            },
+            {
+                label: 'EU 원본 템플릿 선택',
+                description: templateFile ? templateFile.name : '최신 EU Communication template 파일을 선택하세요.',
+                status: templateFile ? '완료' : '대기',
+                tone: templateFile ? 'success' : 'pending',
+                complete: Boolean(templateFile),
+            },
+            {
+                label: '템플릿 구조 검증',
+                description: validation?.isValid
+                    ? `필수 시트 ${REQUIRED_EU_TEMPLATE_SHEETS.length}개와 CN 코드 ${validation.cnCodeCount}개를 확인했습니다.`
+                    : validation
+                      ? `${validation.missingSheets.length}개 필수 시트가 누락되었습니다.`
+                      : '템플릿을 선택하면 공식 시트와 CN 코드 목록을 확인합니다.',
+                status: validation?.isValid ? '완료' : validation ? '오류' : '대기',
+                tone: validation?.isValid ? 'success' : validation ? 'danger' : 'pending',
+                complete: Boolean(validation?.isValid),
+            },
+            {
+                label: 'Export 오류 해결',
+                description:
+                    readiness.errorCount === 0
+                        ? '다운로드를 막는 오류 항목이 없습니다.'
+                        : `${readiness.errorCount}개 오류를 먼저 수정해야 합니다.`,
+                status: readiness.errorCount === 0 ? '완료' : '오류',
+                tone: readiness.errorCount === 0 ? 'success' : 'danger',
+                complete: readiness.errorCount === 0,
+            },
+            {
+                label: '경고 항목 검토',
+                description:
+                    readiness.warningCount === 0
+                        ? '추가 검토 경고가 없습니다.'
+                        : `${readiness.warningCount}개 경고가 있습니다. 제출 전 검토가 필요합니다.`,
+                status: readiness.warningCount === 0 ? '완료' : '확인 필요',
+                tone: readiness.warningCount === 0 ? 'success' : 'warning',
+                complete: readiness.warningCount === 0,
+            },
+        ],
+        [readiness.errorCount, readiness.warningCount, results.length, templateFile, validation]
+    );
+
+    const downloadStatusMessage = useMemo(() => {
+        if (!templateFile) {
+            return 'EU 원본 템플릿을 먼저 선택하세요.';
+        }
+
+        if (!validation?.isValid) {
+            return '선택한 템플릿의 공식 시트 구조를 확인해야 합니다.';
+        }
+
+        if (!readiness.canExportDraft) {
+            return '오류 항목을 수정해야 복사본을 다운로드할 수 있습니다.';
+        }
+
+        if (!readiness.isSubmissionReady) {
+            return '다운로드는 가능하지만 경고 항목은 제출 전 검토하세요.';
+        }
+
+        return '제출용 복사본을 생성할 수 있습니다.';
+    }, [readiness.canExportDraft, readiness.isSubmissionReady, templateFile, validation?.isValid]);
 
     async function handleTemplateFileChange(file: File | undefined) {
         setTemplateFile(file);
@@ -237,6 +319,7 @@ export default function ExportPage() {
                         <Download className="mr-2 h-4 w-4" />
                         산정 데이터가 반영된 복사본 다운로드
                     </Button>
+                    <p className="mt-2 text-xs text-slate-500">{downloadStatusMessage}</p>
 
                     {exportError && (
                         <div className="mt-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -249,14 +332,57 @@ export default function ExportPage() {
                 <SectionCard>
                     <div className="flex items-start gap-3">
                         <ShieldCheck className="mt-1 h-5 w-5 text-emerald-600" />
-                        <div>
-                            <h2 className="text-lg font-semibold text-slate-950">Export 원칙</h2>
-                            <ul className="mt-3 space-y-3 text-sm text-slate-600">
-                                <li>원본 EU 템플릿 파일은 앱에 내장하지 않습니다.</li>
-                                <li>업로드된 파일은 브라우저 메모리에서만 처리합니다.</li>
-                                <li>공식 시트명, 수식, 영문 라벨은 유지합니다.</li>
-                                <li>D_Processes와 E_PurchPrec 입력 셀에 현재 로컬 데이터를 반영합니다.</li>
+                        <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <h2 className="text-lg font-semibold text-slate-950">제출 전 체크리스트</h2>
+                                    <p className="mt-1 text-sm text-slate-600">
+                                        EU 템플릿 복사본을 만들기 전에 필요한 준비 상태를 확인합니다.
+                                    </p>
+                                </div>
+                                <StatusBadge tone={readiness.isSubmissionReady && validation?.isValid ? 'success' : 'warning'}>
+                                    {readiness.isSubmissionReady && validation?.isValid ? '준비 완료' : '검토 필요'}
+                                </StatusBadge>
+                            </div>
+
+                            <ul className="mt-4 space-y-3">
+                                {exportChecklist.map((item) => {
+                                    const Icon = item.complete ? CheckCircle2 : Circle;
+
+                                    return (
+                                        <li key={item.label} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+                                            <div className="flex items-start gap-3">
+                                                <Icon
+                                                    className={
+                                                        item.complete
+                                                            ? 'mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-600'
+                                                            : item.tone === 'danger'
+                                                              ? 'mt-0.5 h-4 w-4 flex-shrink-0 text-red-600'
+                                                              : 'mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600'
+                                                    }
+                                                />
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <p className="text-sm font-semibold text-slate-900">{item.label}</p>
+                                                        <StatusBadge tone={item.tone}>{item.status}</StatusBadge>
+                                                    </div>
+                                                    <p className="mt-1 text-xs leading-5 text-slate-600">{item.description}</p>
+                                                </div>
+                                            </div>
+                                        </li>
+                                    );
+                                })}
                             </ul>
+
+                            <div className="mt-5 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3">
+                                <h3 className="text-sm font-semibold text-teal-900">Export 원칙</h3>
+                                <ul className="mt-2 space-y-2 text-xs leading-5 text-teal-900/80">
+                                    <li>원본 EU 템플릿 파일은 앱에 내장하지 않습니다.</li>
+                                    <li>업로드된 파일은 브라우저 메모리에서만 처리합니다.</li>
+                                    <li>공식 시트명, 수식, 영문 라벨은 유지합니다.</li>
+                                    <li>D_Processes와 E_PurchPrec 입력 셀에 현재 로컬 데이터를 반영합니다.</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </SectionCard>

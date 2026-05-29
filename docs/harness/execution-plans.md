@@ -32,10 +32,12 @@ Completed:
 - Added edit/update support for production processes and purchased precursors so users can correct inputs after validation warnings.
 - Added edit/update support for reporting periods and installations, and connected key form labels to inputs for accessibility-oriented testing.
 - Added inline validation guidance for products, reporting periods, installations, production processes, and purchased precursors before local save.
+- Added readiness-linked navigation from EU Export validation warnings to the exact product, process, or precursor edit form.
+- Added an EU Export pre-submission checklist so users can see template, data, error, and warning readiness before downloading a copy.
 
 Next:
 
-- Add readiness-linked navigation from validation warnings to the exact product, process, or precursor edit form.
+- Add workbook export verification around the generated `D_Processes` and `E_PurchPrec` cells so template-copy behavior is regression-tested.
 
 ## Decision Log
 
