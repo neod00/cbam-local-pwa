@@ -19,10 +19,11 @@ Completed:
 - Connected the Results page to local production process, purchased precursor, product, and reporting period data for process-level SEE calculation.
 - Added the EU template Export entry point with browser-local validation of required official sheets and copy-download flow.
 - Added a Korean-first completed-product design preview page for dashboard, workflow, calculation, validation, and export states.
+- Added controlled browser-side value injection into EU template `D_Processes` and `E_PurchPrec` copies using local process and precursor data.
 
 Next:
 
-- Add controlled value injection into EU input sheets, starting with `D_Processes` and `E_PurchPrec`.
+- Tighten EU dropdown/code mapping for product category, production route, CN/HS code, and template-specific list values before treating exports as submission-ready.
 
 ## Decision Log
 

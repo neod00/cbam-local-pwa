@@ -3,13 +3,13 @@
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import {
     createEuExportFilename,
-    createEuTemplateCopy,
+    createEuTemplateExportCopy,
     downloadBlob,
     REQUIRED_EU_TEMPLATE_SHEETS,
     validateEuTemplateFile,
     type EuTemplateValidationResult,
 } from '@/lib/eu-template-export';
-import { listLocalItems, seedLocalData } from '@/lib/local-db';
+import { listLocalItems, seedLocalData, type Product, type ProductionProcess, type PurchasedPrecursor } from '@/lib/local-db';
 import { AlertTriangle, Download, FileCheck2, FileSpreadsheet, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -25,6 +25,10 @@ export default function ExportPage() {
     const [validationError, setValidationError] = useState('');
     const [isValidating, setIsValidating] = useState(false);
     const [results, setResults] = useState<LocalCalculationResult[]>([]);
+    const [processes, setProcesses] = useState<ProductionProcess[]>([]);
+    const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [exportError, setExportError] = useState('');
 
     useEffect(() => {
         async function loadPreviewData() {
@@ -36,6 +40,9 @@ export default function ExportPage() {
                 listLocalItems('periods'),
             ]);
 
+            setProcesses(processes);
+            setPrecursors(precursors);
+            setProducts(products);
             setResults(calculateLocalResults({ processes, precursors, products, periods }));
         }
 
@@ -79,8 +86,18 @@ export default function ExportPage() {
             return;
         }
 
-        const copy = await createEuTemplateCopy(templateFile);
-        downloadBlob(copy, createEuExportFilename(templateFile.name));
+        setExportError('');
+
+        try {
+            const copy = await createEuTemplateExportCopy(templateFile, {
+                processes,
+                precursors,
+                products,
+            });
+            downloadBlob(copy, createEuExportFilename(templateFile.name));
+        } catch (error) {
+            setExportError(error instanceof Error ? error.message : 'EU 템플릿 Export 중 오류가 발생했습니다.');
+        }
     }
 
     return (
@@ -205,8 +222,15 @@ export default function ExportPage() {
                         className="mt-5 inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
                         <Download className="mr-2 h-4 w-4" />
-                        검증된 템플릿 복사본 다운로드
+                        산정 데이터가 반영된 복사본 다운로드
                     </button>
+
+                    {exportError && (
+                        <div className="mt-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                            <span>{exportError}</span>
+                        </div>
+                    )}
                 </section>
 
                 <aside className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
@@ -218,7 +242,7 @@ export default function ExportPage() {
                                 <li>원본 EU 템플릿 파일은 앱에 내장하지 않습니다.</li>
                                 <li>업로드된 파일은 브라우저 메모리에서만 처리합니다.</li>
                                 <li>공식 시트명, 수식, 영문 라벨은 유지합니다.</li>
-                                <li>데이터 주입은 검증된 입력 시트부터 단계적으로 확장합니다.</li>
+                                <li>D_Processes와 E_PurchPrec 입력 셀에 현재 로컬 데이터를 반영합니다.</li>
                             </ul>
                         </div>
                     </div>
