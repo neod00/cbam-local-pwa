@@ -20,6 +20,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 type HsGroup = Product['hs_group'];
 type ProductDraft = Pick<Product, 'name' | 'hs_code' | 'cn_code' | 'hs_group' | 'product_type_enum' | 'unit'>;
+type ProductErrors = Partial<Record<keyof ProductDraft, string>>;
 
 const EMPTY_PRODUCT_DRAFT: ProductDraft = {
     name: '',
@@ -45,6 +46,7 @@ export default function ProductsPage() {
     const [cnImportMessage, setCnImportMessage] = useState('');
     const [cnImportError, setCnImportError] = useState('');
     const [draft, setDraft] = useState<ProductDraft>(EMPTY_PRODUCT_DRAFT);
+    const [errors, setErrors] = useState<ProductErrors>({});
 
     useEffect(() => {
         async function fetchProducts() {
@@ -89,6 +91,7 @@ export default function ProductsPage() {
 
     function resetForm() {
         setDraft(EMPTY_PRODUCT_DRAFT);
+        setErrors({});
         setEditingProductId(null);
         setCnSearch('');
         setShowForm(false);
@@ -115,6 +118,7 @@ export default function ProductsPage() {
             product_type_enum: product.product_type_enum,
             unit: product.unit,
         });
+        setErrors({});
         setEditingProductId(product.id);
         setCnSearch(product.cn_code ?? product.hs_code);
         setShowForm(true);
@@ -160,6 +164,29 @@ export default function ProductsPage() {
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
+        const nextErrors: ProductErrors = {};
+
+        if (!draft.name.trim()) {
+            nextErrors.name = '제품명을 입력하세요.';
+        }
+
+        if (!/^\d{4,10}$/.test(draft.hs_code.trim())) {
+            nextErrors.hs_code = 'HS 코드는 숫자 4자리 이상으로 입력하세요.';
+        }
+
+        if (!draft.cn_code || !/^\d{8}$/.test(draft.cn_code)) {
+            nextErrors.cn_code = 'EU Export 검증을 위해 CN 8자리 숫자를 입력하세요.';
+        }
+
+        if (!draft.product_type_enum.trim()) {
+            nextErrors.product_type_enum = '제품군 템플릿을 선택하세요.';
+        }
+
+        setErrors(nextErrors);
+
+        if (Object.keys(nextErrors).length > 0) {
+            return;
+        }
 
         if (editingProductId) {
             const existingProduct = products.find((product) => product.id === editingProductId);
@@ -171,13 +198,19 @@ export default function ProductsPage() {
             const updatedProduct = await updateLocalItem('products', {
                 ...existingProduct,
                 ...draft,
+                name: draft.name.trim(),
+                hs_code: draft.hs_code.trim(),
             });
             setProducts(products.map((product) => (product.id === updatedProduct.id ? updatedProduct : product)));
             resetForm();
             return;
         }
 
-        const product = await createLocalItem('products', draft);
+        const product = await createLocalItem('products', {
+            ...draft,
+            name: draft.name.trim(),
+            hs_code: draft.hs_code.trim(),
+        });
         setProducts([product, ...products]);
         resetForm();
     }
@@ -269,7 +302,7 @@ export default function ProductsPage() {
                         </Button>
                     }
                 >
-                    <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <form noValidate onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
                             <label className="text-sm font-semibold text-slate-700">제품명</label>
                             <input
@@ -279,6 +312,7 @@ export default function ProductsPage() {
                                 value={draft.name}
                                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                             />
+                            {errors.name && <p className="mt-1 text-xs font-medium text-red-600">{errors.name}</p>}
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">HS 코드</label>
@@ -289,6 +323,7 @@ export default function ProductsPage() {
                                 value={draft.hs_code}
                                 onChange={(e) => setDraft({ ...draft, hs_code: e.target.value })}
                             />
+                            {errors.hs_code && <p className="mt-1 text-xs font-medium text-red-600">{errors.hs_code}</p>}
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">CN 8자리 코드</label>
@@ -308,6 +343,7 @@ export default function ProductsPage() {
                                 placeholder="예: 72083900"
                             />
                             <p className="mt-1 text-xs text-slate-500">EU 템플릿 제출 검증은 CN 8자리 기준으로 수행합니다.</p>
+                            {errors.cn_code && <p className="mt-1 text-xs font-medium text-red-600">{errors.cn_code}</p>}
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">CN 코드 검색</label>

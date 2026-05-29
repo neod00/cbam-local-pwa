@@ -16,6 +16,7 @@ import { Boxes, Factory, Pencil, Plus, Scale, Trash2, X } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type PrecursorDraft = Omit<PurchasedPrecursor, 'id' | 'created_at' | 'updated_at'>;
+type PrecursorErrors = Partial<Record<keyof PrecursorDraft, string>>;
 
 const emptyDraft: PrecursorDraft = {
     period_id: '',
@@ -54,6 +55,7 @@ export default function PrecursorsPage() {
     const [showForm, setShowForm] = useState(false);
     const [editingPrecursorId, setEditingPrecursorId] = useState<string | null>(null);
     const [newItem, setNewItem] = useState<PrecursorDraft>(emptyDraft);
+    const [errors, setErrors] = useState<PrecursorErrors>({});
 
     useEffect(() => {
         async function loadData() {
@@ -106,6 +108,7 @@ export default function PrecursorsPage() {
 
     function resetForm() {
         setNewItem(createDefaultDraft());
+        setErrors({});
         setEditingPrecursorId(null);
         setShowForm(false);
     }
@@ -137,12 +140,64 @@ export default function PrecursorsPage() {
             source: precursor.source,
             default_value_justification: precursor.default_value_justification,
         });
+        setErrors({});
         setEditingPrecursorId(precursor.id);
         setShowForm(true);
     }
 
     async function handleSubmit(event: FormEvent) {
         event.preventDefault();
+        const nextErrors: PrecursorErrors = {};
+
+        if (!newItem.name.trim()) {
+            nextErrors.name = '전구물질명을 입력하세요.';
+        }
+
+        if (!newItem.aggregated_goods_category.trim()) {
+            nextErrors.aggregated_goods_category = '통합 상품군을 입력하세요.';
+        }
+
+        if (!newItem.period_id) {
+            nextErrors.period_id = '보고기간을 선택하세요.';
+        }
+
+        if (!newItem.process_id) {
+            nextErrors.process_id = '소비 공정을 선택하세요.';
+        }
+
+        if (!newItem.product_id) {
+            nextErrors.product_id = '연결 제품을 선택하세요.';
+        }
+
+        if (newItem.purchased_mass_t < 0) {
+            nextErrors.purchased_mass_t = '구매량은 0 이상이어야 합니다.';
+        }
+
+        if (newItem.consumed_mass_t <= 0) {
+            nextErrors.consumed_mass_t = '소비량은 0보다 커야 합니다.';
+        }
+
+        if (newItem.consumed_for_non_cbam_mass_t < 0) {
+            nextErrors.consumed_for_non_cbam_mass_t = '비CBAM 용도는 0 이상이어야 합니다.';
+        }
+
+        if (newItem.direct_see_tco2e_per_t < 0) {
+            nextErrors.direct_see_tco2e_per_t = '직접 SEE는 0 이상이어야 합니다.';
+        }
+
+        if (newItem.indirect_see_tco2e_per_t < 0) {
+            nextErrors.indirect_see_tco2e_per_t = '간접 SEE는 0 이상이어야 합니다.';
+        }
+
+        if (!newItem.source.trim()) {
+            nextErrors.source = '출처를 입력하세요. 예: 공급업체 회신, 기본값, 내부 산정자료';
+        }
+
+        setErrors(nextErrors);
+
+        if (Object.keys(nextErrors).length > 0) {
+            return;
+        }
 
         if (editingPrecursorId) {
             const existingPrecursor = precursors.find((precursor) => precursor.id === editingPrecursorId);
@@ -154,6 +209,10 @@ export default function PrecursorsPage() {
             const updatedPrecursor = await updateLocalItem('precursors', {
                 ...existingPrecursor,
                 ...newItem,
+                name: newItem.name.trim(),
+                aggregated_goods_category: newItem.aggregated_goods_category.trim(),
+                production_route: newItem.production_route.trim(),
+                source: newItem.source.trim(),
                 period_id: newItem.period_id || undefined,
                 process_id: newItem.process_id || undefined,
                 product_id: newItem.product_id || undefined,
@@ -169,6 +228,10 @@ export default function PrecursorsPage() {
 
         const precursor = await createLocalItem('precursors', {
             ...newItem,
+            name: newItem.name.trim(),
+            aggregated_goods_category: newItem.aggregated_goods_category.trim(),
+            production_route: newItem.production_route.trim(),
+            source: newItem.source.trim(),
             period_id: newItem.period_id || undefined,
             process_id: newItem.process_id || undefined,
             product_id: newItem.product_id || undefined,
@@ -225,14 +288,16 @@ export default function PrecursorsPage() {
                         </Button>
                     }
                 >
-                    <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <form noValidate onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
                             <label htmlFor="precursor-name" className="text-sm font-semibold text-slate-700">전구물질명</label>
                             <input id="precursor-name" required className={fieldClass} value={newItem.name} onChange={(event) => setNewItem({ ...newItem, name: event.target.value })} />
+                            {errors.name && <p className="mt-1 text-xs font-medium text-red-600">{errors.name}</p>}
                         </div>
                         <div>
                             <label htmlFor="precursor-goods-category" className="text-sm font-semibold text-slate-700">통합 상품군(Aggregated Goods)</label>
                             <input id="precursor-goods-category" required className={fieldClass} value={newItem.aggregated_goods_category} onChange={(event) => setNewItem({ ...newItem, aggregated_goods_category: event.target.value })} />
+                            {errors.aggregated_goods_category && <p className="mt-1 text-xs font-medium text-red-600">{errors.aggregated_goods_category}</p>}
                         </div>
                         <div>
                             <label htmlFor="precursor-route" className="text-sm font-semibold text-slate-700">생산경로(Route)</label>
@@ -244,6 +309,7 @@ export default function PrecursorsPage() {
                                 <option value="">미지정</option>
                                 {periods.map((period) => <option key={period.id} value={period.id}>{period.name}</option>)}
                             </select>
+                            {errors.period_id && <p className="mt-1 text-xs font-medium text-red-600">{errors.period_id}</p>}
                         </div>
                         <div>
                             <label htmlFor="precursor-process" className="text-sm font-semibold text-slate-700">소비 공정</label>
@@ -251,6 +317,7 @@ export default function PrecursorsPage() {
                                 <option value="">미지정</option>
                                 {processes.map((process) => <option key={process.id} value={process.id}>{process.name}</option>)}
                             </select>
+                            {errors.process_id && <p className="mt-1 text-xs font-medium text-red-600">{errors.process_id}</p>}
                         </div>
                         <div>
                             <label htmlFor="precursor-product" className="text-sm font-semibold text-slate-700">연결 제품</label>
@@ -258,30 +325,37 @@ export default function PrecursorsPage() {
                                 <option value="">미지정</option>
                                 {products.map((product) => <option key={product.id} value={product.id}>{product.name} ({product.hs_code})</option>)}
                             </select>
+                            {errors.product_id && <p className="mt-1 text-xs font-medium text-red-600">{errors.product_id}</p>}
                         </div>
                         <div>
                             <label htmlFor="precursor-purchased-mass" className="text-sm font-semibold text-slate-700">구매량(t)</label>
                             <input id="precursor-purchased-mass" type="number" min="0" step="0.0001" className={fieldClass} value={newItem.purchased_mass_t} onChange={(event) => setNewItem({ ...newItem, purchased_mass_t: toNumber(event.target.value) })} />
+                            {errors.purchased_mass_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.purchased_mass_t}</p>}
                         </div>
                         <div>
                             <label htmlFor="precursor-consumed-mass" className="text-sm font-semibold text-slate-700">소비량(t)</label>
                             <input id="precursor-consumed-mass" required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.consumed_mass_t} onChange={(event) => setNewItem({ ...newItem, consumed_mass_t: toNumber(event.target.value) })} />
+                            {errors.consumed_mass_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.consumed_mass_t}</p>}
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">비CBAM 용도(t)</label>
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.consumed_for_non_cbam_mass_t} onChange={(event) => setNewItem({ ...newItem, consumed_for_non_cbam_mass_t: toNumber(event.target.value) })} />
+                            {errors.consumed_for_non_cbam_mass_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.consumed_for_non_cbam_mass_t}</p>}
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">직접 SEE(tCO2e/t)</label>
                             <input required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.direct_see_tco2e_per_t} onChange={(event) => setNewItem({ ...newItem, direct_see_tco2e_per_t: toNumber(event.target.value) })} />
+                            {errors.direct_see_tco2e_per_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.direct_see_tco2e_per_t}</p>}
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">간접 SEE(tCO2e/t)</label>
                             <input required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.indirect_see_tco2e_per_t} onChange={(event) => setNewItem({ ...newItem, indirect_see_tco2e_per_t: toNumber(event.target.value) })} />
+                            {errors.indirect_see_tco2e_per_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.indirect_see_tco2e_per_t}</p>}
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">출처</label>
                             <input className={fieldClass} value={newItem.source} onChange={(event) => setNewItem({ ...newItem, source: event.target.value })} placeholder="예: Supplier communication template" />
+                            {errors.source && <p className="mt-1 text-xs font-medium text-red-600">{errors.source}</p>}
                         </div>
                         <div className="md:col-span-3">
                             <label className="text-sm font-semibold text-slate-700">기본값 사용 사유</label>

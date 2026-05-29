@@ -9,6 +9,7 @@ const fieldClass =
     'mt-1 block h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100';
 
 type InstallationDraft = Pick<Installation, 'name' | 'country'>;
+type InstallationErrors = Partial<Record<keyof InstallationDraft, string>>;
 
 const emptyDraft: InstallationDraft = {
     name: '',
@@ -20,6 +21,7 @@ export default function InstallationsPage() {
     const [showForm, setShowForm] = useState(false);
     const [editingInstallationId, setEditingInstallationId] = useState<string | null>(null);
     const [newItem, setNewItem] = useState<InstallationDraft>(emptyDraft);
+    const [errors, setErrors] = useState<InstallationErrors>({});
 
     useEffect(() => {
         async function fetchInstallations() {
@@ -33,6 +35,7 @@ export default function InstallationsPage() {
 
     function resetForm() {
         setNewItem(emptyDraft);
+        setErrors({});
         setEditingInstallationId(null);
         setShowForm(false);
     }
@@ -53,12 +56,29 @@ export default function InstallationsPage() {
             name: installation.name,
             country: installation.country,
         });
+        setErrors({});
         setEditingInstallationId(installation.id);
         setShowForm(true);
     }
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
+        const nextErrors: InstallationErrors = {};
+        const country = newItem.country.trim().toUpperCase();
+
+        if (!newItem.name.trim()) {
+            nextErrors.name = '사업장명을 입력하세요.';
+        }
+
+        if (!/^[A-Z]{2}$/.test(country)) {
+            nextErrors.country = '국가코드는 ISO 2자리 영문 코드로 입력하세요. 예: KR';
+        }
+
+        setErrors(nextErrors);
+
+        if (Object.keys(nextErrors).length > 0) {
+            return;
+        }
 
         if (editingInstallationId) {
             const existingInstallation = items.find((item) => item.id === editingInstallationId);
@@ -69,14 +89,18 @@ export default function InstallationsPage() {
 
             const updatedInstallation = await updateLocalItem('installations', {
                 ...existingInstallation,
-                ...newItem,
+                name: newItem.name.trim(),
+                country,
             });
             setItems(items.map((item) => (item.id === updatedInstallation.id ? updatedInstallation : item)));
             resetForm();
             return;
         }
 
-        const installation = await createLocalItem('installations', newItem);
+        const installation = await createLocalItem('installations', {
+            name: newItem.name.trim(),
+            country,
+        });
         setItems([installation, ...items]);
         resetForm();
     }
@@ -106,7 +130,7 @@ export default function InstallationsPage() {
                         </Button>
                     }
                 >
-                    <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <form noValidate onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
                             <label htmlFor="installation-name" className="text-sm font-semibold text-slate-700">사업장명</label>
                             <input
@@ -117,6 +141,7 @@ export default function InstallationsPage() {
                                 onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
                                 placeholder="예: 인천 제1공장"
                             />
+                            {errors.name && <p className="mt-1 text-xs font-medium text-red-600">{errors.name}</p>}
                         </div>
                         <div>
                             <label htmlFor="installation-country" className="text-sm font-semibold text-slate-700">국가코드</label>
@@ -128,6 +153,7 @@ export default function InstallationsPage() {
                                 onChange={(e) => setNewItem({ ...newItem, country: e.target.value.toUpperCase() })}
                                 maxLength={2}
                             />
+                            {errors.country && <p className="mt-1 text-xs font-medium text-red-600">{errors.country}</p>}
                         </div>
                         <div className="md:col-span-2">
                             <Button type="submit">{editingInstallationId ? '수정 저장' : '사업장 저장'}</Button>

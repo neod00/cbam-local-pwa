@@ -16,6 +16,7 @@ import { Factory, Gauge, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type ProcessDraft = Omit<ProductionProcess, 'id' | 'created_at' | 'updated_at'>;
+type ProcessErrors = Partial<Record<keyof ProcessDraft, string>>;
 
 const emptyDraft: ProcessDraft = {
     period_id: '',
@@ -51,6 +52,7 @@ export default function ProcessesPage() {
     const [showForm, setShowForm] = useState(false);
     const [editingProcessId, setEditingProcessId] = useState<string | null>(null);
     const [newItem, setNewItem] = useState<ProcessDraft>(emptyDraft);
+    const [errors, setErrors] = useState<ProcessErrors>({});
 
     useEffect(() => {
         async function loadData() {
@@ -97,6 +99,7 @@ export default function ProcessesPage() {
 
     function resetForm() {
         setNewItem(createDefaultDraft());
+        setErrors({});
         setEditingProcessId(null);
         setShowForm(false);
     }
@@ -125,12 +128,60 @@ export default function ProcessesPage() {
             electricity_mwh: process.electricity_mwh,
             electricity_ef_tco2e_per_mwh: process.electricity_ef_tco2e_per_mwh,
         });
+        setErrors({});
         setEditingProcessId(process.id);
         setShowForm(true);
     }
 
     async function handleSubmit(event: FormEvent) {
         event.preventDefault();
+        const nextErrors: ProcessErrors = {};
+
+        if (!newItem.name.trim()) {
+            nextErrors.name = '공정명을 입력하세요.';
+        }
+
+        if (!newItem.production_route.trim()) {
+            nextErrors.production_route = '생산경로를 입력하세요.';
+        }
+
+        if (!newItem.period_id) {
+            nextErrors.period_id = '보고기간을 선택하세요.';
+        }
+
+        if (!newItem.product_id) {
+            nextErrors.product_id = '연결 제품을 선택하세요.';
+        }
+
+        if (newItem.output_mass_t <= 0) {
+            nextErrors.output_mass_t = '총 생산량은 0보다 커야 합니다.';
+        }
+
+        if (newItem.market_output_mass_t < 0) {
+            nextErrors.market_output_mass_t = '시장 출하량은 0 이상이어야 합니다.';
+        }
+
+        if (newItem.internal_consumption_mass_t < 0) {
+            nextErrors.internal_consumption_mass_t = '내부 소비량은 0 이상이어야 합니다.';
+        }
+
+        if (newItem.direct_attributable_emissions_tco2e < 0) {
+            nextErrors.direct_attributable_emissions_tco2e = '직접귀속배출량은 0 이상이어야 합니다.';
+        }
+
+        if (newItem.electricity_mwh < 0) {
+            nextErrors.electricity_mwh = '전력 사용량은 0 이상이어야 합니다.';
+        }
+
+        if (newItem.electricity_ef_tco2e_per_mwh < 0) {
+            nextErrors.electricity_ef_tco2e_per_mwh = '전력 배출계수는 0 이상이어야 합니다.';
+        }
+
+        setErrors(nextErrors);
+
+        if (Object.keys(nextErrors).length > 0) {
+            return;
+        }
 
         if (editingProcessId) {
             const existingProcess = processes.find((process) => process.id === editingProcessId);
@@ -142,6 +193,8 @@ export default function ProcessesPage() {
             const updatedProcess = await updateLocalItem('processes', {
                 ...existingProcess,
                 ...newItem,
+                name: newItem.name.trim(),
+                production_route: newItem.production_route.trim(),
                 period_id: newItem.period_id || undefined,
                 product_id: newItem.product_id || undefined,
             });
@@ -152,6 +205,8 @@ export default function ProcessesPage() {
 
         const process = await createLocalItem('processes', {
             ...newItem,
+            name: newItem.name.trim(),
+            production_route: newItem.production_route.trim(),
             period_id: newItem.period_id || undefined,
             product_id: newItem.product_id || undefined,
         });
@@ -230,14 +285,16 @@ export default function ProcessesPage() {
                         </Button>
                     }
                 >
-                    <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <form noValidate onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
                             <label htmlFor="process-name" className="text-sm font-semibold text-slate-700">공정명</label>
                             <input id="process-name" required className={fieldClass} value={newItem.name} onChange={(event) => setNewItem({ ...newItem, name: event.target.value })} />
+                            {errors.name && <p className="mt-1 text-xs font-medium text-red-600">{errors.name}</p>}
                         </div>
                         <div>
                             <label htmlFor="process-route" className="text-sm font-semibold text-slate-700">생산경로(Route)</label>
                             <input id="process-route" required className={fieldClass} value={newItem.production_route} onChange={(event) => setNewItem({ ...newItem, production_route: event.target.value })} />
+                            {errors.production_route && <p className="mt-1 text-xs font-medium text-red-600">{errors.production_route}</p>}
                         </div>
                         <div>
                             <label htmlFor="process-period" className="text-sm font-semibold text-slate-700">보고기간</label>
@@ -245,6 +302,7 @@ export default function ProcessesPage() {
                                 <option value="">미지정</option>
                                 {periods.map((period) => <option key={period.id} value={period.id}>{period.name}</option>)}
                             </select>
+                            {errors.period_id && <p className="mt-1 text-xs font-medium text-red-600">{errors.period_id}</p>}
                         </div>
                         <div>
                             <label htmlFor="process-product" className="text-sm font-semibold text-slate-700">연결 제품</label>
@@ -252,30 +310,37 @@ export default function ProcessesPage() {
                                 <option value="">미지정</option>
                                 {products.map((product) => <option key={product.id} value={product.id}>{product.name} ({product.hs_code})</option>)}
                             </select>
+                            {errors.product_id && <p className="mt-1 text-xs font-medium text-red-600">{errors.product_id}</p>}
                         </div>
                         <div>
                             <label htmlFor="process-output-mass" className="text-sm font-semibold text-slate-700">총 생산량(t)</label>
                             <input id="process-output-mass" required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.output_mass_t} onChange={(event) => setNewItem({ ...newItem, output_mass_t: toNumber(event.target.value) })} />
+                            {errors.output_mass_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.output_mass_t}</p>}
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">시장 출하량(t)</label>
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.market_output_mass_t} onChange={(event) => setNewItem({ ...newItem, market_output_mass_t: toNumber(event.target.value) })} />
+                            {errors.market_output_mass_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.market_output_mass_t}</p>}
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">내부 소비량(t)</label>
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.internal_consumption_mass_t} onChange={(event) => setNewItem({ ...newItem, internal_consumption_mass_t: toNumber(event.target.value) })} />
+                            {errors.internal_consumption_mass_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.internal_consumption_mass_t}</p>}
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">직접귀속배출량(tCO2e)</label>
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.direct_attributable_emissions_tco2e} onChange={(event) => setNewItem({ ...newItem, direct_attributable_emissions_tco2e: toNumber(event.target.value) })} />
+                            {errors.direct_attributable_emissions_tco2e && <p className="mt-1 text-xs font-medium text-red-600">{errors.direct_attributable_emissions_tco2e}</p>}
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">전력 사용량(MWh)</label>
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.electricity_mwh} onChange={(event) => setNewItem({ ...newItem, electricity_mwh: toNumber(event.target.value) })} />
+                            {errors.electricity_mwh && <p className="mt-1 text-xs font-medium text-red-600">{errors.electricity_mwh}</p>}
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">전력 배출계수(tCO2e/MWh)</label>
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.electricity_ef_tco2e_per_mwh} onChange={(event) => setNewItem({ ...newItem, electricity_ef_tco2e_per_mwh: toNumber(event.target.value) })} />
+                            {errors.electricity_ef_tco2e_per_mwh && <p className="mt-1 text-xs font-medium text-red-600">{errors.electricity_ef_tco2e_per_mwh}</p>}
                         </div>
                         <div className="md:col-span-3">
                             <Button type="submit">{editingProcessId ? '수정 저장' : '공정 저장'}</Button>

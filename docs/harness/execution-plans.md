@@ -31,10 +31,11 @@ Completed:
 - Added delete safeguards for products, production processes, and purchased precursors so linked records are not removed without dependency checks.
 - Added edit/update support for production processes and purchased precursors so users can correct inputs after validation warnings.
 - Added edit/update support for reporting periods and installations, and connected key form labels to inputs for accessibility-oriented testing.
+- Added inline validation guidance for products, reporting periods, installations, production processes, and purchased precursors before local save.
 
 Next:
 
-- Add inline validation guidance for reporting period date ranges, country codes, CN codes, and required EU Export fields.
+- Add readiness-linked navigation from validation warnings to the exact product, process, or precursor edit form.
 
 ## Decision Log
 

@@ -9,6 +9,7 @@ const fieldClass =
     'mt-1 block h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100';
 
 type PeriodDraft = Pick<ReportingPeriod, 'name' | 'start_date' | 'end_date' | 'status'>;
+type PeriodErrors = Partial<Record<keyof PeriodDraft, string>>;
 
 const emptyDraft: PeriodDraft = {
     name: '',
@@ -22,6 +23,7 @@ export default function PeriodsPage() {
     const [showForm, setShowForm] = useState(false);
     const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
     const [newItem, setNewItem] = useState<PeriodDraft>(emptyDraft);
+    const [errors, setErrors] = useState<PeriodErrors>({});
 
     useEffect(() => {
         async function fetchPeriods() {
@@ -35,6 +37,7 @@ export default function PeriodsPage() {
 
     function resetForm() {
         setNewItem(emptyDraft);
+        setErrors({});
         setEditingPeriodId(null);
         setShowForm(false);
     }
@@ -57,12 +60,36 @@ export default function PeriodsPage() {
             end_date: period.end_date,
             status: period.status,
         });
+        setErrors({});
         setEditingPeriodId(period.id);
         setShowForm(true);
     }
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
+        const nextErrors: PeriodErrors = {};
+
+        if (!newItem.name.trim()) {
+            nextErrors.name = '기간명을 입력하세요.';
+        }
+
+        if (!newItem.start_date) {
+            nextErrors.start_date = '시작일을 선택하세요.';
+        }
+
+        if (!newItem.end_date) {
+            nextErrors.end_date = '종료일을 선택하세요.';
+        }
+
+        if (newItem.start_date && newItem.end_date && newItem.start_date > newItem.end_date) {
+            nextErrors.end_date = '종료일은 시작일 이후여야 합니다.';
+        }
+
+        setErrors(nextErrors);
+
+        if (Object.keys(nextErrors).length > 0) {
+            return;
+        }
 
         if (editingPeriodId) {
             const existingPeriod = periods.find((period) => period.id === editingPeriodId);
@@ -74,13 +101,17 @@ export default function PeriodsPage() {
             const updatedPeriod = await updateLocalItem('periods', {
                 ...existingPeriod,
                 ...newItem,
+                name: newItem.name.trim(),
             });
             setPeriods(periods.map((period) => (period.id === updatedPeriod.id ? updatedPeriod : period)));
             resetForm();
             return;
         }
 
-        const period = await createLocalItem('periods', newItem);
+        const period = await createLocalItem('periods', {
+            ...newItem,
+            name: newItem.name.trim(),
+        });
         setPeriods([period, ...periods]);
         resetForm();
     }
@@ -116,7 +147,7 @@ export default function PeriodsPage() {
                         </Button>
                     }
                 >
-                    <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <form noValidate onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
                             <label htmlFor="period-name" className="text-sm font-semibold text-slate-700">기간명</label>
                             <input
@@ -127,6 +158,7 @@ export default function PeriodsPage() {
                                 onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
                                 placeholder="예: 2025년 4분기"
                             />
+                            {errors.name && <p className="mt-1 text-xs font-medium text-red-600">{errors.name}</p>}
                         </div>
                         <div>
                             <label htmlFor="period-start-date" className="text-sm font-semibold text-slate-700">시작일</label>
@@ -138,6 +170,7 @@ export default function PeriodsPage() {
                                 value={newItem.start_date}
                                 onChange={(e) => setNewItem({ ...newItem, start_date: e.target.value })}
                             />
+                            {errors.start_date && <p className="mt-1 text-xs font-medium text-red-600">{errors.start_date}</p>}
                         </div>
                         <div>
                             <label htmlFor="period-end-date" className="text-sm font-semibold text-slate-700">종료일</label>
@@ -149,6 +182,7 @@ export default function PeriodsPage() {
                                 value={newItem.end_date}
                                 onChange={(e) => setNewItem({ ...newItem, end_date: e.target.value })}
                             />
+                            {errors.end_date && <p className="mt-1 text-xs font-medium text-red-600">{errors.end_date}</p>}
                         </div>
                         <div className="md:col-span-3">
                             <Button type="submit">{editingPeriodId ? '수정 저장' : '기간 저장'}</Button>
