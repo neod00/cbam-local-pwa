@@ -27,10 +27,11 @@ Completed:
 - Added product-page import of full CN code options from an uploaded EU template, stored locally for reusable product search/selection.
 - Added product edit/update support so existing products can be corrected after CN code reference import.
 - Added the first-pass Clean Compliance Dashboard redesign with shared layout, sidebar/topbar, UI primitives, and refreshed dashboard/product/result/export/settings screens.
+- Extended the Clean Compliance Dashboard redesign to reporting periods, installations, production processes, purchased precursors, and upload screens, including mobile card-list layouts.
 
 Next:
 
-- Continue redesign coverage for reporting periods, installations, processes, precursors, upload, and mobile card-list refinements.
+- Add delete safeguards and dependency warnings for product, process, and precursor records used by downstream calculations or Export.
 
 ## Decision Log
 

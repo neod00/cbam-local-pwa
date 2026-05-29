@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { Button, DataTable, PageHeader, SectionCard, StatCard } from '@/components/ui';
 import {
     createLocalItem,
     listLocalItems,
@@ -10,7 +10,8 @@ import {
     ReportingPeriod,
     seedLocalData,
 } from '@/lib/local-db';
-import { Plus } from 'lucide-react';
+import { Boxes, Factory, Plus, Scale } from 'lucide-react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type PrecursorDraft = Omit<PurchasedPrecursor, 'id' | 'created_at' | 'updated_at'>;
 
@@ -29,6 +30,9 @@ const emptyDraft: PrecursorDraft = {
     source: '',
     default_value_justification: '',
 };
+
+const fieldClass =
+    'mt-1 block h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100';
 
 function toNumber(value: string) {
     const parsed = Number(value);
@@ -75,17 +79,18 @@ export default function PrecursorsPage() {
         loadData();
     }, []);
 
-    const periodNames = useMemo(() => {
-        return new Map(periods.map((period) => [period.id, period.name]));
-    }, [periods]);
+    const periodNames = useMemo(() => new Map(periods.map((period) => [period.id, period.name])), [periods]);
+    const processNames = useMemo(() => new Map(processes.map((process) => [process.id, process.name])), [processes]);
+    const productNames = useMemo(() => new Map(products.map((product) => [product.id, product.name])), [products]);
 
-    const processNames = useMemo(() => {
-        return new Map(processes.map((process) => [process.id, process.name]));
-    }, [processes]);
-
-    const productNames = useMemo(() => {
-        return new Map(products.map((product) => [product.id, product.name]));
-    }, [products]);
+    const summary = useMemo(() => {
+        const consumedMass = precursors.reduce((sum, precursor) => sum + precursor.consumed_mass_t, 0);
+        const totalSee = precursors.reduce(
+            (sum, precursor) => sum + precursor.direct_see_tco2e_per_t + precursor.indirect_see_tco2e_per_t,
+            0
+        );
+        return { consumedMass, totalSee };
+    }, [precursors]);
 
     async function handleSubmit(event: FormEvent) {
         event.preventDefault();
@@ -108,292 +113,170 @@ export default function PrecursorsPage() {
     }
 
     return (
-        <div>
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">구매 전구물질</h1>
-                    <p className="mt-2 max-w-3xl text-sm text-gray-600">
-                        EU 템플릿의 E_PurchPrec 입력 구조에 맞춰 구매 전구물질의 소비량과 내재배출량(SEE)을 관리합니다.
-                    </p>
-                </div>
-                <button
-                    onClick={() => setShowForm(!showForm)}
-                    className="flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                >
-                    <Plus className="mr-2 h-4 w-4" />
-                    전구물질 추가
-                </button>
+        <div className="space-y-6">
+            <PageHeader
+                eyebrow="E_PurchPrec"
+                title="구매 전구물질"
+                description="EU 템플릿의 E_PurchPrec 입력 구조에 맞춰 구매 전구물질의 소비량과 내재배출량(SEE)을 관리합니다."
+                actions={
+                    <Button type="button" onClick={() => setShowForm(!showForm)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        전구물질 추가
+                    </Button>
+                }
+            />
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <StatCard label="등록 전구물질" value={precursors.length} helper="E_PurchPrec 후보" icon={Boxes} tone="info" />
+                <StatCard label="총 소비량" value={formatNumber(summary.consumedMass)} helper="tonne" icon={Scale} tone="success" />
+                <StatCard label="SEE 합계" value={formatNumber(summary.totalSee)} helper="직접 + 간접" icon={Factory} tone="warning" />
             </div>
 
             {showForm && (
-                <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <h2 className="mb-4 text-lg font-medium text-gray-900">신규 구매 전구물질</h2>
+                <SectionCard title="신규 구매 전구물질" description="공급업체 회신 또는 기본값 사용 근거를 함께 관리하세요.">
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">전구물질명</label>
-                            <input
-                                required
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
-                                value={newItem.name}
-                                onChange={(event) => setNewItem({ ...newItem, name: event.target.value })}
-                            />
+                            <label className="text-sm font-semibold text-slate-700">전구물질명</label>
+                            <input required className={fieldClass} value={newItem.name} onChange={(event) => setNewItem({ ...newItem, name: event.target.value })} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                                통합 상품군(Aggregated Goods)
-                            </label>
-                            <input
-                                required
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
-                                value={newItem.aggregated_goods_category}
-                                onChange={(event) =>
-                                    setNewItem({ ...newItem, aggregated_goods_category: event.target.value })
-                                }
-                            />
+                            <label className="text-sm font-semibold text-slate-700">통합 상품군(Aggregated Goods)</label>
+                            <input required className={fieldClass} value={newItem.aggregated_goods_category} onChange={(event) => setNewItem({ ...newItem, aggregated_goods_category: event.target.value })} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">생산경로(Route)</label>
-                            <input
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
-                                value={newItem.production_route}
-                                onChange={(event) =>
-                                    setNewItem({ ...newItem, production_route: event.target.value })
-                                }
-                            />
+                            <label className="text-sm font-semibold text-slate-700">생산경로(Route)</label>
+                            <input className={fieldClass} value={newItem.production_route} onChange={(event) => setNewItem({ ...newItem, production_route: event.target.value })} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">보고기간</label>
-                            <select
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
-                                value={newItem.period_id}
-                                onChange={(event) => setNewItem({ ...newItem, period_id: event.target.value })}
-                            >
+                            <label className="text-sm font-semibold text-slate-700">보고기간</label>
+                            <select className={fieldClass} value={newItem.period_id} onChange={(event) => setNewItem({ ...newItem, period_id: event.target.value })}>
                                 <option value="">미지정</option>
-                                {periods.map((period) => (
-                                    <option key={period.id} value={period.id}>
-                                        {period.name}
-                                    </option>
-                                ))}
+                                {periods.map((period) => <option key={period.id} value={period.id}>{period.name}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">소비 공정</label>
-                            <select
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
-                                value={newItem.process_id}
-                                onChange={(event) => setNewItem({ ...newItem, process_id: event.target.value })}
-                            >
+                            <label className="text-sm font-semibold text-slate-700">소비 공정</label>
+                            <select className={fieldClass} value={newItem.process_id} onChange={(event) => setNewItem({ ...newItem, process_id: event.target.value })}>
                                 <option value="">미지정</option>
-                                {processes.map((process) => (
-                                    <option key={process.id} value={process.id}>
-                                        {process.name}
-                                    </option>
-                                ))}
+                                {processes.map((process) => <option key={process.id} value={process.id}>{process.name}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">연결 제품</label>
-                            <select
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
-                                value={newItem.product_id}
-                                onChange={(event) => setNewItem({ ...newItem, product_id: event.target.value })}
-                            >
+                            <label className="text-sm font-semibold text-slate-700">연결 제품</label>
+                            <select className={fieldClass} value={newItem.product_id} onChange={(event) => setNewItem({ ...newItem, product_id: event.target.value })}>
                                 <option value="">미지정</option>
-                                {products.map((product) => (
-                                    <option key={product.id} value={product.id}>
-                                        {product.name} ({product.hs_code})
-                                    </option>
-                                ))}
+                                {products.map((product) => <option key={product.id} value={product.id}>{product.name} ({product.hs_code})</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">구매량(t)</label>
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.0001"
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
-                                value={newItem.purchased_mass_t}
-                                onChange={(event) =>
-                                    setNewItem({ ...newItem, purchased_mass_t: toNumber(event.target.value) })
-                                }
-                            />
+                            <label className="text-sm font-semibold text-slate-700">구매량(t)</label>
+                            <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.purchased_mass_t} onChange={(event) => setNewItem({ ...newItem, purchased_mass_t: toNumber(event.target.value) })} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">소비량(t)</label>
-                            <input
-                                required
-                                type="number"
-                                min="0"
-                                step="0.0001"
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
-                                value={newItem.consumed_mass_t}
-                                onChange={(event) =>
-                                    setNewItem({ ...newItem, consumed_mass_t: toNumber(event.target.value) })
-                                }
-                            />
+                            <label className="text-sm font-semibold text-slate-700">소비량(t)</label>
+                            <input required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.consumed_mass_t} onChange={(event) => setNewItem({ ...newItem, consumed_mass_t: toNumber(event.target.value) })} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">비CBAM 용도(t)</label>
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.0001"
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
-                                value={newItem.consumed_for_non_cbam_mass_t}
-                                onChange={(event) =>
-                                    setNewItem({
-                                        ...newItem,
-                                        consumed_for_non_cbam_mass_t: toNumber(event.target.value),
-                                    })
-                                }
-                            />
+                            <label className="text-sm font-semibold text-slate-700">비CBAM 용도(t)</label>
+                            <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.consumed_for_non_cbam_mass_t} onChange={(event) => setNewItem({ ...newItem, consumed_for_non_cbam_mass_t: toNumber(event.target.value) })} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                                직접 SEE(tCO2e/t)
-                            </label>
-                            <input
-                                required
-                                type="number"
-                                min="0"
-                                step="0.0001"
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
-                                value={newItem.direct_see_tco2e_per_t}
-                                onChange={(event) =>
-                                    setNewItem({
-                                        ...newItem,
-                                        direct_see_tco2e_per_t: toNumber(event.target.value),
-                                    })
-                                }
-                            />
+                            <label className="text-sm font-semibold text-slate-700">직접 SEE(tCO2e/t)</label>
+                            <input required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.direct_see_tco2e_per_t} onChange={(event) => setNewItem({ ...newItem, direct_see_tco2e_per_t: toNumber(event.target.value) })} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                                간접 SEE(tCO2e/t)
-                            </label>
-                            <input
-                                required
-                                type="number"
-                                min="0"
-                                step="0.0001"
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
-                                value={newItem.indirect_see_tco2e_per_t}
-                                onChange={(event) =>
-                                    setNewItem({
-                                        ...newItem,
-                                        indirect_see_tco2e_per_t: toNumber(event.target.value),
-                                    })
-                                }
-                            />
+                            <label className="text-sm font-semibold text-slate-700">간접 SEE(tCO2e/t)</label>
+                            <input required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.indirect_see_tco2e_per_t} onChange={(event) => setNewItem({ ...newItem, indirect_see_tco2e_per_t: toNumber(event.target.value) })} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">출처</label>
-                            <input
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
-                                value={newItem.source}
-                                onChange={(event) => setNewItem({ ...newItem, source: event.target.value })}
-                            />
+                            <label className="text-sm font-semibold text-slate-700">출처</label>
+                            <input className={fieldClass} value={newItem.source} onChange={(event) => setNewItem({ ...newItem, source: event.target.value })} placeholder="예: Supplier communication template" />
                         </div>
                         <div className="md:col-span-3">
-                            <label className="block text-sm font-medium text-gray-700">
-                                기본값 사용 사유
-                            </label>
+                            <label className="text-sm font-semibold text-slate-700">기본값 사용 사유</label>
                             <textarea
                                 rows={3}
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
+                                className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
                                 value={newItem.default_value_justification}
-                                onChange={(event) =>
-                                    setNewItem({
-                                        ...newItem,
-                                        default_value_justification: event.target.value,
-                                    })
-                                }
+                                onChange={(event) => setNewItem({ ...newItem, default_value_justification: event.target.value })}
                             />
                         </div>
                         <div className="md:col-span-3">
-                            <button
-                                type="submit"
-                                className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-                            >
-                                전구물질 저장
-                            </button>
+                            <Button type="submit">전구물질 저장</Button>
                         </div>
                     </form>
-                </div>
+                </SectionCard>
             )}
 
-            <div className="mt-6 overflow-hidden rounded-lg bg-white shadow ring-1 ring-black ring-opacity-5">
-                <table className="min-w-full divide-y divide-gray-300">
-                    <thead className="bg-gray-50">
+            <div className="grid grid-cols-1 gap-3 md:hidden">
+                {precursors.map((precursor) => {
+                    const totalSee = precursor.direct_see_tco2e_per_t + precursor.indirect_see_tco2e_per_t;
+                    return (
+                        <SectionCard key={precursor.id} className="p-4">
+                            <h2 className="text-base font-semibold text-slate-950">{precursor.name}</h2>
+                            <p className="mt-1 text-sm text-slate-500">{precursor.aggregated_goods_category}</p>
+                            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                                <div className="rounded-xl bg-slate-50 p-3">
+                                    <dt className="text-xs text-slate-500">소비 공정</dt>
+                                    <dd className="mt-1 font-medium text-slate-900">{precursor.process_id ? processNames.get(precursor.process_id) ?? '알 수 없음' : '-'}</dd>
+                                </div>
+                                <div className="rounded-xl bg-slate-50 p-3">
+                                    <dt className="text-xs text-slate-500">소비량</dt>
+                                    <dd className="mt-1 font-medium text-slate-900">{formatNumber(precursor.consumed_mass_t)}t</dd>
+                                </div>
+                                <div className="rounded-xl bg-slate-50 p-3">
+                                    <dt className="text-xs text-slate-500">직접 SEE</dt>
+                                    <dd className="mt-1 font-medium text-slate-900">{formatNumber(precursor.direct_see_tco2e_per_t)}</dd>
+                                </div>
+                                <div className="rounded-xl bg-slate-50 p-3">
+                                    <dt className="text-xs text-slate-500">총 SEE</dt>
+                                    <dd className="mt-1 font-medium text-slate-900">{formatNumber(totalSee)}</dd>
+                                </div>
+                            </dl>
+                        </SectionCard>
+                    );
+                })}
+            </div>
+
+            <DataTable className="hidden md:block">
+                <table className="min-w-full divide-y divide-slate-200">
+                    <thead className="bg-slate-50">
                         <tr>
-                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">전구물질</th>
-                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">공정</th>
-                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">보고기간</th>
-                            <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">제품</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">소비량(t)</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">직접 SEE</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">간접 SEE</th>
-                            <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">총 SEE</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">전구물질</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">공정</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">보고기간</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">제품</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">소비량(t)</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">간접 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">총 SEE</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white">
+                    <tbody className="divide-y divide-slate-100 bg-white">
                         {loading ? (
-                            <tr>
-                                <td colSpan={8} className="p-4 text-center text-sm text-gray-500">
-                                    불러오는 중...
-                                </td>
-                            </tr>
+                            <tr><td colSpan={8} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
                         ) : precursors.length === 0 ? (
-                            <tr>
-                                <td colSpan={8} className="p-4 text-center text-sm text-gray-500">
-                                    등록된 구매 전구물질이 없습니다.
-                                </td>
-                            </tr>
+                            <tr><td colSpan={8} className="p-6 text-center text-sm text-slate-500">등록된 구매 전구물질이 없습니다.</td></tr>
                         ) : (
                             precursors.map((precursor) => {
-                                const totalSee =
-                                    precursor.direct_see_tco2e_per_t + precursor.indirect_see_tco2e_per_t;
-
+                                const totalSee = precursor.direct_see_tco2e_per_t + precursor.indirect_see_tco2e_per_t;
                                 return (
-                                    <tr key={precursor.id}>
-                                        <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-900">
-                                            {precursor.name}
-                                        </td>
-                                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                            {precursor.process_id
-                                                ? processNames.get(precursor.process_id) ?? '알 수 없음'
-                                                : '-'}
-                                        </td>
-                                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                            {precursor.period_id
-                                                ? periodNames.get(precursor.period_id) ?? '알 수 없음'
-                                                : '-'}
-                                        </td>
-                                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                            {precursor.product_id
-                                                ? productNames.get(precursor.product_id) ?? '알 수 없음'
-                                                : '-'}
-                                        </td>
-                                        <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">
-                                            {formatNumber(precursor.consumed_mass_t)}
-                                        </td>
-                                        <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">
-                                            {formatNumber(precursor.direct_see_tco2e_per_t)}
-                                        </td>
-                                        <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">
-                                            {formatNumber(precursor.indirect_see_tco2e_per_t)}
-                                        </td>
-                                        <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">
-                                            {formatNumber(totalSee)}
-                                        </td>
+                                    <tr key={precursor.id} className="transition hover:bg-slate-50">
+                                        <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-slate-950">{precursor.name}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{precursor.process_id ? processNames.get(precursor.process_id) ?? '알 수 없음' : '-'}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{precursor.period_id ? periodNames.get(precursor.period_id) ?? '알 수 없음' : '-'}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{precursor.product_id ? productNames.get(precursor.product_id) ?? '알 수 없음' : '-'}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(precursor.consumed_mass_t)}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(precursor.direct_see_tco2e_per_t)}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(precursor.indirect_see_tco2e_per_t)}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(totalSee)}</td>
                                     </tr>
                                 );
                             })
                         )}
                     </tbody>
                 </table>
-            </div>
+            </DataTable>
         </div>
     );
 }

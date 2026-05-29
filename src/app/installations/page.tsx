@@ -1,8 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Button, PageHeader, SectionCard, StatusBadge } from '@/components/ui';
 import { createLocalItem, Installation, listLocalItems, seedLocalData } from '@/lib/local-db';
-import { Plus } from 'lucide-react';
+import { Building2, Plus } from 'lucide-react';
+import { useEffect, useState } from 'react';
+
+const fieldClass =
+    'mt-1 block h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100';
 
 export default function InstallationsPage() {
     const [items, setItems] = useState<Installation[]>([]);
@@ -31,71 +35,64 @@ export default function InstallationsPage() {
     }
 
     return (
-        <div>
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-gray-900">사업장</h1>
-                <button
-                    onClick={() => setShowForm(!showForm)}
-                    className="flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                >
-                    <Plus className="mr-2 h-4 w-4" />
-                    사업장 추가
-                </button>
-            </div>
-            <p className="mt-2 text-sm text-gray-600">
-                사업장 정보는 이 PWA 버전에서 브라우저 로컬 DB에 저장됩니다.
-            </p>
+        <div className="space-y-6">
+            <PageHeader
+                eyebrow="조직 기준"
+                title="사업장"
+                description="CBAM 산정 대상 사업장을 관리합니다. 이 PWA 버전에서는 사업장 정보도 브라우저 로컬 DB에 저장됩니다."
+                actions={
+                    <Button type="button" onClick={() => setShowForm(!showForm)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        사업장 추가
+                    </Button>
+                }
+            />
 
             {showForm && (
-                <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <h2 className="mb-4 text-lg font-medium">신규 사업장</h2>
+                <SectionCard title="신규 사업장" description="국가코드는 ISO 2자리 코드 기준으로 입력합니다.">
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">사업장명</label>
+                            <label className="text-sm font-semibold text-slate-700">사업장명</label>
                             <input
                                 required
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
+                                className={fieldClass}
                                 value={newItem.name}
                                 onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                                placeholder="예: 인천 제1공장"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">국가코드</label>
+                            <label className="text-sm font-semibold text-slate-700">국가코드</label>
                             <input
                                 required
-                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm"
+                                className={fieldClass}
                                 value={newItem.country}
                                 onChange={(e) => setNewItem({ ...newItem, country: e.target.value.toUpperCase() })}
                                 maxLength={2}
                             />
                         </div>
                         <div className="md:col-span-2">
-                            <button
-                                type="submit"
-                                className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-                            >
-                                사업장 저장
-                            </button>
+                            <Button type="submit">사업장 저장</Button>
                         </div>
                     </form>
-                </div>
+                </SectionCard>
             )}
 
-            <div className="mt-6 bg-white shadow overflow-hidden sm:rounded-md">
-                <ul role="list" className="divide-y divide-gray-200">
-                    {items.map((item) => (
-                        <li key={item.id} className="px-4 py-4 sm:px-6">
-                            <div className="flex items-center justify-between">
-                                <p className="text-sm font-medium text-blue-600 truncate">{item.name}</p>
-                                <div className="ml-2 flex-shrink-0 flex">
-                                    <p className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                        {item.country}
-                                    </p>
-                                </div>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                {items.map((item) => (
+                    <SectionCard key={item.id} className="p-5">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <StatusBadge tone="success">{item.country}</StatusBadge>
+                                <h2 className="mt-3 text-base font-semibold text-slate-950">{item.name}</h2>
+                                <p className="mt-1 text-sm text-slate-500">로컬 산정 데이터 연결 가능</p>
                             </div>
-                        </li>
-                    ))}
-                </ul>
+                            <div className="rounded-2xl bg-teal-50 p-3 text-teal-700">
+                                <Building2 className="h-5 w-5" />
+                            </div>
+                        </div>
+                    </SectionCard>
+                ))}
             </div>
         </div>
     );
