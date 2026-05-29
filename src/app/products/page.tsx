@@ -8,32 +8,35 @@ import {
     Product,
     seedLocalData,
     setLocalSetting,
+    updateLocalItem,
 } from '@/lib/local-db';
 import { CN_CODE_OPTIONS, type CnCodeOption } from '@/lib/cn-code-options';
 import { parseEuTemplateCnCodeOptions } from '@/lib/eu-template-export';
-import { FileSpreadsheet, Plus } from 'lucide-react';
+import { FileSpreadsheet, Pencil, Plus, X } from 'lucide-react';
 
 type HsGroup = Product['hs_group'];
 type ProductDraft = Pick<Product, 'name' | 'hs_code' | 'cn_code' | 'hs_group' | 'product_type_enum' | 'unit'>;
+
+const EMPTY_PRODUCT_DRAFT: ProductDraft = {
+    name: '',
+    hs_code: '',
+    cn_code: '',
+    hs_group: '72',
+    product_type_enum: 'HS72_PLATE_SHEET',
+    unit: 'tonne',
+};
 
 export default function ProductsPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
+    const [editingProductId, setEditingProductId] = useState<string | null>(null);
     const [cnSearch, setCnSearch] = useState('');
     const [cnOptions, setCnOptions] = useState<CnCodeOption[]>(CN_CODE_OPTIONS);
     const [cnImportMessage, setCnImportMessage] = useState('');
     const [cnImportError, setCnImportError] = useState('');
 
-    // Form State
-    const [newItem, setNewItem] = useState<ProductDraft>({
-        name: '',
-        hs_code: '',
-        cn_code: '',
-        hs_group: '72',
-        product_type_enum: 'HS72_PLATE_SHEET',
-        unit: 'tonne',
-    });
+    const [draft, setDraft] = useState<ProductDraft>(EMPTY_PRODUCT_DRAFT);
 
     useEffect(() => {
         async function fetchProducts() {
@@ -53,19 +56,60 @@ export default function ProductsPage() {
         fetchProducts();
     }, []);
 
+    function resetForm() {
+        setDraft(EMPTY_PRODUCT_DRAFT);
+        setEditingProductId(null);
+        setCnSearch('');
+        setShowForm(false);
+    }
+
+    function startNewProduct() {
+        if (showForm && !editingProductId) {
+            resetForm();
+            return;
+        }
+
+        setDraft(EMPTY_PRODUCT_DRAFT);
+        setEditingProductId(null);
+        setCnSearch('');
+        setShowForm(true);
+    }
+
+    function startEditProduct(product: Product) {
+        setDraft({
+            name: product.name,
+            hs_code: product.hs_code,
+            cn_code: product.cn_code ?? '',
+            hs_group: product.hs_group,
+            product_type_enum: product.product_type_enum,
+            unit: product.unit,
+        });
+        setEditingProductId(product.id);
+        setCnSearch(product.cn_code ?? product.hs_code);
+        setShowForm(true);
+    }
+
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        const product = await createLocalItem('products', newItem);
+        if (editingProductId) {
+            const existingProduct = products.find((product) => product.id === editingProductId);
+
+            if (!existingProduct) {
+                return;
+            }
+
+            const updatedProduct = await updateLocalItem('products', {
+                ...existingProduct,
+                ...draft,
+            });
+            setProducts(products.map((product) => (product.id === updatedProduct.id ? updatedProduct : product)));
+            resetForm();
+            return;
+        }
+
+        const product = await createLocalItem('products', draft);
         setProducts([product, ...products]);
-        setNewItem({
-            name: '',
-            hs_code: '',
-            cn_code: '',
-            hs_group: '72',
-            product_type_enum: 'HS72_PLATE_SHEET',
-            unit: 'tonne',
-        });
-        setShowForm(false);
+        resetForm();
     }
 
     async function handleCnTemplateImport(file: File | undefined) {
@@ -106,7 +150,7 @@ export default function ProductsPage() {
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-gray-900">제품 등록(CN/HS 72·73)</h1>
                 <button
-                    onClick={() => setShowForm(!showForm)}
+                    onClick={startNewProduct}
                     className="flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                 >
                     <Plus className="mr-2 h-4 w-4" />
@@ -154,7 +198,17 @@ export default function ProductsPage() {
             {/* Add Form */}
             {showForm && (
                 <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <h2 className="mb-4 text-lg font-medium">신규 제품 등록</h2>
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                        <h2 className="text-lg font-medium">{editingProductId ? '제품 정보 수정' : '신규 제품 등록'}</h2>
+                        <button
+                            type="button"
+                            onClick={resetForm}
+                            className="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                            <X className="mr-2 h-4 w-4" />
+                            취소
+                        </button>
+                    </div>
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
                             <label className="block text-sm font-medium text-gray-700">제품명</label>
@@ -162,8 +216,8 @@ export default function ProductsPage() {
                                 type="text"
                                 required
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                value={newItem.name}
-                                onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                                value={draft.name}
+                                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                             />
                         </div>
                         <div>
@@ -172,8 +226,8 @@ export default function ProductsPage() {
                                 type="text"
                                 required
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                value={newItem.hs_code}
-                                onChange={(e) => setNewItem({ ...newItem, hs_code: e.target.value })}
+                                value={draft.hs_code}
+                                onChange={(e) => setDraft({ ...draft, hs_code: e.target.value })}
                             />
                         </div>
                         <div>
@@ -184,10 +238,10 @@ export default function ProductsPage() {
                                 pattern="[0-9]{8}"
                                 maxLength={8}
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                value={newItem.cn_code}
+                                value={draft.cn_code}
                                 onChange={(e) =>
-                                    setNewItem({
-                                        ...newItem,
+                                    setDraft({
+                                        ...draft,
                                         cn_code: e.target.value.replace(/\D/g, '').slice(0, 8),
                                     })
                                 }
@@ -210,8 +264,8 @@ export default function ProductsPage() {
                                         key={option.code}
                                         type="button"
                                         onClick={() =>
-                                            setNewItem({
-                                                ...newItem,
+                                            setDraft({
+                                                ...draft,
                                                 cn_code: option.code,
                                                 hs_code: option.code.slice(0, 4),
                                                 hs_group: option.code.startsWith('73') ? '73' : '72',
@@ -237,8 +291,8 @@ export default function ProductsPage() {
                             <label className="block text-sm font-medium text-gray-700">HS 그룹</label>
                             <select
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                value={newItem.hs_group}
-                                onChange={(e) => setNewItem({ ...newItem, hs_group: e.target.value as HsGroup })}
+                                value={draft.hs_group}
+                                onChange={(e) => setDraft({ ...draft, hs_group: e.target.value as HsGroup })}
                             >
                                 <option value="72">HS 72 (철강)</option>
                                 <option value="73">HS 73 (철강 제품)</option>
@@ -248,8 +302,8 @@ export default function ProductsPage() {
                             <label className="block text-sm font-medium text-gray-700">제품군 템플릿</label>
                             <select
                                 className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                value={newItem.product_type_enum}
-                                onChange={(e) => setNewItem({ ...newItem, product_type_enum: e.target.value })}
+                                value={draft.product_type_enum}
+                                onChange={(e) => setDraft({ ...draft, product_type_enum: e.target.value })}
                             >
                                 <option value="HS72_PLATE_SHEET">HS72_PLATE_SHEET</option>
                                 <option value="HS72_BAR_SECTION">HS72_BAR_SECTION</option>
@@ -266,7 +320,7 @@ export default function ProductsPage() {
                                 type="submit"
                                 className="items-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
                             >
-                                제품 저장
+                                {editingProductId ? '수정 저장' : '제품 저장'}
                             </button>
                         </div>
                     </form>
@@ -287,13 +341,14 @@ export default function ProductsPage() {
                                         <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">그룹</th>
                                         <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">제품군</th>
                                         <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">단위</th>
+                                        <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">관리</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200 bg-white">
                                     {loading ? (
-                                        <tr><td colSpan={6} className="p-4 text-center">불러오는 중...</td></tr>
+                                        <tr><td colSpan={7} className="p-4 text-center">불러오는 중...</td></tr>
                                     ) : products.length === 0 ? (
-                                        <tr><td colSpan={6} className="p-4 text-center text-gray-500">등록된 제품이 없습니다.</td></tr>
+                                        <tr><td colSpan={7} className="p-4 text-center text-gray-500">등록된 제품이 없습니다.</td></tr>
                                     ) : (
                                         products.map((product) => (
                                             <tr key={product.id}>
@@ -303,6 +358,16 @@ export default function ProductsPage() {
                                                 <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">HS {product.hs_group}</td>
                                                 <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{product.product_type_enum}</td>
                                                 <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{product.unit}</td>
+                                                <td className="whitespace-nowrap px-3 py-4 text-right text-sm">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => startEditProduct(product)}
+                                                        className="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                                    >
+                                                        <Pencil className="mr-1.5 h-4 w-4" />
+                                                        수정
+                                                    </button>
+                                                </td>
                                             </tr>
                                         ))
                                     )}

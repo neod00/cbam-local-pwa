@@ -25,10 +25,11 @@ Completed:
 - Added uploaded-template `Parameters_CNCodes` parsing so CN 8-digit codes resolve against the user's current EU template before Export.
 - Added representative CN 8-digit search/select helpers on the product entry form while keeping final validation tied to the uploaded EU template.
 - Added product-page import of full CN code options from an uploaded EU template, stored locally for reusable product search/selection.
+- Added product edit/update support so existing products can be corrected after CN code reference import.
 
 Next:
 
-- Add product edit/update support so existing products can be corrected after CN code reference import, not only new products.
+- Add delete safeguards and dependency warnings for product records used by process or precursor data.
 
 ## Decision Log
 
