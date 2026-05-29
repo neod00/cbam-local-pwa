@@ -331,7 +331,54 @@ export default function ProductsPage() {
                 </SectionCard>
             )}
 
-            <DataTable>
+            <div className="space-y-3 md:hidden">
+                {loading ? (
+                    <SectionCard>
+                        <p className="text-center text-sm text-slate-500">불러오는 중...</p>
+                    </SectionCard>
+                ) : products.length === 0 ? (
+                    <SectionCard>
+                        <p className="text-center text-sm text-slate-500">등록된 제품이 없습니다.</p>
+                    </SectionCard>
+                ) : (
+                    products.map((product) => (
+                        <SectionCard key={product.id} className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <StatusBadge tone={product.cn_code?.length === 8 ? 'success' : 'warning'}>
+                                        {product.cn_code?.length === 8 ? '산정 준비' : 'CN 확인 필요'}
+                                    </StatusBadge>
+                                    <h2 className="mt-3 text-base font-semibold text-slate-950">{product.name}</h2>
+                                    <p className="mt-1 text-sm text-slate-500">
+                                        {product.cn_code ? `CN ${product.cn_code}` : 'CN 미입력'} · HS {product.hs_code}
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    className="min-h-9 px-3 py-1.5"
+                                    onClick={() => startEditProduct(product)}
+                                >
+                                    <Pencil className="mr-1.5 h-4 w-4" />
+                                    수정
+                                </Button>
+                            </div>
+                            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                                <div className="rounded-xl bg-slate-50 p-3">
+                                    <dt className="text-xs text-slate-500">품목군</dt>
+                                    <dd className="mt-1 font-medium text-slate-900">{product.product_type_enum}</dd>
+                                </div>
+                                <div className="rounded-xl bg-slate-50 p-3">
+                                    <dt className="text-xs text-slate-500">단위</dt>
+                                    <dd className="mt-1 font-medium text-slate-900">{product.unit}</dd>
+                                </div>
+                            </dl>
+                        </SectionCard>
+                    ))
+                )}
+            </div>
+
+            <DataTable className="hidden md:block">
                 <table className="min-w-full divide-y divide-slate-200">
                     <thead className="bg-slate-50">
                         <tr>
