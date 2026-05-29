@@ -7,6 +7,7 @@ import {
     Package,
     Calendar,
     Upload,
+    FileSpreadsheet,
     BarChart,
     Settings,
     ShieldCheck,
@@ -23,6 +24,7 @@ const navigation = [
     { name: '구매 전구물질', href: '/precursors', icon: Boxes },
     { name: '자료 업로드', href: '/upload', icon: Upload },
     { name: '산정결과', href: '/results', icon: BarChart },
+    { name: 'EU 템플릿 Export', href: '/export', icon: FileSpreadsheet },
     { name: '사업장', href: '/installations', icon: Settings },
     { name: '데이터 안전', href: '/settings', icon: ShieldCheck },
 ];
