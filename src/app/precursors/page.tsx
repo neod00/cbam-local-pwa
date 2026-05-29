@@ -10,8 +10,9 @@ import {
     PurchasedPrecursor,
     ReportingPeriod,
     seedLocalData,
+    updateLocalItem,
 } from '@/lib/local-db';
-import { Boxes, Factory, Plus, Scale, Trash2 } from 'lucide-react';
+import { Boxes, Factory, Pencil, Plus, Scale, Trash2, X } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type PrecursorDraft = Omit<PurchasedPrecursor, 'id' | 'created_at' | 'updated_at'>;
@@ -51,6 +52,7 @@ export default function PrecursorsPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
+    const [editingPrecursorId, setEditingPrecursorId] = useState<string | null>(null);
     const [newItem, setNewItem] = useState<PrecursorDraft>(emptyDraft);
 
     useEffect(() => {
@@ -93,8 +95,77 @@ export default function PrecursorsPage() {
         return { consumedMass, totalSee };
     }, [precursors]);
 
+    function createDefaultDraft(): PrecursorDraft {
+        return {
+            ...emptyDraft,
+            period_id: periods[0]?.id ?? '',
+            process_id: processes[0]?.id ?? '',
+            product_id: products[0]?.id ?? '',
+        };
+    }
+
+    function resetForm() {
+        setNewItem(createDefaultDraft());
+        setEditingPrecursorId(null);
+        setShowForm(false);
+    }
+
+    function startNewPrecursor() {
+        if (showForm && !editingPrecursorId) {
+            resetForm();
+            return;
+        }
+
+        setNewItem(createDefaultDraft());
+        setEditingPrecursorId(null);
+        setShowForm(true);
+    }
+
+    function startEditPrecursor(precursor: PurchasedPrecursor) {
+        setNewItem({
+            period_id: precursor.period_id ?? '',
+            process_id: precursor.process_id ?? '',
+            product_id: precursor.product_id ?? '',
+            name: precursor.name,
+            aggregated_goods_category: precursor.aggregated_goods_category,
+            production_route: precursor.production_route,
+            purchased_mass_t: precursor.purchased_mass_t,
+            consumed_mass_t: precursor.consumed_mass_t,
+            consumed_for_non_cbam_mass_t: precursor.consumed_for_non_cbam_mass_t,
+            direct_see_tco2e_per_t: precursor.direct_see_tco2e_per_t,
+            indirect_see_tco2e_per_t: precursor.indirect_see_tco2e_per_t,
+            source: precursor.source,
+            default_value_justification: precursor.default_value_justification,
+        });
+        setEditingPrecursorId(precursor.id);
+        setShowForm(true);
+    }
+
     async function handleSubmit(event: FormEvent) {
         event.preventDefault();
+
+        if (editingPrecursorId) {
+            const existingPrecursor = precursors.find((precursor) => precursor.id === editingPrecursorId);
+
+            if (!existingPrecursor) {
+                return;
+            }
+
+            const updatedPrecursor = await updateLocalItem('precursors', {
+                ...existingPrecursor,
+                ...newItem,
+                period_id: newItem.period_id || undefined,
+                process_id: newItem.process_id || undefined,
+                product_id: newItem.product_id || undefined,
+            });
+            setPrecursors(
+                precursors.map((precursor) =>
+                    precursor.id === updatedPrecursor.id ? updatedPrecursor : precursor
+                )
+            );
+            resetForm();
+            return;
+        }
 
         const precursor = await createLocalItem('precursors', {
             ...newItem,
@@ -104,13 +175,7 @@ export default function PrecursorsPage() {
         });
 
         setPrecursors([precursor, ...precursors]);
-        setNewItem({
-            ...emptyDraft,
-            period_id: periods[0]?.id ?? '',
-            process_id: processes[0]?.id ?? '',
-            product_id: products[0]?.id ?? '',
-        });
-        setShowForm(false);
+        resetForm();
     }
 
     async function handleDeletePrecursor(precursor: PurchasedPrecursor) {
@@ -124,6 +189,9 @@ export default function PrecursorsPage() {
 
         await deleteLocalItem('precursors', precursor.id);
         setPrecursors(precursors.filter((item) => item.id !== precursor.id));
+        if (editingPrecursorId === precursor.id) {
+            resetForm();
+        }
     }
 
     return (
@@ -133,7 +201,7 @@ export default function PrecursorsPage() {
                 title="구매 전구물질"
                 description="EU 템플릿의 E_PurchPrec 입력 구조에 맞춰 구매 전구물질의 소비량과 내재배출량(SEE)을 관리합니다."
                 actions={
-                    <Button type="button" onClick={() => setShowForm(!showForm)}>
+                    <Button type="button" onClick={startNewPrecursor}>
                         <Plus className="mr-2 h-4 w-4" />
                         전구물질 추가
                     </Button>
@@ -147,7 +215,16 @@ export default function PrecursorsPage() {
             </div>
 
             {showForm && (
-                <SectionCard title="신규 구매 전구물질" description="공급업체 회신 또는 기본값 사용 근거를 함께 관리하세요.">
+                <SectionCard
+                    title={editingPrecursorId ? '전구물질 정보 수정' : '신규 구매 전구물질'}
+                    description="공급업체 회신 또는 기본값 사용 근거를 함께 관리하세요."
+                    actions={
+                        <Button type="button" variant="secondary" onClick={resetForm}>
+                            <X className="mr-2 h-4 w-4" />
+                            취소
+                        </Button>
+                    }
+                >
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
                             <label className="text-sm font-semibold text-slate-700">전구물질명</label>
@@ -216,7 +293,7 @@ export default function PrecursorsPage() {
                             />
                         </div>
                         <div className="md:col-span-3">
-                            <Button type="submit">전구물질 저장</Button>
+                            <Button type="submit">{editingPrecursorId ? '수정 저장' : '전구물질 저장'}</Button>
                         </div>
                     </form>
                 </SectionCard>
@@ -247,15 +324,16 @@ export default function PrecursorsPage() {
                                     <dd className="mt-1 font-medium text-slate-900">{formatNumber(totalSee)}</dd>
                                 </div>
                             </dl>
-                            <Button
-                                type="button"
-                                variant="danger"
-                                className="mt-4 w-full"
-                                onClick={() => handleDeletePrecursor(precursor)}
-                            >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                삭제
-                            </Button>
+                            <div className="mt-4 grid grid-cols-2 gap-2">
+                                <Button type="button" variant="secondary" onClick={() => startEditPrecursor(precursor)}>
+                                    <Pencil className="mr-2 h-4 w-4" />
+                                    수정
+                                </Button>
+                                <Button type="button" variant="danger" onClick={() => handleDeletePrecursor(precursor)}>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    삭제
+                                </Button>
+                            </div>
                         </SectionCard>
                     );
                 })}
@@ -295,10 +373,16 @@ export default function PrecursorsPage() {
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(precursor.indirect_see_tco2e_per_t)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(totalSee)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm">
-                                            <Button type="button" variant="danger" className="min-h-9 px-3 py-1.5" onClick={() => handleDeletePrecursor(precursor)}>
-                                                <Trash2 className="mr-1.5 h-4 w-4" />
-                                                삭제
-                                            </Button>
+                                            <div className="flex justify-end gap-2">
+                                                <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => startEditPrecursor(precursor)}>
+                                                    <Pencil className="mr-1.5 h-4 w-4" />
+                                                    수정
+                                                </Button>
+                                                <Button type="button" variant="danger" className="min-h-9 px-3 py-1.5" onClick={() => handleDeletePrecursor(precursor)}>
+                                                    <Trash2 className="mr-1.5 h-4 w-4" />
+                                                    삭제
+                                                </Button>
+                                            </div>
                                         </td>
                                     </tr>
                                 );

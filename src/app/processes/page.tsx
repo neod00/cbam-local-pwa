@@ -10,8 +10,9 @@ import {
     PurchasedPrecursor,
     ReportingPeriod,
     seedLocalData,
+    updateLocalItem,
 } from '@/lib/local-db';
-import { Factory, Gauge, Plus, Trash2, Zap } from 'lucide-react';
+import { Factory, Gauge, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type ProcessDraft = Omit<ProductionProcess, 'id' | 'created_at' | 'updated_at'>;
@@ -48,6 +49,7 @@ export default function ProcessesPage() {
     const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
+    const [editingProcessId, setEditingProcessId] = useState<string | null>(null);
     const [newItem, setNewItem] = useState<ProcessDraft>(emptyDraft);
 
     useEffect(() => {
@@ -85,8 +87,68 @@ export default function ProcessesPage() {
         return { totalOutput, totalElectricity };
     }, [processes]);
 
+    function createDefaultDraft(): ProcessDraft {
+        return {
+            ...emptyDraft,
+            product_id: products[0]?.id ?? '',
+            period_id: periods[0]?.id ?? '',
+        };
+    }
+
+    function resetForm() {
+        setNewItem(createDefaultDraft());
+        setEditingProcessId(null);
+        setShowForm(false);
+    }
+
+    function startNewProcess() {
+        if (showForm && !editingProcessId) {
+            resetForm();
+            return;
+        }
+
+        setNewItem(createDefaultDraft());
+        setEditingProcessId(null);
+        setShowForm(true);
+    }
+
+    function startEditProcess(process: ProductionProcess) {
+        setNewItem({
+            period_id: process.period_id ?? '',
+            product_id: process.product_id ?? '',
+            name: process.name,
+            production_route: process.production_route,
+            output_mass_t: process.output_mass_t,
+            market_output_mass_t: process.market_output_mass_t,
+            internal_consumption_mass_t: process.internal_consumption_mass_t,
+            direct_attributable_emissions_tco2e: process.direct_attributable_emissions_tco2e,
+            electricity_mwh: process.electricity_mwh,
+            electricity_ef_tco2e_per_mwh: process.electricity_ef_tco2e_per_mwh,
+        });
+        setEditingProcessId(process.id);
+        setShowForm(true);
+    }
+
     async function handleSubmit(event: FormEvent) {
         event.preventDefault();
+
+        if (editingProcessId) {
+            const existingProcess = processes.find((process) => process.id === editingProcessId);
+
+            if (!existingProcess) {
+                return;
+            }
+
+            const updatedProcess = await updateLocalItem('processes', {
+                ...existingProcess,
+                ...newItem,
+                period_id: newItem.period_id || undefined,
+                product_id: newItem.product_id || undefined,
+            });
+            setProcesses(processes.map((process) => (process.id === updatedProcess.id ? updatedProcess : process)));
+            resetForm();
+            return;
+        }
 
         const process = await createLocalItem('processes', {
             ...newItem,
@@ -95,12 +157,7 @@ export default function ProcessesPage() {
         });
 
         setProcesses([process, ...processes]);
-        setNewItem({
-            ...emptyDraft,
-            product_id: products[0]?.id ?? '',
-            period_id: periods[0]?.id ?? '',
-        });
-        setShowForm(false);
+        resetForm();
     }
 
     function getSee(process: ProductionProcess) {
@@ -137,6 +194,9 @@ export default function ProcessesPage() {
 
         await deleteLocalItem('processes', process.id);
         setProcesses(processes.filter((item) => item.id !== process.id));
+        if (editingProcessId === process.id) {
+            resetForm();
+        }
     }
 
     return (
@@ -146,7 +206,7 @@ export default function ProcessesPage() {
                 title="생산공정"
                 description="EU 템플릿의 D_Processes 입력 구조에 맞춰 공정별 생산량, 직접귀속배출, 전력 사용량을 관리합니다."
                 actions={
-                    <Button type="button" onClick={() => setShowForm(!showForm)}>
+                    <Button type="button" onClick={startNewProcess}>
                         <Plus className="mr-2 h-4 w-4" />
                         공정 추가
                     </Button>
@@ -160,7 +220,16 @@ export default function ProcessesPage() {
             </div>
 
             {showForm && (
-                <SectionCard title="신규 생산공정" description="공정별 생산량과 배출량 데이터를 입력하면 산정결과와 EU Export에 반영됩니다.">
+                <SectionCard
+                    title={editingProcessId ? '생산공정 정보 수정' : '신규 생산공정'}
+                    description="공정별 생산량과 배출량 데이터를 입력하면 산정결과와 EU Export에 반영됩니다."
+                    actions={
+                        <Button type="button" variant="secondary" onClick={resetForm}>
+                            <X className="mr-2 h-4 w-4" />
+                            취소
+                        </Button>
+                    }
+                >
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
                             <label className="text-sm font-semibold text-slate-700">공정명</label>
@@ -209,7 +278,7 @@ export default function ProcessesPage() {
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.electricity_ef_tco2e_per_mwh} onChange={(event) => setNewItem({ ...newItem, electricity_ef_tco2e_per_mwh: toNumber(event.target.value) })} />
                         </div>
                         <div className="md:col-span-3">
-                            <Button type="submit">공정 저장</Button>
+                            <Button type="submit">{editingProcessId ? '수정 저장' : '공정 저장'}</Button>
                         </div>
                     </form>
                 </SectionCard>
@@ -240,15 +309,16 @@ export default function ProcessesPage() {
                                     <dd className="mt-1 font-medium text-slate-900">{formatNumber(see.indirectSee)}</dd>
                                 </div>
                             </dl>
-                            <Button
-                                type="button"
-                                variant="danger"
-                                className="mt-4 w-full"
-                                onClick={() => handleDeleteProcess(process)}
-                            >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                삭제
-                            </Button>
+                            <div className="mt-4 grid grid-cols-2 gap-2">
+                                <Button type="button" variant="secondary" onClick={() => startEditProcess(process)}>
+                                    <Pencil className="mr-2 h-4 w-4" />
+                                    수정
+                                </Button>
+                                <Button type="button" variant="danger" onClick={() => handleDeleteProcess(process)}>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    삭제
+                                </Button>
+                            </div>
                         </SectionCard>
                     );
                 })}
@@ -286,10 +356,16 @@ export default function ProcessesPage() {
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(see.directSee)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(see.indirectSee)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm">
-                                            <Button type="button" variant="danger" className="min-h-9 px-3 py-1.5" onClick={() => handleDeleteProcess(process)}>
-                                                <Trash2 className="mr-1.5 h-4 w-4" />
-                                                삭제
-                                            </Button>
+                                            <div className="flex justify-end gap-2">
+                                                <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => startEditProcess(process)}>
+                                                    <Pencil className="mr-1.5 h-4 w-4" />
+                                                    수정
+                                                </Button>
+                                                <Button type="button" variant="danger" className="min-h-9 px-3 py-1.5" onClick={() => handleDeleteProcess(process)}>
+                                                    <Trash2 className="mr-1.5 h-4 w-4" />
+                                                    삭제
+                                                </Button>
+                                            </div>
                                         </td>
                                     </tr>
                                 );
