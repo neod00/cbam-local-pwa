@@ -24,8 +24,8 @@
 .DS_Store
 *.pem
 
-# extracted Office document internals
-CBAM_documents/CBAM Communication template for installations_en_20241213/
+# local reference documents and official EU templates
+CBAM_documents/
 
 # debug
 npm-debug.log*
