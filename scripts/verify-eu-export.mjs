@@ -248,6 +248,7 @@ const installation = {
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
   name: 'Main Factory A',
+  local_name: 'Incheon Plant 1',
   country: 'KR',
   street: '1 Steel Road',
   economic_activity: 'Steel processing',
@@ -310,7 +311,7 @@ const validation = await euExport.validateEuTemplateFile(file);
 
 assertEqual(String(validation.isValid), 'true', 'synthetic workbook validity');
 assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
-assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '23', 'planned cell writes');
+assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '24', 'planned cell writes');
 
 const exportedBlob = await euExport.createEuTemplateExportCopy(file, data);
 const exportedZip = fflate.unzipSync(new Uint8Array(await exportedBlob.arrayBuffer()));
@@ -320,6 +321,7 @@ const precursorSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet9.xml'])
 
 assertEqual(readCell(installationSheet, 'I9'), '45292', 'A_InstData I9');
 assertEqual(readCell(installationSheet, 'L9'), '45657', 'A_InstData L9');
+assertEqual(readCell(installationSheet, 'I19'), 'Incheon Plant 1', 'A_InstData I19');
 assertEqual(readCell(installationSheet, 'I20'), 'Main Factory A', 'A_InstData I20');
 assertEqual(readCell(installationSheet, 'I21'), '1 Steel Road', 'A_InstData I21');
 assertEqual(readCell(installationSheet, 'I22'), 'Steel processing', 'A_InstData I22');

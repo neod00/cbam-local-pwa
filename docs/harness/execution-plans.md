@@ -41,10 +41,11 @@ Completed:
 - Added Export success feedback that shows the generated copy filename, timestamp, and verified cell counts after download starts.
 - Corrected EU Export writes to target unlocked official template input cells and documented the current export map.
 - Added first-pass `A_InstData` export for reporting-period dates and basic installation identity.
+- Expanded the installation model and UI for `A_InstData` address/contact fields, including local/internal and English installation names.
 
 Next:
 
-- Expand the installation model for additional `A_InstData` address/contact fields before entering emissions source-stream sheets.
+- Add a dedicated source-stream and energy model before writing `B_EmInst` and `C_Emissions&Energy`.
 
 ## Decision Log
 

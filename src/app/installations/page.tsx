@@ -11,6 +11,7 @@ const fieldClass =
 type InstallationDraft = Pick<
     Installation,
     | 'name'
+    | 'local_name'
     | 'country'
     | 'street'
     | 'economic_activity'
@@ -28,6 +29,7 @@ type InstallationErrors = Partial<Record<keyof InstallationDraft, string>>;
 
 const emptyDraft: InstallationDraft = {
     name: '',
+    local_name: '',
     country: 'KR',
     street: '',
     economic_activity: '',
@@ -50,6 +52,7 @@ function optionalValue(value: string | undefined): string | undefined {
 function toDraft(installation: Installation): InstallationDraft {
     return {
         name: installation.name,
+        local_name: installation.local_name ?? '',
         country: installation.country,
         street: installation.street ?? '',
         economic_activity: installation.economic_activity ?? '',
@@ -68,6 +71,7 @@ function toDraft(installation: Installation): InstallationDraft {
 function normalizeDraft(draft: InstallationDraft): Omit<Installation, keyof InstallationDraft | 'id' | 'created_at' | 'updated_at' | 'boundary_json'> & InstallationDraft {
     return {
         name: draft.name.trim(),
+        local_name: optionalValue(draft.local_name),
         country: draft.country.trim().toUpperCase(),
         street: optionalValue(draft.street),
         economic_activity: optionalValue(draft.economic_activity),
@@ -140,7 +144,7 @@ export default function InstallationsPage() {
         const country = newItem.country.trim().toUpperCase();
 
         if (!newItem.name.trim()) {
-            nextErrors.name = '사업장명을 입력하세요.';
+            nextErrors.name = '영문 사업장명을 입력하세요.';
         }
 
         if (!/^[A-Z]{2}$/.test(country)) {
@@ -215,12 +219,19 @@ export default function InstallationsPage() {
                 >
                     <form noValidate onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <FormInput
+                            id="installation-local-name"
+                            label="내부 사업장명"
+                            value={newItem.local_name ?? ''}
+                            placeholder="예: 인천 제1공장"
+                            onChange={(value) => setNewItem({ ...newItem, local_name: value })}
+                        />
+                        <FormInput
                             id="installation-name"
-                            label="사업장명"
+                            label="영문 사업장명"
                             required
                             value={newItem.name}
                             error={errors.name}
-                            placeholder="예: 인천 제1공장"
+                            placeholder="예: Main Factory A"
                             onChange={(value) => setNewItem({ ...newItem, name: value })}
                         />
                         <FormInput
@@ -322,7 +333,8 @@ export default function InstallationsPage() {
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                                 <StatusBadge tone="success">{item.country}</StatusBadge>
-                                <h2 className="mt-3 truncate text-base font-semibold text-slate-950">{item.name}</h2>
+                                <h2 className="mt-3 truncate text-base font-semibold text-slate-950">{item.local_name || item.name}</h2>
+                                {item.local_name && <p className="mt-1 truncate text-sm text-slate-500">{item.name}</p>}
                                 <div className="mt-3 space-y-2 text-sm text-slate-600">
                                     <p className="flex items-center gap-2">
                                         <MapPin className="h-4 w-4 shrink-0 text-slate-400" />

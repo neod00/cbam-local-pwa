@@ -14,6 +14,7 @@ export interface LocalEntity {
 
 export interface Installation extends LocalEntity {
   name: string;
+  local_name?: string;
   country: string;
   street?: string;
   economic_activity?: string;
@@ -359,6 +360,7 @@ export async function seedLocalData(): Promise<void> {
   if (installations.length === 0) {
     const installation = await createLocalItem("installations", {
       name: "Main Factory A",
+      local_name: "인천 제1공장",
       country: "KR",
       street: "1 Steel Road",
       economic_activity: "Steel processing",
@@ -453,6 +455,7 @@ export async function seedLocalData(): Promise<void> {
   if (demoInstallation && !demoInstallation.city) {
     await updateLocalItem("installations", {
       ...demoInstallation,
+      local_name: demoInstallation.local_name ?? "인천 제1공장",
       street: demoInstallation.street ?? "1 Steel Road",
       economic_activity: demoInstallation.economic_activity ?? "Steel processing",
       postcode: demoInstallation.postcode ?? "21990",

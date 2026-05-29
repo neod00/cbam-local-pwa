@@ -648,6 +648,7 @@ function createInstallationCellWrites(
     }
 
     if (installation) {
+        addOptionalInstallationWrite(writes, installation, 'local_name', 'I19', '사업장명');
         writes.push(
             {
                 sheetName: 'A_InstData',
@@ -685,6 +686,7 @@ function addOptionalInstallationWrite(
     installation: Installation,
     field: keyof Pick<
         Installation,
+        | 'local_name'
         | 'street'
         | 'economic_activity'
         | 'postcode'

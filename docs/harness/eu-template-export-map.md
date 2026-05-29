@@ -21,6 +21,7 @@ The app writes reporting-period, installation identity, address, location, and c
 | --- | --- | --- |
 | `ReportingPeriod.start_date` | `I9` | Start date, written as an Excel serial date. |
 | `ReportingPeriod.end_date` | `L9` | End date, written as an Excel serial date. |
+| `Installation.local_name` | `I19` | Optional internal/local installation name. |
 | `Installation.name` | `I20` | Installation English name field. |
 | `Installation.street` | `I21` | Street and number. |
 | `Installation.economic_activity` | `I22` | Economic activity. |
@@ -67,6 +68,5 @@ The app does not currently write `indirect_see_tco2e_per_t` directly into `E_Pur
 
 ## Known Gaps
 
-- `A_InstData` still does not write the optional local-language installation name at `I19`.
 - `B_EmInst` and `C_Emissions&Energy` require a more detailed source-stream and energy model before reliable export.
 - Production routes and aggregated goods categories should be driven through `A_InstData` and official dropdown/code-list relationships rather than by overwriting protected labels.
