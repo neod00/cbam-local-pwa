@@ -5,11 +5,10 @@
 Run before finishing code changes:
 
 ```bash
-npm.cmd run lint
-npm.cmd run build
+npm.cmd run verify
 ```
 
-Use `npm.cmd` on Windows because PowerShell execution policy can block `npm.ps1`.
+This runs the synthetic EU Export workbook verification, lint, and production build. Use `npm.cmd` on Windows because PowerShell execution policy can block `npm.ps1`.
 
 ## PWA Checks
 
@@ -35,6 +34,15 @@ For changes touching calculation or domain data:
 - Inputs should map to an EU template concept when possible.
 - Calculation outputs should include enough metadata for reproducibility.
 - Warnings should be explicit rather than silently accepting suspicious data.
+
+## EU Export Checks
+
+For changes touching `src/lib/eu-template-export.ts` or EU template mapping:
+
+- Run `npm.cmd run verify:export` during focused iteration.
+- Keep the official EU workbook out of the repository.
+- Synthetic fixtures may cover workbook structure and cell injection, but must not replace final manual checks against the current official EU template before release.
+- Generated workbook copies must preserve official sheet names, formulas, field labels, and English text.
 
 ## UI Checks
 
