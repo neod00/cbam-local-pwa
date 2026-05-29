@@ -22,6 +22,7 @@ export interface Product extends LocalEntity {
   installation_id?: string;
   name: string;
   hs_code: string;
+  cn_code?: string;
   hs_group: "72" | "73";
   product_type_enum: string;
   unit: string;
@@ -333,6 +334,7 @@ export async function seedLocalData(): Promise<void> {
         installation_id: installation.id,
         name: "Hot Rolled Coil",
         hs_code: "7208",
+        cn_code: "72083900",
         hs_group: "72",
         product_type_enum: "HS72_PLATE_SHEET",
         unit: "tonne",
@@ -341,6 +343,7 @@ export async function seedLocalData(): Promise<void> {
         installation_id: installation.id,
         name: "Steel Pipe",
         hs_code: "7306",
+        cn_code: "73063000",
         hs_group: "73",
         product_type_enum: "HS73_PIPE_TUBE",
         unit: "tonne",

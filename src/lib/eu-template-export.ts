@@ -80,6 +80,10 @@ function normalizeHsCode(hsCode: string): string {
     return hsCode.replace(/\D/g, '');
 }
 
+function getProductCnOrHsCode(product: Product): string {
+    return normalizeHsCode(product.cn_code?.trim() || product.hs_code);
+}
+
 function mapProductToEuGood(product: Product | undefined): string | undefined {
     if (!product) {
         return undefined;
@@ -89,7 +93,7 @@ function mapProductToEuGood(product: Product | undefined): string | undefined {
         return product.product_type_enum;
     }
 
-    const hsCode = normalizeHsCode(product.hs_code);
+    const hsCode = getProductCnOrHsCode(product);
 
     if (PIG_IRON_PREFIXES.some((prefix) => hsCode.startsWith(prefix))) {
         return 'Pig iron';
@@ -139,13 +143,13 @@ export function evaluateEuExportReadiness(data: EuTemplateExportData): EuExportR
     }
 
     for (const product of data.products) {
-        const hsCode = normalizeHsCode(product.hs_code);
+        const hsCode = getProductCnOrHsCode(product);
 
         if (hsCode.length < 8) {
             issues.push({
                 severity: 'warning',
                 area: '제품',
-                message: `${product.name}: EU 템플릿 제출에는 CN 8자리 수준의 코드 확인이 필요합니다. 현재 값은 ${product.hs_code}입니다.`,
+                message: `${product.name}: EU 템플릿 제출에는 CN 8자리 코드가 필요합니다. 현재 값은 ${product.cn_code || product.hs_code}입니다.`,
             });
         }
 

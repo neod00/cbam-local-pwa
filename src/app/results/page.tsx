@@ -137,7 +137,11 @@ export default function ResultsPage() {
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                                         {result.product_name}
-                                        {result.hs_code && <div className="text-xs text-gray-400">HS {result.hs_code}</div>}
+                                        {(result.cn_code || result.hs_code) && (
+                                            <div className="text-xs text-gray-400">
+                                                {result.cn_code ? `CN ${result.cn_code}` : `HS ${result.hs_code}`}
+                                            </div>
+                                        )}
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                                         {result.period_name ?? '-'}

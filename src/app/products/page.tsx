@@ -5,7 +5,7 @@ import { createLocalItem, listLocalItems, Product, seedLocalData } from '@/lib/l
 import { Plus } from 'lucide-react';
 
 type HsGroup = Product['hs_group'];
-type ProductDraft = Pick<Product, 'name' | 'hs_code' | 'hs_group' | 'product_type_enum' | 'unit'>;
+type ProductDraft = Pick<Product, 'name' | 'hs_code' | 'cn_code' | 'hs_group' | 'product_type_enum' | 'unit'>;
 
 export default function ProductsPage() {
     const [products, setProducts] = useState<Product[]>([]);
@@ -16,6 +16,7 @@ export default function ProductsPage() {
     const [newItem, setNewItem] = useState<ProductDraft>({
         name: '',
         hs_code: '',
+        cn_code: '',
         hs_group: '72',
         product_type_enum: 'HS72_PLATE_SHEET',
         unit: 'tonne',
@@ -40,6 +41,7 @@ export default function ProductsPage() {
         setNewItem({
             name: '',
             hs_code: '',
+            cn_code: '',
             hs_group: '72',
             product_type_enum: 'HS72_PLATE_SHEET',
             unit: 'tonne',
@@ -50,7 +52,7 @@ export default function ProductsPage() {
     return (
         <div>
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-gray-900">제품 등록(HS72/73)</h1>
+                <h1 className="text-2xl font-bold text-gray-900">제품 등록(CN/HS 72·73)</h1>
                 <button
                     onClick={() => setShowForm(!showForm)}
                     className="flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -60,7 +62,7 @@ export default function ProductsPage() {
                 </button>
             </div>
             <p className="mt-2 text-sm text-gray-600">
-                제품과 생산 관련 데이터는 이 브라우저에만 저장되며 서버로 전송되지 않습니다.
+                제품과 생산 관련 데이터는 이 브라우저에만 저장됩니다. EU Export 정확도를 위해 CN 8자리 코드를 우선 입력하세요.
             </p>
 
             {/* Add Form */}
@@ -87,6 +89,25 @@ export default function ProductsPage() {
                                 value={newItem.hs_code}
                                 onChange={(e) => setNewItem({ ...newItem, hs_code: e.target.value })}
                             />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">CN 8자리 코드</label>
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]{8}"
+                                maxLength={8}
+                                className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                value={newItem.cn_code}
+                                onChange={(e) =>
+                                    setNewItem({
+                                        ...newItem,
+                                        cn_code: e.target.value.replace(/\D/g, '').slice(0, 8),
+                                    })
+                                }
+                                placeholder="예: 72083900"
+                            />
+                            <p className="mt-1 text-xs text-gray-500">EU 템플릿 제출 검증은 CN 8자리 기준으로 수행합니다.</p>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700">HS 그룹</label>
@@ -138,6 +159,7 @@ export default function ProductsPage() {
                                     <tr>
                                         <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">제품명</th>
                                         <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">HS 코드</th>
+                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">CN 8자리</th>
                                         <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">그룹</th>
                                         <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">제품군</th>
                                         <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">단위</th>
@@ -145,14 +167,15 @@ export default function ProductsPage() {
                                 </thead>
                                 <tbody className="divide-y divide-gray-200 bg-white">
                                     {loading ? (
-                                        <tr><td colSpan={5} className="p-4 text-center">불러오는 중...</td></tr>
+                                        <tr><td colSpan={6} className="p-4 text-center">불러오는 중...</td></tr>
                                     ) : products.length === 0 ? (
-                                        <tr><td colSpan={5} className="p-4 text-center text-gray-500">등록된 제품이 없습니다.</td></tr>
+                                        <tr><td colSpan={6} className="p-4 text-center text-gray-500">등록된 제품이 없습니다.</td></tr>
                                     ) : (
                                         products.map((product) => (
                                             <tr key={product.id}>
                                                 <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-900">{product.name}</td>
                                                 <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{product.hs_code}</td>
+                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{product.cn_code || '미입력'}</td>
                                                 <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">HS {product.hs_group}</td>
                                                 <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{product.product_type_enum}</td>
                                                 <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{product.unit}</td>

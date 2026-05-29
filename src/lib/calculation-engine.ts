@@ -35,6 +35,7 @@ export interface LocalCalculationResult {
     product_id?: string;
     product_name: string;
     hs_code?: string;
+    cn_code?: string;
     production_route: string;
     output_mass_t: number;
     direct_see: number;
@@ -162,6 +163,7 @@ export function calculateLocalResults(input: {
             product_id: process.product_id,
             product_name: product?.name ?? '미지정 제품',
             hs_code: product?.hs_code,
+            cn_code: product?.cn_code,
             production_route: process.production_route,
             output_mass_t: process.output_mass_t,
             direct_see,
