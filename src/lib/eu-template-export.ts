@@ -1,5 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import type { Product, ProductionProcess, PurchasedPrecursor } from './local-db';
+import type { Installation, Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod } from './local-db';
 import type { CnCodeOption } from './cn-code-options';
 
 export const REQUIRED_EU_TEMPLATE_SHEETS = [
@@ -33,13 +33,15 @@ export interface EuTemplateValidationResult {
 }
 
 export interface EuTemplateExportData {
+    installations?: Installation[];
+    periods?: ReportingPeriod[];
     processes: ProductionProcess[];
     precursors: PurchasedPrecursor[];
     products: Product[];
 }
 
 type EuCnCodeMap = Map<string, string>;
-type EuExportSheetName = 'D_Processes' | 'E_PurchPrec';
+type EuExportSheetName = 'A_InstData' | 'D_Processes' | 'E_PurchPrec';
 
 export interface EuTemplateExportCellWrite {
     sheetName: EuExportSheetName;
@@ -538,6 +540,18 @@ function applyCellWrites(sheetXml: string, writes: EuTemplateExportCellWrite[]):
     return writes.reduce((output, write) => setCellValue(output, write.cell, write.value), sheetXml);
 }
 
+function dateStringToExcelSerial(dateString: string): number {
+    const [year, month, day] = dateString.split('-').map(Number);
+
+    if (!year || !month || !day) {
+        return 0;
+    }
+
+    const utcDate = Date.UTC(year, month - 1, day);
+    const excelEpoch = Date.UTC(1899, 11, 30);
+    return Math.round((utcDate - excelEpoch) / 86400000);
+}
+
 function parseWorkbookSheetTargets(zip: Record<string, Uint8Array>): Map<string, string> {
     const workbookXml = zip['xl/workbook.xml'];
     const relsXml = zip['xl/_rels/workbook.xml.rels'];
@@ -606,6 +620,55 @@ function createProcessCellWrites(processes: ProductionProcess[]): EuTemplateExpo
     return writes;
 }
 
+function createInstallationCellWrites(
+    installations: Installation[] = [],
+    periods: ReportingPeriod[] = []
+): EuTemplateExportCellWrite[] {
+    const installation = installations[0];
+    const period = periods[0];
+    const writes: EuTemplateExportCellWrite[] = [];
+
+    if (period) {
+        writes.push(
+            {
+                sheetName: 'A_InstData',
+                cell: 'I9',
+                label: '보고기간 시작일',
+                value: dateStringToExcelSerial(period.start_date),
+                sourceId: period.id,
+            },
+            {
+                sheetName: 'A_InstData',
+                cell: 'L9',
+                label: '보고기간 종료일',
+                value: dateStringToExcelSerial(period.end_date),
+                sourceId: period.id,
+            }
+        );
+    }
+
+    if (installation) {
+        writes.push(
+            {
+                sheetName: 'A_InstData',
+                cell: 'I20',
+                label: '사업장 영문명',
+                value: installation.name,
+                sourceId: installation.id,
+            },
+            {
+                sheetName: 'A_InstData',
+                cell: 'I26',
+                label: '사업장 국가',
+                value: installation.country,
+                sourceId: installation.id,
+            }
+        );
+    }
+
+    return writes;
+}
+
 function createPrecursorCellWrites(precursors: PurchasedPrecursor[]): EuTemplateExportCellWrite[] {
     const writes: EuTemplateExportCellWrite[] = [];
 
@@ -644,6 +707,7 @@ export function createEuTemplateExportCellWrites(
     void cnCodeMap;
 
     return [
+        ...createInstallationCellWrites(data.installations, data.periods),
         ...createProcessCellWrites(data.processes),
         ...createPrecursorCellWrites(data.precursors),
     ];
@@ -692,17 +756,27 @@ export async function createEuTemplateExportCopyResult(file: File, data: EuTempl
     }
 
     const sheetTargetByName = parseWorkbookSheetTargets(zip);
+    const installationSheetPath = sheetTargetByName.get('A_InstData');
     const processSheetPath = sheetTargetByName.get('D_Processes');
     const precursorSheetPath = sheetTargetByName.get('E_PurchPrec');
 
-    if (!processSheetPath || !precursorSheetPath || !zip[processSheetPath] || !zip[precursorSheetPath]) {
-        throw new Error('EU 템플릿에서 D_Processes 또는 E_PurchPrec 시트를 찾을 수 없습니다.');
+    if (
+        !installationSheetPath ||
+        !processSheetPath ||
+        !precursorSheetPath ||
+        !zip[installationSheetPath] ||
+        !zip[processSheetPath] ||
+        !zip[precursorSheetPath]
+    ) {
+        throw new Error('EU 템플릿에서 A_InstData, D_Processes 또는 E_PurchPrec 시트를 찾을 수 없습니다.');
     }
 
     const cellWrites = createEuTemplateExportCellWrites(data, cnCodeMap);
+    const installationCellWrites = cellWrites.filter((write) => write.sheetName === 'A_InstData');
     const processCellWrites = cellWrites.filter((write) => write.sheetName === 'D_Processes');
     const precursorCellWrites = cellWrites.filter((write) => write.sheetName === 'E_PurchPrec');
 
+    zip[installationSheetPath] = strToU8(applyCellWrites(strFromU8(zip[installationSheetPath]), installationCellWrites));
     zip[processSheetPath] = strToU8(applyCellWrites(strFromU8(zip[processSheetPath]), processCellWrites));
     zip[precursorSheetPath] = strToU8(applyCellWrites(strFromU8(zip[precursorSheetPath]), precursorCellWrites));
 

@@ -40,10 +40,11 @@ Completed:
 - Added `npm run verify` as the standard local quality gate combining Export verification, lint, and production build.
 - Added Export success feedback that shows the generated copy filename, timestamp, and verified cell counts after download starts.
 - Corrected EU Export writes to target unlocked official template input cells and documented the current export map.
+- Added first-pass `A_InstData` export for reporting-period dates and basic installation identity.
 
 Next:
 
-- Model `A_InstData` installation/reporting-period inputs before expanding into emissions source-stream sheets.
+- Expand the installation model for additional `A_InstData` address/contact fields before entering emissions source-stream sheets.
 
 ## Decision Log
 

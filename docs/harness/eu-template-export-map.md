@@ -13,6 +13,17 @@ The official workbook itself must stay outside the repository. The app should al
 
 ## Current Export Targets
 
+### `A_InstData`
+
+The app writes only basic reporting-period and installation identity fields.
+
+| App field | Official cell | Notes |
+| --- | --- | --- |
+| `ReportingPeriod.start_date` | `I9` | Start date, written as an Excel serial date. |
+| `ReportingPeriod.end_date` | `L9` | End date, written as an Excel serial date. |
+| `Installation.name` | `I20` | Installation English name field. |
+| `Installation.country` | `I26` | Country code/name field currently stores the local country value. |
+
 ### `D_Processes`
 
 Each production process block starts at row `11 + index * 65`.
@@ -45,6 +56,6 @@ The app does not currently write `indirect_see_tco2e_per_t` directly into `E_Pur
 
 ## Known Gaps
 
-- `A_InstData` is not yet populated from the local installation/reporting-period records.
+- `A_InstData` only includes the first-pass reporting-period and installation fields.
 - `B_EmInst` and `C_Emissions&Energy` require a more detailed source-stream and energy model before reliable export.
 - Production routes and aggregated goods categories should be driven through `A_InstData` and official dropdown/code-list relationships rather than by overwriting protected labels.

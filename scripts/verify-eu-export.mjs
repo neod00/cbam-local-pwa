@@ -243,6 +243,23 @@ const product = {
   product_type_enum: 'HS72_PLATE_SHEET',
   unit: 'tonne',
 };
+const installation = {
+  id: 'installation-1',
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+  name: 'Main Factory A',
+  country: 'KR',
+};
+const period = {
+  id: 'period-1',
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+  installation_id: installation.id,
+  name: '2024 Annual',
+  start_date: '2024-01-01',
+  end_date: '2024-12-31',
+  status: 'DRAFT',
+};
 const process = {
   id: 'process-1',
   created_at: '2026-01-01T00:00:00.000Z',
@@ -275,6 +292,8 @@ const precursor = {
   default_value_justification: '',
 };
 const data = {
+  installations: [installation],
+  periods: [period],
   products: [product],
   processes: [process],
   precursors: [precursor],
@@ -284,13 +303,18 @@ const validation = await euExport.validateEuTemplateFile(file);
 
 assertEqual(String(validation.isValid), 'true', 'synthetic workbook validity');
 assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
-assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '12', 'planned cell writes');
+assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '16', 'planned cell writes');
 
 const exportedBlob = await euExport.createEuTemplateExportCopy(file, data);
 const exportedZip = fflate.unzipSync(new Uint8Array(await exportedBlob.arrayBuffer()));
+const installationSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet5.xml']);
 const processSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet8.xml']);
 const precursorSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet9.xml']);
 
+assertEqual(readCell(installationSheet, 'I9'), '45292', 'A_InstData I9');
+assertEqual(readCell(installationSheet, 'L9'), '45657', 'A_InstData L9');
+assertEqual(readCell(installationSheet, 'I20'), 'Main Factory A', 'A_InstData I20');
+assertEqual(readCell(installationSheet, 'I26'), 'KR', 'A_InstData I26');
 assertEqual(readCell(processSheet, 'L16'), '1000', 'D_Processes L16');
 assertEqual(readCell(processSheet, 'L27'), '950', 'D_Processes L27');
 assertEqual(readCell(processSheet, 'L32'), '50', 'D_Processes L32');

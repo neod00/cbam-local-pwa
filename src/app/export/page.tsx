@@ -13,7 +13,15 @@ import {
     type EuExportReadinessIssue,
     type EuTemplateValidationResult,
 } from '@/lib/eu-template-export';
-import { listLocalItems, seedLocalData, type Product, type ProductionProcess, type PurchasedPrecursor } from '@/lib/local-db';
+import {
+    listLocalItems,
+    seedLocalData,
+    type Installation,
+    type Product,
+    type ProductionProcess,
+    type PurchasedPrecursor,
+    type ReportingPeriod,
+} from '@/lib/local-db';
 import { AlertTriangle, CheckCircle2, Circle, Download, FileCheck2, FileSpreadsheet, PackageCheck, ShieldCheck, Workflow } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -63,6 +71,8 @@ export default function ExportPage() {
     const [validationError, setValidationError] = useState('');
     const [isValidating, setIsValidating] = useState(false);
     const [results, setResults] = useState<LocalCalculationResult[]>([]);
+    const [installations, setInstallations] = useState<Installation[]>([]);
+    const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
     const [processes, setProcesses] = useState<ProductionProcess[]>([]);
     const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
@@ -72,13 +82,16 @@ export default function ExportPage() {
     useEffect(() => {
         async function loadPreviewData() {
             await seedLocalData();
-            const [processes, precursors, products, periods] = await Promise.all([
+            const [installations, periods, processes, precursors, products] = await Promise.all([
+                listLocalItems('installations'),
+                listLocalItems('periods'),
                 listLocalItems('processes'),
                 listLocalItems('precursors'),
                 listLocalItems('products'),
-                listLocalItems('periods'),
             ]);
 
+            setInstallations(installations);
+            setPeriods(periods);
             setProcesses(processes);
             setPrecursors(precursors);
             setProducts(products);
@@ -107,8 +120,8 @@ export default function ExportPage() {
     );
 
     const plannedCellWrites = useMemo(
-        () => createEuTemplateExportCellWrites({ processes, precursors, products }, validation?.cnCodeMap),
-        [processes, precursors, products, validation?.cnCodeMap]
+        () => createEuTemplateExportCellWrites({ installations, periods, processes, precursors, products }, validation?.cnCodeMap),
+        [installations, periods, processes, precursors, products, validation?.cnCodeMap]
     );
 
     const exportChecklist = useMemo<ExportChecklistItem[]>(
@@ -227,6 +240,8 @@ export default function ExportPage() {
 
         try {
             const exportResult = await createEuTemplateExportCopyResult(templateFile, {
+                installations,
+                periods,
                 processes,
                 precursors,
                 products,
