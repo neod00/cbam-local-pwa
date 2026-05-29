@@ -5,14 +5,17 @@ import { CN_CODE_OPTIONS, type CnCodeOption } from '@/lib/cn-code-options';
 import { parseEuTemplateCnCodeOptions } from '@/lib/eu-template-export';
 import {
     createLocalItem,
+    deleteLocalItem,
     getLocalSetting,
     listLocalItems,
     Product,
+    ProductionProcess,
+    PurchasedPrecursor,
     seedLocalData,
     setLocalSetting,
     updateLocalItem,
 } from '@/lib/local-db';
-import { FileSpreadsheet, Pencil, Plus, Search, X } from 'lucide-react';
+import { FileSpreadsheet, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 type HsGroup = Product['hs_group'];
@@ -32,6 +35,8 @@ const fieldClass =
 
 export default function ProductsPage() {
     const [products, setProducts] = useState<Product[]>([]);
+    const [processes, setProcesses] = useState<ProductionProcess[]>([]);
+    const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -45,11 +50,15 @@ export default function ProductsPage() {
         async function fetchProducts() {
             setLoading(true);
             await seedLocalData();
-            const [data, storedCnOptions] = await Promise.all([
+            const [data, storedCnOptions, processData, precursorData] = await Promise.all([
                 listLocalItems('products'),
                 getLocalSetting<CnCodeOption[]>('cn-code-options'),
+                listLocalItems('processes'),
+                listLocalItems('precursors'),
             ]);
             setProducts(data.sort((a, b) => b.created_at.localeCompare(a.created_at)));
+            setProcesses(processData);
+            setPrecursors(precursorData);
             if (storedCnOptions?.length) {
                 setCnOptions(storedCnOptions);
             }
@@ -109,6 +118,44 @@ export default function ProductsPage() {
         setEditingProductId(product.id);
         setCnSearch(product.cn_code ?? product.hs_code);
         setShowForm(true);
+    }
+
+    function getProductDependencies(productId: string) {
+        return {
+            processes: processes.filter((process) => process.product_id === productId),
+            precursors: precursors.filter((precursor) => precursor.product_id === productId),
+        };
+    }
+
+    async function handleDeleteProduct(product: Product) {
+        const dependencies = getProductDependencies(product.id);
+        const dependencyCount = dependencies.processes.length + dependencies.precursors.length;
+
+        if (dependencyCount > 0) {
+            window.alert(
+                [
+                    '이 제품은 다른 데이터에 연결되어 있어 삭제할 수 없습니다.',
+                    '',
+                    `연결된 생산공정: ${dependencies.processes.length}건`,
+                    `연결된 전구물질: ${dependencies.precursors.length}건`,
+                    '',
+                    '먼저 연결된 공정 또는 전구물질 데이터를 수정하거나 삭제한 뒤 다시 시도하세요.',
+                ].join('\n')
+            );
+            return;
+        }
+
+        const confirmed = window.confirm(`'${product.name}' 제품을 삭제할까요? 이 작업은 현재 브라우저의 로컬 데이터에서 제거됩니다.`);
+
+        if (!confirmed) {
+            return;
+        }
+
+        await deleteLocalItem('products', product.id);
+        setProducts(products.filter((item) => item.id !== product.id));
+        if (editingProductId === product.id) {
+            resetForm();
+        }
     }
 
     async function handleSubmit(e: React.FormEvent) {
@@ -353,15 +400,27 @@ export default function ProductsPage() {
                                         {product.cn_code ? `CN ${product.cn_code}` : 'CN 미입력'} · HS {product.hs_code}
                                     </p>
                                 </div>
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    className="min-h-9 px-3 py-1.5"
-                                    onClick={() => startEditProduct(product)}
-                                >
-                                    <Pencil className="mr-1.5 h-4 w-4" />
-                                    수정
-                                </Button>
+                                <div className="flex gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        className="min-h-9 px-3 py-1.5"
+                                        onClick={() => startEditProduct(product)}
+                                    >
+                                        <Pencil className="mr-1.5 h-4 w-4" />
+                                        수정
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="danger"
+                                        className="min-h-9 px-3 py-1.5"
+                                        aria-label={`${product.name} 삭제`}
+                                        onClick={() => handleDeleteProduct(product)}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                        <span className="sr-only">삭제</span>
+                                    </Button>
+                                </div>
                             </div>
                             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                                 <div className="rounded-xl bg-slate-50 p-3">
@@ -420,10 +479,16 @@ export default function ProductsPage() {
                                     <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{product.hs_code}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{product.unit}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm">
-                                        <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => startEditProduct(product)}>
-                                            <Pencil className="mr-1.5 h-4 w-4" />
-                                            수정
-                                        </Button>
+                                        <div className="flex justify-end gap-2">
+                                            <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => startEditProduct(product)}>
+                                                <Pencil className="mr-1.5 h-4 w-4" />
+                                                수정
+                                            </Button>
+                                            <Button type="button" variant="danger" className="min-h-9 px-3 py-1.5" onClick={() => handleDeleteProduct(product)}>
+                                                <Trash2 className="mr-1.5 h-4 w-4" />
+                                                삭제
+                                            </Button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))

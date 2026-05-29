@@ -3,6 +3,7 @@
 import { Button, DataTable, PageHeader, SectionCard, StatCard } from '@/components/ui';
 import {
     createLocalItem,
+    deleteLocalItem,
     listLocalItems,
     Product,
     ProductionProcess,
@@ -10,7 +11,7 @@ import {
     ReportingPeriod,
     seedLocalData,
 } from '@/lib/local-db';
-import { Boxes, Factory, Plus, Scale } from 'lucide-react';
+import { Boxes, Factory, Plus, Scale, Trash2 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type PrecursorDraft = Omit<PurchasedPrecursor, 'id' | 'created_at' | 'updated_at'>;
@@ -110,6 +111,19 @@ export default function PrecursorsPage() {
             product_id: products[0]?.id ?? '',
         });
         setShowForm(false);
+    }
+
+    async function handleDeletePrecursor(precursor: PurchasedPrecursor) {
+        const confirmed = window.confirm(
+            `'${precursor.name}' 전구물질을 삭제할까요? 이 항목은 산정결과와 EU Export 미리보기에서 제외됩니다.`
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        await deleteLocalItem('precursors', precursor.id);
+        setPrecursors(precursors.filter((item) => item.id !== precursor.id));
     }
 
     return (
@@ -233,6 +247,15 @@ export default function PrecursorsPage() {
                                     <dd className="mt-1 font-medium text-slate-900">{formatNumber(totalSee)}</dd>
                                 </div>
                             </dl>
+                            <Button
+                                type="button"
+                                variant="danger"
+                                className="mt-4 w-full"
+                                onClick={() => handleDeletePrecursor(precursor)}
+                            >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                삭제
+                            </Button>
                         </SectionCard>
                     );
                 })}
@@ -250,13 +273,14 @@ export default function PrecursorsPage() {
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">간접 SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">총 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">작업</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
                         {loading ? (
-                            <tr><td colSpan={8} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
+                            <tr><td colSpan={9} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
                         ) : precursors.length === 0 ? (
-                            <tr><td colSpan={8} className="p-6 text-center text-sm text-slate-500">등록된 구매 전구물질이 없습니다.</td></tr>
+                            <tr><td colSpan={9} className="p-6 text-center text-sm text-slate-500">등록된 구매 전구물질이 없습니다.</td></tr>
                         ) : (
                             precursors.map((precursor) => {
                                 const totalSee = precursor.direct_see_tco2e_per_t + precursor.indirect_see_tco2e_per_t;
@@ -270,6 +294,12 @@ export default function PrecursorsPage() {
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(precursor.direct_see_tco2e_per_t)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(precursor.indirect_see_tco2e_per_t)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(totalSee)}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-right text-sm">
+                                            <Button type="button" variant="danger" className="min-h-9 px-3 py-1.5" onClick={() => handleDeletePrecursor(precursor)}>
+                                                <Trash2 className="mr-1.5 h-4 w-4" />
+                                                삭제
+                                            </Button>
+                                        </td>
                                     </tr>
                                 );
                             })

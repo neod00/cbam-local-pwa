@@ -28,10 +28,11 @@ Completed:
 - Added product edit/update support so existing products can be corrected after CN code reference import.
 - Added the first-pass Clean Compliance Dashboard redesign with shared layout, sidebar/topbar, UI primitives, and refreshed dashboard/product/result/export/settings screens.
 - Extended the Clean Compliance Dashboard redesign to reporting periods, installations, production processes, purchased precursors, and upload screens, including mobile card-list layouts.
+- Added delete safeguards for products, production processes, and purchased precursors so linked records are not removed without dependency checks.
 
 Next:
 
-- Add delete safeguards and dependency warnings for product, process, and precursor records used by downstream calculations or Export.
+- Add edit/update support for production processes and purchased precursors so users can correct inputs after validation warnings.
 
 ## Decision Log
 

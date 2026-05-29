@@ -3,13 +3,15 @@
 import { Button, DataTable, PageHeader, SectionCard, StatCard } from '@/components/ui';
 import {
     createLocalItem,
+    deleteLocalItem,
     listLocalItems,
     Product,
     ProductionProcess,
+    PurchasedPrecursor,
     ReportingPeriod,
     seedLocalData,
 } from '@/lib/local-db';
-import { Factory, Gauge, Plus, Zap } from 'lucide-react';
+import { Factory, Gauge, Plus, Trash2, Zap } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type ProcessDraft = Omit<ProductionProcess, 'id' | 'created_at' | 'updated_at'>;
@@ -41,6 +43,7 @@ function formatNumber(value: number) {
 
 export default function ProcessesPage() {
     const [processes, setProcesses] = useState<ProductionProcess[]>([]);
+    const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
     const [loading, setLoading] = useState(true);
@@ -51,13 +54,15 @@ export default function ProcessesPage() {
         async function loadData() {
             setLoading(true);
             await seedLocalData();
-            const [processData, productData, periodData] = await Promise.all([
+            const [processData, productData, periodData, precursorData] = await Promise.all([
                 listLocalItems('processes'),
                 listLocalItems('products'),
                 listLocalItems('periods'),
+                listLocalItems('precursors'),
             ]);
 
             setProcesses(processData.sort((a, b) => b.created_at.localeCompare(a.created_at)));
+            setPrecursors(precursorData);
             setProducts(productData.sort((a, b) => a.name.localeCompare(b.name)));
             setPeriods(periodData.sort((a, b) => b.start_date.localeCompare(a.start_date)));
             setNewItem({
@@ -106,6 +111,32 @@ export default function ProcessesPage() {
                 ? (process.electricity_mwh * process.electricity_ef_tco2e_per_mwh) / process.output_mass_t
                 : 0;
         return { directSee, indirectSee };
+    }
+
+    async function handleDeleteProcess(process: ProductionProcess) {
+        const linkedPrecursors = precursors.filter((precursor) => precursor.process_id === process.id);
+
+        if (linkedPrecursors.length > 0) {
+            window.alert(
+                [
+                    '이 생산공정은 전구물질 데이터에 연결되어 있어 삭제할 수 없습니다.',
+                    '',
+                    `연결된 전구물질: ${linkedPrecursors.length}건`,
+                    '',
+                    '먼저 전구물질 데이터를 수정하거나 삭제한 뒤 다시 시도하세요.',
+                ].join('\n')
+            );
+            return;
+        }
+
+        const confirmed = window.confirm(`'${process.name}' 생산공정을 삭제할까요? 산정결과와 Export 미리보기에서도 제외됩니다.`);
+
+        if (!confirmed) {
+            return;
+        }
+
+        await deleteLocalItem('processes', process.id);
+        setProcesses(processes.filter((item) => item.id !== process.id));
     }
 
     return (
@@ -209,6 +240,15 @@ export default function ProcessesPage() {
                                     <dd className="mt-1 font-medium text-slate-900">{formatNumber(see.indirectSee)}</dd>
                                 </div>
                             </dl>
+                            <Button
+                                type="button"
+                                variant="danger"
+                                className="mt-4 w-full"
+                                onClick={() => handleDeleteProcess(process)}
+                            >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                삭제
+                            </Button>
                         </SectionCard>
                     );
                 })}
@@ -225,13 +265,14 @@ export default function ProcessesPage() {
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">생산량(t)</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">간접 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">작업</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
                         {loading ? (
-                            <tr><td colSpan={7} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
+                            <tr><td colSpan={8} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
                         ) : processes.length === 0 ? (
-                            <tr><td colSpan={7} className="p-6 text-center text-sm text-slate-500">등록된 생산공정이 없습니다.</td></tr>
+                            <tr><td colSpan={8} className="p-6 text-center text-sm text-slate-500">등록된 생산공정이 없습니다.</td></tr>
                         ) : (
                             processes.map((process) => {
                                 const see = getSee(process);
@@ -244,6 +285,12 @@ export default function ProcessesPage() {
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(process.output_mass_t)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(see.directSee)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(see.indirectSee)}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-right text-sm">
+                                            <Button type="button" variant="danger" className="min-h-9 px-3 py-1.5" onClick={() => handleDeleteProcess(process)}>
+                                                <Trash2 className="mr-1.5 h-4 w-4" />
+                                                삭제
+                                            </Button>
+                                        </td>
                                     </tr>
                                 );
                             })
