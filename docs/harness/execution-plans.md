@@ -34,10 +34,11 @@ Completed:
 - Added inline validation guidance for products, reporting periods, installations, production processes, and purchased precursors before local save.
 - Added readiness-linked navigation from EU Export validation warnings to the exact product, process, or precursor edit form.
 - Added an EU Export pre-submission checklist so users can see template, data, error, and warning readiness before downloading a copy.
+- Added generated workbook cell-write planning and post-injection verification for `D_Processes` and `E_PurchPrec`.
 
 Next:
 
-- Add workbook export verification around the generated `D_Processes` and `E_PurchPrec` cells so template-copy behavior is regression-tested.
+- Add browser-level Export verification using a small synthetic workbook fixture before expanding EU template coverage.
 
 ## Decision Log
 

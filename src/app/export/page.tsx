@@ -4,6 +4,7 @@ import { Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } fro
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import {
     createEuExportFilename,
+    createEuTemplateExportCellWrites,
     createEuTemplateExportCopy,
     downloadBlob,
     evaluateEuExportReadiness,
@@ -97,6 +98,11 @@ export default function ExportPage() {
         [processes, precursors, products, validation?.cnCodeMap]
     );
 
+    const plannedCellWrites = useMemo(
+        () => createEuTemplateExportCellWrites({ processes, precursors, products }, validation?.cnCodeMap),
+        [processes, precursors, products, validation?.cnCodeMap]
+    );
+
     const exportChecklist = useMemo<ExportChecklistItem[]>(
         () => [
             {
@@ -147,8 +153,18 @@ export default function ExportPage() {
                 tone: readiness.warningCount === 0 ? 'success' : 'warning',
                 complete: readiness.warningCount === 0,
             },
+            {
+                label: '반영 셀 검증',
+                description:
+                    plannedCellWrites.length > 0
+                        ? `D_Processes와 E_PurchPrec에 반영할 셀 ${plannedCellWrites.length}개를 생성 후 검증합니다.`
+                        : '반영할 공정 또는 전구물질 데이터가 없습니다.',
+                status: plannedCellWrites.length > 0 ? '대기' : '확인 필요',
+                tone: plannedCellWrites.length > 0 ? 'pending' : 'warning',
+                complete: false,
+            },
         ],
-        [readiness.errorCount, readiness.warningCount, results.length, templateFile, validation]
+        [plannedCellWrites.length, readiness.errorCount, readiness.warningCount, results.length, templateFile, validation]
     );
 
     const downloadStatusMessage = useMemo(() => {

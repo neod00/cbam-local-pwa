@@ -39,6 +39,27 @@ export interface EuTemplateExportData {
 }
 
 type EuCnCodeMap = Map<string, string>;
+type EuExportSheetName = 'D_Processes' | 'E_PurchPrec';
+
+export interface EuTemplateExportCellWrite {
+    sheetName: EuExportSheetName;
+    cell: string;
+    label: string;
+    value: string | number;
+    sourceId: string;
+}
+
+export interface EuTemplateExportVerificationResult {
+    checkedCellCount: number;
+    mismatches: Array<{
+        sheetName: EuExportSheetName;
+        cell: string;
+        expected: string;
+        actual: string;
+        label: string;
+    }>;
+    isValid: boolean;
+}
 
 export type EuExportIssueTarget =
     | { type: 'product'; id: string }
@@ -487,6 +508,30 @@ function setCellValue(sheetXml: string, cellReference: string, value: string | n
     return sheetXml.replace(sheetDataPattern, `$1$2${newRowXml}$3`);
 }
 
+function normalizeExportCellValue(value: string | number): string {
+    if (typeof value === 'number') {
+        return String(Number.isFinite(value) ? value : 0);
+    }
+
+    return value;
+}
+
+function getCellValue(sheetXml: string, cellReference: string, sharedStrings: string[]): string {
+    const document = new DOMParser().parseFromString(sheetXml, 'application/xml');
+    const cells = Array.from(document.getElementsByTagName('c'));
+    const cell = cells.find((item) => item.getAttribute('r') === cellReference);
+
+    if (!cell) {
+        return '';
+    }
+
+    return readCellText(cell, sharedStrings);
+}
+
+function applyCellWrites(sheetXml: string, writes: EuTemplateExportCellWrite[]): string {
+    return writes.reduce((output, write) => setCellValue(output, write.cell, write.value), sheetXml);
+}
+
 function parseWorkbookSheetTargets(zip: Record<string, Uint8Array>): Map<string, string> {
     const workbookXml = zip['xl/workbook.xml'];
     const relsXml = zip['xl/_rels/workbook.xml.rels'];
@@ -524,55 +569,129 @@ function parseWorkbookSheetTargets(zip: Record<string, Uint8Array>): Map<string,
     return sheetTargetByName;
 }
 
-function injectProcesses(
-    sheetXml: string,
+function createProcessCellWrites(
     processes: ProductionProcess[],
     products: Product[],
     cnCodeMap?: EuCnCodeMap
-): string {
+): EuTemplateExportCellWrite[] {
     const productById = new Map(products.map((product) => [product.id, product]));
-    let output = sheetXml;
+    const writes: EuTemplateExportCellWrite[] = [];
 
     processes.slice(0, 10).forEach((process, index) => {
         const startRow = 11 + index * 65;
         const product = process.product_id ? productById.get(process.product_id) : undefined;
 
-        output = setCellValue(output, `G${startRow}`, process.name);
-        output = setCellValue(output, `L${startRow}`, mapProductToEuGood(product, cnCodeMap) ?? product?.name ?? process.production_route);
-        output = setCellValue(output, `L${startRow + 13}`, process.output_mass_t);
-        output = setCellValue(output, `L${startRow + 16}`, process.market_output_mass_t);
-        output = setCellValue(output, `L${startRow + 31}`, process.internal_consumption_mass_t);
-        output = setCellValue(output, `L${startRow + 43}`, process.direct_attributable_emissions_tco2e);
-        output = setCellValue(output, `L${startRow + 54}`, process.electricity_mwh);
-        output = setCellValue(output, `L${startRow + 55}`, process.electricity_ef_tco2e_per_mwh);
+        writes.push(
+            { sheetName: 'D_Processes', cell: `G${startRow}`, label: '공정명', value: process.name, sourceId: process.id },
+            {
+                sheetName: 'D_Processes',
+                cell: `L${startRow}`,
+                label: 'EU goods category',
+                value: mapProductToEuGood(product, cnCodeMap) ?? product?.name ?? process.production_route,
+                sourceId: process.id,
+            },
+            { sheetName: 'D_Processes', cell: `L${startRow + 13}`, label: '총 생산량', value: process.output_mass_t, sourceId: process.id },
+            { sheetName: 'D_Processes', cell: `L${startRow + 16}`, label: '시장 출하량', value: process.market_output_mass_t, sourceId: process.id },
+            { sheetName: 'D_Processes', cell: `L${startRow + 31}`, label: '내부 소비량', value: process.internal_consumption_mass_t, sourceId: process.id },
+            {
+                sheetName: 'D_Processes',
+                cell: `L${startRow + 43}`,
+                label: '직접귀속배출량',
+                value: process.direct_attributable_emissions_tco2e,
+                sourceId: process.id,
+            },
+            { sheetName: 'D_Processes', cell: `L${startRow + 54}`, label: '전력 사용량', value: process.electricity_mwh, sourceId: process.id },
+            {
+                sheetName: 'D_Processes',
+                cell: `L${startRow + 55}`,
+                label: '전력 배출계수',
+                value: process.electricity_ef_tco2e_per_mwh,
+                sourceId: process.id,
+            }
+        );
     });
 
-    return output;
+    return writes;
 }
 
-function injectPrecursors(
-    sheetXml: string,
+function createPrecursorCellWrites(
     precursors: PurchasedPrecursor[],
     products: Product[],
     cnCodeMap?: EuCnCodeMap
-): string {
+): EuTemplateExportCellWrite[] {
     const productById = new Map(products.map((product) => [product.id, product]));
-    let output = sheetXml;
+    const writes: EuTemplateExportCellWrite[] = [];
 
     precursors.slice(0, 20).forEach((precursor, index) => {
         const startRow = 14 + index * 44;
         const product = precursor.product_id ? productById.get(precursor.product_id) : undefined;
 
-        output = setCellValue(output, `G${startRow}`, precursor.name);
-        output = setCellValue(output, `L${startRow}`, mapPrecursorToEuGood(precursor, product, cnCodeMap) ?? precursor.aggregated_goods_category);
-        output = setCellValue(output, `L${startRow + 11}`, precursor.purchased_mass_t);
-        output = setCellValue(output, `L${startRow + 14}`, precursor.consumed_mass_t);
-        output = setCellValue(output, `L${startRow + 25}`, precursor.consumed_for_non_cbam_mass_t);
-        output = setCellValue(output, `L${startRow + 35}`, precursor.direct_see_tco2e_per_t);
-        output = setCellValue(output, `L${startRow + 38}`, precursor.indirect_see_tco2e_per_t);
+        writes.push(
+            { sheetName: 'E_PurchPrec', cell: `G${startRow}`, label: '전구물질명', value: precursor.name, sourceId: precursor.id },
+            {
+                sheetName: 'E_PurchPrec',
+                cell: `L${startRow}`,
+                label: 'EU goods category',
+                value: mapPrecursorToEuGood(precursor, product, cnCodeMap) ?? precursor.aggregated_goods_category,
+                sourceId: precursor.id,
+            },
+            { sheetName: 'E_PurchPrec', cell: `L${startRow + 11}`, label: '구매량', value: precursor.purchased_mass_t, sourceId: precursor.id },
+            { sheetName: 'E_PurchPrec', cell: `L${startRow + 14}`, label: '소비량', value: precursor.consumed_mass_t, sourceId: precursor.id },
+            {
+                sheetName: 'E_PurchPrec',
+                cell: `L${startRow + 25}`,
+                label: '비CBAM 용도 소비량',
+                value: precursor.consumed_for_non_cbam_mass_t,
+                sourceId: precursor.id,
+            },
+            { sheetName: 'E_PurchPrec', cell: `L${startRow + 35}`, label: '직접 SEE', value: precursor.direct_see_tco2e_per_t, sourceId: precursor.id },
+            { sheetName: 'E_PurchPrec', cell: `L${startRow + 38}`, label: '간접 SEE', value: precursor.indirect_see_tco2e_per_t, sourceId: precursor.id }
+        );
     });
 
-    return output;
+    return writes;
+}
+
+export function createEuTemplateExportCellWrites(
+    data: EuTemplateExportData,
+    cnCodeMap?: EuCnCodeMap
+): EuTemplateExportCellWrite[] {
+    return [
+        ...createProcessCellWrites(data.processes, data.products, cnCodeMap),
+        ...createPrecursorCellWrites(data.precursors, data.products, cnCodeMap),
+    ];
+}
+
+function verifyExportCellWrites(
+    zip: Record<string, Uint8Array>,
+    sheetTargetByName: Map<string, string>,
+    writes: EuTemplateExportCellWrite[]
+): EuTemplateExportVerificationResult {
+    const sharedStrings = parseSharedStrings(zip);
+    const mismatches: EuTemplateExportVerificationResult['mismatches'] = [];
+
+    for (const write of writes) {
+        const sheetPath = sheetTargetByName.get(write.sheetName);
+        const sheetXml = sheetPath ? zip[sheetPath] : undefined;
+        const actual = sheetXml ? getCellValue(strFromU8(sheetXml), write.cell, sharedStrings) : '';
+        const expected = normalizeExportCellValue(write.value);
+
+        if (actual !== expected) {
+            mismatches.push({
+                sheetName: write.sheetName,
+                cell: write.cell,
+                expected,
+                actual,
+                label: write.label,
+            });
+        }
+    }
+
+    return {
+        checkedCellCount: writes.length,
+        mismatches,
+        isValid: mismatches.length === 0,
+    };
 }
 
 export async function createEuTemplateExportCopy(file: File, data: EuTemplateExportData): Promise<Blob> {
@@ -593,12 +712,21 @@ export async function createEuTemplateExportCopy(file: File, data: EuTemplateExp
         throw new Error('EU 템플릿에서 D_Processes 또는 E_PurchPrec 시트를 찾을 수 없습니다.');
     }
 
-    zip[processSheetPath] = strToU8(
-        injectProcesses(strFromU8(zip[processSheetPath]), data.processes, data.products, cnCodeMap)
-    );
-    zip[precursorSheetPath] = strToU8(
-        injectPrecursors(strFromU8(zip[precursorSheetPath]), data.precursors, data.products, cnCodeMap)
-    );
+    const cellWrites = createEuTemplateExportCellWrites(data, cnCodeMap);
+    const processCellWrites = cellWrites.filter((write) => write.sheetName === 'D_Processes');
+    const precursorCellWrites = cellWrites.filter((write) => write.sheetName === 'E_PurchPrec');
+
+    zip[processSheetPath] = strToU8(applyCellWrites(strFromU8(zip[processSheetPath]), processCellWrites));
+    zip[precursorSheetPath] = strToU8(applyCellWrites(strFromU8(zip[precursorSheetPath]), precursorCellWrites));
+
+    const verification = verifyExportCellWrites(zip, sheetTargetByName, cellWrites);
+
+    if (!verification.isValid) {
+        const firstMismatch = verification.mismatches[0];
+        throw new Error(
+            `EU 템플릿 Export 검증에 실패했습니다. ${firstMismatch.sheetName}!${firstMismatch.cell} ${firstMismatch.label} 값이 예상과 다릅니다.`
+        );
+    }
 
     return new Blob([zipSync(zip)], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
