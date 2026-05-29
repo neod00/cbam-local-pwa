@@ -36,10 +36,11 @@ Completed:
 - Added an EU Export pre-submission checklist so users can see template, data, error, and warning readiness before downloading a copy.
 - Added generated workbook cell-write planning and post-injection verification for `D_Processes` and `E_PurchPrec`.
 - Linked and repaired default sample process/precursor records to the sample product so first-run Export readiness demonstrates a valid workflow.
+- Added `npm run verify:export`, a synthetic workbook verification script for EU template validation and `D_Processes`/`E_PurchPrec` cell injection.
 
 Next:
 
-- Add browser-level Export verification using a small synthetic workbook fixture before expanding EU template coverage.
+- Expand EU template coverage beyond the first MVP cells once more official workbook sections are mapped.
 
 ## Decision Log
 

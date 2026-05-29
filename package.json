@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "verify:export": "node scripts/verify-eu-export.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.1",
