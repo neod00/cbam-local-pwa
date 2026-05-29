@@ -64,8 +64,8 @@ export default function ExportPage() {
     }, [results]);
 
     const readiness = useMemo(
-        () => evaluateEuExportReadiness({ processes, precursors, products }),
-        [processes, precursors, products]
+        () => evaluateEuExportReadiness({ processes, precursors, products }, validation?.cnCodeMap),
+        [processes, precursors, products, validation?.cnCodeMap]
     );
 
     async function handleTemplateFileChange(file: File | undefined) {
@@ -210,6 +210,9 @@ export default function ExportPage() {
                                     <p className="mt-1 text-xs text-gray-600">
                                         확인된 시트 {validation.sheetNames.length}개 / 필수 시트{' '}
                                         {REQUIRED_EU_TEMPLATE_SHEETS.length}개
+                                    </p>
+                                    <p className="mt-1 text-xs text-gray-600">
+                                        Parameters_CNCodes에서 CN 코드 {validation.cnCodeCount}개를 읽었습니다.
                                     </p>
                                 </div>
                             </div>

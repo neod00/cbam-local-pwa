@@ -22,10 +22,11 @@ Completed:
 - Added controlled browser-side value injection into EU template `D_Processes` and `E_PurchPrec` copies using local process and precursor data.
 - Added EU Export readiness checks for goods category mapping, CN/HS code precision, linked products, precursor sources, and current template row limits.
 - Added optional CN 8-digit product code support and wired it into product entry, calculation results, and EU Export readiness checks.
+- Added uploaded-template `Parameters_CNCodes` parsing so CN 8-digit codes resolve against the user's current EU template before Export.
 
 Next:
 
-- Map uploaded EU template `Parameters_CNCodes` values directly so CN 8-digit codes can resolve to the exact official CBAM goods category.
+- Add product master helpers for searching/selecting valid CN 8-digit codes from the uploaded EU template instead of manual entry only.
 
 ## Decision Log
 

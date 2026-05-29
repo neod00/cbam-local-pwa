@@ -26,6 +26,8 @@ export const REQUIRED_EU_TEMPLATE_SHEETS = [
 export interface EuTemplateValidationResult {
     sheetNames: string[];
     missingSheets: string[];
+    cnCodeCount: number;
+    cnCodeMap: Map<string, string>;
     isValid: boolean;
 }
 
@@ -34,6 +36,8 @@ export interface EuTemplateExportData {
     precursors: PurchasedPrecursor[];
     products: Product[];
 }
+
+type EuCnCodeMap = Map<string, string>;
 
 export interface EuExportReadinessIssue {
     severity: 'error' | 'warning';
@@ -84,16 +88,21 @@ function getProductCnOrHsCode(product: Product): string {
     return normalizeHsCode(product.cn_code?.trim() || product.hs_code);
 }
 
-function mapProductToEuGood(product: Product | undefined): string | undefined {
+function mapProductToEuGood(product: Product | undefined, cnCodeMap?: EuCnCodeMap): string | undefined {
     if (!product) {
         return undefined;
+    }
+
+    const hsCode = getProductCnOrHsCode(product);
+    const templateGood = cnCodeMap?.get(hsCode);
+
+    if (templateGood) {
+        return templateGood;
     }
 
     if (EU_GOODS_SET.has(product.product_type_enum)) {
         return product.product_type_enum;
     }
-
-    const hsCode = getProductCnOrHsCode(product);
 
     if (PIG_IRON_PREFIXES.some((prefix) => hsCode.startsWith(prefix))) {
         return 'Pig iron';
@@ -114,15 +123,22 @@ function mapProductToEuGood(product: Product | undefined): string | undefined {
     return undefined;
 }
 
-function mapPrecursorToEuGood(precursor: PurchasedPrecursor, product: Product | undefined): string | undefined {
+function mapPrecursorToEuGood(
+    precursor: PurchasedPrecursor,
+    product: Product | undefined,
+    cnCodeMap?: EuCnCodeMap
+): string | undefined {
     if (EU_GOODS_SET.has(precursor.aggregated_goods_category)) {
         return precursor.aggregated_goods_category;
     }
 
-    return mapProductToEuGood(product);
+    return mapProductToEuGood(product, cnCodeMap);
 }
 
-export function evaluateEuExportReadiness(data: EuTemplateExportData): EuExportReadinessResult {
+export function evaluateEuExportReadiness(
+    data: EuTemplateExportData,
+    cnCodeMap?: EuCnCodeMap
+): EuExportReadinessResult {
     const issues: EuExportReadinessIssue[] = [];
     const productById = new Map(data.products.map((product) => [product.id, product]));
 
@@ -153,7 +169,15 @@ export function evaluateEuExportReadiness(data: EuTemplateExportData): EuExportR
             });
         }
 
-        if (!mapProductToEuGood(product)) {
+        if (cnCodeMap && hsCode.length >= 8 && !cnCodeMap.has(hsCode)) {
+            issues.push({
+                severity: 'error',
+                area: '제품',
+                message: `${product.name}: 업로드한 EU 템플릿의 Parameters_CNCodes에서 CN ${hsCode}를 찾을 수 없습니다.`,
+            });
+        }
+
+        if (!mapProductToEuGood(product, cnCodeMap)) {
             issues.push({
                 severity: 'error',
                 area: '제품',
@@ -174,7 +198,7 @@ export function evaluateEuExportReadiness(data: EuTemplateExportData): EuExportR
             continue;
         }
 
-        const euGood = mapProductToEuGood(product);
+        const euGood = mapProductToEuGood(product, cnCodeMap);
 
         if (!euGood) {
             issues.push({
@@ -196,7 +220,7 @@ export function evaluateEuExportReadiness(data: EuTemplateExportData): EuExportR
     for (const precursor of data.precursors) {
         const product = precursor.product_id ? productById.get(precursor.product_id) : undefined;
 
-        if (!mapPrecursorToEuGood(precursor, product)) {
+        if (!mapPrecursorToEuGood(precursor, product, cnCodeMap)) {
             issues.push({
                 severity: 'error',
                 area: '구매 전구물질',
@@ -238,6 +262,85 @@ function parseWorkbookSheetNames(workbookXml: string): string[] {
         .filter((name): name is string => Boolean(name));
 }
 
+function parseSharedStrings(zip: Record<string, Uint8Array>): string[] {
+    const sharedStringsXml = zip['xl/sharedStrings.xml'];
+
+    if (!sharedStringsXml) {
+        return [];
+    }
+
+    const document = new DOMParser().parseFromString(strFromU8(sharedStringsXml), 'application/xml');
+    return Array.from(document.getElementsByTagName('si')).map((item) =>
+        Array.from(item.getElementsByTagName('t'))
+            .map((text) => text.textContent ?? '')
+            .join('')
+    );
+}
+
+function getColumnName(cellReference: string): string {
+    return splitCellReference(cellReference).column;
+}
+
+function readCellText(cell: Element, sharedStrings: string[]): string {
+    const type = cell.getAttribute('t');
+
+    if (type === 's') {
+        const sharedStringIndex = Number(cell.getElementsByTagName('v')[0]?.textContent ?? -1);
+        return sharedStrings[sharedStringIndex] ?? '';
+    }
+
+    if (type === 'inlineStr') {
+        return Array.from(cell.getElementsByTagName('t'))
+            .map((text) => text.textContent ?? '')
+            .join('');
+    }
+
+    return cell.getElementsByTagName('v')[0]?.textContent ?? '';
+}
+
+function parseCnCodeMap(zip: Record<string, Uint8Array>): EuCnCodeMap {
+    const sheetTargetByName = parseWorkbookSheetTargets(zip);
+    const cnCodeSheetPath = sheetTargetByName.get('Parameters_CNCodes');
+    const cnCodeSheetXml = cnCodeSheetPath ? zip[cnCodeSheetPath] : undefined;
+
+    if (!cnCodeSheetXml) {
+        return new Map();
+    }
+
+    const sharedStrings = parseSharedStrings(zip);
+    const document = new DOMParser().parseFromString(strFromU8(cnCodeSheetXml), 'application/xml');
+    const cnCodeMap: EuCnCodeMap = new Map();
+
+    for (const row of Array.from(document.getElementsByTagName('row'))) {
+        const rowNumber = Number(row.getAttribute('r') ?? 0);
+
+        if (rowNumber < 4) {
+            continue;
+        }
+
+        const valuesByColumn = new Map<string, string>();
+
+        for (const cell of Array.from(row.getElementsByTagName('c'))) {
+            const reference = cell.getAttribute('r');
+
+            if (!reference) {
+                continue;
+            }
+
+            valuesByColumn.set(getColumnName(reference), readCellText(cell, sharedStrings));
+        }
+
+        const cnCode = normalizeHsCode(valuesByColumn.get('D') ?? '');
+        const cbamGood = valuesByColumn.get('E') ?? '';
+
+        if (cnCode.length === 8 && EU_GOODS_SET.has(cbamGood)) {
+            cnCodeMap.set(cnCode, cbamGood);
+        }
+    }
+
+    return cnCodeMap;
+}
+
 export async function validateEuTemplateFile(file: File): Promise<EuTemplateValidationResult> {
     if (!file.name.toLowerCase().endsWith('.xlsx')) {
         throw new Error('EU 원본 템플릿은 .xlsx 파일이어야 합니다.');
@@ -253,10 +356,13 @@ export async function validateEuTemplateFile(file: File): Promise<EuTemplateVali
 
     const sheetNames = parseWorkbookSheetNames(strFromU8(workbookXml));
     const missingSheets = REQUIRED_EU_TEMPLATE_SHEETS.filter((sheetName) => !sheetNames.includes(sheetName));
+    const cnCodeMap = parseCnCodeMap(zip);
 
     return {
         sheetNames,
         missingSheets,
+        cnCodeCount: cnCodeMap.size,
+        cnCodeMap,
         isValid: missingSheets.length === 0,
     };
 }
@@ -370,7 +476,12 @@ function parseWorkbookSheetTargets(zip: Record<string, Uint8Array>): Map<string,
     return sheetTargetByName;
 }
 
-function injectProcesses(sheetXml: string, processes: ProductionProcess[], products: Product[]): string {
+function injectProcesses(
+    sheetXml: string,
+    processes: ProductionProcess[],
+    products: Product[],
+    cnCodeMap?: EuCnCodeMap
+): string {
     const productById = new Map(products.map((product) => [product.id, product]));
     let output = sheetXml;
 
@@ -379,7 +490,7 @@ function injectProcesses(sheetXml: string, processes: ProductionProcess[], produ
         const product = process.product_id ? productById.get(process.product_id) : undefined;
 
         output = setCellValue(output, `G${startRow}`, process.name);
-        output = setCellValue(output, `L${startRow}`, mapProductToEuGood(product) ?? product?.name ?? process.production_route);
+        output = setCellValue(output, `L${startRow}`, mapProductToEuGood(product, cnCodeMap) ?? product?.name ?? process.production_route);
         output = setCellValue(output, `L${startRow + 13}`, process.output_mass_t);
         output = setCellValue(output, `L${startRow + 16}`, process.market_output_mass_t);
         output = setCellValue(output, `L${startRow + 31}`, process.internal_consumption_mass_t);
@@ -391,7 +502,12 @@ function injectProcesses(sheetXml: string, processes: ProductionProcess[], produ
     return output;
 }
 
-function injectPrecursors(sheetXml: string, precursors: PurchasedPrecursor[], products: Product[]): string {
+function injectPrecursors(
+    sheetXml: string,
+    precursors: PurchasedPrecursor[],
+    products: Product[],
+    cnCodeMap?: EuCnCodeMap
+): string {
     const productById = new Map(products.map((product) => [product.id, product]));
     let output = sheetXml;
 
@@ -400,7 +516,7 @@ function injectPrecursors(sheetXml: string, precursors: PurchasedPrecursor[], pr
         const product = precursor.product_id ? productById.get(precursor.product_id) : undefined;
 
         output = setCellValue(output, `G${startRow}`, precursor.name);
-        output = setCellValue(output, `L${startRow}`, mapPrecursorToEuGood(precursor, product) ?? precursor.aggregated_goods_category);
+        output = setCellValue(output, `L${startRow}`, mapPrecursorToEuGood(precursor, product, cnCodeMap) ?? precursor.aggregated_goods_category);
         output = setCellValue(output, `L${startRow + 11}`, precursor.purchased_mass_t);
         output = setCellValue(output, `L${startRow + 14}`, precursor.consumed_mass_t);
         output = setCellValue(output, `L${startRow + 25}`, precursor.consumed_for_non_cbam_mass_t);
@@ -412,14 +528,15 @@ function injectPrecursors(sheetXml: string, precursors: PurchasedPrecursor[], pr
 }
 
 export async function createEuTemplateExportCopy(file: File, data: EuTemplateExportData): Promise<Blob> {
-    const readiness = evaluateEuExportReadiness(data);
+    const workbookBytes = new Uint8Array(await file.arrayBuffer());
+    const zip = unzipSync(workbookBytes);
+    const cnCodeMap = parseCnCodeMap(zip);
+    const readiness = evaluateEuExportReadiness(data, cnCodeMap);
 
     if (!readiness.canExportDraft) {
         throw new Error('EU 템플릿 Export 전에 오류 항목을 먼저 해결해야 합니다.');
     }
 
-    const workbookBytes = new Uint8Array(await file.arrayBuffer());
-    const zip = unzipSync(workbookBytes);
     const sheetTargetByName = parseWorkbookSheetTargets(zip);
     const processSheetPath = sheetTargetByName.get('D_Processes');
     const precursorSheetPath = sheetTargetByName.get('E_PurchPrec');
@@ -428,8 +545,12 @@ export async function createEuTemplateExportCopy(file: File, data: EuTemplateExp
         throw new Error('EU 템플릿에서 D_Processes 또는 E_PurchPrec 시트를 찾을 수 없습니다.');
     }
 
-    zip[processSheetPath] = strToU8(injectProcesses(strFromU8(zip[processSheetPath]), data.processes, data.products));
-    zip[precursorSheetPath] = strToU8(injectPrecursors(strFromU8(zip[precursorSheetPath]), data.precursors, data.products));
+    zip[processSheetPath] = strToU8(
+        injectProcesses(strFromU8(zip[processSheetPath]), data.processes, data.products, cnCodeMap)
+    );
+    zip[precursorSheetPath] = strToU8(
+        injectPrecursors(strFromU8(zip[precursorSheetPath]), data.precursors, data.products, cnCodeMap)
+    );
 
     return new Blob([zipSync(zip)], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
