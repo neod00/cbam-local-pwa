@@ -195,6 +195,33 @@ export default function ExportPage() {
         }),
         [backupStatus, readiness, templateFile, validation]
     );
+    const issueAreaSummaries = useMemo(() => {
+        const summaryByArea = new Map<string, { errorCount: number; warningCount: number }>();
+
+        for (const issue of readiness.issues) {
+            const summary = summaryByArea.get(issue.area) ?? { errorCount: 0, warningCount: 0 };
+
+            if (issue.severity === 'error') {
+                summary.errorCount += 1;
+            } else {
+                summary.warningCount += 1;
+            }
+
+            summaryByArea.set(issue.area, summary);
+        }
+
+        return Array.from(summaryByArea.entries()).map(([area, summary]) => ({ area, ...summary }));
+    }, [readiness.issues]);
+    const sortedReadinessIssues = useMemo(
+        () => [...readiness.issues].sort((a, b) => {
+            if (a.severity !== b.severity) {
+                return a.severity === 'error' ? -1 : 1;
+            }
+
+            return a.area.localeCompare(b.area, 'ko-KR');
+        }),
+        [readiness.issues]
+    );
 
     async function handleTemplateFileChange(file: File | undefined) {
         setTemplateFile(file);
@@ -471,7 +498,7 @@ export default function ExportPage() {
                     <div>
                         <h2 className="text-lg font-semibold text-slate-950">Export 데이터 검토</h2>
                         <p className="mt-1 text-sm text-slate-600">
-                            제품군, CN/HS 코드, 생산공정/전구물질 연결 상태와 배출량 일관성을 Export 전에 확인합니다.
+                            다운로드를 막는 오류와 제출 전 검토가 필요한 경고를 구분해서 확인합니다.
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -480,13 +507,26 @@ export default function ExportPage() {
                     </div>
                 </div>
 
+                {issueAreaSummaries.length > 0 && (
+                    <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+                        {issueAreaSummaries.map((summary) => (
+                            <div key={summary.area} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm">
+                                <p className="font-semibold text-slate-900">{summary.area}</p>
+                                <p className="mt-1 text-xs text-slate-600">
+                                    오류 {summary.errorCount}건 / 경고 {summary.warningCount}건
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
                 {readiness.issues.length === 0 ? (
                     <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                         현재 로컬 데이터는 Export 매핑 검토를 통과했습니다.
                     </div>
                 ) : (
                     <ul className="mt-4 divide-y divide-gray-100 rounded-md border border-gray-200">
-                        {readiness.issues.map((issue, index) => {
+                        {sortedReadinessIssues.map((issue, index) => {
                             const issueEditHref = getEuExportIssueEditHref(issue);
 
                             return (
@@ -500,7 +540,10 @@ export default function ExportPage() {
                                     />
                                     <div className="min-w-0 flex-1">
                                         <div>
-                                            <span className="font-medium text-gray-900">[{issue.area}]</span>{' '}
+                                            <StatusBadge tone={issue.severity === 'error' ? 'danger' : 'warning'}>
+                                                {issue.severity === 'error' ? '오류' : '경고'}
+                                            </StatusBadge>{' '}
+                                            <span className="ml-1 font-medium text-gray-900">[{issue.area}]</span>{' '}
                                             <span className="text-gray-700">{issue.message}</span>
                                         </div>
                                         {issueEditHref && (
@@ -508,7 +551,7 @@ export default function ExportPage() {
                                                 href={issueEditHref}
                                                 className="mt-2 inline-flex min-h-9 items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
                                             >
-                                                수정하기
+                                                해당 화면에서 수정
                                             </Link>
                                         )}
                                     </div>

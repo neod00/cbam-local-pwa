@@ -76,6 +76,7 @@ Completed:
 - Added a production-process edit notice that directs users to add source-stream evidence when direct emissions exist without linked B_EmInst data.
 - Added precursor evidence review indicators for default-value justification, SEE source, and unverified actual/semi-actual data.
 - Added precursor form notices for unverified actual/semi-actual data and missing default-value justification.
+- Improved the EU Export readiness review with area summaries, error-first ordering, and clearer edit actions.
 
 Next:
 
