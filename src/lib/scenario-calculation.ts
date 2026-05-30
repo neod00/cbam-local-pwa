@@ -22,12 +22,14 @@ export interface ProductScenarioResult {
     output_mass_t: number;
     actual_see: number;
     default_see?: number;
+    default_gap?: number;
     benchmark_column_a?: number;
     benchmark_column_b?: number;
     sefa_indicator?: number;
     certificate_quantity_indicator?: number;
     certificate_cost_indicator_eur?: number;
     data_quality: 'READY' | 'MISSING_REFERENCE' | 'MISSING_CN';
+    review_message: string;
 }
 
 export function calculateProductScenarios(
@@ -48,6 +50,7 @@ export function calculateProductScenarios(
                 output_mass_t: result.output_mass_t,
                 actual_see: result.total_see,
                 data_quality: 'MISSING_CN',
+                review_message: 'CN 코드가 없어 공식 기준값과 비교할 수 없습니다.',
             };
         }
 
@@ -59,6 +62,7 @@ export function calculateProductScenarios(
             assumptions.default_value_year
         );
         const defaultSee = defaultValue ? getDefaultValueTotalForYear(defaultValue, assumptions.default_value_year) : undefined;
+        const defaultGap = defaultSee === undefined ? undefined : result.total_see - defaultSee;
         const benchmarkColumnA = benchmark?.column_a_benchmark;
         const benchmarkColumnB = benchmark?.column_b_benchmark;
         const sefaIndicator = benchmarkColumnA === undefined
@@ -78,12 +82,18 @@ export function calculateProductScenarios(
             output_mass_t: result.output_mass_t,
             actual_see: result.total_see,
             default_see: defaultSee,
+            default_gap: defaultGap,
             benchmark_column_a: benchmarkColumnA,
             benchmark_column_b: benchmarkColumnB,
             sefa_indicator: sefaIndicator,
             certificate_quantity_indicator: certificateQuantityIndicator,
             certificate_cost_indicator_eur: certificateCostIndicator,
             data_quality: benchmark && defaultValue ? 'READY' : 'MISSING_REFERENCE',
+            review_message: benchmark && defaultValue
+                ? defaultGap !== undefined && defaultGap > 0
+                    ? '실측 SEE가 기본값보다 높습니다. 기본값/공급망 자료 전략을 비교하세요.'
+                    : '공식 기준값과 연결되었습니다. SEFA 및 인증서 지표를 검토하세요.'
+                : '벤치마크 또는 국가/CN 기본값 연결이 필요합니다.',
         };
     });
 }
