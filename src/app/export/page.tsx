@@ -15,6 +15,8 @@ import {
     type EuTemplateValidationResult,
 } from '@/lib/eu-template-export';
 import {
+    CBAM_LAST_BACKUP_AT_KEY,
+    getBackupStatus,
     getLocalSetting,
     listLocalItems,
     seedLocalData,
@@ -99,10 +101,12 @@ export default function ExportPage() {
     const [scenarioAssumptions, setScenarioAssumptions] = useState<ScenarioAssumptions>();
     const [exportError, setExportError] = useState('');
     const [lastExportResult, setLastExportResult] = useState<LastExportResult | undefined>();
+    const [lastBackupAt, setLastBackupAt] = useState<string | undefined>();
 
     useEffect(() => {
         async function loadPreviewData() {
             await seedLocalData();
+            setLastBackupAt(window.localStorage.getItem(CBAM_LAST_BACKUP_AT_KEY) ?? undefined);
             const [
                 installations,
                 periods,
@@ -185,6 +189,7 @@ export default function ExportPage() {
         () => createEuTemplateExportCellWrites({ installations, periods, processes, sourceStreams, precursors, products }, validation?.cnCodeMap),
         [installations, periods, processes, sourceStreams, precursors, products, validation?.cnCodeMap]
     );
+    const backupStatus = useMemo(() => getBackupStatus(lastBackupAt), [lastBackupAt]);
 
     const exportChecklist = useMemo<ExportChecklistItem[]>(
         () => [
@@ -199,6 +204,15 @@ export default function ExportPage() {
                 complete: results.length > 0,
                 actionHref: results.length > 0 ? '/results' : '/products',
                 actionLabel: results.length > 0 ? '산정 결과 보기' : '품목 입력',
+            },
+            {
+                label: '로컬 백업 확인',
+                description: backupStatus.helper,
+                status: backupStatus.label,
+                tone: backupStatus.tone,
+                complete: backupStatus.tone === 'success',
+                actionHref: '/settings',
+                actionLabel: '백업 관리',
             },
             {
                 label: 'EU 원본 템플릿 선택',
@@ -266,6 +280,7 @@ export default function ExportPage() {
         [
             lastExportResult,
             plannedCellWrites.length,
+            backupStatus,
             readiness.errorCount,
             readiness.warningCount,
             results.length,
