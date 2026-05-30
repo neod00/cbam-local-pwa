@@ -69,6 +69,15 @@ export default function SettingsPage() {
         return Object.values(backupPreview.manifest.counts).reduce((sum, count) => sum + count, 0);
     }, [backupPreview]);
 
+    const backupScenarioAssumptions = useMemo(() => {
+        if (!backupPreview) {
+            return undefined;
+        }
+
+        const setting = backupPreview.data.settings.find((item) => item.key === SCENARIO_ASSUMPTIONS_SETTING_KEY);
+        return normalizeScenarioAssumptions(setting?.value as Partial<ScenarioAssumptions> | undefined);
+    }, [backupPreview]);
+
     async function handleExport() {
         const backup = await exportLocalBackup();
         const content = JSON.stringify(backup, null, 2);
@@ -189,7 +198,7 @@ export default function SettingsPage() {
                     <div>
                         <h2 className="text-lg font-semibold text-slate-950">.cbam 백업 가져오기</h2>
                         <p className="mt-1 text-sm text-slate-600">
-                            백업 파일을 불러와 내용을 확인한 뒤 이 브라우저에 복원합니다. 복원하면 현재 로컬 데이터가 교체됩니다.
+                            백업 파일을 불러와 내용을 확인한 뒤 이 브라우저에 복원합니다. 복원 전 백업 파일에 포함된 시나리오 가정값도 미리 볼 수 있습니다.
                         </p>
                     </div>
                     <div className="flex gap-3">
@@ -246,6 +255,13 @@ export default function SettingsPage() {
                                     <div className="font-semibold text-gray-900">{count}</div>
                                 </div>
                             ))}
+                        </div>
+                        <div className="mt-4">
+                            <ScenarioAssumptionSummary
+                                assumptions={backupScenarioAssumptions}
+                                description="이 백업 파일에 포함된 시나리오 가정값입니다. 복원하면 현재 로컬 설정이 이 값으로 교체됩니다."
+                                mode="panel"
+                            />
                         </div>
                     </div>
                 )}
