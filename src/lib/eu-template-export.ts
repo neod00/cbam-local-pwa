@@ -94,6 +94,28 @@ export interface EuExportReadinessResult {
     isSubmissionReady: boolean;
 }
 
+export function getEuExportIssueEditHref(issue: EuExportReadinessIssue): string | undefined {
+    if (!issue.target) {
+        return undefined;
+    }
+
+    const encodedId = encodeURIComponent(issue.target.id);
+
+    if (issue.target.type === 'product') {
+        return `/products?edit=${encodedId}`;
+    }
+
+    if (issue.target.type === 'process') {
+        return `/processes?edit=${encodedId}`;
+    }
+
+    if (issue.target.type === 'sourceStream') {
+        return `/source-streams?edit=${encodedId}`;
+    }
+
+    return `/precursors?edit=${encodedId}`;
+}
+
 export interface ExportChecklistItem {
     label: string;
     description: string;

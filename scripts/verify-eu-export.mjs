@@ -93,6 +93,7 @@ globalThis.euExport = {
   createEuTemplateExportCopy,
   evaluateEuExportReadiness,
   getEuExportDownloadStatusMessage,
+  getEuExportIssueEditHref,
   validateEuTemplateFile
 };`,
     {
@@ -401,6 +402,31 @@ const incompleteChecklist = euExport.createExportChecklist({
   },
 });
 assertEqual(String(incompleteChecklist.isComplete), 'false', 'incomplete export checklist complete');
+assertEqual(
+  euExport.getEuExportIssueEditHref({ target: { type: 'product', id: 'product 1' } }),
+  '/products?edit=product%201',
+  'product issue edit href'
+);
+assertEqual(
+  euExport.getEuExportIssueEditHref({ target: { type: 'process', id: 'process-1' } }),
+  '/processes?edit=process-1',
+  'process issue edit href'
+);
+assertEqual(
+  euExport.getEuExportIssueEditHref({ target: { type: 'sourceStream', id: 'source-stream-1' } }),
+  '/source-streams?edit=source-stream-1',
+  'source stream issue edit href'
+);
+assertEqual(
+  euExport.getEuExportIssueEditHref({ target: { type: 'precursor', id: 'precursor-1' } }),
+  '/precursors?edit=precursor-1',
+  'precursor issue edit href'
+);
+assertEqual(
+  String(euExport.getEuExportIssueEditHref({})),
+  'undefined',
+  'missing target issue edit href'
+);
 assertEqual(
   euExport.getEuExportDownloadStatusMessage({
     backupStatus: { helper: '', label: '백업 완료', tone: 'success' },

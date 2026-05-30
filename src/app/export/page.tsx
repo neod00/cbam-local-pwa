@@ -11,9 +11,9 @@ import {
     downloadBlob,
     evaluateEuExportReadiness,
     getEuExportDownloadStatusMessage,
+    getEuExportIssueEditHref,
     REQUIRED_EU_TEMPLATE_SHEETS,
     validateEuTemplateFile,
-    type EuExportReadinessIssue,
     type EuTemplateValidationResult,
 } from '@/lib/eu-template-export';
 import {
@@ -53,28 +53,6 @@ function formatNumber(value: number) {
     return new Intl.NumberFormat(undefined, {
         maximumFractionDigits: 4,
     }).format(value);
-}
-
-function getIssueEditHref(issue: EuExportReadinessIssue) {
-    if (!issue.target) {
-        return undefined;
-    }
-
-    const encodedId = encodeURIComponent(issue.target.id);
-
-    if (issue.target.type === 'product') {
-        return `/products?edit=${encodedId}`;
-    }
-
-    if (issue.target.type === 'process') {
-        return `/processes?edit=${encodedId}`;
-    }
-
-    if (issue.target.type === 'sourceStream') {
-        return `/source-streams?edit=${encodedId}`;
-    }
-
-    return `/precursors?edit=${encodedId}`;
 }
 
 export default function ExportPage() {
@@ -505,7 +483,7 @@ export default function ExportPage() {
                 ) : (
                     <ul className="mt-4 divide-y divide-gray-100 rounded-md border border-gray-200">
                         {readiness.issues.map((issue, index) => {
-                            const issueEditHref = getIssueEditHref(issue);
+                            const issueEditHref = getEuExportIssueEditHref(issue);
 
                             return (
                                 <li key={`${issue.area}-${issue.message}-${index}`} className="flex gap-3 px-4 py-3 text-sm">
