@@ -29,6 +29,7 @@ ${scenarioSource}
 
 globalThis.scenarioCalculation = {
   calculateProductScenarios,
+  DEFAULT_SCENARIO_ASSUMPTIONS,
   summarizeScenarioRisks,
 };`,
     {
@@ -44,7 +45,7 @@ globalThis.scenarioCalculation = {
   return context.scenarioCalculation;
 }
 
-const { calculateProductScenarios, summarizeScenarioRisks } = loadScenarioModule();
+const { calculateProductScenarios, DEFAULT_SCENARIO_ASSUMPTIONS, summarizeScenarioRisks } = loadScenarioModule();
 
 function assertClose(actual, expected, delta = 0.0000001) {
   assert.ok(Math.abs(actual - expected) < delta, `Expected ${actual} to be close to ${expected}`);
@@ -60,13 +61,12 @@ const baseResult = {
   total_see: 2.4,
 };
 
-const assumptions = {
-  origin_country: 'South Korea',
-  default_value_year: '2026',
-  cbam_factor: 0.975,
-  cscf: 1,
-  certificate_price_eur: 80,
-};
+const assumptions = DEFAULT_SCENARIO_ASSUMPTIONS;
+assert.equal(assumptions.origin_country, 'South Korea');
+assert.equal(assumptions.default_value_year, '2026');
+assert.equal(assumptions.cbam_factor, 0.975);
+assert.equal(assumptions.cscf, 1);
+assert.equal(assumptions.certificate_price_eur, 80);
 
 const references = {
   benchmarks: {

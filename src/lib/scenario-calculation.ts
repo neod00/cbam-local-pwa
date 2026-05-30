@@ -15,6 +15,14 @@ export interface ScenarioAssumptions {
     certificate_price_eur: number;
 }
 
+export const DEFAULT_SCENARIO_ASSUMPTIONS: ScenarioAssumptions = {
+    origin_country: 'South Korea',
+    default_value_year: '2026',
+    cbam_factor: 0.975,
+    cscf: 1,
+    certificate_price_eur: 80,
+};
+
 export interface ProductScenarioResult {
     result_id: string;
     product_name: string;

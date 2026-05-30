@@ -5,6 +5,7 @@ import { calculateLocalResults } from '@/lib/calculation-engine';
 import { getLocalSetting, listLocalItems, seedLocalData } from '@/lib/local-db';
 import {
     calculateProductScenarios,
+    DEFAULT_SCENARIO_ASSUMPTIONS,
     summarizeScenarioRisks,
     type ProductScenarioResult,
     type ScenarioAssumptions,
@@ -51,13 +52,7 @@ export default function ScenariosPage() {
     const [benchmarkReference, setBenchmarkReference] = useState<ImportedBenchmarkReference | undefined>();
     const [defaultValueReference, setDefaultValueReference] = useState<ImportedDefaultValueReference | undefined>();
     const [loading, setLoading] = useState(true);
-    const [assumptions, setAssumptions] = useState<ScenarioAssumptions>({
-        origin_country: 'South Korea',
-        default_value_year: '2026',
-        cbam_factor: 0.975,
-        cscf: 1,
-        certificate_price_eur: 80,
-    });
+    const [assumptions, setAssumptions] = useState<ScenarioAssumptions>(DEFAULT_SCENARIO_ASSUMPTIONS);
 
     useEffect(() => {
         async function loadScenarios() {

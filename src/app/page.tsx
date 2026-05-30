@@ -8,8 +8,8 @@ import { getLocalSetting, listLocalItems, seedLocalData } from '@/lib/local-db';
 import type { ImportedBenchmarkReference, ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import {
   calculateProductScenarios,
+  DEFAULT_SCENARIO_ASSUMPTIONS,
   summarizeScenarioRisks,
-  type ScenarioAssumptions,
   type ScenarioRiskSummary,
 } from '@/lib/scenario-calculation';
 import { AlertTriangle, CheckCircle2, Factory, FileSpreadsheet, Package, TrendingUp } from 'lucide-react';
@@ -19,14 +19,6 @@ import { useEffect, useMemo, useState } from 'react';
 function formatNumber(value: number) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value);
 }
-
-const DASHBOARD_SCENARIO_ASSUMPTIONS: ScenarioAssumptions = {
-  origin_country: 'South Korea',
-  default_value_year: '2026',
-  cbam_factor: 0.975,
-  cscf: 1,
-  certificate_price_eur: 80,
-};
 
 const EMPTY_SCENARIO_RISK_SUMMARY: ScenarioRiskSummary = {
   missing_cn_count: 0,
@@ -75,7 +67,7 @@ export default function Home() {
         getLocalSetting<ImportedDefaultValueReference>('reference:default-values'),
       ]);
       const localResults = calculateLocalResults({ processes, precursors, products, periods, sourceStreams, productOutputLines });
-      const scenarios = calculateProductScenarios(localResults, DASHBOARD_SCENARIO_ASSUMPTIONS, {
+      const scenarios = calculateProductScenarios(localResults, DEFAULT_SCENARIO_ASSUMPTIONS, {
         benchmarks,
         defaultValues,
       });

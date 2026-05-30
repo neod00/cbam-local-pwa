@@ -27,8 +27,8 @@ import {
 import type { ImportedBenchmarkReference, ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import {
     calculateProductScenarios,
+    DEFAULT_SCENARIO_ASSUMPTIONS,
     summarizeScenarioRisks,
-    type ScenarioAssumptions,
 } from '@/lib/scenario-calculation';
 import { AlertTriangle, CheckCircle2, Circle, Download, FileCheck2, FileSpreadsheet, PackageCheck, ShieldCheck, Workflow } from 'lucide-react';
 import Link from 'next/link';
@@ -49,14 +49,6 @@ type LastExportResult = {
     generatedAt: string;
     checkedCellCount: number;
     writtenCellCount: number;
-};
-
-const EXPORT_SCENARIO_ASSUMPTIONS: ScenarioAssumptions = {
-    origin_country: 'South Korea',
-    default_value_year: '2026',
-    cbam_factor: 0.975,
-    cscf: 1,
-    certificate_price_eur: 80,
 };
 
 function formatNumber(value: number) {
@@ -162,7 +154,7 @@ export default function ExportPage() {
     );
 
     const scenarioRiskSummary = useMemo(() => {
-        const scenarios = calculateProductScenarios(results, EXPORT_SCENARIO_ASSUMPTIONS, {
+        const scenarios = calculateProductScenarios(results, DEFAULT_SCENARIO_ASSUMPTIONS, {
             benchmarks: benchmarkReference,
             defaultValues: defaultValueReference,
         });
