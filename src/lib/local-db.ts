@@ -121,6 +121,7 @@ export interface CbamBackupManifest {
   format: "cbam-local-backup";
   format_version: 1;
   app_name: "CBAM Local";
+  app_version: string;
   exported_at: string;
   stores: StoreName[];
   counts: Record<StoreName, number>;
@@ -148,6 +149,7 @@ type StoreEntityMap = {
 
 const DB_NAME = "cbam-local";
 const DB_VERSION = 5;
+const BACKUP_APP_VERSION = "0.1.0";
 const STORE_NAMES: StoreName[] = [
   "installations",
   "products",
@@ -290,6 +292,7 @@ export function createLocalBackup(data: BackupData, exportedAt = nowIso()): Cbam
       format: "cbam-local-backup",
       format_version: 1,
       app_name: "CBAM Local",
+      app_version: BACKUP_APP_VERSION,
       exported_at: exportedAt,
       stores: STORE_NAMES,
       counts: {
@@ -345,6 +348,7 @@ export function parseBackupFile(content: string): CbamBackupFile {
   return {
     manifest: {
       ...parsed.manifest,
+      app_version: parsed.manifest.app_version ?? "unknown",
       stores: STORE_NAMES,
       counts: {
         installations: data.installations?.length ?? 0,

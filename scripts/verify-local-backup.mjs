@@ -72,6 +72,8 @@ const generatedBackup = createLocalBackup({
 }, '2026-05-30T00:00:00.000Z');
 
 assert.equal(generatedBackup.manifest.exported_at, '2026-05-30T00:00:00.000Z');
+assert.equal(generatedBackup.manifest.app_name, 'CBAM Local');
+assert.equal(generatedBackup.manifest.app_version, '0.1.0');
 assert.equal(generatedBackup.manifest.counts.products, 1);
 assert.equal(generatedBackup.manifest.counts.settings, 1);
 assert.equal(generatedBackup.data.settings[0].key, 'scenario:assumptions');
@@ -102,6 +104,7 @@ const backup = parseBackupFile(JSON.stringify({
 }));
 
 assert.equal(backup.manifest.format, 'cbam-local-backup');
+assert.equal(backup.manifest.app_version, 'unknown');
 assert.equal(backup.manifest.counts.settings, 1);
 assert.equal(backup.manifest.counts.products, 0);
 assert.equal(Array.isArray(backup.data.products), true);

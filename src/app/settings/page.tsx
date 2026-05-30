@@ -237,7 +237,13 @@ export default function SettingsPage() {
                 {backupPreview && (
                     <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <h3 className="text-sm font-semibold text-gray-900">백업 미리보기</h3>
-                        <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+                        <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-4">
+                            <div>
+                                <dt className="text-gray-500">앱</dt>
+                                <dd className="font-medium text-gray-900">
+                                    {backupPreview.manifest.app_name} {backupPreview.manifest.app_version}
+                                </dd>
+                            </div>
                             <div>
                                 <dt className="text-gray-500">내보낸 시각</dt>
                                 <dd className="font-medium text-gray-900">
