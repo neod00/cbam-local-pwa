@@ -45,6 +45,28 @@ function formatNumber(value: number) {
     return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value);
 }
 
+function calculateProcessSourceStreamSummary(process: ProductionProcess, sourceStreams: SourceStream[]) {
+    const linkedSourceStreams = sourceStreams.filter((sourceStream) => sourceStream.process_id === process.id);
+    const emissions = linkedSourceStreams.reduce(
+        (sum, sourceStream) => sum + calculateSourceStreamEmissions(sourceStream),
+        0
+    );
+    const energy = linkedSourceStreams.reduce(
+        (sum, sourceStream) => sum + calculateSourceStreamEnergyBreakdown(sourceStream).total,
+        0
+    );
+    const delta = emissions - process.direct_attributable_emissions_tco2e;
+    const tolerance = Math.max(0.01, Math.abs(process.direct_attributable_emissions_tco2e) * 0.01);
+
+    return {
+        count: linkedSourceStreams.length,
+        emissions,
+        energy,
+        delta,
+        needsReview: linkedSourceStreams.length > 0 && Math.abs(delta) > tolerance,
+    };
+}
+
 export default function ProcessesPage() {
     const [processes, setProcesses] = useState<ProductionProcess[]>([]);
     const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
@@ -111,8 +133,9 @@ export default function ProcessesPage() {
     const summary = useMemo(() => {
         const totalOutput = processes.reduce((sum, process) => sum + process.output_mass_t, 0);
         const totalElectricity = processes.reduce((sum, process) => sum + process.electricity_mwh, 0);
-        return { totalOutput, totalElectricity };
-    }, [processes]);
+        const sourceStreamReviewCount = processes.filter((process) => calculateProcessSourceStreamSummary(process, sourceStreams).needsReview).length;
+        return { totalOutput, totalElectricity, sourceStreamReviewCount };
+    }, [processes, sourceStreams]);
 
     const editingSourceStreamSummary = useMemo(() => {
         if (!editingProcessId) {
@@ -274,6 +297,10 @@ export default function ProcessesPage() {
         return { directSee, indirectSee };
     }
 
+    function getProcessSourceStreamSummary(process: ProductionProcess) {
+        return calculateProcessSourceStreamSummary(process, sourceStreams);
+    }
+
     async function handleDeleteProcess(process: ProductionProcess) {
         const linkedPrecursors = precursors.filter((precursor) => precursor.process_id === process.id);
         const linkedSourceStreams = sourceStreams.filter((sourceStream) => sourceStream.process_id === process.id);
@@ -319,10 +346,11 @@ export default function ProcessesPage() {
                 }
             />
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                 <StatCard label="등록 공정" value={processes.length} helper="D_Processes 후보" icon={Factory} tone="info" />
                 <StatCard label="총 생산량" value={formatNumber(summary.totalOutput)} helper="tonne" icon={Gauge} tone="success" />
                 <StatCard label="전력 사용량" value={formatNumber(summary.totalElectricity)} helper="MWh" icon={Zap} tone="warning" />
+                <StatCard label="검토 필요" value={summary.sourceStreamReviewCount} helper="배출원 차이" icon={Gauge} tone="warning" />
             </div>
 
             {showForm && (
@@ -435,6 +463,7 @@ export default function ProcessesPage() {
             <div className="grid grid-cols-1 gap-3 md:hidden">
                 {processes.map((process) => {
                     const see = getSee(process);
+                    const sourceStreamSummary = getProcessSourceStreamSummary(process);
                     return (
                         <SectionCard key={process.id} className="p-4">
                             <h2 className="text-base font-semibold text-slate-950">{process.name}</h2>
@@ -455,6 +484,18 @@ export default function ProcessesPage() {
                                 <div className="rounded-xl bg-slate-50 p-3">
                                     <dt className="text-xs text-slate-500">간접 SEE</dt>
                                     <dd className="mt-1 font-medium text-slate-900">{formatNumber(see.indirectSee)}</dd>
+                                </div>
+                                <div className="rounded-xl bg-slate-50 p-3">
+                                    <dt className="text-xs text-slate-500">배출원 합계</dt>
+                                    <dd className="mt-1 font-medium text-slate-900">
+                                        {sourceStreamSummary.count > 0 ? `${formatNumber(sourceStreamSummary.emissions)} tCO2e` : '-'}
+                                    </dd>
+                                </div>
+                                <div className={sourceStreamSummary.needsReview ? 'rounded-xl bg-amber-50 p-3' : 'rounded-xl bg-slate-50 p-3'}>
+                                    <dt className={sourceStreamSummary.needsReview ? 'text-xs text-amber-700' : 'text-xs text-slate-500'}>직접 차이</dt>
+                                    <dd className={sourceStreamSummary.needsReview ? 'mt-1 font-semibold text-amber-800' : 'mt-1 font-medium text-slate-900'}>
+                                        {sourceStreamSummary.count > 0 ? `${formatNumber(sourceStreamSummary.delta)} tCO2e` : '-'}
+                                    </dd>
                                 </div>
                             </dl>
                             <div className="mt-4 grid grid-cols-2 gap-2">
@@ -480,20 +521,22 @@ export default function ProcessesPage() {
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">경로</th>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">보고기간</th>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">제품</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">생산량(t)</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 SEE</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">간접 SEE</th>
+                            <th className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">생산량</th>
+                            <th className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">직접</th>
+                            <th className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">배출원</th>
+                            <th className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">간접</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">작업</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
                         {loading ? (
-                            <tr><td colSpan={8} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
+                            <tr><td colSpan={9} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
                         ) : processes.length === 0 ? (
-                            <tr><td colSpan={8} className="p-6 text-center text-sm text-slate-500">등록된 생산공정이 없습니다.</td></tr>
+                            <tr><td colSpan={9} className="p-6 text-center text-sm text-slate-500">등록된 생산공정이 없습니다.</td></tr>
                         ) : (
                             processes.map((process) => {
                                 const see = getSee(process);
+                                const sourceStreamSummary = getProcessSourceStreamSummary(process);
                                 return (
                                     <tr key={process.id} className="transition hover:bg-slate-50">
                                         <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-slate-950">{process.name}</td>
@@ -502,6 +545,18 @@ export default function ProcessesPage() {
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{process.product_id ? productNames.get(process.product_id) ?? '알 수 없음' : '-'}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(process.output_mass_t)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(see.directSee)}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
+                                            {sourceStreamSummary.count > 0 ? (
+                                                <>
+                                                    <span>{formatNumber(sourceStreamSummary.emissions)} tCO2e</span>
+                                                    <div className={sourceStreamSummary.needsReview ? 'text-xs font-semibold text-amber-700' : 'text-xs text-slate-400'}>
+                                                        차이 {formatNumber(sourceStreamSummary.delta)}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                '-'
+                                            )}
+                                        </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(see.indirectSee)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm">
                                             <div className="flex justify-end gap-2">
