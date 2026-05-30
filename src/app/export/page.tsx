@@ -103,7 +103,7 @@ export default function ExportPage() {
             setSourceStreams(sourceStreams);
             setPrecursors(precursors);
             setProducts(products);
-            setResults(calculateLocalResults({ processes, precursors, products, periods }));
+            setResults(calculateLocalResults({ processes, precursors, products, periods, sourceStreams }));
         }
 
         loadPreviewData();
