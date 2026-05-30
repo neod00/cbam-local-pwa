@@ -4,6 +4,8 @@ import { Button, PageHeader, SectionCard, StatCard } from '@/components/ui';
 import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummary';
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
+    CBAM_LOCAL_APP_NAME,
+    CBAM_LOCAL_APP_VERSION,
     CbamBackupFile,
     clearLocalData,
     exportLocalBackup,
@@ -77,6 +79,26 @@ export default function SettingsPage() {
 
         const setting = backupPreview.data.settings.find((item) => item.key === SCENARIO_ASSUMPTIONS_SETTING_KEY);
         return normalizeScenarioAssumptions(setting?.value as Partial<ScenarioAssumptions> | undefined);
+    }, [backupPreview]);
+
+    const backupCompatibilityMessage = useMemo(() => {
+        if (!backupPreview) {
+            return '';
+        }
+
+        if (backupPreview.manifest.app_name !== CBAM_LOCAL_APP_NAME) {
+            return '이 백업은 CBAM Local이 아닌 앱에서 생성된 것으로 표시됩니다. 복원 전 파일 출처와 데이터 구조를 확인하세요.';
+        }
+
+        if (backupPreview.manifest.app_version === 'unknown') {
+            return '이 백업은 앱 버전 정보가 없는 이전 형식입니다. 복원은 가능하지만, 복원 후 산정 결과와 시나리오 가정값을 다시 확인하세요.';
+        }
+
+        if (backupPreview.manifest.app_version !== CBAM_LOCAL_APP_VERSION) {
+            return `이 백업은 현재 앱 버전(${CBAM_LOCAL_APP_VERSION})과 다른 버전(${backupPreview.manifest.app_version})에서 생성되었습니다. 복원 전 현재 데이터를 별도 백업해 두세요.`;
+        }
+
+        return '';
     }, [backupPreview]);
 
     async function handleExport() {
@@ -261,6 +283,12 @@ export default function SettingsPage() {
                                 <dd className="font-medium text-gray-900">{totalPreviewItems}</dd>
                             </div>
                         </dl>
+                        {backupCompatibilityMessage && (
+                            <div className="mt-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+                                <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
+                                <p>{backupCompatibilityMessage}</p>
+                            </div>
+                        )}
                         <div className="mt-4 grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
                             {Object.entries(backupPreview.manifest.counts).map(([store, count]) => (
                                 <div key={store} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
