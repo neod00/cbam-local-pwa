@@ -92,6 +92,7 @@ globalThis.euExport = {
   createEuTemplateExportCellWrites,
   createEuTemplateExportCopy,
   evaluateEuExportReadiness,
+  getEuExportDownloadStatusMessage,
   validateEuTemplateFile
 };`,
     {
@@ -400,6 +401,36 @@ const incompleteChecklist = euExport.createExportChecklist({
   },
 });
 assertEqual(String(incompleteChecklist.isComplete), 'false', 'incomplete export checklist complete');
+assertEqual(
+  euExport.getEuExportDownloadStatusMessage({
+    backupStatus: { helper: '', label: '백업 완료', tone: 'success' },
+    hasTemplateFile: false,
+    readiness,
+    validation,
+  }),
+  'EU 원본 템플릿을 먼저 선택하세요.',
+  'download status without template'
+);
+assertEqual(
+  euExport.getEuExportDownloadStatusMessage({
+    backupStatus: { helper: '', label: '백업 완료', tone: 'success' },
+    hasTemplateFile: true,
+    readiness: { ...readiness, isSubmissionReady: true, warningCount: 0 },
+    validation,
+  }),
+  '제출용 복사본을 생성할 수 있습니다.',
+  'download status ready'
+);
+assertEqual(
+  euExport.getEuExportDownloadStatusMessage({
+    backupStatus: { helper: '', label: '백업 필요', tone: 'warning' },
+    hasTemplateFile: true,
+    readiness: { ...readiness, isSubmissionReady: true, warningCount: 0 },
+    validation,
+  }),
+  '다운로드는 가능하지만 제출용 복사본 생성 전 .cbam 백업을 권장합니다.',
+  'download status backup warning'
+);
 
 const exportedBlob = await euExport.createEuTemplateExportCopy(file, data);
 const exportedZip = fflate.unzipSync(new Uint8Array(await exportedBlob.arrayBuffer()));

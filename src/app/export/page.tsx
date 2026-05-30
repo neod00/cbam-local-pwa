@@ -10,6 +10,7 @@ import {
     createEuTemplateExportCopyResult,
     downloadBlob,
     evaluateEuExportReadiness,
+    getEuExportDownloadStatusMessage,
     REQUIRED_EU_TEMPLATE_SHEETS,
     validateEuTemplateFile,
     type EuExportReadinessIssue,
@@ -207,29 +208,15 @@ export default function ExportPage() {
         ]
     );
 
-    const downloadStatusMessage = useMemo(() => {
-        if (!templateFile) {
-            return 'EU 원본 템플릿을 먼저 선택하세요.';
-        }
-
-        if (!validation?.isValid) {
-            return '선택한 템플릿의 공식 시트 구조를 확인해야 합니다.';
-        }
-
-        if (!readiness.canExportDraft) {
-            return '오류 항목을 수정해야 복사본을 다운로드할 수 있습니다.';
-        }
-
-        if (!readiness.isSubmissionReady) {
-            return '다운로드는 가능하지만 경고 항목은 제출 전 검토하세요.';
-        }
-
-        if (backupStatus.tone !== 'success') {
-            return '다운로드는 가능하지만 제출용 복사본 생성 전 .cbam 백업을 권장합니다.';
-        }
-
-        return '제출용 복사본을 생성할 수 있습니다.';
-    }, [backupStatus.tone, readiness.canExportDraft, readiness.isSubmissionReady, templateFile, validation?.isValid]);
+    const downloadStatusMessage = useMemo(
+        () => getEuExportDownloadStatusMessage({
+            backupStatus,
+            hasTemplateFile: Boolean(templateFile),
+            readiness,
+            validation,
+        }),
+        [backupStatus, readiness, templateFile, validation]
+    );
 
     async function handleTemplateFileChange(file: File | undefined) {
         setTemplateFile(file);

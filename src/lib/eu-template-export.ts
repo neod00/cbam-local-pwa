@@ -122,6 +122,13 @@ export interface ExportChecklistInput {
     validation?: EuTemplateValidationResult;
 }
 
+export interface EuExportDownloadStatusInput {
+    backupStatus: BackupStatus;
+    hasTemplateFile: boolean;
+    readiness: EuExportReadinessResult;
+    validation?: Pick<EuTemplateValidationResult, 'isValid'>;
+}
+
 const EU_GOODS = [
     'Cement',
     'Cement clinker',
@@ -561,6 +568,32 @@ export function createExportChecklist(input: ExportChecklistInput): ExportCheckl
         reviewCount,
         isComplete: reviewCount === 0,
     };
+}
+
+export function getEuExportDownloadStatusMessage(input: EuExportDownloadStatusInput): string {
+    const { backupStatus, hasTemplateFile, readiness, validation } = input;
+
+    if (!hasTemplateFile) {
+        return 'EU 원본 템플릿을 먼저 선택하세요.';
+    }
+
+    if (!validation?.isValid) {
+        return '선택한 템플릿의 공식 시트 구조를 확인해야 합니다.';
+    }
+
+    if (!readiness.canExportDraft) {
+        return '오류 항목을 수정해야 복사본을 다운로드할 수 있습니다.';
+    }
+
+    if (!readiness.isSubmissionReady) {
+        return '다운로드는 가능하지만 경고 항목은 제출 전 검토하세요.';
+    }
+
+    if (backupStatus.tone !== 'success') {
+        return '다운로드는 가능하지만 제출용 복사본 생성 전 .cbam 백업을 권장합니다.';
+    }
+
+    return '제출용 복사본을 생성할 수 있습니다.';
 }
 
 function parseWorkbookSheetNames(workbookXml: string): string[] {
