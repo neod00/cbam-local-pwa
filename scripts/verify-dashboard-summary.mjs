@@ -65,8 +65,11 @@ const baseRiskSummary = {
   missing_reference_count: 0,
   above_default_count: 0,
   certificate_exposure_count: 0,
+  default_certificate_exposure_count: 0,
   total_certificate_quantity_indicator: 0,
   total_certificate_cost_indicator_eur: 0,
+  total_default_certificate_quantity_indicator: 0,
+  total_default_certificate_cost_indicator_eur: 0,
   is_ready_for_review: true,
 };
 

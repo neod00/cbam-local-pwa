@@ -63,11 +63,12 @@ Completed:
 - Added first-pass SEFA and CBAM certificate scenario screen comparing product SEE, default values, benchmark Column A, and certificate quantity/cost indicators.
 - Added shared product-line allocation summary checks, including mixed allocation-basis warnings and an in-form line-total review box.
 - Connected product-line allocation checks to EU Export readiness so submission prep warns about output-total differences and mixed allocation bases before workbook download.
+- Added default-value scenario SEFA and certificate indicators using Benchmark Column B, while keeping actual-data indicators on Benchmark Column A.
 
 Next:
 
 - Confirm official product-level summary cells before writing product-line allocation details into the EU template copy.
-- Refine SEFA and certificate calculations after confirming the paid-carbon-price formula and current official factors.
+- Refine certificate calculations after confirming the paid-carbon-price formula and current official factors.
 
 ## Decision Log
 

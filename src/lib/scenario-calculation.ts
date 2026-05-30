@@ -54,6 +54,9 @@ export interface ProductScenarioResult {
     sefa_indicator?: number;
     certificate_quantity_indicator?: number;
     certificate_cost_indicator_eur?: number;
+    default_sefa_indicator?: number;
+    default_certificate_quantity_indicator?: number;
+    default_certificate_cost_indicator_eur?: number;
     data_quality: 'READY' | 'MISSING_REFERENCE' | 'MISSING_CN';
     review_message: string;
 }
@@ -64,8 +67,11 @@ export interface ScenarioRiskSummary {
     missing_reference_count: number;
     above_default_count: number;
     certificate_exposure_count: number;
+    default_certificate_exposure_count: number;
     total_certificate_quantity_indicator: number;
     total_certificate_cost_indicator_eur: number;
+    total_default_certificate_quantity_indicator: number;
+    total_default_certificate_cost_indicator_eur: number;
     is_ready_for_review: boolean;
 }
 
@@ -85,6 +91,14 @@ export function summarizeScenarioRisks(scenarios: ProductScenarioResult[]): Scen
         (sum, scenario) => sum + (scenario.certificate_cost_indicator_eur ?? 0),
         0
     );
+    const totalDefaultCertificateQuantityIndicator = scenarios.reduce(
+        (sum, scenario) => sum + (scenario.default_certificate_quantity_indicator ?? 0),
+        0
+    );
+    const totalDefaultCertificateCostIndicatorEur = scenarios.reduce(
+        (sum, scenario) => sum + (scenario.default_certificate_cost_indicator_eur ?? 0),
+        0
+    );
 
     return {
         missing_cn_count: missingCnCount,
@@ -92,8 +106,11 @@ export function summarizeScenarioRisks(scenarios: ProductScenarioResult[]): Scen
         missing_reference_count: missingCnCount + missingOfficialReferenceCount,
         above_default_count: scenarios.filter((scenario) => (scenario.default_gap ?? 0) > 0).length,
         certificate_exposure_count: scenarios.filter((scenario) => (scenario.certificate_quantity_indicator ?? 0) > 0).length,
+        default_certificate_exposure_count: scenarios.filter((scenario) => (scenario.default_certificate_quantity_indicator ?? 0) > 0).length,
         total_certificate_quantity_indicator: totalCertificateQuantityIndicator,
         total_certificate_cost_indicator_eur: totalCertificateCostIndicatorEur,
+        total_default_certificate_quantity_indicator: totalDefaultCertificateQuantityIndicator,
+        total_default_certificate_cost_indicator_eur: totalDefaultCertificateCostIndicatorEur,
         is_ready_for_review: scenarios.length > 0 && missingCnCount === 0 && missingOfficialReferenceCount === 0,
     };
 }
@@ -154,12 +171,21 @@ export function calculateProductScenarios(
         const sefaIndicator = benchmarkColumnA === undefined
             ? undefined
             : benchmarkColumnA * assumptions.cbam_factor * assumptions.cscf;
+        const defaultSefaIndicator = benchmarkColumnB === undefined
+            ? undefined
+            : benchmarkColumnB * assumptions.cbam_factor * assumptions.cscf;
         const certificateQuantityIndicator = sefaIndicator === undefined
             ? undefined
             : Math.max(0, (result.total_see - sefaIndicator) * result.output_mass_t);
         const certificateCostIndicator = certificateQuantityIndicator === undefined
             ? undefined
             : certificateQuantityIndicator * assumptions.certificate_price_eur;
+        const defaultCertificateQuantityIndicator = defaultSee === undefined || defaultSefaIndicator === undefined
+            ? undefined
+            : Math.max(0, (defaultSee - defaultSefaIndicator) * result.output_mass_t);
+        const defaultCertificateCostIndicator = defaultCertificateQuantityIndicator === undefined
+            ? undefined
+            : defaultCertificateQuantityIndicator * assumptions.certificate_price_eur;
 
         return {
             result_id: result.id,
@@ -174,11 +200,14 @@ export function calculateProductScenarios(
             sefa_indicator: sefaIndicator,
             certificate_quantity_indicator: certificateQuantityIndicator,
             certificate_cost_indicator_eur: certificateCostIndicator,
+            default_sefa_indicator: defaultSefaIndicator,
+            default_certificate_quantity_indicator: defaultCertificateQuantityIndicator,
+            default_certificate_cost_indicator_eur: defaultCertificateCostIndicator,
             data_quality: benchmark && defaultValue ? 'READY' : 'MISSING_REFERENCE',
             review_message: benchmark && defaultValue
                 ? defaultGap !== undefined && defaultGap > 0
-                    ? '실측 SEE가 기본값보다 높습니다. 기본값/공급망 자료 전략을 비교하세요.'
-                    : '공식 기준값과 연결되었습니다. SEFA 및 인증서 지표를 검토하세요.'
+                    ? '실측 SEE가 기본값보다 높습니다. 실제자료와 기본값 시나리오의 인증서 지표를 비교하세요.'
+                    : '공식 기준값과 연결되었습니다. 실제자료/기본값 SEFA 및 인증서 지표를 검토하세요.'
                 : '벤치마크 또는 국가/CN 기본값 연결이 필요합니다.',
         };
     });

@@ -77,7 +77,7 @@ After product-level SEE exists, add scenarios:
 Then add:
 
 - Benchmark Column A/B lookup.
-- SEFA calculation.
+- SEFA calculation, with Column A used for actual-data scenarios and Column B used for default-value scenarios.
 - CBAM factor and CSCF handling.
 - Certificate quantity and cost comparison.
 

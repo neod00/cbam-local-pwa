@@ -128,12 +128,22 @@ export default function ScenariosPage() {
             (sum, scenario) => sum + (scenario.certificate_cost_indicator_eur ?? 0),
             0
         );
+        const totalDefaultCertificateQuantity = scenarios.reduce(
+            (sum, scenario) => sum + (scenario.default_certificate_quantity_indicator ?? 0),
+            0
+        );
+        const totalDefaultCost = scenarios.reduce(
+            (sum, scenario) => sum + (scenario.default_certificate_cost_indicator_eur ?? 0),
+            0
+        );
         const riskSummary = summarizeScenarioRisks(scenarios);
 
         return {
             totalOutput,
             totalCertificateQuantity,
             totalCost,
+            totalDefaultCertificateQuantity,
+            totalDefaultCost,
             missingReferenceCount: riskSummary.missing_reference_count,
             missingCnCount: riskSummary.missing_cn_count,
             missingOfficialReferenceCount: riskSummary.missing_official_reference_count,
@@ -194,7 +204,7 @@ export default function ScenariosPage() {
             items.push({
                 key: 'certificate-exposure',
                 title: '인증서 수량 발생 가능',
-                description: '현재 가정 기준으로 인증서 수량 지표가 발생합니다. 가격 가정을 바꿔 민감도를 확인하세요.',
+                description: `실제자료 기준 인증서 수량 지표가 발생합니다. 기본값 시나리오는 ${formatNumber(summary.totalDefaultCertificateQuantity)} tCO2e입니다.`,
                 count: summary.totalCertificateQuantity,
                 unit: 'tCO2e',
                 tone: 'info',
@@ -226,8 +236,8 @@ export default function ScenariosPage() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                 <StatCard label="시나리오 품목" value={loading ? '-' : scenarios.length} helper="제품 산정 라인 기준" icon={BarChart3} tone="info" />
                 <StatCard label="총 생산량" value={formatNumber(summary.totalOutput)} helper="tonne" icon={Calculator} tone="pending" />
-                <StatCard label="인증서 수량 지표" value={formatNumber(summary.totalCertificateQuantity)} helper="검증 전 추정" icon={BadgeEuro} tone="warning" />
-                <StatCard label="예상 비용 지표" value={formatCurrency(summary.totalCost)} helper={`${summary.missingReferenceCount}건 기준값 확인`} icon={AlertTriangle} tone={summary.missingReferenceCount > 0 ? 'warning' : 'success'} />
+                <StatCard label="실제자료 인증서 지표" value={formatNumber(summary.totalCertificateQuantity)} helper={`기본값 ${formatNumber(summary.totalDefaultCertificateQuantity)}`} icon={BadgeEuro} tone="warning" />
+                <StatCard label="예상 비용 지표" value={formatCurrency(summary.totalCost)} helper={`기본값 ${formatCurrency(summary.totalDefaultCost)}`} icon={AlertTriangle} tone={summary.missingReferenceCount > 0 ? 'warning' : 'success'} />
             </div>
 
             {(summary.missingReferenceCount > 0 || !benchmarkReference || !defaultValueReference) && (
@@ -400,9 +410,12 @@ export default function ScenariosPage() {
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 차이</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">Benchmark A</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">Benchmark B</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">SEFA 지표</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">인증서 수량 지표</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">비용 지표</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">실측 SEFA</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">실측 인증서</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">실측 비용</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 SEFA</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 인증서</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 비용</th>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">상태</th>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">검토</th>
                         </tr>
@@ -410,7 +423,7 @@ export default function ScenariosPage() {
                     <tbody className="divide-y divide-slate-100 bg-white">
                         {scenarios.length === 0 ? (
                             <tr>
-                                <td colSpan={12} className="p-6 text-center text-sm text-slate-500">
+                                <td colSpan={15} className="p-6 text-center text-sm text-slate-500">
                                     시나리오를 만들 산정 결과가 없습니다.
                                 </td>
                             </tr>
@@ -432,6 +445,9 @@ export default function ScenariosPage() {
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.sefa_indicator)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.certificate_quantity_indicator)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-950">{formatCurrency(scenario.certificate_cost_indicator_eur)}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.default_sefa_indicator)}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.default_certificate_quantity_indicator)}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-950">{formatCurrency(scenario.default_certificate_cost_indicator_eur)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-sm">{getQualityBadge(scenario)}</td>
                                     <td className="min-w-64 px-4 py-4 text-sm text-slate-600">{scenario.review_message}</td>
                                 </tr>
