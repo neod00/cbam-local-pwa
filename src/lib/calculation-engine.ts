@@ -67,6 +67,14 @@ export type LocalCalculationWarning = {
     };
 };
 
+export function getLocalCalculationWarningHref(warning: LocalCalculationWarning) {
+    const encodedId = encodeURIComponent(warning.target.id);
+
+    return warning.target.type === 'precursor'
+        ? `/precursors?edit=${encodedId}`
+        : `/processes?edit=${encodedId}`;
+}
+
 export function calculateEmission(input: CalcInput): CalcResult {
     const { output_mass_t, electricity_mwh, electricity_ef, fuel_usage, precursors, input_mass_t } = input;
 

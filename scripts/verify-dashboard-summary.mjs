@@ -10,6 +10,8 @@ function loadDashboardModule() {
     .replace(/^export /gm, '');
   const dashboardSource = readFileSync('src/lib/dashboard-summary.ts', 'utf8')
     .replace(/^import type .*;\r?\n/gm, '')
+    .replace("import { getLocalCalculationWarningHref } from './calculation-engine';\r\n", '')
+    .replace("import { getLocalCalculationWarningHref } from './calculation-engine';\n", '')
     .replace("import { getScenarioReviewAction } from './scenario-calculation';\r\n", '')
     .replace("import { getScenarioReviewAction } from './scenario-calculation';\n", '')
     .replace(/^export /gm, '');
@@ -28,6 +30,13 @@ function getDefaultValueTotalForYear(defaultValue, year) {
   if (year === '2026') return defaultValue.total_2026;
   if (year === '2027') return defaultValue.total_2027;
   return defaultValue.total_2028_onwards;
+}
+
+function getLocalCalculationWarningHref(warning) {
+  const encodedId = encodeURIComponent(warning.target.id);
+  return warning.target.type === 'precursor'
+    ? \`/precursors?edit=\${encodedId}\`
+    : \`/processes?edit=\${encodedId}\`;
 }
 
 ${scenarioSource}
@@ -127,5 +136,28 @@ assert.equal(riskDashboard.steps.find((step) => step.name === 'EU Export').statu
 assert.equal(riskDashboard.recentTasks[0].href, '/products');
 assert.equal(riskDashboard.recentTasks[0].tone, 'danger');
 assert.equal(riskDashboard.recentTasks[1].href, '/upload');
+
+const warningDashboard = createDashboardSummary({
+  results: [{
+    ...result,
+    warningDetails: [
+      {
+        message: '전구물질 출처를 확인하세요.',
+        target: { type: 'precursor', id: 'precursor 1' },
+      },
+    ],
+  }],
+  productCount: 1,
+  processCount: 1,
+  precursorCount: 1,
+  scenarioRiskSummary: baseRiskSummary,
+  exportIssueCount: 0,
+  exportErrorCount: 0,
+  hasBenchmarkReference: true,
+  hasDefaultValueReference: true,
+});
+
+assert.equal(warningDashboard.recentTasks[0].href, '/precursors?edit=precursor%201');
+assert.equal(warningDashboard.recentTasks[0].tone, 'warning');
 
 console.log('Dashboard summary verification passed.');

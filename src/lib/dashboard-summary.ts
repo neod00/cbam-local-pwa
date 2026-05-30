@@ -1,4 +1,5 @@
 import type { LocalCalculationResult } from './calculation-engine';
+import { getLocalCalculationWarningHref } from './calculation-engine';
 import type { ScenarioRiskSummary } from './scenario-calculation';
 import { getScenarioReviewAction } from './scenario-calculation';
 
@@ -40,9 +41,7 @@ function getWarningTasks(results: LocalCalculationResult[]): DashboardTask[] {
     return results.flatMap((result) =>
         result.warningDetails.map((warning) => ({
             label: `${result.process_name}: ${warning.message}`,
-            href: warning.target.type === 'precursor'
-                ? `/precursors?edit=${encodeURIComponent(warning.target.id)}`
-                : `/processes?edit=${encodeURIComponent(warning.target.id)}`,
+            href: getLocalCalculationWarningHref(warning),
             tone: 'warning',
         }))
     );

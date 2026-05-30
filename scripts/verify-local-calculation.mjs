@@ -22,6 +22,7 @@ ${productRulesSource}
 ${calculationEngineSource}
 globalThis.localCalculation = {
   calculateLocalResults,
+  getLocalCalculationWarningHref,
   getIndirectEmissionsApplicability,
 };`,
     {
@@ -37,7 +38,11 @@ globalThis.localCalculation = {
   return context.localCalculation;
 }
 
-const { calculateLocalResults, getIndirectEmissionsApplicability } = loadLocalCalculationModule();
+const {
+  calculateLocalResults,
+  getIndirectEmissionsApplicability,
+  getLocalCalculationWarningHref,
+} = loadLocalCalculationModule();
 
 const product = {
   id: 'product-1',
@@ -146,6 +151,14 @@ assert.equal(resultsWithSourceStreams[0].warningDetails.length, 1);
 assert.equal(resultsWithSourceStreams[0].warningDetails[0].target.type, 'process');
 assert.equal(resultsWithSourceStreams[0].warningDetails[0].target.id, process.id);
 assert.match(resultsWithSourceStreams[0].warningDetails[0].message, /배출원 자료 합계/);
+assert.equal(getLocalCalculationWarningHref(resultsWithSourceStreams[0].warningDetails[0]), '/processes?edit=process-1');
+assert.equal(
+  getLocalCalculationWarningHref({
+    message: '전구물질 확인 필요',
+    target: { type: 'precursor', id: 'precursor 1' },
+  }),
+  '/precursors?edit=precursor%201'
+);
 
 const productLineResults = calculateLocalResults({
   processes: [process],

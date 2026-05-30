@@ -1,7 +1,7 @@
 'use client';
 
 import { DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
-import { calculateLocalResults } from '@/lib/calculation-engine';
+import { calculateLocalResults, getLocalCalculationWarningHref } from '@/lib/calculation-engine';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
 import { listLocalItems, seedLocalData } from '@/lib/local-db';
 import { AlertTriangle, ArrowRight, Factory, Gauge, Percent, Scale } from 'lucide-react';
@@ -27,16 +27,6 @@ function average(values: number[]) {
     }
 
     return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-function getWarningHref(warning: LocalCalculationResult['warningDetails'][number]) {
-    const encodedId = encodeURIComponent(warning.target.id);
-
-    if (warning.target.type === 'precursor') {
-        return `/precursors?edit=${encodedId}`;
-    }
-
-    return `/processes?edit=${encodedId}`;
 }
 
 function getAllocationLabel(result: LocalCalculationResult) {
@@ -102,7 +92,7 @@ export default function ResultsPage() {
             result.warningDetails.map((warning) => ({
                 resultId: result.id,
                 processName: result.process_name,
-                href: getWarningHref(warning),
+                href: getLocalCalculationWarningHref(warning),
                 warning,
             }))
         );
