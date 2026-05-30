@@ -14,6 +14,8 @@ function loadLocalDbModule() {
     `${localDbSource}
 
 globalThis.localDb = {
+  CBAM_LOCAL_APP_NAME,
+  CBAM_LOCAL_APP_VERSION,
   createLocalBackup,
   parseBackupFile,
 };`,
@@ -30,7 +32,12 @@ globalThis.localDb = {
   return context.localDb;
 }
 
-const { createLocalBackup, parseBackupFile } = loadLocalDbModule();
+const {
+  CBAM_LOCAL_APP_NAME,
+  CBAM_LOCAL_APP_VERSION,
+  createLocalBackup,
+  parseBackupFile,
+} = loadLocalDbModule();
 
 const scenarioAssumptions = {
   origin_country: 'South Korea',
@@ -72,8 +79,8 @@ const generatedBackup = createLocalBackup({
 }, '2026-05-30T00:00:00.000Z');
 
 assert.equal(generatedBackup.manifest.exported_at, '2026-05-30T00:00:00.000Z');
-assert.equal(generatedBackup.manifest.app_name, 'CBAM Local');
-assert.equal(generatedBackup.manifest.app_version, '0.1.0');
+assert.equal(generatedBackup.manifest.app_name, CBAM_LOCAL_APP_NAME);
+assert.equal(generatedBackup.manifest.app_version, CBAM_LOCAL_APP_VERSION);
 assert.equal(generatedBackup.manifest.counts.products, 1);
 assert.equal(generatedBackup.manifest.counts.settings, 1);
 assert.equal(generatedBackup.data.settings[0].key, 'scenario:assumptions');

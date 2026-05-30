@@ -117,10 +117,13 @@ export interface AppSetting extends LocalEntity {
   value: unknown;
 }
 
+export const CBAM_LOCAL_APP_NAME = "CBAM Local";
+export const CBAM_LOCAL_APP_VERSION = "0.1.0";
+
 export interface CbamBackupManifest {
   format: "cbam-local-backup";
   format_version: 1;
-  app_name: "CBAM Local";
+  app_name: typeof CBAM_LOCAL_APP_NAME;
   app_version: string;
   exported_at: string;
   stores: StoreName[];
@@ -149,7 +152,6 @@ type StoreEntityMap = {
 
 const DB_NAME = "cbam-local";
 const DB_VERSION = 5;
-const BACKUP_APP_VERSION = "0.1.0";
 const STORE_NAMES: StoreName[] = [
   "installations",
   "products",
@@ -291,8 +293,8 @@ export function createLocalBackup(data: BackupData, exportedAt = nowIso()): Cbam
     manifest: {
       format: "cbam-local-backup",
       format_version: 1,
-      app_name: "CBAM Local",
-      app_version: BACKUP_APP_VERSION,
+      app_name: CBAM_LOCAL_APP_NAME,
+      app_version: CBAM_LOCAL_APP_VERSION,
       exported_at: exportedAt,
       stores: STORE_NAMES,
       counts: {
