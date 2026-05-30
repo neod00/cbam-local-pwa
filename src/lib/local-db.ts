@@ -312,6 +312,22 @@ export function createLocalBackup(data: BackupData, exportedAt = nowIso()): Cbam
   };
 }
 
+export function getBackupCompatibilityMessage(manifest: CbamBackupManifest): string {
+  if (manifest.app_name !== CBAM_LOCAL_APP_NAME) {
+    return "이 백업은 CBAM Local이 아닌 앱에서 생성된 것으로 표시됩니다. 복원 전 파일 출처와 데이터 구조를 확인하세요.";
+  }
+
+  if (manifest.app_version === "unknown") {
+    return "이 백업은 앱 버전 정보가 없는 이전 형식입니다. 복원은 가능하지만, 복원 후 산정 결과와 시나리오 가정값을 다시 확인하세요.";
+  }
+
+  if (manifest.app_version !== CBAM_LOCAL_APP_VERSION) {
+    return `이 백업은 현재 앱 버전(${CBAM_LOCAL_APP_VERSION})과 다른 버전(${manifest.app_version})에서 생성되었습니다. 복원 전 현재 데이터를 별도 백업해 두세요.`;
+  }
+
+  return "";
+}
+
 export async function exportLocalBackup(): Promise<CbamBackupFile> {
   return createLocalBackup({
     installations: await listLocalItems("installations"),

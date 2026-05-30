@@ -17,6 +17,7 @@ globalThis.localDb = {
   CBAM_LOCAL_APP_NAME,
   CBAM_LOCAL_APP_VERSION,
   createLocalBackup,
+  getBackupCompatibilityMessage,
   parseBackupFile,
 };`,
     {
@@ -36,6 +37,7 @@ const {
   CBAM_LOCAL_APP_NAME,
   CBAM_LOCAL_APP_VERSION,
   createLocalBackup,
+  getBackupCompatibilityMessage,
   parseBackupFile,
 } = loadLocalDbModule();
 
@@ -81,6 +83,7 @@ const generatedBackup = createLocalBackup({
 assert.equal(generatedBackup.manifest.exported_at, '2026-05-30T00:00:00.000Z');
 assert.equal(generatedBackup.manifest.app_name, CBAM_LOCAL_APP_NAME);
 assert.equal(generatedBackup.manifest.app_version, CBAM_LOCAL_APP_VERSION);
+assert.equal(getBackupCompatibilityMessage(generatedBackup.manifest), '');
 assert.equal(generatedBackup.manifest.counts.products, 1);
 assert.equal(generatedBackup.manifest.counts.settings, 1);
 assert.equal(generatedBackup.data.settings[0].key, 'scenario:assumptions');
@@ -112,6 +115,7 @@ const backup = parseBackupFile(JSON.stringify({
 
 assert.equal(backup.manifest.format, 'cbam-local-backup');
 assert.equal(backup.manifest.app_version, 'unknown');
+assert.match(getBackupCompatibilityMessage(backup.manifest), /앱 버전 정보가 없는 이전 형식/);
 assert.equal(backup.manifest.counts.settings, 1);
 assert.equal(backup.manifest.counts.products, 0);
 assert.equal(Array.isArray(backup.data.products), true);
@@ -119,6 +123,16 @@ assert.equal(backup.data.products.length, 0);
 
 const restoredSetting = backup.data.settings.find((item) => item.key === 'scenario:assumptions');
 assert.deepEqual(restoredSetting?.value, scenarioAssumptions);
+
+assert.match(
+  getBackupCompatibilityMessage({ ...generatedBackup.manifest, app_name: 'Other App' }),
+  /CBAM Local이 아닌 앱/
+);
+
+assert.match(
+  getBackupCompatibilityMessage({ ...generatedBackup.manifest, app_version: '9.9.9' }),
+  /현재 앱 버전/
+);
 
 assert.throws(
   () => parseBackupFile(JSON.stringify({ manifest: { format: 'unknown', format_version: 1 }, data: {} })),
