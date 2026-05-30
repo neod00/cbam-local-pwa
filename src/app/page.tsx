@@ -1,6 +1,7 @@
 'use client';
 
 import { PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummary';
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import { createDashboardSummary } from '@/lib/dashboard-summary';
 import { evaluateEuExportReadiness } from '@/lib/eu-template-export';
@@ -202,32 +203,7 @@ export default function Home() {
           </div>
         </SectionCard>
 
-        <SectionCard
-          title="시나리오 가정"
-          description="Dashboard와 Export 체크리스트는 이 가정값을 기준으로 SEFA·인증서 리스크를 계산합니다."
-          actions={
-            <Link href="/scenarios" className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-              가정값 조정
-            </Link>
-          }
-        >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl bg-slate-50 px-4 py-3">
-              <p className="text-xs font-semibold text-slate-500">기본값 연도</p>
-              <p className="mt-1 text-lg font-semibold text-slate-950">{scenarioAssumptions?.default_value_year ?? '-'}</p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 px-4 py-3">
-              <p className="text-xs font-semibold text-slate-500">CBAM factor</p>
-              <p className="mt-1 text-lg font-semibold text-slate-950">{scenarioAssumptions?.cbam_factor ?? '-'}</p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 px-4 py-3">
-              <p className="text-xs font-semibold text-slate-500">인증서 가격</p>
-              <p className="mt-1 text-lg font-semibold text-slate-950">
-                {scenarioAssumptions ? `EUR ${formatNumber(scenarioAssumptions.certificate_price_eur)}` : '-'}
-              </p>
-            </div>
-          </div>
-        </SectionCard>
+        <ScenarioAssumptionSummary assumptions={scenarioAssumptions} />
 
         <SectionCard title="EU 제출 준비" description="원본 EU 템플릿을 업로드한 뒤 앱의 산정 데이터를 복사본에 반영합니다.">
           <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4">
