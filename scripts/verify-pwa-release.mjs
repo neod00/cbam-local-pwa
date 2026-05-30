@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 
 const manifest = JSON.parse(readFileSync('public/manifest.webmanifest', 'utf8'));
 const serviceWorker = readFileSync('public/sw.js', 'utf8');
 const readme = readFileSync('README.md', 'utf8');
+const releaseChecklist = readFileSync('docs/mvp-release-checklist.md', 'utf8');
 
 assert.equal(manifest.name, 'CBAM Local PWA');
 assert.equal(manifest.short_name, 'CBAM Local');
@@ -44,5 +46,18 @@ assert.ok(readme.includes('로컬 우선'), 'README should explain local-first d
 assert.ok(readme.includes('서버 전송 없음'), 'README should state the no-server-upload posture');
 assert.ok(readme.includes('CBAM_documents/'), 'README should explain local reference document exclusion');
 assert.ok(readme.includes('docs/mvp-release-checklist.md'), 'README should link the release checklist');
+
+assert.ok(releaseChecklist.includes('CBAM_documents/'), 'release checklist should mention local reference document exclusion');
+assert.ok(releaseChecklist.includes('라이선스'), 'release checklist should include the license decision');
+assert.ok(releaseChecklist.includes('Docker/on-premise'), 'release checklist should keep on-premise scope deferred');
+
+const trackedFiles = execFileSync('git', ['ls-files'], { encoding: 'utf8' })
+  .split(/\r?\n/)
+  .filter(Boolean);
+assert.equal(
+  trackedFiles.some((file) => file === 'CBAM_documents' || file.startsWith('CBAM_documents/')),
+  false,
+  'CBAM_documents should not be tracked by Git'
+);
 
 console.log('PWA release verification passed.');
