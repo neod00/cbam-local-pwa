@@ -40,6 +40,8 @@ type ExportChecklistItem = {
     status: string;
     tone: 'success' | 'warning' | 'danger' | 'pending';
     complete: boolean;
+    actionHref?: string;
+    actionLabel?: string;
 };
 
 type LastExportResult = {
@@ -168,6 +170,18 @@ export default function ExportPage() {
         return summarizeScenarioRisks(scenarios);
     }, [benchmarkReference, defaultValueReference, results]);
 
+    const scenarioChecklistAction = useMemo(() => {
+        if (scenarioRiskSummary.missing_cn_count > 0) {
+            return { href: '/products', label: '품목 관리' };
+        }
+
+        if (scenarioRiskSummary.missing_official_reference_count > 0 || !benchmarkReference || !defaultValueReference) {
+            return { href: '/upload', label: '기준자료 가져오기' };
+        }
+
+        return { href: '/scenarios', label: '시나리오 검토' };
+    }, [benchmarkReference, defaultValueReference, scenarioRiskSummary]);
+
     const plannedCellWrites = useMemo(
         () => createEuTemplateExportCellWrites({ installations, periods, processes, sourceStreams, precursors, products }, validation?.cnCodeMap),
         [installations, periods, processes, sourceStreams, precursors, products, validation?.cnCodeMap]
@@ -184,6 +198,8 @@ export default function ExportPage() {
                 status: results.length > 0 ? '완료' : '확인 필요',
                 tone: results.length > 0 ? 'success' : 'warning',
                 complete: results.length > 0,
+                actionHref: results.length > 0 ? '/results' : '/products',
+                actionLabel: results.length > 0 ? '산정 결과 보기' : '품목 입력',
             },
             {
                 label: 'EU 원본 템플릿 선택',
@@ -223,6 +239,8 @@ export default function ExportPage() {
                 status: scenarioRiskSummary.is_ready_for_review ? '검토 가능' : '확인 필요',
                 tone: scenarioRiskSummary.is_ready_for_review ? 'success' : 'warning',
                 complete: scenarioRiskSummary.is_ready_for_review,
+                actionHref: scenarioChecklistAction.href,
+                actionLabel: scenarioChecklistAction.label,
             },
             {
                 label: '경고 항목 검토',
@@ -252,6 +270,7 @@ export default function ExportPage() {
             readiness.errorCount,
             readiness.warningCount,
             results.length,
+            scenarioChecklistAction,
             scenarioRiskSummary,
             templateFile,
             validation,
@@ -514,6 +533,14 @@ export default function ExportPage() {
                                                         <StatusBadge tone={item.tone}>{item.status}</StatusBadge>
                                                     </div>
                                                     <p className="mt-1 text-xs leading-5 text-slate-600">{item.description}</p>
+                                                    {item.actionHref && item.actionLabel && (
+                                                        <Link
+                                                            href={item.actionHref}
+                                                            className="mt-2 inline-flex min-h-8 items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100"
+                                                        >
+                                                            {item.actionLabel}
+                                                        </Link>
+                                                    )}
                                                 </div>
                                             </div>
                                         </li>
