@@ -14,6 +14,7 @@ function loadLocalDbModule() {
     `${localDbSource}
 
 globalThis.localDb = {
+  createLocalBackup,
   parseBackupFile,
 };`,
     {
@@ -29,7 +30,7 @@ globalThis.localDb = {
   return context.localDb;
 }
 
-const { parseBackupFile } = loadLocalDbModule();
+const { createLocalBackup, parseBackupFile } = loadLocalDbModule();
 
 const scenarioAssumptions = {
   origin_country: 'South Korea',
@@ -38,6 +39,43 @@ const scenarioAssumptions = {
   cscf: 0.95,
   certificate_price_eur: 105,
 };
+
+const generatedBackup = createLocalBackup({
+  installations: [],
+  products: [
+    {
+      id: 'product-1',
+      name: 'Hot Rolled Coil',
+      hs_code: '7208',
+      cn_code: '72083900',
+      hs_group: '72',
+      product_type_enum: 'HS72_PLATE_SHEET',
+      unit: 'tonne',
+      created_at: '2026-05-30T00:00:00.000Z',
+      updated_at: '2026-05-30T00:00:00.000Z',
+    },
+  ],
+  periods: [],
+  processes: [],
+  product_output_lines: [],
+  source_streams: [],
+  precursors: [],
+  settings: [
+    {
+      id: 'setting-1',
+      key: 'scenario:assumptions',
+      value: scenarioAssumptions,
+      created_at: '2026-05-30T00:00:00.000Z',
+      updated_at: '2026-05-30T00:00:00.000Z',
+    },
+  ],
+}, '2026-05-30T00:00:00.000Z');
+
+assert.equal(generatedBackup.manifest.exported_at, '2026-05-30T00:00:00.000Z');
+assert.equal(generatedBackup.manifest.counts.products, 1);
+assert.equal(generatedBackup.manifest.counts.settings, 1);
+assert.equal(generatedBackup.data.settings[0].key, 'scenario:assumptions');
+assert.equal(JSON.stringify(generatedBackup.data.settings[0].value), JSON.stringify(scenarioAssumptions));
 
 const backup = parseBackupFile(JSON.stringify({
   manifest: {

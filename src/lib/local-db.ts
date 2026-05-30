@@ -133,6 +133,8 @@ export interface CbamBackupFile {
   };
 }
 
+type BackupData = CbamBackupFile["data"];
+
 type StoreEntityMap = {
   installations: Installation;
   products: Product;
@@ -282,24 +284,13 @@ export async function setLocalSetting(key: string, value: unknown): Promise<AppS
   });
 }
 
-export async function exportLocalBackup(): Promise<CbamBackupFile> {
-  const data = {
-    installations: await listLocalItems("installations"),
-    products: await listLocalItems("products"),
-    periods: await listLocalItems("periods"),
-    processes: await listLocalItems("processes"),
-    product_output_lines: await listLocalItems("product_output_lines"),
-    source_streams: await listLocalItems("source_streams"),
-    precursors: await listLocalItems("precursors"),
-    settings: await listLocalItems("settings"),
-  };
-
+export function createLocalBackup(data: BackupData, exportedAt = nowIso()): CbamBackupFile {
   return {
     manifest: {
       format: "cbam-local-backup",
       format_version: 1,
       app_name: "CBAM Local",
-      exported_at: nowIso(),
+      exported_at: exportedAt,
       stores: STORE_NAMES,
       counts: {
         installations: data.installations.length,
@@ -314,6 +305,19 @@ export async function exportLocalBackup(): Promise<CbamBackupFile> {
     },
     data,
   };
+}
+
+export async function exportLocalBackup(): Promise<CbamBackupFile> {
+  return createLocalBackup({
+    installations: await listLocalItems("installations"),
+    products: await listLocalItems("products"),
+    periods: await listLocalItems("periods"),
+    processes: await listLocalItems("processes"),
+    product_output_lines: await listLocalItems("product_output_lines"),
+    source_streams: await listLocalItems("source_streams"),
+    precursors: await listLocalItems("precursors"),
+    settings: await listLocalItems("settings"),
+  });
 }
 
 export function parseBackupFile(content: string): CbamBackupFile {
