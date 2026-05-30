@@ -12,7 +12,9 @@ The files are reference material only and must stay outside git.
 - `CBAMBenchmarks_20260206.xlsx`: CBAM benchmark workbook based on Implementing Regulation (EU) 2025/2620.
 - `DVsasadopted_v20260204.xlsx`: country/CN default-value workbook based on Implementing Regulation (EU) 2025/2621.
 - 2026 seminar deck PDF: final-period defaults, benchmarks, verification, and business process issues.
-- EU CBAM legal translation/reference PDF, version 5: final-period data requirements.
+- `260204_EUCBAM_TranslationKorean_v5.pdf`: EU CBAM legal translation/reference PDF, version 5, covering product scope, reporting fields, carbon price due, attachments, and final-period data requirements.
+
+The sibling folders `CBAMBenchmarks_20260206` and `DVsasadopted_v20260204` are extracted workbook internals. They do not add independent product requirements beyond the corresponding `.xlsx` files.
 
 ## Main Product Implication
 
@@ -80,6 +82,22 @@ Implementation implications:
 - Keep direct, indirect, total, and mark-up-inclusive values separate.
 - Preserve the official distinction between goods where indirect emissions are applicable and goods where they are not.
 - Add a fallback workflow for missing country/CN values only after confirming the applicable official rule.
+
+## Legal Translation Reference
+
+`260204_EUCBAM_TranslationKorean_v5.pdf` is useful for validating the app's required data model and pre-submission checks:
+
+- Annex I/II product scope and greenhouse gas lists confirm that CN-code eligibility and direct/indirect applicability must be treated as reference data, not free text.
+- Reporting obligations include quantity, CN code, country of origin, installation identity, production route, direct and indirect embedded emissions, electricity consumption, and electricity emission-factor source.
+- Steel goods may require a specific steel mill identification number when known.
+- Carbon price due fields require separate tracking of instrument type, country, total amount, exchange rate, covered emissions, and emissions covered by free allocation/rebate/compensation.
+- Attachments and evidence metadata should be captured as structured evidence records, not only free-text notes.
+
+Implementation implications:
+
+- Add an export-readiness checklist that checks legal/reporting fields separately from calculation completeness.
+- Keep Korean UI labels, but map internal fields to the official English/EU reporting concepts.
+- Treat carbon price due as its own future module because it affects certificate liability and requires evidence.
 
 ## SEFA And Certificate Calculation
 
