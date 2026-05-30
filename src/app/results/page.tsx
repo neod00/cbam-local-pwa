@@ -1,16 +1,23 @@
 'use client';
 
-import { DataTable, PageHeader, SectionCard, StatCard } from '@/components/ui';
+import { DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults } from '@/lib/calculation-engine';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
 import { listLocalItems, seedLocalData } from '@/lib/local-db';
-import { AlertTriangle, ArrowRight, Factory, Gauge, Scale } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Factory, Gauge, Percent, Scale } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 function formatNumber(value: number) {
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat('ko-KR', {
         maximumFractionDigits: 4,
+    }).format(value);
+}
+
+function formatPercent(value: number) {
+    return new Intl.NumberFormat('ko-KR', {
+        maximumFractionDigits: 2,
+        style: 'percent',
     }).format(value);
 }
 
@@ -30,6 +37,30 @@ function getWarningHref(warning: LocalCalculationResult['warningDetails'][number
     }
 
     return `/processes?edit=${encodedId}`;
+}
+
+function getAllocationLabel(result: LocalCalculationResult) {
+    if (result.allocation_basis === 'PROCESS_TOTAL') {
+        return '공정 전체';
+    }
+
+    if (result.allocation_basis === 'MANUAL') {
+        return '수동 비율';
+    }
+
+    return '질량 기준';
+}
+
+function getAllocationTone(result: LocalCalculationResult) {
+    if (result.allocation_basis === 'PROCESS_TOTAL') {
+        return 'neutral' as const;
+    }
+
+    if (result.allocation_basis === 'MANUAL') {
+        return 'warning' as const;
+    }
+
+    return 'pending' as const;
 }
 
 export default function ResultsPage() {
@@ -58,8 +89,11 @@ export default function ResultsPage() {
 
     const summary = useMemo(() => {
         const totalOutput = results.reduce((sum, result) => sum + result.output_mass_t, 0);
-        const totalSourceStreamEmissions = results.reduce((sum, result) => sum + result.source_stream_emissions_tco2e, 0);
-        const totalSourceStreamEnergy = results.reduce((sum, result) => sum + result.source_stream_energy_tj, 0);
+        const allocatedEmissions = results.reduce(
+            (sum, result) => sum + result.direct_emissions_tco2e + result.indirect_see * result.output_mass_t + result.precursor_see * result.output_mass_t,
+            0
+        );
+        const productLineCount = results.filter((result) => result.product_output_line_id).length;
         const allWarnings = results.flatMap((result) =>
             result.warningDetails.map((warning) => ({
                 resultId: result.id,
@@ -70,10 +104,10 @@ export default function ResultsPage() {
         );
 
         return {
-            processCount: results.length,
+            lineCount: results.length,
+            productLineCount,
             totalOutput,
-            totalSourceStreamEmissions,
-            totalSourceStreamEnergy,
+            allocatedEmissions,
             averageTotalSee: average(results.map((result) => result.total_see)),
             warningCount: allWarnings.length,
             warnings: allWarnings,
@@ -83,33 +117,31 @@ export default function ResultsPage() {
     return (
         <div className="space-y-6">
             <PageHeader
-                eyebrow="계산 결과"
-                title="산정결과"
-                description="로컬에 저장된 생산공정(D_Processes)과 구매 전구물질(E_PurchPrec) 데이터를 기준으로 공정별 SEE를 산정합니다."
+                eyebrow="산정 결과"
+                title="제품별 SEE 산정 결과"
+                description="생산공정의 제품 생산라인과 배분기준을 기준으로 직접배출량, 간접배출량, 전구물질 배출량을 제품별로 배분합니다."
             />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <StatCard label="산정 공정 수" value={summary.processCount} helper="공정별 SEE 계산" icon={Factory} tone="info" />
+                <StatCard label="산정 라인 수" value={summary.lineCount} helper={`제품라인 ${summary.productLineCount}개`} icon={Factory} tone="info" />
                 <StatCard label="총 생산량" value={formatNumber(summary.totalOutput)} helper="tonne" icon={Scale} tone="pending" />
-                <StatCard label="배출원 합계" value={formatNumber(summary.totalSourceStreamEmissions)} helper={`${formatNumber(summary.totalSourceStreamEnergy)} TJ`} icon={Gauge} tone="success" />
-                <StatCard label="검토 필요" value={summary.warningCount} helper="경고 항목" icon={AlertTriangle} tone="warning" />
+                <StatCard label="배분 배출량" value={formatNumber(summary.allocatedEmissions)} helper="tCO2e" icon={Gauge} tone="success" />
+                <StatCard label="확인 필요" value={summary.warningCount} helper="경고 항목" icon={AlertTriangle} tone="warning" />
             </div>
 
             <DataTable>
                 <table className="min-w-full divide-y divide-gray-300">
                     <thead className="bg-slate-50">
                         <tr>
-                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">공정</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">공정/제품라인</th>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">제품</th>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">보고기간</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">배분기준</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">생산량(t)</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">배분율</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 SEE</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">배출원 합계</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 차이</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">간접 SEE</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">
-                                전구물질 SEE
-                            </th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">전구물질 SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">총 SEE</th>
                         </tr>
                     </thead>
@@ -117,7 +149,7 @@ export default function ResultsPage() {
                         {loading ? (
                             <tr>
                                 <td colSpan={10} className="p-6 text-center text-sm text-slate-500">
-                                    불러오는 중...
+                                    산정 결과를 불러오는 중입니다.
                                 </td>
                             </tr>
                         ) : results.length === 0 ? (
@@ -131,8 +163,10 @@ export default function ResultsPage() {
                                 <tr key={result.id} className="transition hover:bg-slate-50">
                                     <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-slate-950">
                                         {result.process_name}
-                                        <div className="text-xs font-normal text-slate-500">
-                                            {result.production_route || '생산경로 미지정'}
+                                        <div className="mt-1 flex items-center gap-2 text-xs font-normal text-slate-500">
+                                            <span>{result.product_output_line_id ? '제품라인' : '공정합계'}</span>
+                                            <span className="text-slate-300">/</span>
+                                            <span>{result.production_route || '생산경로 미입력'}</span>
                                         </div>
                                     </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">
@@ -146,24 +180,20 @@ export default function ResultsPage() {
                                     <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">
                                         {result.period_name ?? '-'}
                                     </td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">
+                                        <StatusBadge tone={getAllocationTone(result)}>{getAllocationLabel(result)}</StatusBadge>
+                                    </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
                                         {formatNumber(result.output_mass_t)}
                                     </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
-                                        {formatNumber(result.direct_see)}
+                                        <span className="inline-flex items-center justify-end gap-1">
+                                            <Percent className="h-3.5 w-3.5 text-slate-400" />
+                                            {formatPercent(result.allocation_share)}
+                                        </span>
                                     </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
-                                        {result.source_stream_count > 0
-                                            ? `${formatNumber(result.source_stream_emissions_tco2e)} tCO2e`
-                                            : '-'}
-                                        {result.source_stream_count > 0 && (
-                                            <div className="text-xs text-slate-400">
-                                                {formatNumber(result.source_stream_energy_tj)} TJ
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td className={`whitespace-nowrap px-4 py-4 text-right text-sm ${Math.abs(result.source_stream_delta_tco2e) > 0.01 ? 'font-semibold text-amber-700' : 'text-slate-600'}`}>
-                                        {result.source_stream_count > 0 ? formatNumber(result.source_stream_delta_tco2e) : '-'}
+                                        {formatNumber(result.direct_see)}
                                     </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
                                         {formatNumber(result.indirect_see)}
@@ -185,7 +215,7 @@ export default function ResultsPage() {
                 <SectionCard>
                     <div className="flex items-center gap-2">
                         <AlertTriangle className="h-5 w-5 text-amber-600" />
-                        <h2 className="text-base font-semibold text-amber-900">검토 필요 항목</h2>
+                        <h2 className="text-base font-semibold text-amber-900">확인 필요 항목</h2>
                     </div>
                     <ul className="mt-3 space-y-2 text-sm text-amber-900">
                         {summary.warnings.map((item) => (

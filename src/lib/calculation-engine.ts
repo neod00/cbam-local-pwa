@@ -303,31 +303,5 @@ export function calculateLocalResults(input: {
         }
 
         return lineResults;
-/*
-        return {
-            id: `result_${process.id}`,
-            period_id: process.period_id,
-            period_name: period?.name,
-            process_id: process.id,
-            process_name: process.name,
-            product_id: process.product_id,
-            product_name: product?.name ?? '미지정 제품',
-            hs_code: product?.hs_code,
-            cn_code: product?.cn_code,
-            production_route: process.production_route,
-            output_mass_t: process.output_mass_t,
-            direct_emissions_tco2e: directEmissions,
-            source_stream_count: processSourceStreams.length,
-            source_stream_emissions_tco2e: sourceStreamEmissions,
-            source_stream_energy_tj: sourceStreamEnergy,
-            source_stream_delta_tco2e: sourceStreamDelta,
-            direct_see,
-            indirect_see,
-            precursor_see,
-            total_see,
-            warnings,
-            warningDetails,
-        };
-*/
     });
 }

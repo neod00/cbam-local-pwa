@@ -164,8 +164,13 @@ export default function ProcessesPage() {
         const totalOutput = processes.reduce((sum, process) => sum + process.output_mass_t, 0);
         const totalElectricity = processes.reduce((sum, process) => sum + process.electricity_mwh, 0);
         const sourceStreamReviewCount = processes.filter((process) => calculateProcessSourceStreamSummary(process, sourceStreams).needsReview).length;
-        return { totalOutput, totalElectricity, sourceStreamReviewCount };
-    }, [processes, sourceStreams]);
+        const outputLineReviewCount = processes.filter((process) => {
+            const lines = productOutputLines.filter((line) => line.process_id === process.id);
+            const lineTotal = lines.reduce((sum, line) => sum + line.output_mass_t, 0);
+            return lines.length > 0 && Math.abs(lineTotal - process.output_mass_t) > Math.max(0.01, process.output_mass_t * 0.01);
+        }).length;
+        return { totalOutput, totalElectricity, sourceStreamReviewCount, outputLineCount: productOutputLines.length, outputLineReviewCount };
+    }, [processes, sourceStreams, productOutputLines]);
 
     const editingSourceStreamSummary = useMemo(() => {
         if (!editingProcessId) {
@@ -383,6 +388,20 @@ export default function ProcessesPage() {
         return calculateProcessSourceStreamSummary(process, sourceStreams);
     }
 
+    function getOutputLineSummary(process: ProductionProcess) {
+        const lines = productOutputLines.filter((line) => line.process_id === process.id);
+        const totalOutput = lines.reduce((sum, line) => sum + line.output_mass_t, 0);
+        const delta = totalOutput - process.output_mass_t;
+        const tolerance = Math.max(0.01, process.output_mass_t * 0.01);
+
+        return {
+            count: lines.length,
+            totalOutput,
+            delta,
+            needsReview: lines.length > 0 && Math.abs(delta) > tolerance,
+        };
+    }
+
     async function handleDeleteProcess(process: ProductionProcess) {
         const linkedPrecursors = precursors.filter((precursor) => precursor.process_id === process.id);
         const linkedSourceStreams = sourceStreams.filter((sourceStream) => sourceStream.process_id === process.id);
@@ -433,9 +452,9 @@ export default function ProcessesPage() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                 <StatCard label="등록 공정" value={processes.length} helper="D_Processes 후보" icon={Factory} tone="info" />
-                <StatCard label="총 생산량" value={formatNumber(summary.totalOutput)} helper="tonne" icon={Gauge} tone="success" />
+                <StatCard label="제품 생산라인" value={summary.outputLineCount} helper={`${summary.outputLineReviewCount}건 확인 필요`} icon={Gauge} tone="pending" />
                 <StatCard label="전력 사용량" value={formatNumber(summary.totalElectricity)} helper="MWh" icon={Zap} tone="warning" />
-                <StatCard label="검토 필요" value={summary.sourceStreamReviewCount} helper="배출원 차이" icon={Gauge} tone="warning" />
+                <StatCard label="배출원 검토" value={summary.sourceStreamReviewCount} helper="직접배출량 차이" icon={Gauge} tone="warning" />
             </div>
 
             {showForm && (
@@ -620,6 +639,7 @@ export default function ProcessesPage() {
                 {processes.map((process) => {
                     const see = getSee(process);
                     const sourceStreamSummary = getProcessSourceStreamSummary(process);
+                    const outputLineSummary = getOutputLineSummary(process);
                     return (
                         <SectionCard key={process.id} className="p-4">
                             <h2 className="text-base font-semibold text-slate-950">{process.name}</h2>
@@ -632,6 +652,12 @@ export default function ProcessesPage() {
                                 <div className="rounded-xl bg-slate-50 p-3">
                                     <dt className="text-xs text-slate-500">생산량</dt>
                                     <dd className="mt-1 font-medium text-slate-900">{formatNumber(process.output_mass_t)}t</dd>
+                                </div>
+                                <div className={outputLineSummary.needsReview ? 'rounded-xl bg-amber-50 p-3' : 'rounded-xl bg-slate-50 p-3'}>
+                                    <dt className={outputLineSummary.needsReview ? 'text-xs text-amber-700' : 'text-xs text-slate-500'}>제품라인</dt>
+                                    <dd className={outputLineSummary.needsReview ? 'mt-1 font-semibold text-amber-800' : 'mt-1 font-medium text-slate-900'}>
+                                        {outputLineSummary.count}개 / {formatNumber(outputLineSummary.totalOutput)}t
+                                    </dd>
                                 </div>
                                 <div className="rounded-xl bg-slate-50 p-3">
                                     <dt className="text-xs text-slate-500">직접 SEE</dt>
@@ -677,6 +703,7 @@ export default function ProcessesPage() {
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">경로</th>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">보고기간</th>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">제품</th>
+                            <th className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">제품라인</th>
                             <th className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">생산량</th>
                             <th className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">직접</th>
                             <th className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">배출원</th>
@@ -686,19 +713,26 @@ export default function ProcessesPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
                         {loading ? (
-                            <tr><td colSpan={9} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
+                            <tr><td colSpan={10} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
                         ) : processes.length === 0 ? (
-                            <tr><td colSpan={9} className="p-6 text-center text-sm text-slate-500">등록된 생산공정이 없습니다.</td></tr>
+                            <tr><td colSpan={10} className="p-6 text-center text-sm text-slate-500">등록된 생산공정이 없습니다.</td></tr>
                         ) : (
                             processes.map((process) => {
                                 const see = getSee(process);
                                 const sourceStreamSummary = getProcessSourceStreamSummary(process);
+                                const outputLineSummary = getOutputLineSummary(process);
                                 return (
                                     <tr key={process.id} className="transition hover:bg-slate-50">
                                         <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-slate-950">{process.name}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{process.production_route}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{process.period_id ? periodNames.get(process.period_id) ?? '알 수 없음' : '-'}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{process.product_id ? productNames.get(process.product_id) ?? '알 수 없음' : '-'}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
+                                            <span>{outputLineSummary.count}개</span>
+                                            <div className={outputLineSummary.needsReview ? 'text-xs font-semibold text-amber-700' : 'text-xs text-slate-400'}>
+                                                {formatNumber(outputLineSummary.totalOutput)}t
+                                            </div>
+                                        </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(process.output_mass_t)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(see.directSee)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
