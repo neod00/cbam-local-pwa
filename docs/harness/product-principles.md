@@ -4,6 +4,8 @@
 
 CBAM Local is a free, local-first PWA that helps companies calculate and organize CBAM embedded emissions data without uploading sensitive production data to a central SaaS server.
 
+The PWA can be used by company users and CBAM consultants, but both use the same single-workspace workflow. The free PWA should not introduce separate customer/project workspace management.
+
 ## Distribution Strategy
 
 1. Free PWA edition
@@ -33,6 +35,7 @@ CBAM Local is a free, local-first PWA that helps companies calculate and organiz
 ## Non-Goals For The PWA Edition
 
 - Multi-user collaboration.
+- Customer/project workspace management for consultant portfolios.
 - Central SaaS database.
 - Automatic collection of real company telemetry.
 - Replacing official legal verification or accredited third-party assurance.

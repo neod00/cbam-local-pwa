@@ -124,6 +124,19 @@ Current local stores should eventually be expanded with:
 - Precursor data mode, verification status, supplier country, supplier installation, and source workbook/template version.
 - SEFA and certificate scenario results separate from SEE results.
 
+## Product-Line Allocation Engine
+
+The PWA should implement the next calculation-engine expansion as:
+
+1. Production-process level input.
+2. Product production lines under each process.
+3. Allocation basis selection.
+4. Automatic direct/indirect allocation to product lines.
+5. Product-level SEE calculation.
+6. EU Export handoff.
+
+This directly reflects the reference-material need for system boundaries, attributable emissions, and allocation. Keep the first implementation pragmatic: mass allocation and justified manual allocation first; molar-ratio allocation can follow when the UI and data model can support it cleanly.
+
 ## UX Backlog
 
 Add Korean-first workflow screens for:

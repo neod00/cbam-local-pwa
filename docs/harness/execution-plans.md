@@ -61,6 +61,7 @@ Next:
 
 - Add local reference workbook import for CBAM benchmarks and country/CN default values.
 - Add CN-specific direct/indirect applicability so iron/steel goods do not always include electricity unless the official product rule requires it.
+- Expand the calculation model from process-level SEE to product-line allocation: process input, product production lines, allocation basis selection, automatic direct/indirect allocation, product-level SEE, and EU Export handoff.
 - Add precursor data modes and supplier-country/default lookup before expanding broad source-stream unit coverage.
 - Add SEFA and certificate scenario modules after confirming the paid-carbon-price formula and current official factors.
 
