@@ -2,10 +2,12 @@
 
 import { DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults } from '@/lib/calculation-engine';
-import { getLocalSetting, listLocalItems, seedLocalData } from '@/lib/local-db';
+import { getLocalSetting, listLocalItems, seedLocalData, setLocalSetting } from '@/lib/local-db';
 import {
     calculateProductScenarios,
     DEFAULT_SCENARIO_ASSUMPTIONS,
+    normalizeScenarioAssumptions,
+    SCENARIO_ASSUMPTIONS_SETTING_KEY,
     summarizeScenarioRisks,
     type ProductScenarioResult,
     type ScenarioAssumptions,
@@ -67,6 +69,7 @@ export default function ScenariosPage() {
                 productOutputLines,
                 benchmarks,
                 defaultValues,
+                savedScenarioAssumptions,
             ] = await Promise.all([
                 listLocalItems('processes'),
                 listLocalItems('precursors'),
@@ -76,17 +79,41 @@ export default function ScenariosPage() {
                 listLocalItems('product_output_lines'),
                 getLocalSetting<ImportedBenchmarkReference>('reference:benchmarks'),
                 getLocalSetting<ImportedDefaultValueReference>('reference:default-values'),
+                getLocalSetting<ScenarioAssumptions>(SCENARIO_ASSUMPTIONS_SETTING_KEY),
             ]);
+            const normalizedAssumptions = normalizeScenarioAssumptions(savedScenarioAssumptions);
             const results = calculateLocalResults({ processes, precursors, products, periods, sourceStreams, productOutputLines });
 
             setBenchmarkReference(benchmarks);
             setDefaultValueReference(defaultValues);
-            setScenarios(calculateProductScenarios(results, assumptions, { benchmarks, defaultValues }));
+            setAssumptions(normalizedAssumptions);
+            setScenarios(calculateProductScenarios(results, normalizedAssumptions, { benchmarks, defaultValues }));
             setLoading(false);
         }
 
         loadScenarios();
-    }, [assumptions]);
+    }, []);
+
+    async function updateAssumptions(nextAssumptions: ScenarioAssumptions) {
+        setAssumptions(nextAssumptions);
+        await setLocalSetting(SCENARIO_ASSUMPTIONS_SETTING_KEY, nextAssumptions);
+
+        const [processes, precursors, products, periods, sourceStreams, productOutputLines, benchmarks, defaultValues] = await Promise.all([
+            listLocalItems('processes'),
+            listLocalItems('precursors'),
+            listLocalItems('products'),
+            listLocalItems('periods'),
+            listLocalItems('source_streams'),
+            listLocalItems('product_output_lines'),
+            getLocalSetting<ImportedBenchmarkReference>('reference:benchmarks'),
+            getLocalSetting<ImportedDefaultValueReference>('reference:default-values'),
+        ]);
+        const results = calculateLocalResults({ processes, precursors, products, periods, sourceStreams, productOutputLines });
+
+        setBenchmarkReference(benchmarks);
+        setDefaultValueReference(defaultValues);
+        setScenarios(calculateProductScenarios(results, nextAssumptions, { benchmarks, defaultValues }));
+    }
 
     const summary = useMemo(() => {
         const totalOutput = scenarios.reduce((sum, scenario) => sum + scenario.output_mass_t, 0);
@@ -267,7 +294,7 @@ export default function ScenariosPage() {
                         <input
                             className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
                             value={assumptions.origin_country}
-                            onChange={(event) => setAssumptions({ ...assumptions, origin_country: event.target.value })}
+                            onChange={(event) => void updateAssumptions({ ...assumptions, origin_country: event.target.value })}
                         />
                     </div>
                     <div>
@@ -275,7 +302,7 @@ export default function ScenariosPage() {
                         <select
                             className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
                             value={assumptions.default_value_year}
-                            onChange={(event) => setAssumptions({ ...assumptions, default_value_year: event.target.value as ScenarioAssumptions['default_value_year'] })}
+                            onChange={(event) => void updateAssumptions({ ...assumptions, default_value_year: event.target.value as ScenarioAssumptions['default_value_year'] })}
                         >
                             <option value="2026">2026</option>
                             <option value="2027">2027</option>
@@ -289,7 +316,7 @@ export default function ScenariosPage() {
                             step="0.0001"
                             className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
                             value={assumptions.cbam_factor}
-                            onChange={(event) => setAssumptions({ ...assumptions, cbam_factor: Number(event.target.value) || 0 })}
+                            onChange={(event) => void updateAssumptions({ ...assumptions, cbam_factor: Number(event.target.value) || 0 })}
                         />
                     </div>
                     <div>
@@ -299,7 +326,7 @@ export default function ScenariosPage() {
                             step="0.0001"
                             className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
                             value={assumptions.cscf}
-                            onChange={(event) => setAssumptions({ ...assumptions, cscf: Number(event.target.value) || 0 })}
+                            onChange={(event) => void updateAssumptions({ ...assumptions, cscf: Number(event.target.value) || 0 })}
                         />
                     </div>
                     <div>
@@ -309,7 +336,7 @@ export default function ScenariosPage() {
                             step="1"
                             className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
                             value={assumptions.certificate_price_eur}
-                            onChange={(event) => setAssumptions({ ...assumptions, certificate_price_eur: Number(event.target.value) || 0 })}
+                            onChange={(event) => void updateAssumptions({ ...assumptions, certificate_price_eur: Number(event.target.value) || 0 })}
                         />
                     </div>
                 </div>

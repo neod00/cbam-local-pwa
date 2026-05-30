@@ -8,8 +8,10 @@ import { getLocalSetting, listLocalItems, seedLocalData } from '@/lib/local-db';
 import type { ImportedBenchmarkReference, ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import {
   calculateProductScenarios,
-  DEFAULT_SCENARIO_ASSUMPTIONS,
+  normalizeScenarioAssumptions,
+  SCENARIO_ASSUMPTIONS_SETTING_KEY,
   summarizeScenarioRisks,
+  type ScenarioAssumptions,
   type ScenarioRiskSummary,
 } from '@/lib/scenario-calculation';
 import { AlertTriangle, CheckCircle2, Factory, FileSpreadsheet, Package, TrendingUp } from 'lucide-react';
@@ -56,6 +58,7 @@ export default function Home() {
         productOutputLines,
         benchmarks,
         defaultValues,
+        savedScenarioAssumptions,
       ] = await Promise.all([
         listLocalItems('processes'),
         listLocalItems('precursors'),
@@ -65,9 +68,10 @@ export default function Home() {
         listLocalItems('product_output_lines'),
         getLocalSetting<ImportedBenchmarkReference>('reference:benchmarks'),
         getLocalSetting<ImportedDefaultValueReference>('reference:default-values'),
+        getLocalSetting<ScenarioAssumptions>(SCENARIO_ASSUMPTIONS_SETTING_KEY),
       ]);
       const localResults = calculateLocalResults({ processes, precursors, products, periods, sourceStreams, productOutputLines });
-      const scenarios = calculateProductScenarios(localResults, DEFAULT_SCENARIO_ASSUMPTIONS, {
+      const scenarios = calculateProductScenarios(localResults, normalizeScenarioAssumptions(savedScenarioAssumptions), {
         benchmarks,
         defaultValues,
       });

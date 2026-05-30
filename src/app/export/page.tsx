@@ -27,8 +27,10 @@ import {
 import type { ImportedBenchmarkReference, ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import {
     calculateProductScenarios,
-    DEFAULT_SCENARIO_ASSUMPTIONS,
+    normalizeScenarioAssumptions,
+    SCENARIO_ASSUMPTIONS_SETTING_KEY,
     summarizeScenarioRisks,
+    type ScenarioAssumptions,
 } from '@/lib/scenario-calculation';
 import { AlertTriangle, CheckCircle2, Circle, Download, FileCheck2, FileSpreadsheet, PackageCheck, ShieldCheck, Workflow } from 'lucide-react';
 import Link from 'next/link';
@@ -93,6 +95,7 @@ export default function ExportPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [benchmarkReference, setBenchmarkReference] = useState<ImportedBenchmarkReference | undefined>();
     const [defaultValueReference, setDefaultValueReference] = useState<ImportedDefaultValueReference | undefined>();
+    const [scenarioAssumptions, setScenarioAssumptions] = useState<ScenarioAssumptions>();
     const [exportError, setExportError] = useState('');
     const [lastExportResult, setLastExportResult] = useState<LastExportResult | undefined>();
 
@@ -109,6 +112,7 @@ export default function ExportPage() {
                 products,
                 benchmarks,
                 defaultValues,
+                savedScenarioAssumptions,
             ] = await Promise.all([
                 listLocalItems('installations'),
                 listLocalItems('periods'),
@@ -119,6 +123,7 @@ export default function ExportPage() {
                 listLocalItems('products'),
                 getLocalSetting<ImportedBenchmarkReference>('reference:benchmarks'),
                 getLocalSetting<ImportedDefaultValueReference>('reference:default-values'),
+                getLocalSetting<ScenarioAssumptions>(SCENARIO_ASSUMPTIONS_SETTING_KEY),
             ]);
 
             setInstallations(installations);
@@ -129,6 +134,7 @@ export default function ExportPage() {
             setProducts(products);
             setBenchmarkReference(benchmarks);
             setDefaultValueReference(defaultValues);
+            setScenarioAssumptions(normalizeScenarioAssumptions(savedScenarioAssumptions));
             setResults(calculateLocalResults({ processes, precursors, products, periods, sourceStreams, productOutputLines }));
         }
 
@@ -154,13 +160,13 @@ export default function ExportPage() {
     );
 
     const scenarioRiskSummary = useMemo(() => {
-        const scenarios = calculateProductScenarios(results, DEFAULT_SCENARIO_ASSUMPTIONS, {
+        const scenarios = calculateProductScenarios(results, normalizeScenarioAssumptions(scenarioAssumptions), {
             benchmarks: benchmarkReference,
             defaultValues: defaultValueReference,
         });
 
         return summarizeScenarioRisks(scenarios);
-    }, [benchmarkReference, defaultValueReference, results]);
+    }, [benchmarkReference, defaultValueReference, results, scenarioAssumptions]);
 
     const scenarioChecklistAction = useMemo(() => {
         if (scenarioRiskSummary.missing_cn_count > 0) {

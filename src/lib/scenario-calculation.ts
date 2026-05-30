@@ -23,6 +23,24 @@ export const DEFAULT_SCENARIO_ASSUMPTIONS: ScenarioAssumptions = {
     certificate_price_eur: 80,
 };
 
+export const SCENARIO_ASSUMPTIONS_SETTING_KEY = 'scenario:assumptions';
+
+export function normalizeScenarioAssumptions(value: Partial<ScenarioAssumptions> | undefined): ScenarioAssumptions {
+    const cbamFactor = value?.cbam_factor;
+    const cscf = value?.cscf;
+    const certificatePriceEur = value?.certificate_price_eur;
+
+    return {
+        origin_country: value?.origin_country || DEFAULT_SCENARIO_ASSUMPTIONS.origin_country,
+        default_value_year: value?.default_value_year || DEFAULT_SCENARIO_ASSUMPTIONS.default_value_year,
+        cbam_factor: Number.isFinite(cbamFactor) ? cbamFactor as number : DEFAULT_SCENARIO_ASSUMPTIONS.cbam_factor,
+        cscf: Number.isFinite(cscf) ? cscf as number : DEFAULT_SCENARIO_ASSUMPTIONS.cscf,
+        certificate_price_eur: Number.isFinite(certificatePriceEur)
+            ? certificatePriceEur as number
+            : DEFAULT_SCENARIO_ASSUMPTIONS.certificate_price_eur,
+    };
+}
+
 export interface ProductScenarioResult {
     result_id: string;
     product_name: string;
