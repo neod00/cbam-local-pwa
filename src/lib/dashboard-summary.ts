@@ -1,5 +1,6 @@
 import type { LocalCalculationResult } from './calculation-engine';
 import type { ScenarioRiskSummary } from './scenario-calculation';
+import { getScenarioReviewAction } from './scenario-calculation';
 
 export type DashboardTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'pending';
 
@@ -50,11 +51,16 @@ function getWarningTasks(results: LocalCalculationResult[]): DashboardTask[] {
 function getScenarioActionTasks(input: DashboardSummaryInput): DashboardTask[] {
     const tasks: DashboardTask[] = [];
     const { exportErrorCount, hasBenchmarkReference, hasDefaultValueReference, scenarioRiskSummary } = input;
+    const scenarioAction = getScenarioReviewAction(
+        scenarioRiskSummary,
+        hasBenchmarkReference,
+        hasDefaultValueReference
+    );
 
-    if (scenarioRiskSummary.missing_cn_count > 0) {
+    if (scenarioAction.href === '/products') {
         tasks.push({
             label: `CN 코드가 없는 품목 ${scenarioRiskSummary.missing_cn_count}건을 먼저 확인하세요.`,
-            href: '/products',
+            href: scenarioAction.href,
             tone: 'danger',
         });
     }
@@ -62,7 +68,7 @@ function getScenarioActionTasks(input: DashboardSummaryInput): DashboardTask[] {
     if (scenarioRiskSummary.missing_official_reference_count > 0 || !hasBenchmarkReference || !hasDefaultValueReference) {
         tasks.push({
             label: '벤치마크와 국가/CN 기본값 기준자료를 가져오세요.',
-            href: '/upload',
+            href: scenarioAction.href === '/upload' ? scenarioAction.href : '/upload',
             tone: 'warning',
         });
     }

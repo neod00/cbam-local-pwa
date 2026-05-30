@@ -4,12 +4,34 @@ import vm from 'node:vm';
 import ts from 'typescript';
 
 function loadDashboardModule() {
+  const scenarioSource = readFileSync('src/lib/scenario-calculation.ts', 'utf8')
+    .replace(/^import type .*;\r?\n/gm, '')
+    .replace(/import\s+\{[\s\S]*?\}\s+from '\.\/reference-workbooks';\r?\n/, '')
+    .replace(/^export /gm, '');
   const dashboardSource = readFileSync('src/lib/dashboard-summary.ts', 'utf8')
     .replace(/^import type .*;\r?\n/gm, '')
+    .replace("import { getScenarioReviewAction } from './scenario-calculation';\r\n", '')
+    .replace("import { getScenarioReviewAction } from './scenario-calculation';\n", '')
     .replace(/^export /gm, '');
 
   const compiled = ts.transpileModule(
-    `${dashboardSource}
+    `
+function findBenchmarkReference(references, cnCode, productionRoute) {
+  return references?.rows?.find((row) => row.cn_code === cnCode && (!productionRoute || row.production_route === productionRoute));
+}
+
+function findDefaultValueReference(references, originCountry, cnCode) {
+  return references?.rows?.find((row) => row.country === originCountry && row.cn_code === cnCode);
+}
+
+function getDefaultValueTotalForYear(defaultValue, year) {
+  if (year === '2026') return defaultValue.total_2026;
+  if (year === '2027') return defaultValue.total_2027;
+  return defaultValue.total_2028_onwards;
+}
+
+${scenarioSource}
+${dashboardSource}
 globalThis.dashboardSummary = {
   createDashboardSummary,
 };`,
