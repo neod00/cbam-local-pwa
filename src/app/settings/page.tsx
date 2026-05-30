@@ -1,15 +1,22 @@
 'use client';
 
 import { Button, PageHeader, SectionCard, StatCard } from '@/components/ui';
+import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummary';
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
     CbamBackupFile,
     clearLocalData,
     exportLocalBackup,
+    getLocalSetting,
     importLocalBackup,
     parseBackupFile,
     seedLocalData,
 } from '@/lib/local-db';
+import {
+    normalizeScenarioAssumptions,
+    SCENARIO_ASSUMPTIONS_SETTING_KEY,
+    type ScenarioAssumptions,
+} from '@/lib/scenario-calculation';
 import { AlertTriangle, Database, Download, FileUp, ShieldCheck, Trash2 } from 'lucide-react';
 
 function formatDateTime(value?: string) {
@@ -45,9 +52,13 @@ export default function SettingsPage() {
     const [importContent, setImportContent] = useState<string>('');
     const [message, setMessage] = useState('');
     const [lastBackupAt, setLastBackupAt] = useState<string | undefined>();
+    const [scenarioAssumptions, setScenarioAssumptions] = useState<ScenarioAssumptions>();
 
     useEffect(() => {
         setLastBackupAt(window.localStorage.getItem('cbam-local:last-backup-at') ?? undefined);
+        getLocalSetting<ScenarioAssumptions>(SCENARIO_ASSUMPTIONS_SETTING_KEY)
+            .then((savedAssumptions) => setScenarioAssumptions(normalizeScenarioAssumptions(savedAssumptions)))
+            .catch(() => setScenarioAssumptions(normalizeScenarioAssumptions(undefined)));
     }, []);
 
     const totalPreviewItems = useMemo(() => {
@@ -150,6 +161,11 @@ export default function SettingsPage() {
                 <StatCard label="로컬 저장" value="IndexedDB" helper="브라우저 데이터 삭제에 주의" icon={Database} tone="info" />
                 <StatCard label="마지막 백업" value={formatDateTime(lastBackupAt)} helper="중요 변경 후 백업 권장" icon={AlertTriangle} tone="warning" />
             </section>
+
+            <ScenarioAssumptionSummary
+                assumptions={scenarioAssumptions}
+                description="이 가정값은 로컬 설정에 저장되며 .cbam 백업 파일에 함께 포함됩니다."
+            />
 
             <SectionCard>
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
