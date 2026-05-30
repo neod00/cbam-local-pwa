@@ -11,6 +11,7 @@ import {
     SourceStream,
     updateLocalItem,
 } from '@/lib/local-db';
+import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
 import { Flame, Gauge, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
@@ -47,16 +48,6 @@ function toNumber(value: string) {
 
 function formatNumber(value: number) {
     return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value);
-}
-
-function calculateSourceStreamEmissions(sourceStream: Pick<SourceStream, 'activity_data' | 'emission_factor_tco2e_per_unit' | 'oxidation_factor' | 'conversion_factor' | 'fossil_fraction'>) {
-    return (
-        sourceStream.activity_data *
-        sourceStream.emission_factor_tco2e_per_unit *
-        sourceStream.oxidation_factor *
-        sourceStream.conversion_factor *
-        sourceStream.fossil_fraction
-    );
 }
 
 function streamTypeLabel(streamType: SourceStream['stream_type']) {
@@ -140,6 +131,11 @@ function createSourceStreamValidationErrors(sourceStream: SourceStreamDraft): So
 
     if (sourceStream.biomass_fraction < 0 || sourceStream.biomass_fraction > 1) {
         nextErrors.biomass_fraction = '바이오매스 비율은 0부터 1 사이로 입력하세요.';
+    }
+
+    if (sourceStream.fossil_fraction + sourceStream.biomass_fraction > 1) {
+        nextErrors.fossil_fraction = '화석탄소 비율과 바이오매스 비율의 합은 1을 넘을 수 없습니다.';
+        nextErrors.biomass_fraction = '화석탄소 비율과 바이오매스 비율의 합은 1을 넘을 수 없습니다.';
     }
 
     if (!sourceStream.source.trim()) {

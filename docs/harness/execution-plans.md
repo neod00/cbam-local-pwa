@@ -45,10 +45,11 @@ Completed:
 - Added the source-stream data model and Korean-first `배출원 자료` screen for future `B_EmInst` and `C_Emissions&Energy` export work.
 - Added first-pass source-stream export writes into `B_EmInst` and manual total indirect emissions into `C_Emissions&Energy`.
 - Added conservative source-stream validation for EU-supported monitoring approaches, activity units, and source-stream type/method combinations.
+- Aligned source-stream on-screen emission estimates with the EU template combustion structure and added a focused calculation verification gate.
 
 Next:
 
-- Expand source-stream unit support only after confirming each additional official dropdown value against workbook formulas and validation lists.
+- Add source-stream energy-content preview and expand unit support only after confirming each additional official dropdown value against workbook formulas and validation lists.
 
 ## Decision Log
 
