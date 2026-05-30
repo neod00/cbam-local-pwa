@@ -83,6 +83,7 @@ Completed:
 - Removed unused default Next.js public SVG assets so the public folder only keeps app-relevant PWA assets.
 - Added an MVP release checklist covering verification, excluded reference documents, user notices, license decisions, and deferred post-MVP scope.
 - Added `npm run verify:pwa` to assert PWA manifest metadata, service-worker app-shell routes, README release guidance, and absence of unused default assets.
+- Added an in-app settings notice clarifying that CBAM Local supports calculation and submission preparation but does not replace legal advice, official verification, or final filing responsibility.
 
 Next:
 

@@ -188,6 +188,19 @@ export default function SettingsPage() {
                 <StatCard label="마지막 백업" value={formatDateTime(lastBackupAt)} helper="중요 변경 후 백업 권장" icon={AlertTriangle} tone="warning" />
             </section>
 
+            <SectionCard>
+                <div className="flex gap-3 text-sm leading-6 text-slate-700">
+                    <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-600" />
+                    <div>
+                        <h2 className="font-semibold text-slate-950">사용 전 확인</h2>
+                        <p className="mt-1">
+                            이 앱은 CBAM 산정과 제출 준비를 돕는 로컬 도구입니다. 법률 자문, 공식 검증, 최종 제출 책임을 대체하지 않습니다.
+                            제출 전에는 회사 내부 검토와 필요한 경우 전문기관 검증을 함께 진행하세요.
+                        </p>
+                    </div>
+                </div>
+            </SectionCard>
+
             <ScenarioAssumptionSummary
                 assumptions={scenarioAssumptions}
                 description="이 가정값은 로컬 설정에 저장되며 .cbam 백업 파일에 함께 포함됩니다."
