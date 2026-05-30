@@ -81,6 +81,7 @@ Completed:
 - Replaced the default Next.js README with Korean project documentation covering local-first PWA usage, data safety, EU template handling, verification commands, and MVP limits.
 - Updated the PWA manifest and service-worker app shell to cover the current MVP routes and Korean local-first positioning.
 - Removed unused default Next.js public SVG assets so the public folder only keeps app-relevant PWA assets.
+- Added an MVP release checklist covering verification, excluded reference documents, user notices, license decisions, and deferred post-MVP scope.
 
 Next:
 
