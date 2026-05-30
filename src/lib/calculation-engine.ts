@@ -266,6 +266,10 @@ export function calculateLocalResults(input: {
             }
         }
 
+        if (directEmissions > 0 && processSourceStreams.length === 0) {
+            addWarning(`${process.name}: 직접배출량은 입력되어 있지만 연결된 배출원 자료가 없습니다.`, { type: 'process', id: process.id });
+        }
+
         if (processSourceStreams.length > 0 && Math.abs(sourceStreamDelta) > Math.max(0.01, directEmissions * 0.01)) {
             addWarning(`배출원 자료 합계와 공정 직접배출량 입력값이 ${sourceStreamDelta.toFixed(4)} tCO2e 차이납니다.`, { type: 'process', id: process.id });
         }

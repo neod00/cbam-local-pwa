@@ -136,7 +136,12 @@ const resultsWithoutSourceStreams = calculateLocalResults({
 });
 assert.equal(resultsWithoutSourceStreams.length, 1);
 assert.equal(resultsWithoutSourceStreams[0].source_stream_emissions_tco2e, 0);
-assert.equal(resultsWithoutSourceStreams[0].warnings.length, 0);
+assert.equal(resultsWithoutSourceStreams[0].warnings.length, 1);
+assert.equal(resultsWithoutSourceStreams[0].warningDetails.length, 1);
+assert.equal(resultsWithoutSourceStreams[0].warningDetails[0].target.type, 'process');
+assert.equal(resultsWithoutSourceStreams[0].warningDetails[0].target.id, process.id);
+assert.match(resultsWithoutSourceStreams[0].warningDetails[0].message, /연결된 배출원 자료가 없습니다/);
+assert.equal(getLocalCalculationWarningHref(resultsWithoutSourceStreams[0].warningDetails[0]), '/processes?edit=process-1');
 
 const resultsWithSourceStreams = calculateLocalResults({
   processes: [process],
