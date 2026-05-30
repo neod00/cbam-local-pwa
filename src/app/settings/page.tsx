@@ -131,8 +131,11 @@ export default function SettingsPage() {
             return;
         }
 
-        await importLocalBackup(parseBackupFile(importContent));
-        setMessage('백업을 복원했습니다. 화면을 새로고침해 로컬 데이터를 다시 불러오는 것을 권장합니다.');
+        const parsed = parseBackupFile(importContent);
+        await importLocalBackup(parsed);
+        const restoredScenarioSetting = parsed.data.settings.find((item) => item.key === SCENARIO_ASSUMPTIONS_SETTING_KEY);
+        setScenarioAssumptions(normalizeScenarioAssumptions(restoredScenarioSetting?.value as Partial<ScenarioAssumptions> | undefined));
+        setMessage('백업을 복원했습니다. 설정 화면의 시나리오 가정값도 복원된 백업 기준으로 갱신했습니다.');
         setBackupPreview(null);
         setImportContent('');
     }
