@@ -43,6 +43,7 @@ export default function Home() {
   const [exportErrorCount, setExportErrorCount] = useState(0);
   const [hasBenchmarkReference, setHasBenchmarkReference] = useState(false);
   const [hasDefaultValueReference, setHasDefaultValueReference] = useState(false);
+  const [scenarioAssumptions, setScenarioAssumptions] = useState<ScenarioAssumptions>();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -70,8 +71,9 @@ export default function Home() {
         getLocalSetting<ImportedDefaultValueReference>('reference:default-values'),
         getLocalSetting<ScenarioAssumptions>(SCENARIO_ASSUMPTIONS_SETTING_KEY),
       ]);
+      const normalizedAssumptions = normalizeScenarioAssumptions(savedScenarioAssumptions);
       const localResults = calculateLocalResults({ processes, precursors, products, periods, sourceStreams, productOutputLines });
-      const scenarios = calculateProductScenarios(localResults, normalizeScenarioAssumptions(savedScenarioAssumptions), {
+      const scenarios = calculateProductScenarios(localResults, normalizedAssumptions, {
         benchmarks,
         defaultValues,
       });
@@ -86,6 +88,7 @@ export default function Home() {
       setExportErrorCount(exportReadiness.errorCount);
       setHasBenchmarkReference(Boolean(benchmarks));
       setHasDefaultValueReference(Boolean(defaultValues));
+      setScenarioAssumptions(normalizedAssumptions);
       setLoading(false);
     }
 
@@ -196,6 +199,33 @@ export default function Home() {
           <div className="rounded-2xl bg-teal-50 p-4 text-sm leading-6 text-teal-900">
             입력 데이터는 브라우저 로컬 DB에 저장됩니다. PC 교체나 브라우저 데이터 삭제에 대비해 중요한 입력 후에는
             `.cbam` 백업을 내려받아 회사의 안전한 폴더에 보관하세요.
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          title="시나리오 가정"
+          description="Dashboard와 Export 체크리스트는 이 가정값을 기준으로 SEFA·인증서 리스크를 계산합니다."
+          actions={
+            <Link href="/scenarios" className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+              가정값 조정
+            </Link>
+          }
+        >
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl bg-slate-50 px-4 py-3">
+              <p className="text-xs font-semibold text-slate-500">기본값 연도</p>
+              <p className="mt-1 text-lg font-semibold text-slate-950">{scenarioAssumptions?.default_value_year ?? '-'}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-50 px-4 py-3">
+              <p className="text-xs font-semibold text-slate-500">CBAM factor</p>
+              <p className="mt-1 text-lg font-semibold text-slate-950">{scenarioAssumptions?.cbam_factor ?? '-'}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-50 px-4 py-3">
+              <p className="text-xs font-semibold text-slate-500">인증서 가격</p>
+              <p className="mt-1 text-lg font-semibold text-slate-950">
+                {scenarioAssumptions ? `EUR ${formatNumber(scenarioAssumptions.certificate_price_eur)}` : '-'}
+              </p>
+            </div>
           </div>
         </SectionCard>
 
