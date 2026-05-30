@@ -567,6 +567,14 @@ export function createExportChecklist(input: ExportChecklistInput): ExportCheckl
         templateFileName,
         validation,
     } = input;
+    const firstErrorHref = readiness.issues
+        .filter((issue) => issue.severity === 'error')
+        .map((issue) => getEuExportIssueEditHref(issue))
+        .find(Boolean);
+    const firstWarningHref = readiness.issues
+        .filter((issue) => issue.severity === 'warning')
+        .map((issue) => getEuExportIssueEditHref(issue))
+        .find(Boolean);
     const items: ExportChecklistItem[] = [
         {
             label: '산정 데이터 준비',
@@ -616,6 +624,8 @@ export function createExportChecklist(input: ExportChecklistInput): ExportCheckl
             status: readiness.errorCount === 0 ? '완료' : '오류',
             tone: readiness.errorCount === 0 ? 'success' : 'danger',
             complete: readiness.errorCount === 0,
+            actionHref: firstErrorHref,
+            actionLabel: firstErrorHref ? '첫 오류 수정' : undefined,
         },
         {
             label: 'SEFA·인증서 시나리오 검토',
@@ -639,6 +649,8 @@ export function createExportChecklist(input: ExportChecklistInput): ExportCheckl
             status: readiness.warningCount === 0 ? '완료' : '확인 필요',
             tone: readiness.warningCount === 0 ? 'success' : 'warning',
             complete: readiness.warningCount === 0,
+            actionHref: firstWarningHref,
+            actionLabel: firstWarningHref ? '첫 경고 검토' : undefined,
         },
         {
             label: '반영 셀 검증',

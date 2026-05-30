@@ -558,6 +558,11 @@ const incompleteChecklist = euExport.createExportChecklist({
 });
 assertEqual(String(incompleteChecklist.isComplete), 'false', 'incomplete export checklist complete');
 assertEqual(
+  incompleteChecklist.items.find((item) => item.actionLabel === '첫 경고 검토')?.actionHref,
+  '/processes?edit=process-1',
+  'first warning checklist action href'
+);
+assertEqual(
   euExport.getEuExportIssueEditHref({ target: { type: 'product', id: 'product 1' } }),
   '/products?edit=product%201',
   'product issue edit href'
