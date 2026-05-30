@@ -70,6 +70,7 @@ Completed:
 - Added EU Export readiness warnings for default precursor justification gaps and unverified actual/semi-actual precursor data.
 - Added EU Export readiness warnings when process direct emissions have no linked source-stream evidence.
 - Surfaced missing source-stream evidence in local calculation warnings so Results and Dashboard show the issue before Export.
+- Restored Korean-first copy on the source-stream entry screen so B_EmInst/C_Emissions&Energy data entry is usable for domestic operators.
 
 Next:
 

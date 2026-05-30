@@ -74,7 +74,7 @@ function createSourceStreamValidationErrors(sourceStream: SourceStreamDraft): So
     }
 
     if (!sourceStream.process_id) {
-        nextErrors.process_id = '연결 생산공정을 선택하세요.';
+        nextErrors.process_id = '연결할 생산공정을 선택하세요.';
     }
 
     if (!sourceStreamMethods.includes(sourceStream.method as (typeof sourceStreamMethods)[number])) {
@@ -90,7 +90,7 @@ function createSourceStreamValidationErrors(sourceStream: SourceStreamDraft): So
     }
 
     if (sourceStream.stream_type === 'OTHER') {
-        nextErrors.stream_type = '기타 배출원은 아직 EU Export 대상이 아닙니다. 연료 또는 공정 원료로 분류하세요.';
+        nextErrors.stream_type = '기타 배출원은 아직 EU Export 대상이 아닙니다. 연료 또는 공정 원료로 분류할 수 있는지 확인하세요.';
     }
 
     if (sourceStream.activity_data < 0) {
@@ -139,7 +139,7 @@ function createSourceStreamValidationErrors(sourceStream: SourceStreamDraft): So
     }
 
     if (!sourceStream.source.trim()) {
-        nextErrors.source = '출처를 입력하세요. 예: 월별 연료 청구서, 계측기 검침표';
+        nextErrors.source = '출처를 입력하세요. 예: 연료 청구서, 계측기 검침표, 배출계수 근거자료';
     }
 
     return nextErrors;
@@ -209,11 +209,10 @@ export default function SourceStreamsPage() {
     const processNames = useMemo(() => new Map(processes.map((process) => [process.id, process.name])), [processes]);
 
     const summary = useMemo(() => {
-        const totalActivity = sourceStreams.reduce((sum, sourceStream) => sum + sourceStream.activity_data, 0);
         const totalEmissions = sourceStreams.reduce((sum, sourceStream) => sum + calculateSourceStreamEmissions(sourceStream), 0);
         const totalEnergy = sourceStreams.reduce((sum, sourceStream) => sum + calculateSourceStreamEnergyBreakdown(sourceStream).total, 0);
         const fuelCount = sourceStreams.filter((sourceStream) => sourceStream.stream_type === 'FUEL').length;
-        return { totalActivity, totalEmissions, totalEnergy, fuelCount };
+        return { totalEmissions, totalEnergy, fuelCount };
     }, [sourceStreams]);
 
     function createDefaultDraft(): SourceStreamDraft {
@@ -310,7 +309,9 @@ export default function SourceStreamsPage() {
     }
 
     async function handleDeleteSourceStream(sourceStream: SourceStream) {
-        const confirmed = window.confirm(`'${sourceStream.name}' 배출원을 삭제할까요? 이 항목은 B_EmInst/C_Emissions&Energy 준비 데이터에서 제외됩니다.`);
+        const confirmed = window.confirm(
+            `'${sourceStream.name}' 배출원 자료를 삭제할까요? 이 항목은 B_EmInst/C_Emissions&Energy 준비 데이터에서 제외됩니다.`
+        );
 
         if (!confirmed) {
             return;
@@ -323,12 +324,14 @@ export default function SourceStreamsPage() {
         }
     }
 
+    const draftEnergyBreakdown = calculateSourceStreamEnergyBreakdown(newItem);
+
     return (
         <div className="space-y-6">
             <PageHeader
                 eyebrow="B_EmInst / C_Emissions&Energy"
                 title="배출원 자료"
-                description="연료, 공정 원료, 기타 배출원별 활동자료와 배출계수를 관리합니다. 이 데이터는 다음 단계에서 EU 템플릿 B/C 시트 Export의 기준이 됩니다."
+                description="연료, 공정 원료, 기타 배출원별 활동자료와 배출계수를 관리합니다. 이 데이터는 EU 원본 템플릿의 B/C 시트 Export 근거로 사용됩니다."
                 actions={
                     <Button type="button" onClick={startNewSourceStream}>
                         <Plus className="mr-2 h-4 w-4" />
@@ -368,6 +371,7 @@ export default function SourceStreamsPage() {
                                 <option value="PROCESS_MATERIAL">공정 원료</option>
                                 <option value="OTHER">기타</option>
                             </select>
+                            {errors.stream_type && <p className="mt-1 text-xs font-medium text-red-600">{errors.stream_type}</p>}
                         </div>
                         <div>
                             <label htmlFor="source-stream-method" className="text-sm font-semibold text-slate-700">산정방법</label>
@@ -436,7 +440,7 @@ export default function SourceStreamsPage() {
                         </div>
                         <div className="md:col-span-2">
                             <label htmlFor="source-stream-source" className="text-sm font-semibold text-slate-700">출처</label>
-                            <input id="source-stream-source" required className={fieldClass} value={newItem.source} onChange={(event) => setNewItem({ ...newItem, source: event.target.value })} placeholder="예: 월별 연료 청구서" />
+                            <input id="source-stream-source" required className={fieldClass} value={newItem.source} onChange={(event) => setNewItem({ ...newItem, source: event.target.value })} placeholder="예: 연료 청구서, 계측기 검침표" />
                             {errors.source && <p className="mt-1 text-xs font-medium text-red-600">{errors.source}</p>}
                         </div>
                         <div className="rounded-xl bg-teal-50 p-4 text-sm text-teal-900 md:col-span-1">
@@ -445,9 +449,9 @@ export default function SourceStreamsPage() {
                             <p className="mt-1 text-xs">tCO2e</p>
                             <div className="mt-4 border-t border-teal-100 pt-3 text-xs">
                                 <p className="font-semibold">연료 에너지 함량</p>
-                                <p className="mt-1">총 {formatNumber(calculateSourceStreamEnergyBreakdown(newItem).total)} TJ</p>
+                                <p className="mt-1">총 {formatNumber(draftEnergyBreakdown.total)} TJ</p>
                                 <p className="mt-1 text-teal-800">
-                                    화석 {formatNumber(calculateSourceStreamEnergyBreakdown(newItem).fossil)} TJ · 바이오매스 {formatNumber(calculateSourceStreamEnergyBreakdown(newItem).biomass)} TJ
+                                    화석 {formatNumber(draftEnergyBreakdown.fossil)} TJ / 바이오매스 {formatNumber(draftEnergyBreakdown.biomass)} TJ
                                 </p>
                             </div>
                         </div>
@@ -462,7 +466,7 @@ export default function SourceStreamsPage() {
                 {sourceStreams.map((sourceStream) => (
                     <SectionCard key={sourceStream.id} className="p-4">
                         <h2 className="text-base font-semibold text-slate-950">{sourceStream.name}</h2>
-                        <p className="mt-1 text-sm text-slate-500">{streamTypeLabel(sourceStream.stream_type)} · {sourceStream.method}</p>
+                        <p className="mt-1 text-sm text-slate-500">{streamTypeLabel(sourceStream.stream_type)} / {sourceStream.method}</p>
                         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                             <div className="rounded-xl bg-slate-50 p-3">
                                 <dt className="text-xs text-slate-500">공정</dt>
