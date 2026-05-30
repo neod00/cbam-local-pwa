@@ -290,6 +290,11 @@ export default function ExportPage() {
             validation,
         ]
     );
+    const checklistReviewCount = useMemo(
+        () => exportChecklist.filter((item) => !item.complete).length,
+        [exportChecklist]
+    );
+    const isChecklistComplete = checklistReviewCount === 0;
 
     const downloadStatusMessage = useMemo(() => {
         if (!templateFile) {
@@ -308,8 +313,12 @@ export default function ExportPage() {
             return '다운로드는 가능하지만 경고 항목은 제출 전 검토하세요.';
         }
 
+        if (backupStatus.tone !== 'success') {
+            return '다운로드는 가능하지만 제출용 복사본 생성 전 .cbam 백업을 권장합니다.';
+        }
+
         return '제출용 복사본을 생성할 수 있습니다.';
-    }, [readiness.canExportDraft, readiness.isSubmissionReady, templateFile, validation?.isValid]);
+    }, [backupStatus.tone, readiness.canExportDraft, readiness.isSubmissionReady, templateFile, validation?.isValid]);
 
     async function handleTemplateFileChange(file: File | undefined) {
         setTemplateFile(file);
@@ -520,8 +529,8 @@ export default function ExportPage() {
                                         EU 템플릿 복사본을 만들기 전에 필요한 준비 상태를 확인합니다.
                                     </p>
                                 </div>
-                                <StatusBadge tone={readiness.isSubmissionReady && validation?.isValid ? 'success' : 'warning'}>
-                                    {readiness.isSubmissionReady && validation?.isValid ? '준비 완료' : '검토 필요'}
+                                <StatusBadge tone={isChecklistComplete ? 'success' : 'warning'}>
+                                    {isChecklistComplete ? '준비 완료' : `검토 ${checklistReviewCount}건`}
                                 </StatusBadge>
                             </div>
 
