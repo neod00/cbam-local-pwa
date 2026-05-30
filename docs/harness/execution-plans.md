@@ -47,6 +47,7 @@ Completed:
 - Added conservative source-stream validation for EU-supported monitoring approaches, activity units, and source-stream type/method combinations.
 - Aligned source-stream on-screen emission estimates with the EU template combustion structure and added a focused calculation verification gate.
 - Added source-stream energy-content previews so fuel rows show the same audit concept used by `B_EmInst` energy calculations.
+- Added source-stream direct-emissions mismatch warnings to Results and EU Export readiness checks.
 
 Next:
 

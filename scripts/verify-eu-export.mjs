@@ -67,19 +67,25 @@ function unescapeXml(value) {
 }
 
 function loadEuExportModule() {
+  const sourceStreamCalculationSource = readFileSync('src/lib/source-stream-calculation.ts', 'utf8')
+    .replace(/^import type .*;\r?\n/gm, '')
+    .replace(/^export /gm, '');
   const source = readFileSync('src/lib/eu-template-export.ts', 'utf8')
     .replace(
       "import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';",
       'const { strFromU8, strToU8, unzipSync, zipSync } = fflate;'
     )
+    .replace("import { calculateSourceStreamEmissions } from './source-stream-calculation';", '')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
   const compiled = ts.transpileModule(
-    `${source}
+    `${sourceStreamCalculationSource}
+${source}
 globalThis.euExport = {
   REQUIRED_EU_TEMPLATE_SHEETS,
   createEuTemplateExportCellWrites,
   createEuTemplateExportCopy,
+  evaluateEuExportReadiness,
   validateEuTemplateFile
 };`,
     {
@@ -331,6 +337,9 @@ const validation = await euExport.validateEuTemplateFile(file);
 
 assertEqual(String(validation.isValid), 'true', 'synthetic workbook validity');
 assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
+const readiness = euExport.evaluateEuExportReadiness(data, validation.cnCodeMap);
+assertEqual(String(readiness.errorCount), '0', 'readiness error count');
+assertEqual(String(readiness.warningCount), '1', 'readiness warning count');
 assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '35', 'planned cell writes');
 
 const exportedBlob = await euExport.createEuTemplateExportCopy(file, data);

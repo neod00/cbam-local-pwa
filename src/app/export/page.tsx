@@ -477,9 +477,9 @@ export default function ExportPage() {
             <SectionCard>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <h2 className="text-lg font-semibold text-slate-950">EU 코드 매핑 검토</h2>
+                        <h2 className="text-lg font-semibold text-slate-950">Export 데이터 검토</h2>
                         <p className="mt-1 text-sm text-slate-600">
-                            제품군, CN/HS 코드, 생산공정/전구물질 연결 상태를 Export 전에 확인합니다.
+                            제품군, CN/HS 코드, 생산공정/전구물질 연결 상태와 배출량 일관성을 Export 전에 확인합니다.
                         </p>
                     </div>
                     <div className="flex gap-2">

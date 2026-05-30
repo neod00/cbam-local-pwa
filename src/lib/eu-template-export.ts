@@ -1,6 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import type { Installation, Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import type { CnCodeOption } from './cn-code-options';
+import { calculateSourceStreamEmissions } from './source-stream-calculation';
 
 export const REQUIRED_EU_TEMPLATE_SHEETS = [
     '0_Versions',
@@ -269,6 +270,17 @@ export function evaluateEuExportReadiness(
 ): EuExportReadinessResult {
     const issues: EuExportReadinessIssue[] = [];
     const productById = new Map(data.products.map((product) => [product.id, product]));
+    const sourceStreamsByProcess = new Map<string, SourceStream[]>();
+
+    for (const sourceStream of data.sourceStreams ?? []) {
+        if (!sourceStream.process_id) {
+            continue;
+        }
+
+        const group = sourceStreamsByProcess.get(sourceStream.process_id) ?? [];
+        group.push(sourceStream);
+        sourceStreamsByProcess.set(sourceStream.process_id, group);
+    }
 
     if (data.processes.length > 10) {
         issues.push({
@@ -327,6 +339,7 @@ export function evaluateEuExportReadiness(
 
     for (const process of data.processes) {
         const product = process.product_id ? productById.get(process.product_id) : undefined;
+        const processSourceStreams = sourceStreamsByProcess.get(process.id) ?? [];
 
         if (!product) {
             issues.push({
@@ -356,6 +369,23 @@ export function evaluateEuExportReadiness(
                 message: `${process.name}: 생산경로가 비어 있습니다. EU 템플릿 드롭다운 값과 대조가 필요합니다.`,
                 target: { type: 'process', id: process.id },
             });
+        }
+        if (processSourceStreams.length > 0) {
+            const sourceStreamEmissions = processSourceStreams.reduce(
+                (sum, sourceStream) => sum + calculateSourceStreamEmissions(sourceStream),
+                0
+            );
+            const delta = sourceStreamEmissions - process.direct_attributable_emissions_tco2e;
+            const tolerance = Math.max(0.01, Math.abs(process.direct_attributable_emissions_tco2e) * 0.01);
+
+            if (Math.abs(delta) > tolerance) {
+                issues.push({
+                    severity: 'warning',
+                    area: '생산공정',
+                    message: `${process.name}: B_EmInst 배출원 합계 ${sourceStreamEmissions.toFixed(4)} tCO2e와 D_Processes 직접배출량 ${process.direct_attributable_emissions_tco2e.toFixed(4)} tCO2e가 ${delta.toFixed(4)} tCO2e 차이납니다.`,
+                    target: { type: 'process', id: process.id },
+                });
+            }
         }
     }
 
