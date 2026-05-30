@@ -70,16 +70,21 @@ function loadEuExportModule() {
   const sourceStreamCalculationSource = readFileSync('src/lib/source-stream-calculation.ts', 'utf8')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
+  const productRulesSource = readFileSync('src/lib/cbam-product-rules.ts', 'utf8')
+    .replace(/^import type .*;\r?\n/gm, '')
+    .replace(/^export /gm, '');
   const source = readFileSync('src/lib/eu-template-export.ts', 'utf8')
     .replace(
       "import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';",
       'const { strFromU8, strToU8, unzipSync, zipSync } = fflate;'
     )
     .replace("import { calculateSourceStreamEmissions } from './source-stream-calculation';", '')
+    .replace("import { getIndirectEmissionsApplicability } from './cbam-product-rules';", '')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
   const compiled = ts.transpileModule(
     `${sourceStreamCalculationSource}
+${productRulesSource}
 ${source}
 globalThis.euExport = {
   REQUIRED_EU_TEMPLATE_SHEETS,
@@ -340,7 +345,7 @@ assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
 const readiness = euExport.evaluateEuExportReadiness(data, validation.cnCodeMap);
 assertEqual(String(readiness.errorCount), '0', 'readiness error count');
 assertEqual(String(readiness.warningCount), '1', 'readiness warning count');
-assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '35', 'planned cell writes');
+assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '34', 'planned cell writes');
 
 const exportedBlob = await euExport.createEuTemplateExportCopy(file, data);
 const exportedZip = fflate.unzipSync(new Uint8Array(await exportedBlob.arrayBuffer()));
@@ -372,7 +377,7 @@ assertEqual(readCell(sourceStreamSheet, 'K17'), 'tCO2/TJ', 'B_EmInst K17');
 assertEqual(readCell(sourceStreamSheet, 'N17'), '100', 'B_EmInst N17');
 assertEqual(readCell(sourceStreamSheet, 'P17'), '100', 'B_EmInst P17');
 assertEqual(readCell(sourceStreamSheet, 'R17'), '0', 'B_EmInst R17');
-assertEqual(readCell(emissionsEnergySheet, 'M26'), '235', 'C_Emissions&Energy M26');
+assertEqual(readCell(emissionsEnergySheet, 'M26'), '', 'C_Emissions&Energy M26');
 assertEqual(readCell(processSheet, 'L16'), '1000', 'D_Processes L16');
 assertEqual(readCell(processSheet, 'L27'), '950', 'D_Processes L27');
 assertEqual(readCell(processSheet, 'L32'), '50', 'D_Processes L32');

@@ -15,6 +15,7 @@ import {
     updateLocalItem,
 } from '@/lib/local-db';
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from '@/lib/source-stream-calculation';
+import { getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
 import { Factory, Gauge, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
@@ -375,13 +376,15 @@ export default function ProcessesPage() {
     }
 
     function getSee(process: ProductionProcess) {
+        const product = process.product_id ? products.find((item) => item.id === process.product_id) : undefined;
+        const indirectApplicability = getIndirectEmissionsApplicability(product);
         const directSee =
             process.output_mass_t > 0 ? process.direct_attributable_emissions_tco2e / process.output_mass_t : 0;
         const indirectSee =
-            process.output_mass_t > 0
+            process.output_mass_t > 0 && indirectApplicability.applicable
                 ? (process.electricity_mwh * process.electricity_ef_tco2e_per_mwh) / process.output_mass_t
                 : 0;
-        return { directSee, indirectSee };
+        return { directSee, indirectSee, indirectApplicability };
     }
 
     function getProcessSourceStreamSummary(process: ProductionProcess) {
@@ -666,6 +669,9 @@ export default function ProcessesPage() {
                                 <div className="rounded-xl bg-slate-50 p-3">
                                     <dt className="text-xs text-slate-500">간접 SEE</dt>
                                     <dd className="mt-1 font-medium text-slate-900">{formatNumber(see.indirectSee)}</dd>
+                                    <dd className={see.indirectApplicability.applicable ? 'mt-1 text-xs text-slate-500' : 'mt-1 text-xs font-semibold text-amber-700'}>
+                                        {see.indirectApplicability.label}
+                                    </dd>
                                 </div>
                                 <div className="rounded-xl bg-slate-50 p-3">
                                     <dt className="text-xs text-slate-500">배출원 합계</dt>
@@ -747,7 +753,12 @@ export default function ProcessesPage() {
                                                 '-'
                                             )}
                                         </td>
-                                        <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(see.indirectSee)}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
+                                            {formatNumber(see.indirectSee)}
+                                            <div className={see.indirectApplicability.applicable ? 'text-xs text-slate-400' : 'text-xs font-semibold text-amber-700'}>
+                                                {see.indirectApplicability.label}
+                                            </div>
+                                        </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm">
                                             <div className="flex justify-end gap-2">
                                                 <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => startEditProcess(process)}>

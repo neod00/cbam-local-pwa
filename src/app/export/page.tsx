@@ -564,6 +564,9 @@ export default function ExportPage() {
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">
                                         {formatNumber(result.indirect_see)}
+                                        <div className={result.indirect_emissions_applicable ? 'text-xs text-slate-400' : 'text-xs font-semibold text-amber-700'}>
+                                            {result.indirect_emissions_applicable ? '간접 포함' : '간접 제외'}
+                                        </div>
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-4 text-right text-sm font-semibold text-gray-900">
                                         {formatNumber(result.total_see)}

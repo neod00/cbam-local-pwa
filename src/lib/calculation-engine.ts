@@ -1,5 +1,6 @@
 import type { Product, ProductOutputLine, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';
+import { getIndirectEmissionsApplicability } from './cbam-product-rules';
 
 export type ActivityData = Record<string, number>;
 
@@ -43,6 +44,9 @@ export interface LocalCalculationResult {
     production_route: string;
     output_mass_t: number;
     direct_emissions_tco2e: number;
+    indirect_emissions_applicable: boolean;
+    indirect_emissions_rule: string;
+    indirect_emissions_excluded_tco2e: number;
     source_stream_count: number;
     source_stream_emissions_tco2e: number;
     source_stream_energy_tj: number;
@@ -189,7 +193,10 @@ export function calculateLocalResults(input: {
             0
         );
         const sourceStreamDelta = sourceStreamEmissions - directEmissions;
-        const indirectEmissions = process.electricity_mwh * process.electricity_ef_tco2e_per_mwh;
+        const grossIndirectEmissions = process.electricity_mwh * process.electricity_ef_tco2e_per_mwh;
+        const processIndirectApplicability = getIndirectEmissionsApplicability(product);
+        const indirectEmissions = processIndirectApplicability.applicable ? grossIndirectEmissions : 0;
+        const indirectEmissionsExcluded = processIndirectApplicability.applicable ? 0 : grossIndirectEmissions;
         const precursorEmissions = processPrecursors.reduce((sum, precursor) => {
             const precursorSee =
                 precursor.direct_see_tco2e_per_t + precursor.indirect_see_tco2e_per_t;
@@ -238,6 +245,9 @@ export function calculateLocalResults(input: {
                 production_route: process.production_route,
                 output_mass_t: process.output_mass_t,
                 direct_emissions_tco2e: directEmissions,
+                indirect_emissions_applicable: processIndirectApplicability.applicable,
+                indirect_emissions_rule: processIndirectApplicability.rule_code,
+                indirect_emissions_excluded_tco2e: indirectEmissionsExcluded,
                 source_stream_count: processSourceStreams.length,
                 source_stream_emissions_tco2e: sourceStreamEmissions,
                 source_stream_energy_tj: sourceStreamEnergy,
@@ -256,8 +266,11 @@ export function calculateLocalResults(input: {
             const allocationShare = line.allocation_basis === 'MANUAL'
                 ? (manualTotal > 0 ? line.manual_allocation_percent / manualTotal : 0)
                 : (massTotal > 0 ? line.output_mass_t / massTotal : 0);
+            const lineIndirectApplicability = getIndirectEmissionsApplicability(lineProduct);
+            const lineGrossIndirectEmissions = grossIndirectEmissions * allocationShare;
+            const allocatedIndirectEmissions = lineIndirectApplicability.applicable ? lineGrossIndirectEmissions : 0;
+            const allocatedExcludedIndirectEmissions = lineIndirectApplicability.applicable ? 0 : lineGrossIndirectEmissions;
             const allocatedDirectEmissions = directEmissions * allocationShare;
-            const allocatedIndirectEmissions = indirectEmissions * allocationShare;
             const allocatedPrecursorEmissions = precursorEmissions * allocationShare;
 
             return {
@@ -276,6 +289,9 @@ export function calculateLocalResults(input: {
                 production_route: process.production_route,
                 output_mass_t: line.output_mass_t,
                 direct_emissions_tco2e: allocatedDirectEmissions,
+                indirect_emissions_applicable: lineIndirectApplicability.applicable,
+                indirect_emissions_rule: lineIndirectApplicability.rule_code,
+                indirect_emissions_excluded_tco2e: allocatedExcludedIndirectEmissions,
                 source_stream_count: processSourceStreams.length,
                 source_stream_emissions_tco2e: sourceStreamEmissions * allocationShare,
                 source_stream_energy_tj: sourceStreamEnergy * allocationShare,

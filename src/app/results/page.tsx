@@ -63,6 +63,10 @@ function getAllocationTone(result: LocalCalculationResult) {
     return 'pending' as const;
 }
 
+function getIndirectApplicabilityLabel(result: LocalCalculationResult) {
+    return result.indirect_emissions_applicable ? '간접 포함' : '간접 제외';
+}
+
 export default function ResultsPage() {
     const [results, setResults] = useState<LocalCalculationResult[]>([]);
     const [loading, setLoading] = useState(true);
@@ -197,6 +201,12 @@ export default function ResultsPage() {
                                     </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
                                         {formatNumber(result.indirect_see)}
+                                        <div className={result.indirect_emissions_applicable ? 'mt-1 text-xs text-slate-400' : 'mt-1 text-xs font-semibold text-amber-700'}>
+                                            {getIndirectApplicabilityLabel(result)}
+                                            {!result.indirect_emissions_applicable && result.indirect_emissions_excluded_tco2e > 0
+                                                ? ` ${formatNumber(result.indirect_emissions_excluded_tco2e)} tCO2e`
+                                                : ''}
+                                        </div>
                                     </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
                                         {formatNumber(result.precursor_see)}

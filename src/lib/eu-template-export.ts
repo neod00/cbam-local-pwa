@@ -2,6 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import type { Installation, Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import type { CnCodeOption } from './cn-code-options';
 import { calculateSourceStreamEmissions } from './source-stream-calculation';
+import { getIndirectEmissionsApplicability } from './cbam-product-rules';
 
 export const REQUIRED_EU_TEMPLATE_SHEETS = [
     '0_Versions',
@@ -803,9 +804,16 @@ function createSourceStreamCellWrites(sourceStreams: SourceStream[] = []): EuTem
     return writes;
 }
 
-function createEmissionsEnergyCellWrites(processes: ProductionProcess[]): EuTemplateExportCellWrite[] {
+function createEmissionsEnergyCellWrites(processes: ProductionProcess[], products: Product[]): EuTemplateExportCellWrite[] {
+    const productById = new Map(products.map((product) => [product.id, product]));
     const indirectEmissions = processes.reduce(
-        (sum, process) => sum + process.electricity_mwh * process.electricity_ef_tco2e_per_mwh,
+        (sum, process) => {
+            const product = process.product_id ? productById.get(process.product_id) : undefined;
+            const applicability = getIndirectEmissionsApplicability(product);
+            return applicability.applicable
+                ? sum + process.electricity_mwh * process.electricity_ef_tco2e_per_mwh
+                : sum;
+        },
         0
     );
 
@@ -961,7 +969,7 @@ export function createEuTemplateExportCellWrites(
     return [
         ...createInstallationCellWrites(data.installations, data.periods),
         ...createSourceStreamCellWrites(data.sourceStreams),
-        ...createEmissionsEnergyCellWrites(data.processes),
+        ...createEmissionsEnergyCellWrites(data.processes, data.products),
         ...createProcessCellWrites(data.processes),
         ...createPrecursorCellWrites(data.precursors),
     ];

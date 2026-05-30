@@ -7,16 +7,22 @@ function loadLocalCalculationModule() {
   const sourceStreamCalculationSource = readFileSync('src/lib/source-stream-calculation.ts', 'utf8')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
+  const productRulesSource = readFileSync('src/lib/cbam-product-rules.ts', 'utf8')
+    .replace(/^import type .*;\r?\n/gm, '')
+    .replace(/^export /gm, '');
   const calculationEngineSource = readFileSync('src/lib/calculation-engine.ts', 'utf8')
     .replace(/^import type .* from '\.\/local-db';\r?\n/gm, '')
     .replace("import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';", '')
+    .replace("import { getIndirectEmissionsApplicability } from './cbam-product-rules';", '')
     .replace(/^export /gm, '');
 
   const compiled = ts.transpileModule(
     `${sourceStreamCalculationSource}
+${productRulesSource}
 ${calculationEngineSource}
 globalThis.localCalculation = {
   calculateLocalResults,
+  getIndirectEmissionsApplicability,
 };`,
     {
       compilerOptions: {
@@ -31,7 +37,7 @@ globalThis.localCalculation = {
   return context.localCalculation;
 }
 
-const { calculateLocalResults } = loadLocalCalculationModule();
+const { calculateLocalResults, getIndirectEmissionsApplicability } = loadLocalCalculationModule();
 
 const product = {
   id: 'product-1',
@@ -155,9 +161,15 @@ assert.equal(productLineResults[0].allocation_share, 0.6);
 assert.equal(productLineResults[0].output_mass_t, 600);
 assert.equal(productLineResults[0].direct_emissions_tco2e, 72);
 assert.equal(productLineResults[0].direct_see, 0.12);
-assert.equal(productLineResults[0].indirect_see, 0.235);
+assert.equal(productLineResults[0].indirect_emissions_applicable, false);
+assert.equal(productLineResults[0].indirect_emissions_rule, 'IRON_STEEL_EXCLUDED');
+assert.equal(productLineResults[0].indirect_emissions_excluded_tco2e, 141);
+assert.equal(productLineResults[0].indirect_see, 0);
 assert.equal(productLineResults[0].precursor_see, 1.45);
-assert.equal(productLineResults[0].total_see, 1.805);
+assert.equal(productLineResults[0].total_see, 1.57);
 assert.equal(productLineResults[1].allocation_share, 0.4);
+
+assert.equal(getIndirectEmissionsApplicability({ cn_code: '72083900', hs_code: '7208' }).applicable, false);
+assert.equal(getIndirectEmissionsApplicability({ cn_code: '26011200', hs_code: '2601' }).applicable, true);
 
 console.log('Local calculation verification passed.');

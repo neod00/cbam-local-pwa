@@ -62,11 +62,14 @@ export default function Home() {
     const sourceStreamWarningCount = results.filter(
       (result) => result.source_stream_count > 0 && Math.abs(result.source_stream_delta_tco2e) > 0.01
     ).length;
+    const indirectApplicableCount = results.filter((result) => result.indirect_emissions_applicable).length;
+    const indirectCompleted = results.some((result) => result.indirect_emissions_applicable && result.indirect_see > 0);
+    const indirectNotRequired = results.length > 0 && indirectApplicableCount === 0;
     const completedSteps = [
       productCount > 0,
       processCount > 0,
       sourceStreamWarningCount === 0 && results.some((result) => result.source_stream_count > 0),
-      results.some((result) => result.indirect_see > 0),
+      indirectCompleted || indirectNotRequired,
       precursorCount > 0,
     ].filter(Boolean).length;
     const readinessRate = Math.round((completedSteps / 6) * 100);
@@ -79,7 +82,11 @@ export default function Home() {
         status: sourceStreamWarningCount > 0 ? '확인필요' : results.some((result) => result.source_stream_count > 0) ? '완료' : '진행중',
         tone: sourceStreamWarningCount > 0 ? 'warning' as const : results.some((result) => result.source_stream_count > 0) ? 'success' as const : 'info' as const,
       },
-      { name: '간접배출량 입력', status: results.some((result) => result.indirect_see > 0) ? '완료' : '미완료', tone: results.some((result) => result.indirect_see > 0) ? 'success' as const : 'neutral' as const },
+      {
+        name: '간접배출량 입력',
+        status: indirectNotRequired ? '해당없음' : indirectCompleted ? '완료' : '미완료',
+        tone: indirectNotRequired || indirectCompleted ? 'success' as const : 'neutral' as const,
+      },
       { name: '전구물질 입력', status: precursorCount > 0 ? '완료' : '미완료', tone: precursorCount > 0 ? 'success' as const : 'neutral' as const },
       { name: 'EU Export', status: warningCount > 0 ? '검토중' : '대기', tone: warningCount > 0 ? 'warning' as const : 'pending' as const },
     ];
@@ -88,7 +95,7 @@ export default function Home() {
       ? warningTasks.slice(0, 4)
       : [
         { label: 'EU 템플릿 Parameters_CNCodes 기준으로 제품 CN 코드 확인', href: '/products', tone: 'success' as const },
-        { label: '생산공정별 전력 사용량 입력', href: '/processes', tone: 'success' as const },
+        { label: indirectNotRequired ? 'CN 코드별 간접배출 제외 여부 확인' : '생산공정별 전력 사용량 입력', href: '/processes', tone: 'success' as const },
         { label: '구매 전구물질 공급업체 자료 출처 확인', href: '/precursors', tone: 'success' as const },
         { label: '.cbam 백업 파일 최신화', href: '/settings', tone: 'success' as const },
       ];
