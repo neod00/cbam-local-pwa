@@ -72,6 +72,7 @@ Completed:
 - Surfaced missing source-stream evidence in local calculation warnings so Results and Dashboard show the issue before Export.
 - Restored Korean-first copy on the source-stream entry screen so B_EmInst/C_Emissions&Energy data entry is usable for domestic operators.
 - Updated dashboard progress logic so missing or mismatched source-stream evidence marks the direct-emissions step as requiring review.
+- Updated the production-process screen so the source-stream review count and lists flag missing source-stream evidence, not only emission-total mismatches.
 
 Next:
 

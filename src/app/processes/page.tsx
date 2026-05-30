@@ -78,7 +78,10 @@ function calculateProcessSourceStreamSummary(process: ProductionProcess, sourceS
         emissions,
         energy,
         delta,
-        needsReview: linkedSourceStreams.length > 0 && Math.abs(delta) > tolerance,
+        hasMissingEvidence: process.direct_attributable_emissions_tco2e > 0 && linkedSourceStreams.length === 0,
+        needsReview:
+            (process.direct_attributable_emissions_tco2e > 0 && linkedSourceStreams.length === 0)
+            || (linkedSourceStreams.length > 0 && Math.abs(delta) > tolerance),
     };
 }
 
@@ -453,7 +456,7 @@ export default function ProcessesPage() {
                 <StatCard label="등록 공정" value={processes.length} helper="D_Processes 후보" icon={Factory} tone="info" />
                 <StatCard label="제품 생산라인" value={summary.outputLineCount} helper={`${summary.outputLineReviewCount}건 확인 필요`} icon={Gauge} tone="pending" />
                 <StatCard label="전력 사용량" value={formatNumber(summary.totalElectricity)} helper="MWh" icon={Zap} tone="warning" />
-                <StatCard label="배출원 검토" value={summary.sourceStreamReviewCount} helper="직접배출량 차이" icon={Gauge} tone="warning" />
+                <StatCard label="배출원 검토" value={summary.sourceStreamReviewCount} helper="자료 누락 또는 직접배출량 차이" icon={Gauge} tone="warning" />
             </div>
 
             {showForm && (
@@ -695,16 +698,20 @@ export default function ProcessesPage() {
                                         {see.indirectApplicability.label}
                                     </dd>
                                 </div>
-                                <div className="rounded-xl bg-slate-50 p-3">
+                                <div className={sourceStreamSummary.needsReview ? 'rounded-xl bg-amber-50 p-3' : 'rounded-xl bg-slate-50 p-3'}>
                                     <dt className="text-xs text-slate-500">배출원 합계</dt>
-                                    <dd className="mt-1 font-medium text-slate-900">
-                                        {sourceStreamSummary.count > 0 ? `${formatNumber(sourceStreamSummary.emissions)} tCO2e` : '-'}
+                                    <dd className={sourceStreamSummary.needsReview ? 'mt-1 font-semibold text-amber-800' : 'mt-1 font-medium text-slate-900'}>
+                                        {sourceStreamSummary.count > 0
+                                            ? `${formatNumber(sourceStreamSummary.emissions)} tCO2e`
+                                            : sourceStreamSummary.hasMissingEvidence ? '자료 필요' : '-'}
                                     </dd>
                                 </div>
                                 <div className={sourceStreamSummary.needsReview ? 'rounded-xl bg-amber-50 p-3' : 'rounded-xl bg-slate-50 p-3'}>
                                     <dt className={sourceStreamSummary.needsReview ? 'text-xs text-amber-700' : 'text-xs text-slate-500'}>직접 차이</dt>
                                     <dd className={sourceStreamSummary.needsReview ? 'mt-1 font-semibold text-amber-800' : 'mt-1 font-medium text-slate-900'}>
-                                        {sourceStreamSummary.count > 0 ? `${formatNumber(sourceStreamSummary.delta)} tCO2e` : '-'}
+                                        {sourceStreamSummary.count > 0
+                                            ? `${formatNumber(sourceStreamSummary.delta)} tCO2e`
+                                            : sourceStreamSummary.hasMissingEvidence ? '배출원 없음' : '-'}
                                     </dd>
                                 </div>
                             </dl>
@@ -763,7 +770,7 @@ export default function ProcessesPage() {
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(process.output_mass_t)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(see.directSee)}</td>
-                                        <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
+                                        <td className={sourceStreamSummary.needsReview ? 'whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-amber-700' : 'whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600'}>
                                             {sourceStreamSummary.count > 0 ? (
                                                 <>
                                                     <span>{formatNumber(sourceStreamSummary.emissions)} tCO2e</span>
@@ -772,7 +779,7 @@ export default function ProcessesPage() {
                                                     </div>
                                                 </>
                                             ) : (
-                                                '-'
+                                                sourceStreamSummary.hasMissingEvidence ? '자료 필요' : '-'
                                             )}
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
