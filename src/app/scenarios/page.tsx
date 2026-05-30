@@ -1,6 +1,6 @@
 'use client';
 
-import { DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults } from '@/lib/calculation-engine';
 import { getLocalSetting, listLocalItems, seedLocalData, setLocalSetting } from '@/lib/local-db';
 import {
@@ -55,6 +55,7 @@ export default function ScenariosPage() {
     const [defaultValueReference, setDefaultValueReference] = useState<ImportedDefaultValueReference | undefined>();
     const [loading, setLoading] = useState(true);
     const [assumptions, setAssumptions] = useState<ScenarioAssumptions>(DEFAULT_SCENARIO_ASSUMPTIONS);
+    const [assumptionSaveState, setAssumptionSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
     useEffect(() => {
         async function loadScenarios() {
@@ -96,6 +97,7 @@ export default function ScenariosPage() {
 
     async function updateAssumptions(nextAssumptions: ScenarioAssumptions) {
         setAssumptions(nextAssumptions);
+        setAssumptionSaveState('saving');
         await setLocalSetting(SCENARIO_ASSUMPTIONS_SETTING_KEY, nextAssumptions);
 
         const [processes, precursors, products, periods, sourceStreams, productOutputLines, benchmarks, defaultValues] = await Promise.all([
@@ -113,6 +115,7 @@ export default function ScenariosPage() {
         setBenchmarkReference(benchmarks);
         setDefaultValueReference(defaultValues);
         setScenarios(calculateProductScenarios(results, nextAssumptions, { benchmarks, defaultValues }));
+        setAssumptionSaveState('saved');
     }
 
     const summary = useMemo(() => {
@@ -287,6 +290,20 @@ export default function ScenariosPage() {
             <SectionCard
                 title="시나리오 가정"
                 description="공식 산식 확정 전까지는 비용 판단용 보조 지표입니다. 실제 제출·정산 전 공식 산식과 가격 기준을 반드시 확인해야 합니다."
+                actions={
+                    <div className="flex items-center gap-2">
+                        <StatusBadge tone={assumptionSaveState === 'saving' ? 'pending' : assumptionSaveState === 'saved' ? 'success' : 'neutral'}>
+                            {assumptionSaveState === 'saving' ? '저장 중' : assumptionSaveState === 'saved' ? '로컬 저장됨' : '기본 가정'}
+                        </StatusBadge>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => void updateAssumptions(DEFAULT_SCENARIO_ASSUMPTIONS)}
+                        >
+                            기본값 복원
+                        </Button>
+                    </div>
+                }
             >
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
                     <div>
