@@ -74,6 +74,7 @@ Completed:
 - Updated dashboard progress logic so missing or mismatched source-stream evidence marks the direct-emissions step as requiring review.
 - Updated the production-process screen so the source-stream review count and lists flag missing source-stream evidence, not only emission-total mismatches.
 - Added a production-process edit notice that directs users to add source-stream evidence when direct emissions exist without linked B_EmInst data.
+- Added precursor evidence review indicators for default-value justification, SEE source, and unverified actual/semi-actual data.
 
 Next:
 

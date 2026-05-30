@@ -82,6 +82,24 @@ function getVerificationLabel(status: PurchasedPrecursor['verification_status'] 
     return '미검증';
 }
 
+function getPrecursorEvidenceIssues(precursor: PurchasedPrecursor) {
+    const issues: string[] = [];
+
+    if (precursor.data_mode === 'DEFAULT' && !precursor.default_value_justification?.trim()) {
+        issues.push('기본값 사용 사유 필요');
+    }
+
+    if (precursor.data_mode !== 'DEFAULT' && precursor.verification_status === 'UNVERIFIED') {
+        issues.push('실측자료 검증 필요');
+    }
+
+    if (!precursor.source?.trim()) {
+        issues.push('SEE 출처 필요');
+    }
+
+    return issues;
+}
+
 export default function PrecursorsPage() {
     const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
     const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
@@ -165,7 +183,8 @@ export default function PrecursorsPage() {
             0
         );
         const defaultModeCount = precursors.filter((precursor) => precursor.data_mode === 'DEFAULT').length;
-        return { consumedMass, totalSee, defaultModeCount };
+        const evidenceReviewCount = precursors.filter((precursor) => getPrecursorEvidenceIssues(precursor).length > 0).length;
+        return { consumedMass, totalSee, defaultModeCount, evidenceReviewCount };
     }, [precursors]);
 
     function createDefaultDraft(): PrecursorDraft {
@@ -398,10 +417,11 @@ export default function PrecursorsPage() {
                 }
             />
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                 <StatCard label="등록 전구물질" value={precursors.length} helper="E_PurchPrec 후보" icon={Boxes} tone="info" />
                 <StatCard label="총 소비량" value={formatNumber(summary.consumedMass)} helper="tonne" icon={Scale} tone="success" />
                 <StatCard label="기본값 사용" value={summary.defaultModeCount} helper={`SEE 합계 ${formatNumber(summary.totalSee)}`} icon={Factory} tone={summary.defaultModeCount > 0 ? 'warning' : 'pending'} />
+                <StatCard label="증빙 검토" value={summary.evidenceReviewCount} helper="사유·출처·검증 상태" icon={Factory} tone={summary.evidenceReviewCount > 0 ? 'warning' : 'success'} />
             </div>
 
             {showForm && (
@@ -563,6 +583,7 @@ export default function PrecursorsPage() {
             <div className="grid grid-cols-1 gap-3 md:hidden">
                 {precursors.map((precursor) => {
                     const totalSee = precursor.direct_see_tco2e_per_t + precursor.indirect_see_tco2e_per_t;
+                    const evidenceIssues = getPrecursorEvidenceIssues(precursor);
                     return (
                         <SectionCard key={precursor.id} className="p-4">
                             <h2 className="text-base font-semibold text-slate-950">{precursor.name}</h2>
@@ -579,6 +600,12 @@ export default function PrecursorsPage() {
                                 <div className="rounded-xl bg-slate-50 p-3">
                                     <dt className="text-xs text-slate-500">데이터 모드</dt>
                                     <dd className="mt-1 font-medium text-slate-900">{getDataModeLabel(precursor.data_mode)}</dd>
+                                </div>
+                                <div className={evidenceIssues.length > 0 ? 'rounded-xl bg-amber-50 p-3' : 'rounded-xl bg-slate-50 p-3'}>
+                                    <dt className={evidenceIssues.length > 0 ? 'text-xs text-amber-700' : 'text-xs text-slate-500'}>증빙 상태</dt>
+                                    <dd className={evidenceIssues.length > 0 ? 'mt-1 font-semibold text-amber-800' : 'mt-1 font-medium text-slate-900'}>
+                                        {evidenceIssues.length > 0 ? evidenceIssues[0] : '확인 완료'}
+                                    </dd>
                                 </div>
                                 <div className="rounded-xl bg-slate-50 p-3">
                                     <dt className="text-xs text-slate-500">공급국가</dt>
@@ -633,6 +660,7 @@ export default function PrecursorsPage() {
                         ) : (
                             precursors.map((precursor) => {
                                 const totalSee = precursor.direct_see_tco2e_per_t + precursor.indirect_see_tco2e_per_t;
+                                const evidenceIssues = getPrecursorEvidenceIssues(precursor);
                                 return (
                                     <tr key={precursor.id} className="transition hover:bg-slate-50">
                                         <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-slate-950">{precursor.name}</td>
@@ -644,6 +672,11 @@ export default function PrecursorsPage() {
                                                 {getDataModeLabel(precursor.data_mode)}
                                             </StatusBadge>
                                             <div className="mt-1 text-xs text-slate-400">{getVerificationLabel(precursor.verification_status)}</div>
+                                            {evidenceIssues.length > 0 && (
+                                                <div className="mt-1 text-xs font-semibold text-amber-700">
+                                                    {evidenceIssues.join(' / ')}
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">
                                             {precursor.supplier_country || '-'}
