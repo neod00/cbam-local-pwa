@@ -1,23 +1,92 @@
+'use client';
+
 import { PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
+import { listLocalItems, seedLocalData } from '@/lib/local-db';
 import { AlertTriangle, CheckCircle2, Factory, FileSpreadsheet, Package, TrendingUp } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
-const steps = [
-  { name: '품목 식별', status: '완료', tone: 'success' as const },
-  { name: '생산공정 설정', status: '진행중', tone: 'info' as const },
-  { name: '직접배출량 입력', status: '확인필요', tone: 'warning' as const },
-  { name: '간접배출량 입력', status: '미완료', tone: 'neutral' as const },
-  { name: '전구물질 입력', status: '진행중', tone: 'info' as const },
-  { name: 'EU Export', status: '대기', tone: 'pending' as const },
-];
-
-const recentTasks = [
-  'EU 템플릿 Parameters_CNCodes 기준으로 제품 CN 코드 확인',
-  '생산공정별 전력 사용량 입력',
-  '구매 전구물질 공급업체 자료 출처 확인',
-  '.cbam 백업 파일 최신화',
-];
+function formatNumber(value: number) {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value);
+}
 
 export default function Home() {
+  const [results, setResults] = useState<LocalCalculationResult[]>([]);
+  const [productCount, setProductCount] = useState(0);
+  const [processCount, setProcessCount] = useState(0);
+  const [precursorCount, setPrecursorCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadDashboard() {
+      setLoading(true);
+      await seedLocalData();
+      const [processes, precursors, products, periods, sourceStreams] = await Promise.all([
+        listLocalItems('processes'),
+        listLocalItems('precursors'),
+        listLocalItems('products'),
+        listLocalItems('periods'),
+        listLocalItems('source_streams'),
+      ]);
+
+      setProductCount(products.length);
+      setProcessCount(processes.length);
+      setPrecursorCount(precursors.length);
+      setResults(calculateLocalResults({ processes, precursors, products, periods, sourceStreams }));
+      setLoading(false);
+    }
+
+    loadDashboard();
+  }, []);
+
+  const dashboard = useMemo(() => {
+    const totalOutput = results.reduce((sum, result) => sum + result.output_mass_t, 0);
+    const warnings = results.flatMap((result) =>
+      result.warnings.map((warning) => `${result.process_name}: ${warning}`)
+    );
+    const sourceStreamWarningCount = results.filter(
+      (result) => result.source_stream_count > 0 && Math.abs(result.source_stream_delta_tco2e) > 0.01
+    ).length;
+    const completedSteps = [
+      productCount > 0,
+      processCount > 0,
+      sourceStreamWarningCount === 0 && results.some((result) => result.source_stream_count > 0),
+      results.some((result) => result.indirect_see > 0),
+      precursorCount > 0,
+    ].filter(Boolean).length;
+    const readinessRate = Math.round((completedSteps / 6) * 100);
+
+    const steps = [
+      { name: '품목 식별', status: productCount > 0 ? '완료' : '미완료', tone: productCount > 0 ? 'success' as const : 'neutral' as const },
+      { name: '생산공정 설정', status: processCount > 0 ? '완료' : '미완료', tone: processCount > 0 ? 'success' as const : 'neutral' as const },
+      {
+        name: '직접배출량 입력',
+        status: sourceStreamWarningCount > 0 ? '확인필요' : results.some((result) => result.source_stream_count > 0) ? '완료' : '진행중',
+        tone: sourceStreamWarningCount > 0 ? 'warning' as const : results.some((result) => result.source_stream_count > 0) ? 'success' as const : 'info' as const,
+      },
+      { name: '간접배출량 입력', status: results.some((result) => result.indirect_see > 0) ? '완료' : '미완료', tone: results.some((result) => result.indirect_see > 0) ? 'success' as const : 'neutral' as const },
+      { name: '전구물질 입력', status: precursorCount > 0 ? '완료' : '미완료', tone: precursorCount > 0 ? 'success' as const : 'neutral' as const },
+      { name: 'EU Export', status: warnings.length > 0 ? '검토중' : '대기', tone: warnings.length > 0 ? 'warning' as const : 'pending' as const },
+    ];
+
+    const recentTasks = warnings.length > 0
+      ? warnings.slice(0, 4)
+      : [
+        'EU 템플릿 Parameters_CNCodes 기준으로 제품 CN 코드 확인',
+        '생산공정별 전력 사용량 입력',
+        '구매 전구물질 공급업체 자료 출처 확인',
+        '.cbam 백업 파일 최신화',
+      ];
+
+    return {
+      totalOutput,
+      warningCount: warnings.length,
+      readinessRate,
+      steps,
+      recentTasks,
+    };
+  }, [precursorCount, processCount, productCount, results]);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -27,10 +96,10 @@ export default function Home() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="CBAM 대상 품목" value="2개" helper="CN 8자리 기준 관리" icon={Package} tone="pending" />
-        <StatCard label="총 생산량" value="1,950t" helper="등록된 공정 기준" icon={Factory} tone="info" />
-        <StatCard label="보고 준비율" value="72%" helper="Export 전 검토 필요" icon={TrendingUp} tone="success" />
-        <StatCard label="확인 필요 항목" value="5건" helper="입력 누락과 경고 포함" icon={AlertTriangle} tone="warning" />
+        <StatCard label="CBAM 대상 품목" value={loading ? '-' : `${productCount}개`} helper="CN 8자리 기준 관리" icon={Package} tone="pending" />
+        <StatCard label="총 생산량" value={loading ? '-' : `${formatNumber(dashboard.totalOutput)}t`} helper={`${processCount}개 공정 기준`} icon={Factory} tone="info" />
+        <StatCard label="보고 준비율" value={loading ? '-' : `${dashboard.readinessRate}%`} helper="로컬 입력 데이터 기준" icon={TrendingUp} tone="success" />
+        <StatCard label="확인 필요 항목" value={loading ? '-' : `${dashboard.warningCount}건`} helper="입력 누락과 경고 포함" icon={AlertTriangle} tone="warning" />
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
@@ -39,7 +108,7 @@ export default function Home() {
           description="EU 제출용 파일을 만들기 전 필요한 업무 흐름을 단계별로 확인합니다."
         >
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {steps.map((step, index) => (
+            {dashboard.steps.map((step, index) => (
               <div key={step.name} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
@@ -55,7 +124,7 @@ export default function Home() {
 
         <SectionCard title="최근 작업 항목" description="다음 작업을 우선 처리하면 Export 준비율이 올라갑니다.">
           <ul className="space-y-3">
-            {recentTasks.map((task) => (
+            {dashboard.recentTasks.map((task) => (
               <li key={task} className="flex gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-700" />
                 <span>{task}</span>
