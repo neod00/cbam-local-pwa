@@ -13,6 +13,7 @@ import {
     seedLocalData,
 } from '@/lib/local-db';
 import {
+    DEFAULT_SCENARIO_ASSUMPTIONS,
     normalizeScenarioAssumptions,
     SCENARIO_ASSUMPTIONS_SETTING_KEY,
     type ScenarioAssumptions,
@@ -151,7 +152,10 @@ export default function SettingsPage() {
 
         await clearLocalData();
         await seedLocalData();
-        setMessage('로컬 데이터를 삭제하고 시작용 예시 데이터를 다시 생성했습니다.');
+        setScenarioAssumptions(DEFAULT_SCENARIO_ASSUMPTIONS);
+        setBackupPreview(null);
+        setImportContent('');
+        setMessage('로컬 데이터를 삭제하고 시작용 예시 데이터를 다시 생성했습니다. 시나리오 가정값은 기본값으로 돌아갔습니다.');
     }
 
     return (
