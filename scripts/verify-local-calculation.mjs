@@ -24,6 +24,7 @@ globalThis.localCalculation = {
   calculateLocalResults,
   getLocalCalculationWarningHref,
   getIndirectEmissionsApplicability,
+  summarizeProductOutputLines,
 };`,
     {
       compilerOptions: {
@@ -42,6 +43,7 @@ const {
   calculateLocalResults,
   getIndirectEmissionsApplicability,
   getLocalCalculationWarningHref,
+  summarizeProductOutputLines,
 } = loadLocalCalculationModule();
 
 const product = {
@@ -181,6 +183,31 @@ assert.equal(productLineResults[0].indirect_see, 0);
 assert.equal(productLineResults[0].precursor_see, 1.45);
 assert.equal(productLineResults[0].total_see, 1.57);
 assert.equal(productLineResults[1].allocation_share, 0.4);
+
+const mixedAllocationSummary = summarizeProductOutputLines(process.output_mass_t, [
+  { ...outputLineA, allocation_basis: 'MASS' },
+  { ...outputLineB, allocation_basis: 'MANUAL', manual_allocation_percent: 40 },
+]);
+assert.equal(mixedAllocationSummary.count, 2);
+assert.equal(mixedAllocationSummary.activeCount, 2);
+assert.equal(mixedAllocationSummary.totalOutput, 1000);
+assert.equal(mixedAllocationSummary.delta, 0);
+assert.equal(mixedAllocationSummary.hasMixedAllocationBasis, true);
+assert.equal(mixedAllocationSummary.needsOutputReview, false);
+assert.equal(mixedAllocationSummary.needsAllocationReview, true);
+assert.equal(mixedAllocationSummary.needsReview, true);
+
+const mixedAllocationResults = calculateLocalResults({
+  processes: [process],
+  precursors: [precursor],
+  products: [product],
+  periods: [period],
+  productOutputLines: [
+    { ...outputLineA, allocation_basis: 'MASS' },
+    { ...outputLineB, allocation_basis: 'MANUAL', manual_allocation_percent: 40 },
+  ],
+});
+assert.match(mixedAllocationResults[0].warnings.join('\n'), /배분기준이 섞여 있습니다/);
 
 assert.equal(getIndirectEmissionsApplicability({ cn_code: '72083900', hs_code: '7208' }).applicable, false);
 assert.equal(getIndirectEmissionsApplicability({ cn_code: '26011200', hs_code: '2601' }).applicable, true);

@@ -75,6 +75,51 @@ export function getLocalCalculationWarningHref(warning: LocalCalculationWarning)
         : `/processes?edit=${encodedId}`;
 }
 
+export interface ProductOutputLineSummary {
+    count: number;
+    activeCount: number;
+    totalOutput: number;
+    delta: number;
+    tolerance: number;
+    manualPercentTotal: number;
+    hasMixedAllocationBasis: boolean;
+    needsOutputReview: boolean;
+    needsAllocationReview: boolean;
+    needsReview: boolean;
+}
+
+export function summarizeProductOutputLines(
+    processOutputMassT: number,
+    outputLines: Pick<ProductOutputLine, 'output_mass_t' | 'allocation_basis' | 'manual_allocation_percent'>[]
+): ProductOutputLineSummary {
+    const activeLines = outputLines.filter((line) => line.output_mass_t > 0);
+    const totalOutput = activeLines.reduce((sum, line) => sum + line.output_mass_t, 0);
+    const delta = totalOutput - processOutputMassT;
+    const tolerance = Math.max(0.01, Math.abs(processOutputMassT) * 0.01);
+    const allocationBases = new Set(activeLines.map((line) => line.allocation_basis));
+    const hasMixedAllocationBasis = allocationBases.size > 1;
+    const manualPercentTotal = activeLines.reduce(
+        (sum, line) => sum + (line.allocation_basis === 'MANUAL' ? line.manual_allocation_percent : 0),
+        0
+    );
+    const hasManualLines = activeLines.some((line) => line.allocation_basis === 'MANUAL');
+    const needsOutputReview = activeLines.length > 0 && Math.abs(delta) > tolerance;
+    const needsAllocationReview = hasMixedAllocationBasis || (hasManualLines && manualPercentTotal <= 0);
+
+    return {
+        count: outputLines.length,
+        activeCount: activeLines.length,
+        totalOutput,
+        delta,
+        tolerance,
+        manualPercentTotal,
+        hasMixedAllocationBasis,
+        needsOutputReview,
+        needsAllocationReview,
+        needsReview: needsOutputReview || needsAllocationReview,
+    };
+}
+
 export function calculateEmission(input: CalcInput): CalcResult {
     const { output_mass_t, electricity_mwh, electricity_ef, fuel_usage, precursors, input_mass_t } = input;
 
@@ -230,12 +275,21 @@ export function calculateLocalResults(input: {
         const precursor_see = output > 0 ? precursorEmissions / output : 0;
         const total_see = direct_see + indirect_see + precursor_see;
         const outputLines = outputLinesByProcess.get(process.id) ?? [];
+        const outputLineSummary = summarizeProductOutputLines(process.output_mass_t, outputLines);
         const validOutputLines = outputLines.filter((line) => line.output_mass_t > 0);
         const massTotal = validOutputLines.reduce((sum, line) => sum + line.output_mass_t, 0);
         const manualTotal = validOutputLines.reduce(
             (sum, line) => sum + (line.allocation_basis === 'MANUAL' ? line.manual_allocation_percent : 0),
             0
         );
+
+        if (outputLineSummary.hasMixedAllocationBasis) {
+            addWarning('제품 생산라인의 배분기준이 섞여 있습니다. 한 공정 안에서는 같은 배분기준을 사용하는지 확인하세요.', { type: 'process', id: process.id });
+        }
+
+        if (outputLineSummary.needsAllocationReview && manualTotal <= 0) {
+            addWarning('수동 비율 배분을 선택했지만 유효한 수동비율 합계가 0입니다.', { type: 'process', id: process.id });
+        }
 
         if (validOutputLines.length === 0) {
             return [{
@@ -315,12 +369,11 @@ export function calculateLocalResults(input: {
             };
         });
 
-        const outputLineTotal = validOutputLines.reduce((sum, line) => sum + line.output_mass_t, 0);
-        if (Math.abs(outputLineTotal - process.output_mass_t) > Math.max(0.01, process.output_mass_t * 0.01)) {
+        if (outputLineSummary.needsOutputReview) {
             for (const result of lineResults) {
-                result.warnings = [...result.warnings, `제품 생산라인 합계가 공정 총 생산량과 ${Math.abs(outputLineTotal - process.output_mass_t).toFixed(4)} t 차이납니다.`];
+                result.warnings = [...result.warnings, `제품 생산라인 합계가 공정 총 생산량과 ${Math.abs(outputLineSummary.delta).toFixed(4)} t 차이납니다.`];
                 result.warningDetails = [...result.warningDetails, {
-                    message: `제품 생산라인 합계가 공정 총 생산량과 ${Math.abs(outputLineTotal - process.output_mass_t).toFixed(4)} t 차이납니다.`,
+                    message: `제품 생산라인 합계가 공정 총 생산량과 ${Math.abs(outputLineSummary.delta).toFixed(4)} t 차이납니다.`,
                     target: { type: 'process', id: process.id },
                 }];
             }

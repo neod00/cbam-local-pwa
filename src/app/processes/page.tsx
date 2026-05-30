@@ -14,6 +14,7 @@ import {
     SourceStream,
     updateLocalItem,
 } from '@/lib/local-db';
+import { summarizeProductOutputLines } from '@/lib/calculation-engine';
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from '@/lib/source-stream-calculation';
 import { getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
 import { Factory, Gauge, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
@@ -167,8 +168,7 @@ export default function ProcessesPage() {
         const sourceStreamReviewCount = processes.filter((process) => calculateProcessSourceStreamSummary(process, sourceStreams).needsReview).length;
         const outputLineReviewCount = processes.filter((process) => {
             const lines = productOutputLines.filter((line) => line.process_id === process.id);
-            const lineTotal = lines.reduce((sum, line) => sum + line.output_mass_t, 0);
-            return lines.length > 0 && Math.abs(lineTotal - process.output_mass_t) > Math.max(0.01, process.output_mass_t * 0.01);
+            return summarizeProductOutputLines(process.output_mass_t, lines).needsReview;
         }).length;
         return { totalOutput, totalElectricity, sourceStreamReviewCount, outputLineCount: productOutputLines.length, outputLineReviewCount };
     }, [processes, sourceStreams, productOutputLines]);
@@ -196,6 +196,11 @@ export default function ProcessesPage() {
             delta,
         };
     }, [editingProcessId, newItem.direct_attributable_emissions_tco2e, sourceStreams]);
+
+    const editingOutputLineSummary = useMemo(
+        () => summarizeProductOutputLines(newItem.output_mass_t, outputLineDrafts),
+        [newItem.output_mass_t, outputLineDrafts]
+    );
 
     function createDefaultDraft(): ProcessDraft {
         return {
@@ -393,16 +398,7 @@ export default function ProcessesPage() {
 
     function getOutputLineSummary(process: ProductionProcess) {
         const lines = productOutputLines.filter((line) => line.process_id === process.id);
-        const totalOutput = lines.reduce((sum, line) => sum + line.output_mass_t, 0);
-        const delta = totalOutput - process.output_mass_t;
-        const tolerance = Math.max(0.01, process.output_mass_t * 0.01);
-
-        return {
-            count: lines.length,
-            totalOutput,
-            delta,
-            needsReview: lines.length > 0 && Math.abs(delta) > tolerance,
-        };
+        return summarizeProductOutputLines(process.output_mass_t, lines);
     }
 
     async function handleDeleteProcess(process: ProductionProcess) {
@@ -572,6 +568,32 @@ export default function ProcessesPage() {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                            <div className={editingOutputLineSummary.needsReview ? 'mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950' : 'mt-4 rounded-xl border border-teal-100 bg-teal-50 p-3 text-sm text-teal-950'}>
+                                <div className="grid gap-2 sm:grid-cols-3">
+                                    <div>
+                                        <p className={editingOutputLineSummary.needsReview ? 'text-xs text-amber-800' : 'text-xs text-teal-700'}>라인 합계</p>
+                                        <p className="font-semibold">{formatNumber(editingOutputLineSummary.totalOutput)} t</p>
+                                    </div>
+                                    <div>
+                                        <p className={editingOutputLineSummary.needsReview ? 'text-xs text-amber-800' : 'text-xs text-teal-700'}>공정 총 생산량과 차이</p>
+                                        <p className="font-semibold">{formatNumber(editingOutputLineSummary.delta)} t</p>
+                                    </div>
+                                    <div>
+                                        <p className={editingOutputLineSummary.needsReview ? 'text-xs text-amber-800' : 'text-xs text-teal-700'}>수동비율 합계</p>
+                                        <p className="font-semibold">{formatNumber(editingOutputLineSummary.manualPercentTotal)}%</p>
+                                    </div>
+                                </div>
+                                {editingOutputLineSummary.hasMixedAllocationBasis && (
+                                    <p className="mt-2 text-xs font-semibold">
+                                        질량 기준과 수동 비율이 섞여 있습니다. 한 공정 안에서는 같은 배분기준을 사용하는지 확인하세요.
+                                    </p>
+                                )}
+                                {editingOutputLineSummary.needsOutputReview && (
+                                    <p className="mt-2 text-xs font-semibold">
+                                        제품 생산라인 합계가 공정 총 생산량과 다릅니다. 저장은 가능하지만 산정 결과에서 확인 필요 항목으로 표시됩니다.
+                                    </p>
+                                )}
                             </div>
                         </div>
                         <div>

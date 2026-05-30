@@ -61,10 +61,11 @@ Completed:
 - Added first-pass CN-specific indirect-emissions applicability so HS 72/73 iron and steel products exclude electricity from SEE unless an explicit included CN rule applies.
 - Added precursor data modes, supplier country/installation fields, verification status, and local country/CN default-value lookup for purchased precursor SEE entry.
 - Added first-pass SEFA and CBAM certificate scenario screen comparing product SEE, default values, benchmark Column A, and certificate quantity/cost indicators.
+- Added shared product-line allocation summary checks, including mixed allocation-basis warnings and an in-form line-total review box.
 
 Next:
 
-- Tighten product-line allocation UX and export mapping after confirming the official template cells for product-level summaries.
+- Continue product-line export mapping after confirming the official template cells for product-level summaries.
 - Refine SEFA and certificate calculations after confirming the paid-carbon-price formula and current official factors.
 
 ## Decision Log
