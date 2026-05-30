@@ -55,10 +55,14 @@ Completed:
 - Added structured calculation warning targets and linked Results warnings to the relevant process or precursor edit screen.
 - Included source-stream data in the Export preview calculation summary so Export warning totals match dashboard and Results.
 - Added a local calculation verification gate to assert source-stream totals and warning targets are included in calculation results.
+- Reviewed the additional 2026 final-period CBAM materials, including `EUCBAM배산인수.pdf`, benchmark values, and country/CN default values. Captured the need to extend the app from SEE-only MVP logic toward system-boundary, allocation, SEFA, and certificate scenario support.
 
 Next:
 
-- Expand source-stream unit support only after confirming each additional official dropdown value against workbook formulas and validation lists.
+- Add local reference workbook import for CBAM benchmarks and country/CN default values.
+- Add CN-specific direct/indirect applicability so iron/steel goods do not always include electricity unless the official product rule requires it.
+- Add precursor data modes and supplier-country/default lookup before expanding broad source-stream unit coverage.
+- Add SEFA and certificate scenario modules after confirming the paid-carbon-price formula and current official factors.
 
 ## Decision Log
 
