@@ -69,6 +69,11 @@ export interface ScenarioRiskSummary {
     is_ready_for_review: boolean;
 }
 
+export interface ScenarioReviewAction {
+    href: string;
+    label: string;
+}
+
 export function summarizeScenarioRisks(scenarios: ProductScenarioResult[]): ScenarioRiskSummary {
     const missingCnCount = scenarios.filter((scenario) => scenario.data_quality === 'MISSING_CN').length;
     const missingOfficialReferenceCount = scenarios.filter((scenario) => scenario.data_quality === 'MISSING_REFERENCE').length;
@@ -91,6 +96,26 @@ export function summarizeScenarioRisks(scenarios: ProductScenarioResult[]): Scen
         total_certificate_cost_indicator_eur: totalCertificateCostIndicatorEur,
         is_ready_for_review: scenarios.length > 0 && missingCnCount === 0 && missingOfficialReferenceCount === 0,
     };
+}
+
+export function getScenarioReviewAction(
+    scenarioRiskSummary: ScenarioRiskSummary,
+    hasBenchmarkReference: boolean,
+    hasDefaultValueReference: boolean
+): ScenarioReviewAction {
+    if (scenarioRiskSummary.missing_cn_count > 0) {
+        return { href: '/products', label: '품목 관리' };
+    }
+
+    if (
+        scenarioRiskSummary.missing_official_reference_count > 0 ||
+        !hasBenchmarkReference ||
+        !hasDefaultValueReference
+    ) {
+        return { href: '/upload', label: '기준자료 가져오기' };
+    }
+
+    return { href: '/scenarios', label: '시나리오 검토' };
 }
 
 export function calculateProductScenarios(

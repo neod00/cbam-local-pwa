@@ -32,6 +32,7 @@ import {
 import type { ImportedBenchmarkReference, ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import {
     calculateProductScenarios,
+    getScenarioReviewAction,
     normalizeScenarioAssumptions,
     SCENARIO_ASSUMPTIONS_SETTING_KEY,
     summarizeScenarioRisks,
@@ -166,15 +167,11 @@ export default function ExportPage() {
     }, [benchmarkReference, defaultValueReference, results, scenarioAssumptions]);
 
     const scenarioChecklistAction = useMemo(() => {
-        if (scenarioRiskSummary.missing_cn_count > 0) {
-            return { href: '/products', label: '품목 관리' };
-        }
-
-        if (scenarioRiskSummary.missing_official_reference_count > 0 || !benchmarkReference || !defaultValueReference) {
-            return { href: '/upload', label: '기준자료 가져오기' };
-        }
-
-        return { href: '/scenarios', label: '시나리오 검토' };
+        return getScenarioReviewAction(
+            scenarioRiskSummary,
+            Boolean(benchmarkReference),
+            Boolean(defaultValueReference)
+        );
     }, [benchmarkReference, defaultValueReference, scenarioRiskSummary]);
 
     const plannedCellWrites = useMemo(

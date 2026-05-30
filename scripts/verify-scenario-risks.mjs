@@ -30,6 +30,7 @@ ${scenarioSource}
 globalThis.scenarioCalculation = {
   calculateProductScenarios,
   DEFAULT_SCENARIO_ASSUMPTIONS,
+  getScenarioReviewAction,
   normalizeScenarioAssumptions,
   summarizeScenarioRisks,
 };`,
@@ -49,12 +50,17 @@ globalThis.scenarioCalculation = {
 const {
   calculateProductScenarios,
   DEFAULT_SCENARIO_ASSUMPTIONS,
+  getScenarioReviewAction,
   normalizeScenarioAssumptions,
   summarizeScenarioRisks,
 } = loadScenarioModule();
 
 function assertClose(actual, expected, delta = 0.0000001) {
   assert.ok(Math.abs(actual - expected) < delta, `Expected ${actual} to be close to ${expected}`);
+}
+
+function assertAction(actual, expected) {
+  assert.equal(JSON.stringify(actual), JSON.stringify(expected));
 }
 
 const baseResult = {
@@ -121,15 +127,19 @@ assert.equal(readySummary.certificate_exposure_count, 1);
 assert.equal(readySummary.total_certificate_quantity_indicator, 93.75);
 assert.equal(readySummary.total_certificate_cost_indicator_eur, 7500);
 assert.equal(readySummary.is_ready_for_review, true);
+assertAction(getScenarioReviewAction(readySummary, true, true), { href: '/scenarios', label: '시나리오 검토' });
+assertAction(getScenarioReviewAction(readySummary, false, true), { href: '/upload', label: '기준자료 가져오기' });
 
 const missingCnScenarios = calculateProductScenarios([{ ...baseResult, id: 'result-2', cn_code: '', hs_code: '' }], assumptions, references);
 assert.equal(missingCnScenarios[0].data_quality, 'MISSING_CN');
 assert.equal(summarizeScenarioRisks(missingCnScenarios).missing_cn_count, 1);
 assert.equal(summarizeScenarioRisks(missingCnScenarios).is_ready_for_review, false);
+assertAction(getScenarioReviewAction(summarizeScenarioRisks(missingCnScenarios), true, true), { href: '/products', label: '품목 관리' });
 
 const missingReferenceScenarios = calculateProductScenarios([baseResult], assumptions, {});
 assert.equal(missingReferenceScenarios[0].data_quality, 'MISSING_REFERENCE');
 assert.equal(summarizeScenarioRisks(missingReferenceScenarios).missing_official_reference_count, 1);
 assert.equal(summarizeScenarioRisks(missingReferenceScenarios).is_ready_for_review, false);
+assertAction(getScenarioReviewAction(summarizeScenarioRisks(missingReferenceScenarios), true, true), { href: '/upload', label: '기준자료 가져오기' });
 
 console.log('Scenario risk verification passed.');
