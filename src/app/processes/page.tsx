@@ -646,6 +646,20 @@ export default function ProcessesPage() {
                                 </Button>
                             </div>
                         )}
+                        {editingProcessId && newItem.direct_attributable_emissions_tco2e > 0 && editingSourceStreamSummary?.count === 0 && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 md:col-span-2">
+                                <p className="font-semibold">연결된 배출원 자료가 없습니다</p>
+                                <p className="mt-2 text-amber-900">
+                                    직접배출량을 입력한 공정은 B_EmInst 근거가 필요합니다. 배출원 자료 화면에서 이 생산공정에 연료 또는 공정 원료 자료를 연결하세요.
+                                </p>
+                                <a
+                                    href="/source-streams"
+                                    className="mt-3 inline-flex min-h-9 items-center rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
+                                >
+                                    배출원 자료 추가하기
+                                </a>
+                            </div>
+                        )}
                         <div>
                             <label className="text-sm font-semibold text-slate-700">전력 사용량(MWh)</label>
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.electricity_mwh} onChange={(event) => setNewItem({ ...newItem, electricity_mwh: toNumber(event.target.value) })} />
