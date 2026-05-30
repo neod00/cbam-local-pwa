@@ -82,6 +82,7 @@ Completed:
 - Updated the PWA manifest and service-worker app shell to cover the current MVP routes and Korean local-first positioning.
 - Removed unused default Next.js public SVG assets so the public folder only keeps app-relevant PWA assets.
 - Added an MVP release checklist covering verification, excluded reference documents, user notices, license decisions, and deferred post-MVP scope.
+- Added `npm run verify:pwa` to assert PWA manifest metadata, service-worker app-shell routes, README release guidance, and absence of unused default assets.
 
 Next:
 

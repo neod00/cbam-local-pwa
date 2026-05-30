@@ -62,6 +62,7 @@ npm run verify:scenarios
 npm run verify:dashboard
 npm run verify:export
 npm run verify:backup
+npm run verify:pwa
 ```
 
 ## 데이터 보안 및 백업
