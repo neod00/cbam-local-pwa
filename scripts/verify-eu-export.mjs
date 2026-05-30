@@ -448,6 +448,46 @@ const checklist = euExport.createExportChecklist({
 assertEqual(String(checklist.items.length), '8', 'export checklist item count');
 assertEqual(String(checklist.reviewCount), '0', 'export checklist review count');
 assertEqual(String(checklist.isComplete), 'true', 'export checklist complete');
+const scenarioChecklist = euExport.createExportChecklist({
+  backupStatus: {
+    helper: '최근 백업 기록이 있습니다.',
+    label: '백업 완료',
+    tone: 'success',
+  },
+  lastExportResult: { checkedCellCount: 34 },
+  plannedCellWriteCount: 34,
+  readiness: {
+    ...readiness,
+    warningCount: 0,
+    isSubmissionReady: true,
+  },
+  resultCount: 1,
+  scenarioAction: { href: '/scenarios', label: '시나리오 검토' },
+  scenarioRiskSummary: {
+    missing_cn_count: 0,
+    missing_official_reference_count: 0,
+    missing_reference_count: 0,
+    above_default_count: 2,
+    certificate_exposure_count: 1,
+    default_certificate_exposure_count: 1,
+    actual_lower_certificate_count: 0,
+    default_lower_certificate_count: 1,
+    equal_certificate_count: 0,
+    total_certificate_quantity_indicator: 10,
+    total_certificate_cost_indicator_eur: 800,
+    total_default_certificate_quantity_indicator: 5,
+    total_default_certificate_cost_indicator_eur: 400,
+    is_ready_for_review: true,
+  },
+  templateFileName: file.name,
+  validation,
+});
+const scenarioChecklistItem = scenarioChecklist.items.find((item) => item.label === 'SEFA·인증서 시나리오 검토');
+assertEqual(
+  String(scenarioChecklistItem?.description.includes('기본값 우위 1건')),
+  'true',
+  'scenario checklist default basis summary'
+);
 const incompleteChecklist = euExport.createExportChecklist({
   backupStatus: {
     helper: '아직 백업 파일을 만든 기록이 없습니다.',

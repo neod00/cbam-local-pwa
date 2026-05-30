@@ -80,6 +80,22 @@ function getScenarioActionTasks(input: DashboardSummaryInput): DashboardTask[] {
         });
     }
 
+    if (scenarioRiskSummary.default_lower_certificate_count > 0) {
+        tasks.push({
+            label: `기본값 시나리오가 비용 지표상 유리한 품목 ${scenarioRiskSummary.default_lower_certificate_count}건을 검토하세요.`,
+            href: '/scenarios',
+            tone: 'warning',
+        });
+    }
+
+    if (scenarioRiskSummary.actual_lower_certificate_count > 0) {
+        tasks.push({
+            label: `실측자료 시나리오가 비용 지표상 유리한 품목 ${scenarioRiskSummary.actual_lower_certificate_count}건의 증빙을 확인하세요.`,
+            href: '/scenarios',
+            tone: 'success',
+        });
+    }
+
     if (exportErrorCount > 0) {
         tasks.push({
             label: `EU Export를 막는 오류 ${exportErrorCount}건을 해결하세요.`,
@@ -109,6 +125,7 @@ export function createDashboardSummary(input: DashboardSummaryInput): DashboardS
     const warningCount = warningTasks.length
         + scenarioRiskSummary.missing_reference_count
         + scenarioRiskSummary.above_default_count
+        + scenarioRiskSummary.default_lower_certificate_count
         + exportIssueCount;
     const sourceStreamWarningCount = results.filter(
         (result) => result.source_stream_count > 0 && Math.abs(result.source_stream_delta_tco2e) > 0.01

@@ -593,8 +593,8 @@ export function createExportChecklist(input: ExportChecklistInput): ExportCheckl
         {
             label: 'SEFA·인증서 시나리오 검토',
             description: scenarioRiskSummary.is_ready_for_review
-                ? scenarioRiskSummary.above_default_count > 0 || scenarioRiskSummary.certificate_exposure_count > 0
-                    ? `기준자료는 연결됐지만 ${scenarioRiskSummary.above_default_count}개 품목은 기본값 대비 차이를 검토해야 합니다.`
+                ? scenarioRiskSummary.above_default_count > 0 || scenarioRiskSummary.certificate_exposure_count > 0 || scenarioRiskSummary.default_lower_certificate_count > 0
+                    ? `기준자료는 연결됐지만 기본값 우위 ${scenarioRiskSummary.default_lower_certificate_count}건, 기본값 대비 차이 ${scenarioRiskSummary.above_default_count}건을 검토해야 합니다.`
                     : 'CN 코드와 공식 기준자료가 연결되어 시나리오 검토가 가능합니다.'
                 : `${scenarioRiskSummary.missing_reference_count}개 품목은 CN 코드 또는 공식 기준자료 연결이 필요합니다.`,
             status: scenarioRiskSummary.is_ready_for_review ? '검토 가능' : '확인 필요',

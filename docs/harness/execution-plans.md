@@ -65,6 +65,7 @@ Completed:
 - Connected product-line allocation checks to EU Export readiness so submission prep warns about output-total differences and mixed allocation bases before workbook download.
 - Added default-value scenario SEFA and certificate indicators using Benchmark Column B, while keeping actual-data indicators on Benchmark Column A.
 - Added actual-vs-default certificate comparison fields so the scenario screen can show which basis has the lower certificate cost indicator.
+- Surfaced actual-vs-default certificate basis decisions in dashboard tasks and the EU Export checklist.
 
 Next:
 

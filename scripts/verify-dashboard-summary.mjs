@@ -166,4 +166,26 @@ const warningDashboard = createDashboardSummary({
 assert.equal(warningDashboard.recentTasks[0].href, '/precursors?edit=precursor%201');
 assert.equal(warningDashboard.recentTasks[0].tone, 'warning');
 
+const scenarioBasisDashboard = createDashboardSummary({
+  results: [result],
+  productCount: 1,
+  processCount: 1,
+  precursorCount: 1,
+  scenarioRiskSummary: {
+    ...baseRiskSummary,
+    default_lower_certificate_count: 1,
+    actual_lower_certificate_count: 1,
+  },
+  exportIssueCount: 0,
+  exportErrorCount: 0,
+  hasBenchmarkReference: true,
+  hasDefaultValueReference: true,
+});
+
+assert.equal(scenarioBasisDashboard.warningCount, 1);
+assert.equal(scenarioBasisDashboard.recentTasks[0].href, '/scenarios');
+assert.equal(scenarioBasisDashboard.recentTasks[0].tone, 'warning');
+assert.match(scenarioBasisDashboard.recentTasks[0].label, /기본값 시나리오/);
+assert.equal(scenarioBasisDashboard.recentTasks[1].tone, 'success');
+
 console.log('Dashboard summary verification passed.');
