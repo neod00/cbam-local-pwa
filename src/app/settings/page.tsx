@@ -5,6 +5,7 @@ import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummar
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
     CbamBackupFile,
+    CBAM_LAST_BACKUP_AT_KEY,
     clearLocalData,
     exportLocalBackup,
     getBackupCompatibilityMessage,
@@ -57,7 +58,7 @@ export default function SettingsPage() {
     const [scenarioAssumptions, setScenarioAssumptions] = useState<ScenarioAssumptions>();
 
     useEffect(() => {
-        setLastBackupAt(window.localStorage.getItem('cbam-local:last-backup-at') ?? undefined);
+        setLastBackupAt(window.localStorage.getItem(CBAM_LAST_BACKUP_AT_KEY) ?? undefined);
         getLocalSetting<ScenarioAssumptions>(SCENARIO_ASSUMPTIONS_SETTING_KEY)
             .then((savedAssumptions) => setScenarioAssumptions(normalizeScenarioAssumptions(savedAssumptions)))
             .catch(() => setScenarioAssumptions(normalizeScenarioAssumptions(undefined)));
@@ -102,7 +103,7 @@ export default function SettingsPage() {
         anchor.remove();
         URL.revokeObjectURL(url);
 
-        window.localStorage.setItem('cbam-local:last-backup-at', backup.manifest.exported_at);
+        window.localStorage.setItem(CBAM_LAST_BACKUP_AT_KEY, backup.manifest.exported_at);
         setLastBackupAt(backup.manifest.exported_at);
         setMessage('백업 파일을 내보냈습니다. 회사의 안전한 폴더에 보관하세요.');
     }

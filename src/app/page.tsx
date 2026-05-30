@@ -5,7 +5,7 @@ import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummar
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import { createDashboardSummary } from '@/lib/dashboard-summary';
 import { evaluateEuExportReadiness } from '@/lib/eu-template-export';
-import { getLocalSetting, listLocalItems, seedLocalData } from '@/lib/local-db';
+import { CBAM_LAST_BACKUP_AT_KEY, getLocalSetting, listLocalItems, seedLocalData } from '@/lib/local-db';
 import type { ImportedBenchmarkReference, ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import {
   calculateProductScenarios,
@@ -21,6 +21,17 @@ import { useEffect, useMemo, useState } from 'react';
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value);
+}
+
+function formatDateTime(value?: string) {
+  if (!value) {
+    return '아직 백업하지 않음';
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
 }
 
 const EMPTY_SCENARIO_RISK_SUMMARY: ScenarioRiskSummary = {
@@ -45,12 +56,14 @@ export default function Home() {
   const [hasBenchmarkReference, setHasBenchmarkReference] = useState(false);
   const [hasDefaultValueReference, setHasDefaultValueReference] = useState(false);
   const [scenarioAssumptions, setScenarioAssumptions] = useState<ScenarioAssumptions>();
+  const [lastBackupAt, setLastBackupAt] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadDashboard() {
       setLoading(true);
       await seedLocalData();
+      setLastBackupAt(window.localStorage.getItem(CBAM_LAST_BACKUP_AT_KEY) ?? undefined);
       const [
         processes,
         precursors,
@@ -197,9 +210,15 @@ export default function Home() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <SectionCard title="데이터 보관 원칙" description="무료 PWA 버전은 기업 데이터를 서버로 전송하지 않는 구조를 우선합니다.">
-          <div className="rounded-2xl bg-teal-50 p-4 text-sm leading-6 text-teal-900">
-            입력 데이터는 브라우저 로컬 DB에 저장됩니다. PC 교체나 브라우저 데이터 삭제에 대비해 중요한 입력 후에는
-            `.cbam` 백업을 내려받아 회사의 안전한 폴더에 보관하세요.
+          <div className="space-y-3">
+            <div className="rounded-2xl bg-teal-50 p-4 text-sm leading-6 text-teal-900">
+              입력 데이터는 브라우저 로컬 DB에 저장됩니다. PC 교체나 브라우저 데이터 삭제에 대비해 중요한 입력 후에는
+              `.cbam` 백업을 내려받아 회사의 안전한 폴더에 보관하세요.
+            </div>
+            <Link href="/settings" className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm transition hover:bg-slate-50">
+              <span className="font-semibold text-slate-900">마지막 백업</span>
+              <span className="text-right text-slate-600">{formatDateTime(lastBackupAt)}</span>
+            </Link>
           </div>
         </SectionCard>
 

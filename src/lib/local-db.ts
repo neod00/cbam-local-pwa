@@ -119,6 +119,7 @@ export interface AppSetting extends LocalEntity {
 
 export const CBAM_LOCAL_APP_NAME = "CBAM Local";
 export const CBAM_LOCAL_APP_VERSION = "0.1.0";
+export const CBAM_LAST_BACKUP_AT_KEY = "cbam-local:last-backup-at";
 
 export interface CbamBackupManifest {
   format: "cbam-local-backup";
