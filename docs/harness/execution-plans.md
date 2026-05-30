@@ -54,6 +54,7 @@ Completed:
 - Linked dashboard next-task items to the relevant local edit screens so warnings can be resolved from the dashboard.
 - Added structured calculation warning targets and linked Results warnings to the relevant process or precursor edit screen.
 - Included source-stream data in the Export preview calculation summary so Export warning totals match dashboard and Results.
+- Added a local calculation verification gate to assert source-stream totals and warning targets are included in calculation results.
 
 Next:
 

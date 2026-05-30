@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "verify": "npm run verify:source-streams && npm run verify:export && npm run lint && npm run build",
+    "verify": "npm run verify:source-streams && npm run verify:calculation && npm run verify:export && npm run lint && npm run build",
+    "verify:calculation": "node scripts/verify-local-calculation.mjs",
     "verify:export": "node scripts/verify-eu-export.mjs",
     "verify:source-streams": "node scripts/verify-source-stream-calculation.mjs"
   },
