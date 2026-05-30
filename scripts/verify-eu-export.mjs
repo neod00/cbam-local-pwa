@@ -368,6 +368,8 @@ const precursor = {
   purchased_mass_t: 1100,
   consumed_mass_t: 1000,
   consumed_for_non_cbam_mass_t: 0,
+  data_mode: 'ACTUAL',
+  verification_status: 'SUPPLIER_CONFIRMED',
   direct_see_tco2e_per_t: 1.2,
   indirect_see_tco2e_per_t: 0.25,
   source: 'Supplier communication template',
@@ -390,6 +392,36 @@ assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
 const readiness = euExport.evaluateEuExportReadiness(data, validation.cnCodeMap);
 assertEqual(String(readiness.errorCount), '0', 'readiness error count');
 assertEqual(String(readiness.warningCount), '1', 'readiness warning count');
+const precursorEvidenceReadiness = euExport.evaluateEuExportReadiness({
+  ...data,
+  sourceStreams: [],
+  precursors: [
+    {
+      ...precursor,
+      id: 'precursor-default',
+      data_mode: 'DEFAULT',
+      default_value_justification: '',
+    },
+    {
+      ...precursor,
+      id: 'precursor-unverified',
+      data_mode: 'SEMI_ACTUAL',
+      verification_status: 'UNVERIFIED',
+      default_value_justification: 'Supplier data partially replaced with defaults',
+    },
+  ],
+}, validation.cnCodeMap);
+assertEqual(String(precursorEvidenceReadiness.warningCount), '2', 'precursor evidence warning count');
+assertEqual(
+  String(precursorEvidenceReadiness.issues.some((issue) => issue.message.includes('기본값을 사용하는 사유'))),
+  'true',
+  'default precursor justification warning'
+);
+assertEqual(
+  String(precursorEvidenceReadiness.issues.some((issue) => issue.message.includes('미검증 상태'))),
+  'true',
+  'unverified precursor warning'
+);
 const allocationReadiness = euExport.evaluateEuExportReadiness({
   ...data,
   sourceStreams: [],

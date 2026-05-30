@@ -514,6 +514,24 @@ export function evaluateEuExportReadiness(
                 target: { type: 'precursor', id: precursor.id },
             });
         }
+
+        if (precursor.data_mode === 'DEFAULT' && !precursor.default_value_justification?.trim()) {
+            issues.push({
+                severity: 'warning',
+                area: '구매 전구물질',
+                message: `${precursor.name}: 기본값을 사용하는 사유가 비어 있습니다. 제출 전 기본값 사용 근거를 남기세요.`,
+                target: { type: 'precursor', id: precursor.id },
+            });
+        }
+
+        if (precursor.data_mode !== 'DEFAULT' && precursor.verification_status === 'UNVERIFIED') {
+            issues.push({
+                severity: 'warning',
+                area: '구매 전구물질',
+                message: `${precursor.name}: 실측 또는 혼합 전구물질 자료가 아직 미검증 상태입니다.`,
+                target: { type: 'precursor', id: precursor.id },
+            });
+        }
     }
 
     const errorCount = issues.filter((issue) => issue.severity === 'error').length;
