@@ -1,12 +1,12 @@
 {
-  "name": "CBAM Local",
+  "name": "CBAM Local PWA",
   "short_name": "CBAM Local",
-  "description": "Local-first CBAM embedded emissions calculator for installation data.",
+  "description": "브라우저 로컬에서 CBAM 산정, 증빙 검토, EU 템플릿 Export를 지원하는 PWA입니다.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f3f4f6",
-  "theme_color": "#111827",
+  "background_color": "#F6F8F7",
+  "theme_color": "#0F766E",
   "orientation": "any",
   "icons": [
     {

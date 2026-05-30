@@ -1,11 +1,18 @@
-const CACHE_NAME = "cbam-local-v1";
+const CACHE_NAME = "cbam-local-v2";
 const APP_SHELL = [
   "/",
-  "/products",
-  "/periods",
+  "/design-preview",
+  "/export",
   "/installations",
-  "/upload",
+  "/periods",
+  "/precursors",
+  "/processes",
+  "/products",
   "/results",
+  "/scenarios",
+  "/settings",
+  "/source-streams",
+  "/upload",
   "/manifest.webmanifest",
   "/icon.svg"
 ];

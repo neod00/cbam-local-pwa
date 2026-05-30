@@ -79,6 +79,7 @@ Completed:
 - Improved the EU Export readiness review with area summaries, error-first ordering, and clearer edit actions.
 - Linked Export checklist error and warning items to the first editable readiness issue.
 - Replaced the default Next.js README with Korean project documentation covering local-first PWA usage, data safety, EU template handling, verification commands, and MVP limits.
+- Updated the PWA manifest and service-worker app shell to cover the current MVP routes and Korean local-first positioning.
 
 Next:
 
