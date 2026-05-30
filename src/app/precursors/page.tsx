@@ -478,6 +478,22 @@ export default function PrecursorsPage() {
                                 <option value="VERIFIED">검증완료</option>
                             </select>
                         </div>
+                        {newItem.data_mode !== 'DEFAULT' && newItem.verification_status === 'UNVERIFIED' && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 md:col-span-3">
+                                <p className="font-semibold">실측자료 검증 상태를 확인하세요</p>
+                                <p className="mt-2 text-amber-900">
+                                    실측/혼합 전구물질 자료가 미검증 상태입니다. 공급사 회신, 검증 문서, 내부 확인 근거 중 어떤 자료로 확인했는지 정리해 두세요.
+                                </p>
+                            </div>
+                        )}
+                        {newItem.data_mode === 'DEFAULT' && !newItem.default_value_justification.trim() && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 md:col-span-3">
+                                <p className="font-semibold">기본값 사용 근거가 필요합니다</p>
+                                <p className="mt-2 text-amber-900">
+                                    공식 기본값을 사용하는 경우 적용연도, 국가/CN 코드, 기준자료 파일명을 사유에 남겨야 Export 전 검토가 쉬워집니다.
+                                </p>
+                            </div>
+                        )}
                         <div>
                             <label htmlFor="precursor-period" className="text-sm font-semibold text-slate-700">보고기간</label>
                             <select id="precursor-period" className={fieldClass} value={newItem.period_id} onChange={(event) => setNewItem({ ...newItem, period_id: event.target.value })}>
