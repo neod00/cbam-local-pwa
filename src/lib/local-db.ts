@@ -138,6 +138,12 @@ export interface CbamBackupFile {
   };
 }
 
+export interface BackupStatus {
+  helper: string;
+  label: "백업 필요" | "백업 점검" | "백업 완료";
+  tone: "success" | "warning";
+}
+
 type BackupData = CbamBackupFile["data"];
 
 type StoreEntityMap = {
@@ -327,6 +333,33 @@ export function getBackupCompatibilityMessage(manifest: CbamBackupManifest): str
   }
 
   return "";
+}
+
+export function getBackupStatus(value?: string, now = Date.now()): BackupStatus {
+  if (!value) {
+    return {
+      helper: "아직 백업 파일을 만든 기록이 없습니다.",
+      label: "백업 필요",
+      tone: "warning",
+    };
+  }
+
+  const backupTime = new Date(value).getTime();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+  if (!Number.isFinite(backupTime) || now - backupTime > sevenDaysMs) {
+    return {
+      helper: "최근 백업이 오래되었습니다. 주요 입력 후 새 백업을 권장합니다.",
+      label: "백업 점검",
+      tone: "warning",
+    };
+  }
+
+  return {
+    helper: "최근 백업 기록이 있습니다.",
+    label: "백업 완료",
+    tone: "success",
+  };
 }
 
 export async function exportLocalBackup(): Promise<CbamBackupFile> {

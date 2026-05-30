@@ -18,6 +18,7 @@ globalThis.localDb = {
   CBAM_LOCAL_APP_VERSION,
   createLocalBackup,
   getBackupCompatibilityMessage,
+  getBackupStatus,
   parseBackupFile,
 };`,
     {
@@ -38,6 +39,7 @@ const {
   CBAM_LOCAL_APP_VERSION,
   createLocalBackup,
   getBackupCompatibilityMessage,
+  getBackupStatus,
   parseBackupFile,
 } = loadLocalDbModule();
 
@@ -133,6 +135,12 @@ assert.match(
   getBackupCompatibilityMessage({ ...generatedBackup.manifest, app_version: '9.9.9' }),
   /현재 앱 버전/
 );
+
+const now = new Date('2026-05-30T00:00:00.000Z').getTime();
+assert.equal(getBackupStatus(undefined, now).label, '백업 필요');
+assert.equal(getBackupStatus('not-a-date', now).label, '백업 점검');
+assert.equal(getBackupStatus('2026-05-20T00:00:00.000Z', now).label, '백업 점검');
+assert.equal(getBackupStatus('2026-05-29T00:00:00.000Z', now).label, '백업 완료');
 
 assert.throws(
   () => parseBackupFile(JSON.stringify({ manifest: { format: 'unknown', format_version: 1 }, data: {} })),
