@@ -51,6 +51,14 @@ Each production process block starts at row `11 + index * 65`.
 
 The app does not currently write production process labels or goods-category text into `D_Processes`, because those visible block labels are protected in the official workbook.
 
+Export readiness also checks product output-line consistency before download:
+
+- Product output-line mass totals are compared with the production-process total output.
+- Mixed allocation bases inside one production process are reported as warnings.
+- Manual allocation lines with no valid manual percentage total are reported as warnings.
+
+These checks are intentionally handled as readiness warnings rather than direct workbook writes, because the current confirmed unlocked `D_Processes` cells accept process-level totals, not a separate product-line allocation table.
+
 ### `B_EmInst`
 
 Each calculation-based source-stream row starts at row `17 + index`. The app currently writes up to 75 source streams.
@@ -98,4 +106,5 @@ The app does not currently write `indirect_see_tco2e_per_t` directly into `E_Pur
 ## Known Gaps
 
 - Production routes and aggregated goods categories should be driven through `A_InstData` and official dropdown/code-list relationships rather than by overwriting protected labels.
+- Product-level output and allocation mapping still needs official-cell confirmation before the app writes product-line summaries into the template.
 - Source-stream validation is still intentionally conservative. Additional official unit/dropdown values should be added only after confirming the corresponding workbook formulas and validation lists.

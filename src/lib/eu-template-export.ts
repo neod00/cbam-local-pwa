@@ -1,7 +1,8 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import type { BackupStatus, Installation, Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
+import type { BackupStatus, Installation, Product, ProductOutputLine, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import type { CnCodeOption } from './cn-code-options';
 import type { ScenarioRiskSummary } from './scenario-calculation';
+import { summarizeProductOutputLines } from './calculation-engine';
 import { calculateSourceStreamEmissions } from './source-stream-calculation';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
 
@@ -39,6 +40,7 @@ export interface EuTemplateExportData {
     installations?: Installation[];
     periods?: ReportingPeriod[];
     processes: ProductionProcess[];
+    productOutputLines?: ProductOutputLine[];
     sourceStreams?: SourceStream[];
     precursors: PurchasedPrecursor[];
     products: Product[];
@@ -330,6 +332,7 @@ export function evaluateEuExportReadiness(
     const issues: EuExportReadinessIssue[] = [];
     const productById = new Map(data.products.map((product) => [product.id, product]));
     const sourceStreamsByProcess = new Map<string, SourceStream[]>();
+    const outputLinesByProcess = new Map<string, ProductOutputLine[]>();
 
     for (const sourceStream of data.sourceStreams ?? []) {
         if (!sourceStream.process_id) {
@@ -339,6 +342,16 @@ export function evaluateEuExportReadiness(
         const group = sourceStreamsByProcess.get(sourceStream.process_id) ?? [];
         group.push(sourceStream);
         sourceStreamsByProcess.set(sourceStream.process_id, group);
+    }
+
+    for (const outputLine of data.productOutputLines ?? []) {
+        if (!outputLine.process_id) {
+            continue;
+        }
+
+        const group = outputLinesByProcess.get(outputLine.process_id) ?? [];
+        group.push(outputLine);
+        outputLinesByProcess.set(outputLine.process_id, group);
     }
 
     if (data.processes.length > 10) {
@@ -399,6 +412,7 @@ export function evaluateEuExportReadiness(
     for (const process of data.processes) {
         const product = process.product_id ? productById.get(process.product_id) : undefined;
         const processSourceStreams = sourceStreamsByProcess.get(process.id) ?? [];
+        const outputLineSummary = summarizeProductOutputLines(process.output_mass_t, outputLinesByProcess.get(process.id) ?? []);
 
         if (!product) {
             issues.push({
@@ -429,6 +443,34 @@ export function evaluateEuExportReadiness(
                 target: { type: 'process', id: process.id },
             });
         }
+
+        if (outputLineSummary.needsOutputReview) {
+            issues.push({
+                severity: 'warning',
+                area: '생산공정',
+                message: `${process.name}: 제품 생산라인 합계 ${outputLineSummary.totalOutput.toFixed(4)} t와 공정 총 생산량 ${process.output_mass_t.toFixed(4)} t가 ${outputLineSummary.delta.toFixed(4)} t 차이납니다.`,
+                target: { type: 'process', id: process.id },
+            });
+        }
+
+        if (outputLineSummary.hasMixedAllocationBasis) {
+            issues.push({
+                severity: 'warning',
+                area: '생산공정',
+                message: `${process.name}: 제품 생산라인의 배분기준이 섞여 있습니다. Export 전에 산정 근거를 확인하세요.`,
+                target: { type: 'process', id: process.id },
+            });
+        }
+
+        if (outputLineSummary.needsAllocationReview && outputLineSummary.manualPercentTotal <= 0) {
+            issues.push({
+                severity: 'warning',
+                area: '생산공정',
+                message: `${process.name}: 수동 비율 배분을 선택했지만 유효한 수동비율 합계가 0입니다.`,
+                target: { type: 'process', id: process.id },
+            });
+        }
+
         if (processSourceStreams.length > 0) {
             const sourceStreamEmissions = processSourceStreams.reduce(
                 (sum, sourceStream) => sum + calculateSourceStreamEmissions(sourceStream),

@@ -24,6 +24,7 @@ import {
     seedLocalData,
     type Installation,
     type Product,
+    type ProductOutputLine,
     type ProductionProcess,
     type PurchasedPrecursor,
     type ReportingPeriod,
@@ -64,6 +65,7 @@ export default function ExportPage() {
     const [installations, setInstallations] = useState<Installation[]>([]);
     const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
     const [processes, setProcesses] = useState<ProductionProcess[]>([]);
+    const [productOutputLines, setProductOutputLines] = useState<ProductOutputLine[]>([]);
     const [sourceStreams, setSourceStreams] = useState<SourceStream[]>([]);
     const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
@@ -105,6 +107,7 @@ export default function ExportPage() {
             setInstallations(installations);
             setPeriods(periods);
             setProcesses(processes);
+            setProductOutputLines(productOutputLines);
             setSourceStreams(sourceStreams);
             setPrecursors(precursors);
             setProducts(products);
@@ -131,8 +134,8 @@ export default function ExportPage() {
     }, [results]);
 
     const readiness = useMemo(
-        () => evaluateEuExportReadiness({ processes, sourceStreams, precursors, products }, validation?.cnCodeMap),
-        [processes, sourceStreams, precursors, products, validation?.cnCodeMap]
+        () => evaluateEuExportReadiness({ processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
+        [processes, productOutputLines, sourceStreams, precursors, products, validation?.cnCodeMap]
     );
 
     const scenarioRiskSummary = useMemo(() => {
@@ -153,8 +156,8 @@ export default function ExportPage() {
     }, [benchmarkReference, defaultValueReference, scenarioRiskSummary]);
 
     const plannedCellWrites = useMemo(
-        () => createEuTemplateExportCellWrites({ installations, periods, processes, sourceStreams, precursors, products }, validation?.cnCodeMap),
-        [installations, periods, processes, sourceStreams, precursors, products, validation?.cnCodeMap]
+        () => createEuTemplateExportCellWrites({ installations, periods, processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
+        [installations, periods, processes, productOutputLines, sourceStreams, precursors, products, validation?.cnCodeMap]
     );
     const backupStatus = useMemo(() => getBackupStatus(lastBackupAt), [lastBackupAt]);
 
@@ -227,6 +230,7 @@ export default function ExportPage() {
                 installations,
                 periods,
                 processes,
+                productOutputLines,
                 sourceStreams,
                 precursors,
                 products,

@@ -78,6 +78,7 @@ function loadEuExportModule() {
       "import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';",
       'const { strFromU8, strToU8, unzipSync, zipSync } = fflate;'
     )
+    .replace("import { summarizeProductOutputLines } from './calculation-engine';", '')
     .replace("import { calculateSourceStreamEmissions } from './source-stream-calculation';", '')
     .replace("import { getIndirectEmissionsApplicability } from './cbam-product-rules';", '')
     .replace(/^import type .*;\r?\n/gm, '')
@@ -85,6 +86,34 @@ function loadEuExportModule() {
   const compiled = ts.transpileModule(
     `${sourceStreamCalculationSource}
 ${productRulesSource}
+function summarizeProductOutputLines(processOutputMassT, outputLines) {
+  const activeLines = outputLines.filter((line) => line.output_mass_t > 0);
+  const totalOutput = activeLines.reduce((sum, line) => sum + line.output_mass_t, 0);
+  const delta = totalOutput - processOutputMassT;
+  const tolerance = Math.max(0.01, Math.abs(processOutputMassT) * 0.01);
+  const allocationBases = new Set(activeLines.map((line) => line.allocation_basis));
+  const hasMixedAllocationBasis = allocationBases.size > 1;
+  const manualPercentTotal = activeLines.reduce(
+    (sum, line) => sum + (line.allocation_basis === 'MANUAL' ? line.manual_allocation_percent : 0),
+    0
+  );
+  const hasManualLines = activeLines.some((line) => line.allocation_basis === 'MANUAL');
+  const needsOutputReview = activeLines.length > 0 && Math.abs(delta) > tolerance;
+  const needsAllocationReview = hasMixedAllocationBasis || (hasManualLines && manualPercentTotal <= 0);
+
+  return {
+    count: outputLines.length,
+    activeCount: activeLines.length,
+    totalOutput,
+    delta,
+    tolerance,
+    manualPercentTotal,
+    hasMixedAllocationBasis,
+    needsOutputReview,
+    needsAllocationReview,
+    needsReview: needsOutputReview || needsAllocationReview,
+  };
+}
 ${source}
 globalThis.euExport = {
   REQUIRED_EU_TEMPLATE_SHEETS,
@@ -315,6 +344,18 @@ const sourceStream = {
   biomass_fraction: 0,
   source: 'Monthly fuel invoice',
 };
+const outputLine = {
+  id: 'output-line-1',
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+  process_id: process.id,
+  product_id: product.id,
+  name: 'Hot Rolled Coil output',
+  output_mass_t: 1000,
+  allocation_basis: 'MASS',
+  manual_allocation_percent: 100,
+  note: '',
+};
 const precursor = {
   id: 'precursor-1',
   created_at: '2026-01-01T00:00:00.000Z',
@@ -337,6 +378,7 @@ const data = {
   periods: [period],
   products: [product],
   processes: [process],
+  productOutputLines: [outputLine],
   sourceStreams: [sourceStream],
   precursors: [precursor],
 };
@@ -348,6 +390,26 @@ assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
 const readiness = euExport.evaluateEuExportReadiness(data, validation.cnCodeMap);
 assertEqual(String(readiness.errorCount), '0', 'readiness error count');
 assertEqual(String(readiness.warningCount), '1', 'readiness warning count');
+const allocationReadiness = euExport.evaluateEuExportReadiness({
+  ...data,
+  sourceStreams: [],
+  productOutputLines: [
+    { ...outputLine, id: 'output-line-1', output_mass_t: 600, allocation_basis: 'MASS' },
+    { ...outputLine, id: 'output-line-2', output_mass_t: 300, allocation_basis: 'MANUAL', manual_allocation_percent: 40 },
+  ],
+}, validation.cnCodeMap);
+assertEqual(String(allocationReadiness.errorCount), '0', 'allocation readiness error count');
+assertEqual(String(allocationReadiness.warningCount), '2', 'allocation readiness warning count');
+assertEqual(
+  String(allocationReadiness.issues.some((issue) => issue.message.includes('제품 생산라인 합계'))),
+  'true',
+  'allocation output total warning'
+);
+assertEqual(
+  String(allocationReadiness.issues.some((issue) => issue.message.includes('배분기준이 섞여 있습니다'))),
+  'true',
+  'mixed allocation basis warning'
+);
 assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '34', 'planned cell writes');
 const checklist = euExport.createExportChecklist({
   backupStatus: {
