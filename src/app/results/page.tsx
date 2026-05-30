@@ -29,14 +29,15 @@ export default function ResultsPage() {
         async function loadResults() {
             setLoading(true);
             await seedLocalData();
-            const [processes, precursors, products, periods] = await Promise.all([
+            const [processes, precursors, products, periods, sourceStreams] = await Promise.all([
                 listLocalItems('processes'),
                 listLocalItems('precursors'),
                 listLocalItems('products'),
                 listLocalItems('periods'),
+                listLocalItems('source_streams'),
             ]);
 
-            setResults(calculateLocalResults({ processes, precursors, products, periods }));
+            setResults(calculateLocalResults({ processes, precursors, products, periods, sourceStreams }));
             setLoading(false);
         }
 
@@ -45,6 +46,8 @@ export default function ResultsPage() {
 
     const summary = useMemo(() => {
         const totalOutput = results.reduce((sum, result) => sum + result.output_mass_t, 0);
+        const totalSourceStreamEmissions = results.reduce((sum, result) => sum + result.source_stream_emissions_tco2e, 0);
+        const totalSourceStreamEnergy = results.reduce((sum, result) => sum + result.source_stream_energy_tj, 0);
         const allWarnings = results.flatMap((result) =>
             result.warnings.map((warning) => ({
                 resultId: result.id,
@@ -56,6 +59,8 @@ export default function ResultsPage() {
         return {
             processCount: results.length,
             totalOutput,
+            totalSourceStreamEmissions,
+            totalSourceStreamEnergy,
             averageTotalSee: average(results.map((result) => result.total_see)),
             warningCount: allWarnings.length,
             warnings: allWarnings,
@@ -73,7 +78,7 @@ export default function ResultsPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard label="산정 공정 수" value={summary.processCount} helper="공정별 SEE 계산" icon={Factory} tone="info" />
                 <StatCard label="총 생산량" value={formatNumber(summary.totalOutput)} helper="tonne" icon={Scale} tone="pending" />
-                <StatCard label="평균 총 SEE" value={formatNumber(summary.averageTotalSee)} helper="tCO2e/t" icon={Gauge} tone="success" />
+                <StatCard label="배출원 합계" value={formatNumber(summary.totalSourceStreamEmissions)} helper={`${formatNumber(summary.totalSourceStreamEnergy)} TJ`} icon={Gauge} tone="success" />
                 <StatCard label="검토 필요" value={summary.warningCount} helper="경고 항목" icon={AlertTriangle} tone="warning" />
             </div>
 
@@ -86,6 +91,8 @@ export default function ResultsPage() {
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">보고기간</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">생산량(t)</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">배출원 합계</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 차이</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">간접 SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">
                                 전구물질 SEE
@@ -96,13 +103,13 @@ export default function ResultsPage() {
                     <tbody className="divide-y divide-slate-100 bg-white">
                         {loading ? (
                             <tr>
-                                <td colSpan={8} className="p-6 text-center text-sm text-slate-500">
+                                <td colSpan={10} className="p-6 text-center text-sm text-slate-500">
                                     불러오는 중...
                                 </td>
                             </tr>
                         ) : results.length === 0 ? (
                             <tr>
-                                <td colSpan={8} className="p-6 text-center text-sm text-slate-500">
+                                <td colSpan={10} className="p-6 text-center text-sm text-slate-500">
                                     산정할 생산공정이 없습니다.
                                 </td>
                             </tr>
@@ -131,6 +138,19 @@ export default function ResultsPage() {
                                     </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
                                         {formatNumber(result.direct_see)}
+                                    </td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
+                                        {result.source_stream_count > 0
+                                            ? `${formatNumber(result.source_stream_emissions_tco2e)} tCO2e`
+                                            : '-'}
+                                        {result.source_stream_count > 0 && (
+                                            <div className="text-xs text-slate-400">
+                                                {formatNumber(result.source_stream_energy_tj)} TJ
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className={`whitespace-nowrap px-4 py-4 text-right text-sm ${Math.abs(result.source_stream_delta_tco2e) > 0.01 ? 'font-semibold text-amber-700' : 'text-slate-600'}`}>
+                                        {result.source_stream_count > 0 ? formatNumber(result.source_stream_delta_tco2e) : '-'}
                                     </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
                                         {formatNumber(result.indirect_see)}

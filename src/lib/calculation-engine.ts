@@ -1,4 +1,5 @@
-import type { Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod } from './local-db';
+import type { Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
+import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';
 
 export type ActivityData = Record<string, number>;
 
@@ -38,6 +39,11 @@ export interface LocalCalculationResult {
     cn_code?: string;
     production_route: string;
     output_mass_t: number;
+    direct_emissions_tco2e: number;
+    source_stream_count: number;
+    source_stream_emissions_tco2e: number;
+    source_stream_energy_tj: number;
+    source_stream_delta_tco2e: number;
     direct_see: number;
     indirect_see: number;
     precursor_see: number;
@@ -97,10 +103,12 @@ export function calculateLocalResults(input: {
     precursors: PurchasedPrecursor[];
     products: Product[];
     periods: ReportingPeriod[];
+    sourceStreams?: SourceStream[];
 }): LocalCalculationResult[] {
     const productById = new Map(input.products.map((product) => [product.id, product]));
     const periodById = new Map(input.periods.map((period) => [period.id, period]));
     const precursorsByProcess = new Map<string, PurchasedPrecursor[]>();
+    const sourceStreamsByProcess = new Map<string, SourceStream[]>();
 
     for (const precursor of input.precursors) {
         if (!precursor.process_id) {
@@ -112,11 +120,22 @@ export function calculateLocalResults(input: {
         precursorsByProcess.set(precursor.process_id, group);
     }
 
+    for (const sourceStream of input.sourceStreams ?? []) {
+        if (!sourceStream.process_id) {
+            continue;
+        }
+
+        const group = sourceStreamsByProcess.get(sourceStream.process_id) ?? [];
+        group.push(sourceStream);
+        sourceStreamsByProcess.set(sourceStream.process_id, group);
+    }
+
     return input.processes.map((process) => {
         const warnings: string[] = [];
         const product = process.product_id ? productById.get(process.product_id) : undefined;
         const period = process.period_id ? periodById.get(process.period_id) : undefined;
         const processPrecursors = precursorsByProcess.get(process.id) ?? [];
+        const processSourceStreams = sourceStreamsByProcess.get(process.id) ?? [];
 
         if (process.output_mass_t <= 0) {
             warnings.push('생산량이 0 이하입니다. SEE 산정이 제한됩니다.');
@@ -132,6 +151,15 @@ export function calculateLocalResults(input: {
 
         const output = process.output_mass_t > 0 ? process.output_mass_t : 0;
         const directEmissions = process.direct_attributable_emissions_tco2e;
+        const sourceStreamEmissions = processSourceStreams.reduce(
+            (sum, sourceStream) => sum + calculateSourceStreamEmissions(sourceStream),
+            0
+        );
+        const sourceStreamEnergy = processSourceStreams.reduce(
+            (sum, sourceStream) => sum + calculateSourceStreamEnergyBreakdown(sourceStream).total,
+            0
+        );
+        const sourceStreamDelta = sourceStreamEmissions - directEmissions;
         const indirectEmissions = process.electricity_mwh * process.electricity_ef_tco2e_per_mwh;
         const precursorEmissions = processPrecursors.reduce((sum, precursor) => {
             const precursorSee =
@@ -147,6 +175,10 @@ export function calculateLocalResults(input: {
             if (!precursor.source) {
                 warnings.push(`${precursor.name}의 SEE 출처가 비어 있습니다.`);
             }
+        }
+
+        if (processSourceStreams.length > 0 && Math.abs(sourceStreamDelta) > Math.max(0.01, directEmissions * 0.01)) {
+            warnings.push(`배출원 자료 합계와 공정 직접배출량 입력값이 ${sourceStreamDelta.toFixed(4)} tCO2e 차이납니다.`);
         }
 
         const direct_see = output > 0 ? directEmissions / output : 0;
@@ -166,6 +198,11 @@ export function calculateLocalResults(input: {
             cn_code: product?.cn_code,
             production_route: process.production_route,
             output_mass_t: process.output_mass_t,
+            direct_emissions_tco2e: directEmissions,
+            source_stream_count: processSourceStreams.length,
+            source_stream_emissions_tco2e: sourceStreamEmissions,
+            source_stream_energy_tj: sourceStreamEnergy,
+            source_stream_delta_tco2e: sourceStreamDelta,
             direct_see,
             indirect_see,
             precursor_see,
