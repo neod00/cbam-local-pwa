@@ -1,4 +1,4 @@
-import type { Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
+import type { Product, ProductOutputLine, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';
 
 export type ActivityData = Record<string, number>;
@@ -33,6 +33,9 @@ export interface LocalCalculationResult {
     period_name?: string;
     process_id: string;
     process_name: string;
+    product_output_line_id?: string;
+    allocation_basis: ProductOutputLine['allocation_basis'] | 'PROCESS_TOTAL';
+    allocation_share: number;
     product_id?: string;
     product_name: string;
     hs_code?: string;
@@ -113,11 +116,13 @@ export function calculateLocalResults(input: {
     products: Product[];
     periods: ReportingPeriod[];
     sourceStreams?: SourceStream[];
+    productOutputLines?: ProductOutputLine[];
 }): LocalCalculationResult[] {
     const productById = new Map(input.products.map((product) => [product.id, product]));
     const periodById = new Map(input.periods.map((period) => [period.id, period]));
     const precursorsByProcess = new Map<string, PurchasedPrecursor[]>();
     const sourceStreamsByProcess = new Map<string, SourceStream[]>();
+    const outputLinesByProcess = new Map<string, ProductOutputLine[]>();
 
     for (const precursor of input.precursors) {
         if (!precursor.process_id) {
@@ -139,7 +144,17 @@ export function calculateLocalResults(input: {
         sourceStreamsByProcess.set(sourceStream.process_id, group);
     }
 
-    return input.processes.map((process) => {
+    for (const outputLine of input.productOutputLines ?? []) {
+        if (!outputLine.process_id) {
+            continue;
+        }
+
+        const group = outputLinesByProcess.get(outputLine.process_id) ?? [];
+        group.push(outputLine);
+        outputLinesByProcess.set(outputLine.process_id, group);
+    }
+
+    return input.processes.flatMap<LocalCalculationResult>((process) => {
         const warnings: string[] = [];
         const warningDetails: LocalCalculationWarning[] = [];
         const product = process.product_id ? productById.get(process.product_id) : undefined;
@@ -199,7 +214,96 @@ export function calculateLocalResults(input: {
         const indirect_see = output > 0 ? indirectEmissions / output : 0;
         const precursor_see = output > 0 ? precursorEmissions / output : 0;
         const total_see = direct_see + indirect_see + precursor_see;
+        const outputLines = outputLinesByProcess.get(process.id) ?? [];
+        const validOutputLines = outputLines.filter((line) => line.output_mass_t > 0);
+        const massTotal = validOutputLines.reduce((sum, line) => sum + line.output_mass_t, 0);
+        const manualTotal = validOutputLines.reduce(
+            (sum, line) => sum + (line.allocation_basis === 'MANUAL' ? line.manual_allocation_percent : 0),
+            0
+        );
 
+        if (validOutputLines.length === 0) {
+            return [{
+                id: `result_${process.id}`,
+                period_id: process.period_id,
+                period_name: period?.name,
+                process_id: process.id,
+                process_name: process.name,
+                allocation_basis: 'PROCESS_TOTAL',
+                allocation_share: 1,
+                product_id: process.product_id,
+                product_name: product?.name ?? '미지정 제품',
+                hs_code: product?.hs_code,
+                cn_code: product?.cn_code,
+                production_route: process.production_route,
+                output_mass_t: process.output_mass_t,
+                direct_emissions_tco2e: directEmissions,
+                source_stream_count: processSourceStreams.length,
+                source_stream_emissions_tco2e: sourceStreamEmissions,
+                source_stream_energy_tj: sourceStreamEnergy,
+                source_stream_delta_tco2e: sourceStreamDelta,
+                direct_see,
+                indirect_see,
+                precursor_see,
+                total_see,
+                warnings,
+                warningDetails,
+            }];
+        }
+
+        const lineResults = validOutputLines.map((line) => {
+            const lineProduct = line.product_id ? productById.get(line.product_id) : product;
+            const allocationShare = line.allocation_basis === 'MANUAL'
+                ? (manualTotal > 0 ? line.manual_allocation_percent / manualTotal : 0)
+                : (massTotal > 0 ? line.output_mass_t / massTotal : 0);
+            const allocatedDirectEmissions = directEmissions * allocationShare;
+            const allocatedIndirectEmissions = indirectEmissions * allocationShare;
+            const allocatedPrecursorEmissions = precursorEmissions * allocationShare;
+
+            return {
+                id: `result_${process.id}_${line.id}`,
+                period_id: process.period_id,
+                period_name: period?.name,
+                process_id: process.id,
+                process_name: process.name,
+                product_output_line_id: line.id,
+                allocation_basis: line.allocation_basis,
+                allocation_share: allocationShare,
+                product_id: line.product_id ?? process.product_id,
+                product_name: lineProduct?.name ?? line.name,
+                hs_code: lineProduct?.hs_code,
+                cn_code: lineProduct?.cn_code,
+                production_route: process.production_route,
+                output_mass_t: line.output_mass_t,
+                direct_emissions_tco2e: allocatedDirectEmissions,
+                source_stream_count: processSourceStreams.length,
+                source_stream_emissions_tco2e: sourceStreamEmissions * allocationShare,
+                source_stream_energy_tj: sourceStreamEnergy * allocationShare,
+                source_stream_delta_tco2e: sourceStreamDelta * allocationShare,
+                direct_see: line.output_mass_t > 0 ? allocatedDirectEmissions / line.output_mass_t : 0,
+                indirect_see: line.output_mass_t > 0 ? allocatedIndirectEmissions / line.output_mass_t : 0,
+                precursor_see: line.output_mass_t > 0 ? allocatedPrecursorEmissions / line.output_mass_t : 0,
+                total_see: line.output_mass_t > 0
+                    ? (allocatedDirectEmissions + allocatedIndirectEmissions + allocatedPrecursorEmissions) / line.output_mass_t
+                    : 0,
+                warnings,
+                warningDetails,
+            };
+        });
+
+        const outputLineTotal = validOutputLines.reduce((sum, line) => sum + line.output_mass_t, 0);
+        if (Math.abs(outputLineTotal - process.output_mass_t) > Math.max(0.01, process.output_mass_t * 0.01)) {
+            for (const result of lineResults) {
+                result.warnings = [...result.warnings, `제품 생산라인 합계가 공정 총 생산량과 ${Math.abs(outputLineTotal - process.output_mass_t).toFixed(4)} t 차이납니다.`];
+                result.warningDetails = [...result.warningDetails, {
+                    message: `제품 생산라인 합계가 공정 총 생산량과 ${Math.abs(outputLineTotal - process.output_mass_t).toFixed(4)} t 차이납니다.`,
+                    target: { type: 'process', id: process.id },
+                }];
+            }
+        }
+
+        return lineResults;
+/*
         return {
             id: `result_${process.id}`,
             period_id: process.period_id,
@@ -224,5 +328,6 @@ export function calculateLocalResults(input: {
             warnings,
             warningDetails,
         };
+*/
     });
 }

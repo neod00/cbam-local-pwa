@@ -56,12 +56,13 @@ Completed:
 - Included source-stream data in the Export preview calculation summary so Export warning totals match dashboard and Results.
 - Added a local calculation verification gate to assert source-stream totals and warning targets are included in calculation results.
 - Reviewed the additional 2026 final-period CBAM materials, including `EUCBAM배산인수.pdf`, benchmark values, and country/CN default values. Captured the need to extend the app from SEE-only MVP logic toward system-boundary, allocation, SEFA, and certificate scenario support.
+- Added the first product-line allocation model: production processes can store product output lines, choose mass/manual allocation, and calculate product-level SEE from allocated direct, indirect, and precursor emissions.
 
 Next:
 
 - Add local reference workbook import for CBAM benchmarks and country/CN default values.
 - Add CN-specific direct/indirect applicability so iron/steel goods do not always include electricity unless the official product rule requires it.
-- Expand the calculation model from process-level SEE to product-line allocation: process input, product production lines, allocation basis selection, automatic direct/indirect allocation, product-level SEE, and EU Export handoff.
+- Tighten product-line allocation UX and export mapping after confirming the official template cells for product-level summaries.
 - Add precursor data modes and supplier-country/default lookup before expanding broad source-stream unit coverage.
 - Add SEFA and certificate scenario modules after confirming the paid-carbon-price formula and current official factors.
 

@@ -28,18 +28,19 @@ export default function Home() {
     async function loadDashboard() {
       setLoading(true);
       await seedLocalData();
-      const [processes, precursors, products, periods, sourceStreams] = await Promise.all([
+      const [processes, precursors, products, periods, sourceStreams, productOutputLines] = await Promise.all([
         listLocalItems('processes'),
         listLocalItems('precursors'),
         listLocalItems('products'),
         listLocalItems('periods'),
         listLocalItems('source_streams'),
+        listLocalItems('product_output_lines'),
       ]);
 
       setProductCount(products.length);
       setProcessCount(processes.length);
       setPrecursorCount(precursors.length);
-      setResults(calculateLocalResults({ processes, precursors, products, periods, sourceStreams }));
+      setResults(calculateLocalResults({ processes, precursors, products, periods, sourceStreams, productOutputLines }));
       setLoading(false);
     }
 

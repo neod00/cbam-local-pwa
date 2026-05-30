@@ -40,15 +40,16 @@ export default function ResultsPage() {
         async function loadResults() {
             setLoading(true);
             await seedLocalData();
-            const [processes, precursors, products, periods, sourceStreams] = await Promise.all([
+            const [processes, precursors, products, periods, sourceStreams, productOutputLines] = await Promise.all([
                 listLocalItems('processes'),
                 listLocalItems('precursors'),
                 listLocalItems('products'),
                 listLocalItems('periods'),
                 listLocalItems('source_streams'),
+                listLocalItems('product_output_lines'),
             ]);
 
-            setResults(calculateLocalResults({ processes, precursors, products, periods, sourceStreams }));
+            setResults(calculateLocalResults({ processes, precursors, products, periods, sourceStreams, productOutputLines }));
             setLoading(false);
         }
 

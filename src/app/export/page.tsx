@@ -88,10 +88,11 @@ export default function ExportPage() {
     useEffect(() => {
         async function loadPreviewData() {
             await seedLocalData();
-            const [installations, periods, processes, sourceStreams, precursors, products] = await Promise.all([
+            const [installations, periods, processes, productOutputLines, sourceStreams, precursors, products] = await Promise.all([
                 listLocalItems('installations'),
                 listLocalItems('periods'),
                 listLocalItems('processes'),
+                listLocalItems('product_output_lines'),
                 listLocalItems('source_streams'),
                 listLocalItems('precursors'),
                 listLocalItems('products'),
@@ -103,7 +104,7 @@ export default function ExportPage() {
             setSourceStreams(sourceStreams);
             setPrecursors(precursors);
             setProducts(products);
-            setResults(calculateLocalResults({ processes, precursors, products, periods, sourceStreams }));
+            setResults(calculateLocalResults({ processes, precursors, products, periods, sourceStreams, productOutputLines }));
         }
 
         loadPreviewData();

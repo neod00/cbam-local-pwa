@@ -3,6 +3,7 @@ export type StoreName =
   | "products"
   | "periods"
   | "processes"
+  | "product_output_lines"
   | "source_streams"
   | "precursors"
   | "settings";
@@ -60,6 +61,16 @@ export interface ProductionProcess extends LocalEntity {
   direct_attributable_emissions_tco2e: number;
   electricity_mwh: number;
   electricity_ef_tco2e_per_mwh: number;
+}
+
+export interface ProductOutputLine extends LocalEntity {
+  process_id: string;
+  product_id?: string;
+  name: string;
+  output_mass_t: number;
+  allocation_basis: "MASS" | "MANUAL";
+  manual_allocation_percent: number;
+  note: string;
 }
 
 export interface SourceStream extends LocalEntity {
@@ -121,18 +132,20 @@ type StoreEntityMap = {
   products: Product;
   periods: ReportingPeriod;
   processes: ProductionProcess;
+  product_output_lines: ProductOutputLine;
   source_streams: SourceStream;
   precursors: PurchasedPrecursor;
   settings: AppSetting;
 };
 
 const DB_NAME = "cbam-local";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const STORE_NAMES: StoreName[] = [
   "installations",
   "products",
   "periods",
   "processes",
+  "product_output_lines",
   "source_streams",
   "precursors",
   "settings",
@@ -269,6 +282,7 @@ export async function exportLocalBackup(): Promise<CbamBackupFile> {
     products: await listLocalItems("products"),
     periods: await listLocalItems("periods"),
     processes: await listLocalItems("processes"),
+    product_output_lines: await listLocalItems("product_output_lines"),
     source_streams: await listLocalItems("source_streams"),
     precursors: await listLocalItems("precursors"),
     settings: await listLocalItems("settings"),
@@ -286,6 +300,7 @@ export async function exportLocalBackup(): Promise<CbamBackupFile> {
         products: data.products.length,
         periods: data.periods.length,
         processes: data.processes.length,
+        product_output_lines: data.product_output_lines.length,
         source_streams: data.source_streams.length,
         precursors: data.precursors.length,
         settings: data.settings.length,
@@ -326,6 +341,7 @@ export function parseBackupFile(content: string): CbamBackupFile {
         products: data.products?.length ?? 0,
         periods: data.periods?.length ?? 0,
         processes: data.processes?.length ?? 0,
+        product_output_lines: data.product_output_lines?.length ?? 0,
         source_streams: data.source_streams?.length ?? 0,
         precursors: data.precursors?.length ?? 0,
         settings: data.settings?.length ?? 0,
@@ -372,11 +388,12 @@ export async function clearLocalData(): Promise<void> {
 }
 
 export async function seedLocalData(): Promise<void> {
-  const [installations, products, periods, processes, sourceStreams, precursors] = await Promise.all([
+  const [installations, products, periods, processes, productOutputLines, sourceStreams, precursors] = await Promise.all([
     listLocalItems("installations"),
     listLocalItems("products"),
     listLocalItems("periods"),
     listLocalItems("processes"),
+    listLocalItems("product_output_lines"),
     listLocalItems("source_streams"),
     listLocalItems("precursors"),
   ]);
@@ -449,6 +466,18 @@ export async function seedLocalData(): Promise<void> {
       processId = process.id;
     }
 
+    if (productOutputLines.length === 0 && processId && defaultProductId) {
+      await createLocalItem("product_output_lines", {
+        process_id: processId,
+        product_id: defaultProductId,
+        name: "Hot Rolled Coil output",
+        output_mass_t: 1000,
+        allocation_basis: "MASS",
+        manual_allocation_percent: 100,
+        note: "",
+      });
+    }
+
     if (precursors.length === 0) {
       await createLocalItem("precursors", {
         period_id: periodId,
@@ -487,11 +516,12 @@ export async function seedLocalData(): Promise<void> {
     }
   }
 
-  const [currentInstallations, currentProducts, currentPeriods, currentProcesses, currentSourceStreams, currentPrecursors] = await Promise.all([
+  const [currentInstallations, currentProducts, currentPeriods, currentProcesses, currentProductOutputLines, currentSourceStreams, currentPrecursors] = await Promise.all([
     listLocalItems("installations"),
     listLocalItems("products"),
     listLocalItems("periods"),
     listLocalItems("processes"),
+    listLocalItems("product_output_lines"),
     listLocalItems("source_streams"),
     listLocalItems("precursors"),
   ]);
@@ -519,6 +549,18 @@ export async function seedLocalData(): Promise<void> {
     await updateLocalItem("processes", {
       ...demoProcess,
       product_id: defaultProduct.id,
+    });
+  }
+
+  if (defaultProduct && demoProcess && currentProductOutputLines.length === 0) {
+    await createLocalItem("product_output_lines", {
+      process_id: demoProcess.id,
+      product_id: defaultProduct.id,
+      name: `${defaultProduct.name} output`,
+      output_mass_t: demoProcess.output_mass_t,
+      allocation_basis: "MASS",
+      manual_allocation_percent: 100,
+      note: "",
     });
   }
 

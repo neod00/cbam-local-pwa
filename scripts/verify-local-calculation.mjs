@@ -8,7 +8,7 @@ function loadLocalCalculationModule() {
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
   const calculationEngineSource = readFileSync('src/lib/calculation-engine.ts', 'utf8')
-    .replace("import type { Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';", '')
+    .replace(/^import type .* from '\.\/local-db';\r?\n/gm, '')
     .replace("import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';", '')
     .replace(/^export /gm, '');
 
@@ -94,6 +94,26 @@ const precursor = {
   source: 'Supplier communication template',
   default_value_justification: '',
 };
+const outputLineA = {
+  id: 'output-line-1',
+  process_id: process.id,
+  product_id: product.id,
+  name: 'Hot rolled coil A',
+  output_mass_t: 600,
+  allocation_basis: 'MASS',
+  manual_allocation_percent: 60,
+  note: '',
+};
+const outputLineB = {
+  id: 'output-line-2',
+  process_id: process.id,
+  product_id: product.id,
+  name: 'Hot rolled coil B',
+  output_mass_t: 400,
+  allocation_basis: 'MASS',
+  manual_allocation_percent: 40,
+  note: '',
+};
 
 const resultsWithoutSourceStreams = calculateLocalResults({
   processes: [process],
@@ -120,5 +140,24 @@ assert.equal(resultsWithSourceStreams[0].warningDetails.length, 1);
 assert.equal(resultsWithSourceStreams[0].warningDetails[0].target.type, 'process');
 assert.equal(resultsWithSourceStreams[0].warningDetails[0].target.id, process.id);
 assert.match(resultsWithSourceStreams[0].warningDetails[0].message, /배출원 자료 합계/);
+
+const productLineResults = calculateLocalResults({
+  processes: [process],
+  precursors: [precursor],
+  products: [product],
+  periods: [period],
+  sourceStreams: [sourceStream],
+  productOutputLines: [outputLineA, outputLineB],
+});
+assert.equal(productLineResults.length, 2);
+assert.equal(productLineResults[0].product_output_line_id, outputLineA.id);
+assert.equal(productLineResults[0].allocation_share, 0.6);
+assert.equal(productLineResults[0].output_mass_t, 600);
+assert.equal(productLineResults[0].direct_emissions_tco2e, 72);
+assert.equal(productLineResults[0].direct_see, 0.12);
+assert.equal(productLineResults[0].indirect_see, 0.235);
+assert.equal(productLineResults[0].precursor_see, 1.45);
+assert.equal(productLineResults[0].total_see, 1.805);
+assert.equal(productLineResults[1].allocation_share, 0.4);
 
 console.log('Local calculation verification passed.');

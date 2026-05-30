@@ -6,6 +6,7 @@ import {
     deleteLocalItem,
     listLocalItems,
     Product,
+    ProductOutputLine,
     ProductionProcess,
     PurchasedPrecursor,
     ReportingPeriod,
@@ -18,6 +19,7 @@ import { Factory, Gauge, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type ProcessDraft = Omit<ProductionProcess, 'id' | 'created_at' | 'updated_at'>;
+type OutputLineDraft = Omit<ProductOutputLine, 'id' | 'created_at' | 'updated_at' | 'process_id'>;
 type ProcessErrors = Partial<Record<keyof ProcessDraft, string>>;
 
 const emptyDraft: ProcessDraft = {
@@ -35,6 +37,17 @@ const emptyDraft: ProcessDraft = {
 
 const fieldClass =
     'mt-1 block h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100';
+
+function createOutputLineDraft(productId = '', outputMass = 0): OutputLineDraft {
+    return {
+        product_id: productId,
+        name: '',
+        output_mass_t: outputMass,
+        allocation_basis: 'MASS',
+        manual_allocation_percent: 100,
+        note: '',
+    };
+}
 
 function toNumber(value: string) {
     const parsed = Number(value);
@@ -69,6 +82,7 @@ function calculateProcessSourceStreamSummary(process: ProductionProcess, sourceS
 
 export default function ProcessesPage() {
     const [processes, setProcesses] = useState<ProductionProcess[]>([]);
+    const [productOutputLines, setProductOutputLines] = useState<ProductOutputLine[]>([]);
     const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
     const [sourceStreams, setSourceStreams] = useState<SourceStream[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
@@ -77,24 +91,27 @@ export default function ProcessesPage() {
     const [showForm, setShowForm] = useState(false);
     const [editingProcessId, setEditingProcessId] = useState<string | null>(null);
     const [newItem, setNewItem] = useState<ProcessDraft>(emptyDraft);
+    const [outputLineDrafts, setOutputLineDrafts] = useState<OutputLineDraft[]>([createOutputLineDraft()]);
     const [errors, setErrors] = useState<ProcessErrors>({});
 
     useEffect(() => {
         async function loadData() {
             setLoading(true);
             await seedLocalData();
-            const [processData, productData, periodData, precursorData, sourceStreamData] = await Promise.all([
+            const [processData, productData, periodData, precursorData, sourceStreamData, outputLineData] = await Promise.all([
                 listLocalItems('processes'),
                 listLocalItems('products'),
                 listLocalItems('periods'),
                 listLocalItems('precursors'),
                 listLocalItems('source_streams'),
+                listLocalItems('product_output_lines'),
             ]);
             const sortedProcesses = processData.sort((a, b) => b.created_at.localeCompare(a.created_at));
             const editProcessId = new URLSearchParams(window.location.search).get('edit');
             const editProcess = editProcessId ? sortedProcesses.find((item) => item.id === editProcessId) : undefined;
 
             setProcesses(sortedProcesses);
+            setProductOutputLines(outputLineData);
             setPrecursors(precursorData);
             setSourceStreams(sourceStreamData);
             setProducts(productData.sort((a, b) => a.name.localeCompare(b.name)));
@@ -112,6 +129,18 @@ export default function ProcessesPage() {
                     electricity_mwh: editProcess.electricity_mwh,
                     electricity_ef_tco2e_per_mwh: editProcess.electricity_ef_tco2e_per_mwh,
                 });
+                const existingLines = outputLineData.filter((line) => line.process_id === editProcess.id);
+                setOutputLineDrafts(existingLines.length > 0
+                    ? existingLines.map((line) => ({
+                        product_id: line.product_id ?? '',
+                        name: line.name,
+                        output_mass_t: line.output_mass_t,
+                        allocation_basis: line.allocation_basis,
+                        manual_allocation_percent: line.manual_allocation_percent,
+                        note: line.note,
+                    }))
+                    : [createOutputLineDraft(editProcess.product_id ?? '', editProcess.output_mass_t)]
+                );
                 setEditingProcessId(editProcess.id);
                 setShowForm(true);
             } else {
@@ -120,6 +149,7 @@ export default function ProcessesPage() {
                     product_id: productData[0]?.id ?? '',
                     period_id: periodData[0]?.id ?? '',
                 });
+                setOutputLineDrafts([createOutputLineDraft(productData[0]?.id ?? '', emptyDraft.output_mass_t)]);
             }
             setLoading(false);
         }
@@ -169,8 +199,14 @@ export default function ProcessesPage() {
         };
     }
 
+    function createDefaultOutputLineDrafts(processDraft = createDefaultDraft()) {
+        return [createOutputLineDraft(processDraft.product_id ?? '', processDraft.output_mass_t)];
+    }
+
     function resetForm() {
-        setNewItem(createDefaultDraft());
+        const defaultDraft = createDefaultDraft();
+        setNewItem(defaultDraft);
+        setOutputLineDrafts(createDefaultOutputLineDrafts(defaultDraft));
         setErrors({});
         setEditingProcessId(null);
         setShowForm(false);
@@ -182,7 +218,9 @@ export default function ProcessesPage() {
             return;
         }
 
-        setNewItem(createDefaultDraft());
+        const defaultDraft = createDefaultDraft();
+        setNewItem(defaultDraft);
+        setOutputLineDrafts(createDefaultOutputLineDrafts(defaultDraft));
         setEditingProcessId(null);
         setShowForm(true);
     }
@@ -201,8 +239,45 @@ export default function ProcessesPage() {
             electricity_ef_tco2e_per_mwh: process.electricity_ef_tco2e_per_mwh,
         });
         setErrors({});
+        const existingLines = productOutputLines.filter((line) => line.process_id === process.id);
+        setOutputLineDrafts(existingLines.length > 0
+            ? existingLines.map((line) => ({
+                product_id: line.product_id ?? '',
+                name: line.name,
+                output_mass_t: line.output_mass_t,
+                allocation_basis: line.allocation_basis,
+                manual_allocation_percent: line.manual_allocation_percent,
+                note: line.note,
+            }))
+            : [createOutputLineDraft(process.product_id ?? '', process.output_mass_t)]
+        );
         setEditingProcessId(process.id);
         setShowForm(true);
+    }
+
+    async function saveOutputLines(processId: string) {
+        const existingLines = productOutputLines.filter((line) => line.process_id === processId);
+        const validDrafts = outputLineDrafts.filter((line) => line.output_mass_t > 0);
+
+        await Promise.all(existingLines.map((line) => deleteLocalItem('product_output_lines', line.id)));
+        const savedLines = await Promise.all(
+            validDrafts.map((line, index) =>
+                createLocalItem('product_output_lines', {
+                    process_id: processId,
+                    product_id: line.product_id || undefined,
+                    name: line.name.trim() || `Output line ${index + 1}`,
+                    output_mass_t: line.output_mass_t,
+                    allocation_basis: line.allocation_basis,
+                    manual_allocation_percent: line.manual_allocation_percent,
+                    note: line.note.trim(),
+                })
+            )
+        );
+
+        setProductOutputLines([
+            ...productOutputLines.filter((line) => line.process_id !== processId),
+            ...savedLines,
+        ]);
     }
 
     async function handleSubmit(event: FormEvent) {
@@ -227,6 +302,11 @@ export default function ProcessesPage() {
 
         if (newItem.output_mass_t <= 0) {
             nextErrors.output_mass_t = '총 생산량은 0보다 커야 합니다.';
+        }
+
+        const validOutputLines = outputLineDrafts.filter((line) => line.output_mass_t > 0);
+        if (validOutputLines.length === 0) {
+            nextErrors.output_mass_t = nextErrors.output_mass_t ?? '제품 생산라인을 1개 이상 입력하세요.';
         }
 
         if (newItem.market_output_mass_t < 0) {
@@ -270,6 +350,7 @@ export default function ProcessesPage() {
                 period_id: newItem.period_id || undefined,
                 product_id: newItem.product_id || undefined,
             });
+            await saveOutputLines(updatedProcess.id);
             setProcesses(processes.map((process) => (process.id === updatedProcess.id ? updatedProcess : process)));
             resetForm();
             return;
@@ -283,6 +364,7 @@ export default function ProcessesPage() {
             product_id: newItem.product_id || undefined,
         });
 
+        await saveOutputLines(process.id);
         setProcesses([process, ...processes]);
         resetForm();
     }
@@ -304,6 +386,7 @@ export default function ProcessesPage() {
     async function handleDeleteProcess(process: ProductionProcess) {
         const linkedPrecursors = precursors.filter((precursor) => precursor.process_id === process.id);
         const linkedSourceStreams = sourceStreams.filter((sourceStream) => sourceStream.process_id === process.id);
+        const linkedOutputLines = productOutputLines.filter((line) => line.process_id === process.id);
 
         if (linkedPrecursors.length > 0 || linkedSourceStreams.length > 0) {
             window.alert(
@@ -326,6 +409,8 @@ export default function ProcessesPage() {
         }
 
         await deleteLocalItem('processes', process.id);
+        await Promise.all(linkedOutputLines.map((line) => deleteLocalItem('product_output_lines', line.id)));
+        setProductOutputLines(productOutputLines.filter((line) => line.process_id !== process.id));
         setProcesses(processes.filter((item) => item.id !== process.id));
         if (editingProcessId === process.id) {
             resetForm();
@@ -395,6 +480,77 @@ export default function ProcessesPage() {
                             <label htmlFor="process-output-mass" className="text-sm font-semibold text-slate-700">총 생산량(t)</label>
                             <input id="process-output-mass" required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.output_mass_t} onChange={(event) => setNewItem({ ...newItem, output_mass_t: toNumber(event.target.value) })} />
                             {errors.output_mass_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.output_mass_t}</p>}
+                        </div>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-3">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-slate-950">제품 생산라인</h3>
+                                    <p className="mt-1 text-xs leading-5 text-slate-600">한 공정에서 여러 제품이 생산되면 제품별 생산량과 배분기준을 입력합니다.</p>
+                                </div>
+                                <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => setOutputLineDrafts([...outputLineDrafts, createOutputLineDraft(newItem.product_id, 0)])}>
+                                    <Plus className="mr-1.5 h-4 w-4" />
+                                    라인 추가
+                                </Button>
+                            </div>
+                            <div className="mt-4 space-y-3">
+                                {outputLineDrafts.map((line, index) => (
+                                    <div key={index} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 lg:grid-cols-[1.2fr_1.2fr_1fr_1fr_1fr_auto]">
+                                        <div>
+                                            <label className="text-xs font-semibold text-slate-600">라인명</label>
+                                            <input className={fieldClass} value={line.name} placeholder={`제품라인 ${index + 1}`} onChange={(event) => {
+                                                const next = [...outputLineDrafts];
+                                                next[index] = { ...line, name: event.target.value };
+                                                setOutputLineDrafts(next);
+                                            }} />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-semibold text-slate-600">제품</label>
+                                            <select className={fieldClass} value={line.product_id ?? ''} onChange={(event) => {
+                                                const next = [...outputLineDrafts];
+                                                next[index] = { ...line, product_id: event.target.value };
+                                                setOutputLineDrafts(next);
+                                            }}>
+                                                <option value="">미지정</option>
+                                                {products.map((product) => (
+                                                    <option key={product.id} value={product.id}>{product.name} ({product.hs_code})</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-semibold text-slate-600">생산량(t)</label>
+                                            <input type="number" min="0" step="0.0001" className={fieldClass} value={line.output_mass_t} onChange={(event) => {
+                                                const next = [...outputLineDrafts];
+                                                next[index] = { ...line, output_mass_t: toNumber(event.target.value) };
+                                                setOutputLineDrafts(next);
+                                            }} />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-semibold text-slate-600">배분기준</label>
+                                            <select className={fieldClass} value={line.allocation_basis} onChange={(event) => {
+                                                const next = [...outputLineDrafts];
+                                                next[index] = { ...line, allocation_basis: event.target.value as OutputLineDraft['allocation_basis'] };
+                                                setOutputLineDrafts(next);
+                                            }}>
+                                                <option value="MASS">질량 기준</option>
+                                                <option value="MANUAL">수동 비율</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-semibold text-slate-600">수동비율(%)</label>
+                                            <input type="number" min="0" step="0.0001" className={fieldClass} value={line.manual_allocation_percent} disabled={line.allocation_basis !== 'MANUAL'} onChange={(event) => {
+                                                const next = [...outputLineDrafts];
+                                                next[index] = { ...line, manual_allocation_percent: toNumber(event.target.value) };
+                                                setOutputLineDrafts(next);
+                                            }} />
+                                        </div>
+                                        <div className="flex items-end">
+                                            <Button type="button" variant="danger" className="min-h-11 px-3" disabled={outputLineDrafts.length === 1} onClick={() => setOutputLineDrafts(outputLineDrafts.filter((_, itemIndex) => itemIndex !== index))}>
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">시장 출하량(t)</label>
