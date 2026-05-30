@@ -60,11 +60,12 @@ Completed:
 - Added local reference workbook import for CBAM benchmark and country/CN default-value files so future SEFA/default scenarios can use user-supplied official workbooks without server upload.
 - Added first-pass CN-specific indirect-emissions applicability so HS 72/73 iron and steel products exclude electricity from SEE unless an explicit included CN rule applies.
 - Added precursor data modes, supplier country/installation fields, verification status, and local country/CN default-value lookup for purchased precursor SEE entry.
+- Added first-pass SEFA and CBAM certificate scenario screen comparing product SEE, default values, benchmark Column A, and certificate quantity/cost indicators.
 
 Next:
 
 - Tighten product-line allocation UX and export mapping after confirming the official template cells for product-level summaries.
-- Add SEFA and certificate scenario modules after confirming the paid-carbon-price formula and current official factors.
+- Refine SEFA and certificate calculations after confirming the paid-carbon-price formula and current official factors.
 
 ## Decision Log
 

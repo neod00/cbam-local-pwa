@@ -14,6 +14,7 @@ const pageTitles: Record<string, string> = {
     '/precursors': '구매 전구물질',
     '/upload': '자료 업로드',
     '/results': '산정결과',
+    '/scenarios': '시나리오',
     '/export': 'EU 템플릿 Export',
     '/installations': '사업장',
     '/settings': '데이터 안전',

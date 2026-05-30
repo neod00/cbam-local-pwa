@@ -384,3 +384,30 @@ export function getDefaultValueTotalForYear(
 
     return row.markup_2028_onwards ?? row.total_default;
 }
+
+export function findBenchmarkReference(
+    reference: ImportedBenchmarkReference | undefined,
+    cnCode: string,
+    productionRoute?: string
+): BenchmarkReferenceRow | undefined {
+    if (!reference) {
+        return undefined;
+    }
+
+    const normalizedCnCode = normalizeCode(cnCode);
+    const normalizedRoute = productionRoute?.trim().toLowerCase();
+    const candidates = reference.rows.filter((row) => row.cn_code === normalizedCnCode);
+
+    if (candidates.length === 0) {
+        return undefined;
+    }
+
+    if (normalizedRoute) {
+        return candidates.find((row) =>
+            row.column_a_route.toLowerCase().includes(normalizedRoute) ||
+            row.column_b_route.toLowerCase().includes(normalizedRoute)
+        ) ?? candidates[0];
+    }
+
+    return candidates[0];
+}
