@@ -1,6 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import type { Installation, Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
+import type { BackupStatus, Installation, Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import type { CnCodeOption } from './cn-code-options';
+import type { ScenarioRiskSummary } from './scenario-calculation';
 import { calculateSourceStreamEmissions } from './source-stream-calculation';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
 
@@ -91,6 +92,34 @@ export interface EuExportReadinessResult {
     warningCount: number;
     canExportDraft: boolean;
     isSubmissionReady: boolean;
+}
+
+export interface ExportChecklistItem {
+    label: string;
+    description: string;
+    status: string;
+    tone: 'success' | 'warning' | 'danger' | 'pending';
+    complete: boolean;
+    actionHref?: string;
+    actionLabel?: string;
+}
+
+export interface ExportChecklistSummary {
+    items: ExportChecklistItem[];
+    reviewCount: number;
+    isComplete: boolean;
+}
+
+export interface ExportChecklistInput {
+    backupStatus: BackupStatus;
+    lastExportResult?: { checkedCellCount: number };
+    plannedCellWriteCount: number;
+    readiness: EuExportReadinessResult;
+    resultCount: number;
+    scenarioAction: { href: string; label: string };
+    scenarioRiskSummary: ScenarioRiskSummary;
+    templateFileName?: string;
+    validation?: EuTemplateValidationResult;
 }
 
 const EU_GOODS = [
@@ -425,6 +454,112 @@ export function evaluateEuExportReadiness(
         warningCount,
         canExportDraft: errorCount === 0,
         isSubmissionReady: issues.length === 0,
+    };
+}
+
+export function createExportChecklist(input: ExportChecklistInput): ExportChecklistSummary {
+    const {
+        backupStatus,
+        lastExportResult,
+        plannedCellWriteCount,
+        readiness,
+        resultCount,
+        scenarioAction,
+        scenarioRiskSummary,
+        templateFileName,
+        validation,
+    } = input;
+    const items: ExportChecklistItem[] = [
+        {
+            label: '산정 데이터 준비',
+            description:
+                resultCount > 0
+                    ? `${resultCount}개 공정의 산정 미리보기를 확인했습니다.`
+                    : '제품과 생산공정 데이터를 입력하면 산정 미리보기가 생성됩니다.',
+            status: resultCount > 0 ? '완료' : '확인 필요',
+            tone: resultCount > 0 ? 'success' : 'warning',
+            complete: resultCount > 0,
+            actionHref: resultCount > 0 ? '/results' : '/products',
+            actionLabel: resultCount > 0 ? '산정 결과 보기' : '품목 입력',
+        },
+        {
+            label: '로컬 백업 확인',
+            description: backupStatus.helper,
+            status: backupStatus.label,
+            tone: backupStatus.tone,
+            complete: backupStatus.tone === 'success',
+            actionHref: '/settings',
+            actionLabel: '백업 관리',
+        },
+        {
+            label: 'EU 원본 템플릿 선택',
+            description: templateFileName ?? '최신 EU Communication template 파일을 선택하세요.',
+            status: templateFileName ? '완료' : '대기',
+            tone: templateFileName ? 'success' : 'pending',
+            complete: Boolean(templateFileName),
+        },
+        {
+            label: '템플릿 구조 검증',
+            description: validation?.isValid
+                ? `필수 시트 ${REQUIRED_EU_TEMPLATE_SHEETS.length}개와 CN 코드 ${validation.cnCodeCount}개를 확인했습니다.`
+                : validation
+                    ? `${validation.missingSheets.length}개 필수 시트가 누락되었습니다.`
+                    : '템플릿을 선택하면 공식 시트와 CN 코드 목록을 확인합니다.',
+            status: validation?.isValid ? '완료' : validation ? '오류' : '대기',
+            tone: validation?.isValid ? 'success' : validation ? 'danger' : 'pending',
+            complete: Boolean(validation?.isValid),
+        },
+        {
+            label: 'Export 오류 해결',
+            description:
+                readiness.errorCount === 0
+                    ? '다운로드를 막는 오류 항목이 없습니다.'
+                    : `${readiness.errorCount}개 오류를 먼저 수정해야 합니다.`,
+            status: readiness.errorCount === 0 ? '완료' : '오류',
+            tone: readiness.errorCount === 0 ? 'success' : 'danger',
+            complete: readiness.errorCount === 0,
+        },
+        {
+            label: 'SEFA·인증서 시나리오 검토',
+            description: scenarioRiskSummary.is_ready_for_review
+                ? scenarioRiskSummary.above_default_count > 0 || scenarioRiskSummary.certificate_exposure_count > 0
+                    ? `기준자료는 연결됐지만 ${scenarioRiskSummary.above_default_count}개 품목은 기본값 대비 차이를 검토해야 합니다.`
+                    : 'CN 코드와 공식 기준자료가 연결되어 시나리오 검토가 가능합니다.'
+                : `${scenarioRiskSummary.missing_reference_count}개 품목은 CN 코드 또는 공식 기준자료 연결이 필요합니다.`,
+            status: scenarioRiskSummary.is_ready_for_review ? '검토 가능' : '확인 필요',
+            tone: scenarioRiskSummary.is_ready_for_review ? 'success' : 'warning',
+            complete: scenarioRiskSummary.is_ready_for_review,
+            actionHref: scenarioAction.href,
+            actionLabel: scenarioAction.label,
+        },
+        {
+            label: '경고 항목 검토',
+            description:
+                readiness.warningCount === 0
+                    ? '추가 검토 경고가 없습니다.'
+                    : `${readiness.warningCount}개 경고가 있습니다. 제출 전 검토가 필요합니다.`,
+            status: readiness.warningCount === 0 ? '완료' : '확인 필요',
+            tone: readiness.warningCount === 0 ? 'success' : 'warning',
+            complete: readiness.warningCount === 0,
+        },
+        {
+            label: '반영 셀 검증',
+            description: lastExportResult
+                ? `복사본 생성 중 ${lastExportResult.checkedCellCount}개 셀을 검증했습니다.`
+                : plannedCellWriteCount > 0
+                    ? `D_Processes와 E_PurchPrec에 반영할 셀 ${plannedCellWriteCount}개를 생성 후 검증합니다.`
+                    : '반영할 공정 또는 전구물질 데이터가 없습니다.',
+            status: lastExportResult ? '완료' : plannedCellWriteCount > 0 ? '대기' : '확인 필요',
+            tone: lastExportResult ? 'success' : plannedCellWriteCount > 0 ? 'pending' : 'warning',
+            complete: Boolean(lastExportResult),
+        },
+    ];
+    const reviewCount = items.filter((item) => !item.complete).length;
+
+    return {
+        items,
+        reviewCount,
+        isComplete: reviewCount === 0,
     };
 }
 

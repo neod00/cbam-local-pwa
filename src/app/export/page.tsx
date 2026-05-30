@@ -5,6 +5,7 @@ import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummar
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import {
     createEuExportFilename,
+    createExportChecklist,
     createEuTemplateExportCellWrites,
     createEuTemplateExportCopyResult,
     downloadBlob,
@@ -38,16 +39,6 @@ import {
 import { AlertTriangle, CheckCircle2, Circle, Download, FileCheck2, FileSpreadsheet, PackageCheck, ShieldCheck, Workflow } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-
-type ExportChecklistItem = {
-    label: string;
-    description: string;
-    status: string;
-    tone: 'success' | 'warning' | 'danger' | 'pending';
-    complete: boolean;
-    actionHref?: string;
-    actionLabel?: string;
-};
 
 type LastExportResult = {
     filename: string;
@@ -191,98 +182,23 @@ export default function ExportPage() {
     );
     const backupStatus = useMemo(() => getBackupStatus(lastBackupAt), [lastBackupAt]);
 
-    const exportChecklist = useMemo<ExportChecklistItem[]>(
-        () => [
-            {
-                label: '산정 데이터 준비',
-                description:
-                    results.length > 0
-                        ? `${results.length}개 공정의 산정 미리보기를 확인했습니다.`
-                        : '제품과 생산공정 데이터를 입력하면 산정 미리보기가 생성됩니다.',
-                status: results.length > 0 ? '완료' : '확인 필요',
-                tone: results.length > 0 ? 'success' : 'warning',
-                complete: results.length > 0,
-                actionHref: results.length > 0 ? '/results' : '/products',
-                actionLabel: results.length > 0 ? '산정 결과 보기' : '품목 입력',
-            },
-            {
-                label: '로컬 백업 확인',
-                description: backupStatus.helper,
-                status: backupStatus.label,
-                tone: backupStatus.tone,
-                complete: backupStatus.tone === 'success',
-                actionHref: '/settings',
-                actionLabel: '백업 관리',
-            },
-            {
-                label: 'EU 원본 템플릿 선택',
-                description: templateFile ? templateFile.name : '최신 EU Communication template 파일을 선택하세요.',
-                status: templateFile ? '완료' : '대기',
-                tone: templateFile ? 'success' : 'pending',
-                complete: Boolean(templateFile),
-            },
-            {
-                label: '템플릿 구조 검증',
-                description: validation?.isValid
-                    ? `필수 시트 ${REQUIRED_EU_TEMPLATE_SHEETS.length}개와 CN 코드 ${validation.cnCodeCount}개를 확인했습니다.`
-                    : validation
-                      ? `${validation.missingSheets.length}개 필수 시트가 누락되었습니다.`
-                      : '템플릿을 선택하면 공식 시트와 CN 코드 목록을 확인합니다.',
-                status: validation?.isValid ? '완료' : validation ? '오류' : '대기',
-                tone: validation?.isValid ? 'success' : validation ? 'danger' : 'pending',
-                complete: Boolean(validation?.isValid),
-            },
-            {
-                label: 'Export 오류 해결',
-                description:
-                    readiness.errorCount === 0
-                        ? '다운로드를 막는 오류 항목이 없습니다.'
-                        : `${readiness.errorCount}개 오류를 먼저 수정해야 합니다.`,
-                status: readiness.errorCount === 0 ? '완료' : '오류',
-                tone: readiness.errorCount === 0 ? 'success' : 'danger',
-                complete: readiness.errorCount === 0,
-            },
-            {
-                label: 'SEFA·인증서 시나리오 검토',
-                description: scenarioRiskSummary.is_ready_for_review
-                    ? scenarioRiskSummary.above_default_count > 0 || scenarioRiskSummary.certificate_exposure_count > 0
-                        ? `기준자료는 연결됐지만 ${scenarioRiskSummary.above_default_count}개 품목은 기본값 대비 차이를 검토해야 합니다.`
-                        : 'CN 코드와 공식 기준자료가 연결되어 시나리오 검토가 가능합니다.'
-                    : `${scenarioRiskSummary.missing_reference_count}개 품목은 CN 코드 또는 공식 기준자료 연결이 필요합니다.`,
-                status: scenarioRiskSummary.is_ready_for_review ? '검토 가능' : '확인 필요',
-                tone: scenarioRiskSummary.is_ready_for_review ? 'success' : 'warning',
-                complete: scenarioRiskSummary.is_ready_for_review,
-                actionHref: scenarioChecklistAction.href,
-                actionLabel: scenarioChecklistAction.label,
-            },
-            {
-                label: '경고 항목 검토',
-                description:
-                    readiness.warningCount === 0
-                        ? '추가 검토 경고가 없습니다.'
-                        : `${readiness.warningCount}개 경고가 있습니다. 제출 전 검토가 필요합니다.`,
-                status: readiness.warningCount === 0 ? '완료' : '확인 필요',
-                tone: readiness.warningCount === 0 ? 'success' : 'warning',
-                complete: readiness.warningCount === 0,
-            },
-            {
-                label: '반영 셀 검증',
-                description: lastExportResult
-                    ? `복사본 생성 중 ${lastExportResult.checkedCellCount}개 셀을 검증했습니다.`
-                    : plannedCellWrites.length > 0
-                      ? `D_Processes와 E_PurchPrec에 반영할 셀 ${plannedCellWrites.length}개를 생성 후 검증합니다.`
-                      : '반영할 공정 또는 전구물질 데이터가 없습니다.',
-                status: lastExportResult ? '완료' : plannedCellWrites.length > 0 ? '대기' : '확인 필요',
-                tone: lastExportResult ? 'success' : plannedCellWrites.length > 0 ? 'pending' : 'warning',
-                complete: Boolean(lastExportResult),
-            },
-        ],
+    const exportChecklist = useMemo(
+        () => createExportChecklist({
+            backupStatus,
+            lastExportResult,
+            plannedCellWriteCount: plannedCellWrites.length,
+            readiness,
+            resultCount: results.length,
+            scenarioAction: scenarioChecklistAction,
+            scenarioRiskSummary,
+            templateFileName: templateFile?.name,
+            validation,
+        }),
         [
             lastExportResult,
             plannedCellWrites.length,
             backupStatus,
-            readiness.errorCount,
-            readiness.warningCount,
+            readiness,
             results.length,
             scenarioChecklistAction,
             scenarioRiskSummary,
@@ -290,11 +206,6 @@ export default function ExportPage() {
             validation,
         ]
     );
-    const checklistReviewCount = useMemo(
-        () => exportChecklist.filter((item) => !item.complete).length,
-        [exportChecklist]
-    );
-    const isChecklistComplete = checklistReviewCount === 0;
 
     const downloadStatusMessage = useMemo(() => {
         if (!templateFile) {
@@ -529,8 +440,8 @@ export default function ExportPage() {
                                         EU 템플릿 복사본을 만들기 전에 필요한 준비 상태를 확인합니다.
                                     </p>
                                 </div>
-                                <StatusBadge tone={isChecklistComplete ? 'success' : 'warning'}>
-                                    {isChecklistComplete ? '준비 완료' : `검토 ${checklistReviewCount}건`}
+                                <StatusBadge tone={exportChecklist.isComplete ? 'success' : 'warning'}>
+                                    {exportChecklist.isComplete ? '준비 완료' : `검토 ${exportChecklist.reviewCount}건`}
                                 </StatusBadge>
                             </div>
 
@@ -539,7 +450,7 @@ export default function ExportPage() {
                             </div>
 
                             <ul className="mt-4 space-y-3">
-                                {exportChecklist.map((item) => {
+                                {exportChecklist.items.map((item) => {
                                     const Icon = item.complete ? CheckCircle2 : Circle;
 
                                     return (

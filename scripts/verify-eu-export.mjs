@@ -88,6 +88,7 @@ ${productRulesSource}
 ${source}
 globalThis.euExport = {
   REQUIRED_EU_TEMPLATE_SHEETS,
+  createExportChecklist,
   createEuTemplateExportCellWrites,
   createEuTemplateExportCopy,
   evaluateEuExportReadiness,
@@ -346,6 +347,59 @@ const readiness = euExport.evaluateEuExportReadiness(data, validation.cnCodeMap)
 assertEqual(String(readiness.errorCount), '0', 'readiness error count');
 assertEqual(String(readiness.warningCount), '1', 'readiness warning count');
 assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '34', 'planned cell writes');
+const checklist = euExport.createExportChecklist({
+  backupStatus: {
+    helper: '최근 백업 기록이 있습니다.',
+    label: '백업 완료',
+    tone: 'success',
+  },
+  lastExportResult: { checkedCellCount: 34 },
+  plannedCellWriteCount: 34,
+  readiness: {
+    ...readiness,
+    warningCount: 0,
+    isSubmissionReady: true,
+  },
+  resultCount: 1,
+  scenarioAction: { href: '/scenarios', label: '시나리오 검토' },
+  scenarioRiskSummary: {
+    missing_cn_count: 0,
+    missing_official_reference_count: 0,
+    missing_reference_count: 0,
+    above_default_count: 0,
+    certificate_exposure_count: 0,
+    total_certificate_quantity_indicator: 0,
+    total_certificate_cost_indicator_eur: 0,
+    is_ready_for_review: true,
+  },
+  templateFileName: file.name,
+  validation,
+});
+assertEqual(String(checklist.items.length), '8', 'export checklist item count');
+assertEqual(String(checklist.reviewCount), '0', 'export checklist review count');
+assertEqual(String(checklist.isComplete), 'true', 'export checklist complete');
+const incompleteChecklist = euExport.createExportChecklist({
+  backupStatus: {
+    helper: '아직 백업 파일을 만든 기록이 없습니다.',
+    label: '백업 필요',
+    tone: 'warning',
+  },
+  plannedCellWriteCount: 34,
+  readiness,
+  resultCount: 0,
+  scenarioAction: { href: '/upload', label: '기준자료 가져오기' },
+  scenarioRiskSummary: {
+    missing_cn_count: 1,
+    missing_official_reference_count: 1,
+    missing_reference_count: 1,
+    above_default_count: 0,
+    certificate_exposure_count: 0,
+    total_certificate_quantity_indicator: 0,
+    total_certificate_cost_indicator_eur: 0,
+    is_ready_for_review: false,
+  },
+});
+assertEqual(String(incompleteChecklist.isComplete), 'false', 'incomplete export checklist complete');
 
 const exportedBlob = await euExport.createEuTemplateExportCopy(file, data);
 const exportedZip = fflate.unzipSync(new Uint8Array(await exportedBlob.arrayBuffer()));
