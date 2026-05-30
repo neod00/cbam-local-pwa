@@ -14,6 +14,7 @@ import {
     type EuTemplateValidationResult,
 } from '@/lib/eu-template-export';
 import {
+    getLocalSetting,
     listLocalItems,
     seedLocalData,
     type Installation,
@@ -23,6 +24,12 @@ import {
     type ReportingPeriod,
     type SourceStream,
 } from '@/lib/local-db';
+import type { ImportedBenchmarkReference, ImportedDefaultValueReference } from '@/lib/reference-workbooks';
+import {
+    calculateProductScenarios,
+    summarizeScenarioRisks,
+    type ScenarioAssumptions,
+} from '@/lib/scenario-calculation';
 import { AlertTriangle, CheckCircle2, Circle, Download, FileCheck2, FileSpreadsheet, PackageCheck, ShieldCheck, Workflow } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -40,6 +47,14 @@ type LastExportResult = {
     generatedAt: string;
     checkedCellCount: number;
     writtenCellCount: number;
+};
+
+const EXPORT_SCENARIO_ASSUMPTIONS: ScenarioAssumptions = {
+    origin_country: 'South Korea',
+    default_value_year: '2026',
+    cbam_factor: 0.975,
+    cscf: 1,
+    certificate_price_eur: 80,
 };
 
 function formatNumber(value: number) {
@@ -82,13 +97,25 @@ export default function ExportPage() {
     const [sourceStreams, setSourceStreams] = useState<SourceStream[]>([]);
     const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
+    const [benchmarkReference, setBenchmarkReference] = useState<ImportedBenchmarkReference | undefined>();
+    const [defaultValueReference, setDefaultValueReference] = useState<ImportedDefaultValueReference | undefined>();
     const [exportError, setExportError] = useState('');
     const [lastExportResult, setLastExportResult] = useState<LastExportResult | undefined>();
 
     useEffect(() => {
         async function loadPreviewData() {
             await seedLocalData();
-            const [installations, periods, processes, productOutputLines, sourceStreams, precursors, products] = await Promise.all([
+            const [
+                installations,
+                periods,
+                processes,
+                productOutputLines,
+                sourceStreams,
+                precursors,
+                products,
+                benchmarks,
+                defaultValues,
+            ] = await Promise.all([
                 listLocalItems('installations'),
                 listLocalItems('periods'),
                 listLocalItems('processes'),
@@ -96,6 +123,8 @@ export default function ExportPage() {
                 listLocalItems('source_streams'),
                 listLocalItems('precursors'),
                 listLocalItems('products'),
+                getLocalSetting<ImportedBenchmarkReference>('reference:benchmarks'),
+                getLocalSetting<ImportedDefaultValueReference>('reference:default-values'),
             ]);
 
             setInstallations(installations);
@@ -104,6 +133,8 @@ export default function ExportPage() {
             setSourceStreams(sourceStreams);
             setPrecursors(precursors);
             setProducts(products);
+            setBenchmarkReference(benchmarks);
+            setDefaultValueReference(defaultValues);
             setResults(calculateLocalResults({ processes, precursors, products, periods, sourceStreams, productOutputLines }));
         }
 
@@ -127,6 +158,15 @@ export default function ExportPage() {
         () => evaluateEuExportReadiness({ processes, sourceStreams, precursors, products }, validation?.cnCodeMap),
         [processes, sourceStreams, precursors, products, validation?.cnCodeMap]
     );
+
+    const scenarioRiskSummary = useMemo(() => {
+        const scenarios = calculateProductScenarios(results, EXPORT_SCENARIO_ASSUMPTIONS, {
+            benchmarks: benchmarkReference,
+            defaultValues: defaultValueReference,
+        });
+
+        return summarizeScenarioRisks(scenarios);
+    }, [benchmarkReference, defaultValueReference, results]);
 
     const plannedCellWrites = useMemo(
         () => createEuTemplateExportCellWrites({ installations, periods, processes, sourceStreams, precursors, products }, validation?.cnCodeMap),
@@ -174,6 +214,17 @@ export default function ExportPage() {
                 complete: readiness.errorCount === 0,
             },
             {
+                label: 'SEFA·인증서 시나리오 검토',
+                description: scenarioRiskSummary.is_ready_for_review
+                    ? scenarioRiskSummary.above_default_count > 0 || scenarioRiskSummary.certificate_exposure_count > 0
+                        ? `기준자료는 연결됐지만 ${scenarioRiskSummary.above_default_count}개 품목은 기본값 대비 차이를 검토해야 합니다.`
+                        : 'CN 코드와 공식 기준자료가 연결되어 시나리오 검토가 가능합니다.'
+                    : `${scenarioRiskSummary.missing_reference_count}개 품목은 CN 코드 또는 공식 기준자료 연결이 필요합니다.`,
+                status: scenarioRiskSummary.is_ready_for_review ? '검토 가능' : '확인 필요',
+                tone: scenarioRiskSummary.is_ready_for_review ? 'success' : 'warning',
+                complete: scenarioRiskSummary.is_ready_for_review,
+            },
+            {
                 label: '경고 항목 검토',
                 description:
                     readiness.warningCount === 0
@@ -195,7 +246,16 @@ export default function ExportPage() {
                 complete: Boolean(lastExportResult),
             },
         ],
-        [lastExportResult, plannedCellWrites.length, readiness.errorCount, readiness.warningCount, results.length, templateFile, validation]
+        [
+            lastExportResult,
+            plannedCellWrites.length,
+            readiness.errorCount,
+            readiness.warningCount,
+            results.length,
+            scenarioRiskSummary,
+            templateFile,
+            validation,
+        ]
     );
 
     const downloadStatusMessage = useMemo(() => {

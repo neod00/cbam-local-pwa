@@ -5,6 +5,7 @@ import { calculateLocalResults } from '@/lib/calculation-engine';
 import { getLocalSetting, listLocalItems, seedLocalData } from '@/lib/local-db';
 import {
     calculateProductScenarios,
+    summarizeScenarioRisks,
     type ProductScenarioResult,
     type ScenarioAssumptions,
 } from '@/lib/scenario-calculation';
@@ -102,19 +103,16 @@ export default function ScenariosPage() {
             (sum, scenario) => sum + (scenario.certificate_cost_indicator_eur ?? 0),
             0
         );
-        const missingCnCount = scenarios.filter((scenario) => scenario.data_quality === 'MISSING_CN').length;
-        const missingOfficialReferenceCount = scenarios.filter((scenario) => scenario.data_quality === 'MISSING_REFERENCE').length;
-        const missingReferenceCount = missingCnCount + missingOfficialReferenceCount;
-        const aboveDefaultCount = scenarios.filter((scenario) => (scenario.default_gap ?? 0) > 0).length;
+        const riskSummary = summarizeScenarioRisks(scenarios);
 
         return {
             totalOutput,
             totalCertificateQuantity,
             totalCost,
-            missingReferenceCount,
-            missingCnCount,
-            missingOfficialReferenceCount,
-            aboveDefaultCount,
+            missingReferenceCount: riskSummary.missing_reference_count,
+            missingCnCount: riskSummary.missing_cn_count,
+            missingOfficialReferenceCount: riskSummary.missing_official_reference_count,
+            aboveDefaultCount: riskSummary.above_default_count,
         };
     }, [scenarios]);
 

@@ -32,6 +32,41 @@ export interface ProductScenarioResult {
     review_message: string;
 }
 
+export interface ScenarioRiskSummary {
+    missing_cn_count: number;
+    missing_official_reference_count: number;
+    missing_reference_count: number;
+    above_default_count: number;
+    certificate_exposure_count: number;
+    total_certificate_quantity_indicator: number;
+    total_certificate_cost_indicator_eur: number;
+    is_ready_for_review: boolean;
+}
+
+export function summarizeScenarioRisks(scenarios: ProductScenarioResult[]): ScenarioRiskSummary {
+    const missingCnCount = scenarios.filter((scenario) => scenario.data_quality === 'MISSING_CN').length;
+    const missingOfficialReferenceCount = scenarios.filter((scenario) => scenario.data_quality === 'MISSING_REFERENCE').length;
+    const totalCertificateQuantityIndicator = scenarios.reduce(
+        (sum, scenario) => sum + (scenario.certificate_quantity_indicator ?? 0),
+        0
+    );
+    const totalCertificateCostIndicatorEur = scenarios.reduce(
+        (sum, scenario) => sum + (scenario.certificate_cost_indicator_eur ?? 0),
+        0
+    );
+
+    return {
+        missing_cn_count: missingCnCount,
+        missing_official_reference_count: missingOfficialReferenceCount,
+        missing_reference_count: missingCnCount + missingOfficialReferenceCount,
+        above_default_count: scenarios.filter((scenario) => (scenario.default_gap ?? 0) > 0).length,
+        certificate_exposure_count: scenarios.filter((scenario) => (scenario.certificate_quantity_indicator ?? 0) > 0).length,
+        total_certificate_quantity_indicator: totalCertificateQuantityIndicator,
+        total_certificate_cost_indicator_eur: totalCertificateCostIndicatorEur,
+        is_ready_for_review: scenarios.length > 0 && missingCnCount === 0 && missingOfficialReferenceCount === 0,
+    };
+}
+
 export function calculateProductScenarios(
     results: LocalCalculationResult[],
     assumptions: ScenarioAssumptions,
