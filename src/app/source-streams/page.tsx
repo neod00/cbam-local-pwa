@@ -11,7 +11,7 @@ import {
     SourceStream,
     updateLocalItem,
 } from '@/lib/local-db';
-import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
+import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from '@/lib/source-stream-calculation';
 import { Flame, Gauge, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
@@ -211,8 +211,9 @@ export default function SourceStreamsPage() {
     const summary = useMemo(() => {
         const totalActivity = sourceStreams.reduce((sum, sourceStream) => sum + sourceStream.activity_data, 0);
         const totalEmissions = sourceStreams.reduce((sum, sourceStream) => sum + calculateSourceStreamEmissions(sourceStream), 0);
+        const totalEnergy = sourceStreams.reduce((sum, sourceStream) => sum + calculateSourceStreamEnergyBreakdown(sourceStream).total, 0);
         const fuelCount = sourceStreams.filter((sourceStream) => sourceStream.stream_type === 'FUEL').length;
-        return { totalActivity, totalEmissions, fuelCount };
+        return { totalActivity, totalEmissions, totalEnergy, fuelCount };
     }, [sourceStreams]);
 
     function createDefaultDraft(): SourceStreamDraft {
@@ -336,9 +337,10 @@ export default function SourceStreamsPage() {
                 }
             />
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                 <StatCard label="등록 배출원" value={sourceStreams.length} helper="B_EmInst 후보" icon={Flame} tone="info" />
                 <StatCard label="연료 항목" value={summary.fuelCount} helper="연료/에너지 집계 대상" icon={Gauge} tone="warning" />
+                <StatCard label="연료 에너지" value={formatNumber(summary.totalEnergy)} helper="TJ" icon={Gauge} tone="info" />
                 <StatCard label="추정 배출량" value={formatNumber(summary.totalEmissions)} helper="tCO2e" icon={Flame} tone="success" />
             </div>
 
@@ -441,6 +443,13 @@ export default function SourceStreamsPage() {
                             <p className="font-semibold">추정 배출량</p>
                             <p className="mt-2 text-2xl font-semibold">{formatNumber(calculateSourceStreamEmissions(newItem))}</p>
                             <p className="mt-1 text-xs">tCO2e</p>
+                            <div className="mt-4 border-t border-teal-100 pt-3 text-xs">
+                                <p className="font-semibold">연료 에너지 함량</p>
+                                <p className="mt-1">총 {formatNumber(calculateSourceStreamEnergyBreakdown(newItem).total)} TJ</p>
+                                <p className="mt-1 text-teal-800">
+                                    화석 {formatNumber(calculateSourceStreamEnergyBreakdown(newItem).fossil)} TJ · 바이오매스 {formatNumber(calculateSourceStreamEnergyBreakdown(newItem).biomass)} TJ
+                                </p>
+                            </div>
                         </div>
                         <div className="md:col-span-3">
                             <Button type="submit">{editingSourceStreamId ? '수정 저장' : '배출원 저장'}</Button>
@@ -468,6 +477,10 @@ export default function SourceStreamsPage() {
                                 <dd className="mt-1 font-medium text-slate-900">{formatNumber(sourceStream.emission_factor_tco2e_per_unit)}</dd>
                             </div>
                             <div className="rounded-xl bg-slate-50 p-3">
+                                <dt className="text-xs text-slate-500">에너지 함량</dt>
+                                <dd className="mt-1 font-medium text-slate-900">{formatNumber(calculateSourceStreamEnergyBreakdown(sourceStream).total)} TJ</dd>
+                            </div>
+                            <div className="rounded-xl bg-slate-50 p-3">
                                 <dt className="text-xs text-slate-500">추정 배출량</dt>
                                 <dd className="mt-1 font-medium text-slate-900">{formatNumber(calculateSourceStreamEmissions(sourceStream))}</dd>
                             </div>
@@ -490,21 +503,22 @@ export default function SourceStreamsPage() {
                 <table className="min-w-full divide-y divide-slate-200">
                     <thead className="bg-slate-50">
                         <tr>
-                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">배출원</th>
-                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">유형</th>
-                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">보고기간</th>
-                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">공정</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">활동자료</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">배출계수</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">추정 배출량</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">작업</th>
+                            <th className="whitespace-nowrap px-4 py-4 text-left text-sm font-semibold text-slate-900">배출원</th>
+                            <th className="whitespace-nowrap px-4 py-4 text-left text-sm font-semibold text-slate-900">유형</th>
+                            <th className="whitespace-nowrap px-4 py-4 text-left text-sm font-semibold text-slate-900">보고기간</th>
+                            <th className="whitespace-nowrap px-4 py-4 text-left text-sm font-semibold text-slate-900">공정</th>
+                            <th className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">활동</th>
+                            <th className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">계수</th>
+                            <th className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">에너지</th>
+                            <th className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">배출량</th>
+                            <th className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">작업</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
                         {loading ? (
-                            <tr><td colSpan={8} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
+                            <tr><td colSpan={9} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
                         ) : sourceStreams.length === 0 ? (
-                            <tr><td colSpan={8} className="p-6 text-center text-sm text-slate-500">등록된 배출원 자료가 없습니다.</td></tr>
+                            <tr><td colSpan={9} className="p-6 text-center text-sm text-slate-500">등록된 배출원 자료가 없습니다.</td></tr>
                         ) : (
                             sourceStreams.map((sourceStream) => (
                                 <tr key={sourceStream.id} className="transition hover:bg-slate-50">
@@ -514,7 +528,8 @@ export default function SourceStreamsPage() {
                                     <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{sourceStream.process_id ? processNames.get(sourceStream.process_id) ?? '연결 없음' : '-'}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(sourceStream.activity_data)} {sourceStream.activity_unit}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(sourceStream.emission_factor_tco2e_per_unit)}</td>
-                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(calculateSourceStreamEmissions(sourceStream))}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(calculateSourceStreamEnergyBreakdown(sourceStream).total)} TJ</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(calculateSourceStreamEmissions(sourceStream))} tCO2e</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm">
                                         <div className="flex justify-end gap-2">
                                             <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => startEditSourceStream(sourceStream)}>

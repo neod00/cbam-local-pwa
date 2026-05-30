@@ -10,6 +10,7 @@ type SourceStreamCalculationInput = Pick<
     | 'oxidation_factor'
     | 'conversion_factor'
     | 'fossil_fraction'
+    | 'biomass_fraction'
 >;
 
 function clampFraction(value: number) {
@@ -42,4 +43,27 @@ export function calculateSourceStreamEmissions(sourceStream: SourceStreamCalcula
     }
 
     return activityData * emissionFactor * oxidationFactor * conversionFactor * fossilFraction;
+}
+
+export function calculateSourceStreamEnergyContent(sourceStream: SourceStreamCalculationInput) {
+    if (sourceStream.stream_type !== 'FUEL' && sourceStream.method !== 'Combustion') {
+        return 0;
+    }
+
+    const activityData = Math.max(sourceStream.activity_data, 0);
+    const netCalorificValue = Math.max(sourceStream.ncv_gj_per_unit, 0);
+
+    return activityData * netCalorificValue / 1000;
+}
+
+export function calculateSourceStreamEnergyBreakdown(sourceStream: SourceStreamCalculationInput) {
+    const total = calculateSourceStreamEnergyContent(sourceStream);
+    const fossil = total * clampFraction(sourceStream.fossil_fraction);
+    const biomass = total * clampFraction(sourceStream.biomass_fraction);
+
+    return {
+        total,
+        fossil,
+        biomass,
+    };
 }
