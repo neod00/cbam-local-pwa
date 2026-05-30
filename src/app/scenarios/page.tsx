@@ -5,6 +5,7 @@ import { calculateLocalResults } from '@/lib/calculation-engine';
 import { getLocalSetting, listLocalItems, seedLocalData, setLocalSetting } from '@/lib/local-db';
 import {
     calculateProductScenarios,
+    CERTIFICATE_INDICATOR_NOTICE,
     DEFAULT_SCENARIO_ASSUMPTIONS,
     normalizeScenarioAssumptions,
     SCENARIO_ASSUMPTIONS_SETTING_KEY,
@@ -417,6 +418,9 @@ export default function ScenariosPage() {
                         국가/CN 기본값: {defaultValueReference ? `${defaultValueReference.summary.row_count.toLocaleString('ko-KR')}행, ${defaultValueReference.summary.country_count?.toLocaleString('ko-KR') ?? '-'}개 국가` : '미가져옴'}
                     </div>
                 </div>
+                <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+                    {CERTIFICATE_INDICATOR_NOTICE}
+                </p>
             </SectionCard>
 
             <SectionCard

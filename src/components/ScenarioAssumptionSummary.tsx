@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { SectionCard } from './ui';
-import type { ScenarioAssumptions } from '@/lib/scenario-calculation';
+import { CERTIFICATE_INDICATOR_NOTICE, type ScenarioAssumptions } from '@/lib/scenario-calculation';
 
 function formatNumber(value: number) {
     return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value);
@@ -8,7 +8,11 @@ function formatNumber(value: number) {
 
 function SummaryGrid({ assumptions }: { assumptions?: ScenarioAssumptions }) {
     return (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold text-slate-500">원산지/공급국가</p>
+                <p className="mt-1 text-lg font-semibold text-slate-950">{assumptions?.origin_country ?? '-'}</p>
+            </div>
             <div className="rounded-2xl bg-slate-50 px-4 py-3">
                 <p className="text-xs font-semibold text-slate-500">기본값 연도</p>
                 <p className="mt-1 text-lg font-semibold text-slate-950">{assumptions?.default_value_year ?? '-'}</p>
@@ -18,7 +22,11 @@ function SummaryGrid({ assumptions }: { assumptions?: ScenarioAssumptions }) {
                 <p className="mt-1 text-lg font-semibold text-slate-950">{assumptions?.cbam_factor ?? '-'}</p>
             </div>
             <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold text-slate-500">인증서 가격</p>
+                <p className="text-xs font-semibold text-slate-500">CSCF</p>
+                <p className="mt-1 text-lg font-semibold text-slate-950">{assumptions?.cscf ?? '-'}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold text-slate-500">인증서 가격(EUR)</p>
                 <p className="mt-1 text-lg font-semibold text-slate-950">
                     {assumptions ? `EUR ${formatNumber(assumptions.certificate_price_eur)}` : '-'}
                 </p>
@@ -60,6 +68,9 @@ export function ScenarioAssumptionSummary({
                 <div className="mt-3">
                     <SummaryGrid assumptions={assumptions} />
                 </div>
+                <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                    {CERTIFICATE_INDICATOR_NOTICE}
+                </p>
             </div>
         );
     }
@@ -71,6 +82,9 @@ export function ScenarioAssumptionSummary({
             actions={<AssumptionLink />}
         >
             <SummaryGrid assumptions={assumptions} />
+            <p className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+                {CERTIFICATE_INDICATOR_NOTICE}
+            </p>
         </SectionCard>
     );
 }

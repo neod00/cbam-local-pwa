@@ -24,6 +24,8 @@ export const DEFAULT_SCENARIO_ASSUMPTIONS: ScenarioAssumptions = {
 };
 
 export const SCENARIO_ASSUMPTIONS_SETTING_KEY = 'scenario:assumptions';
+export const CERTIFICATE_INDICATOR_NOTICE =
+    '현재 인증서 비용 지표는 입력한 인증서 가격을 곱한 검토용 지표이며, 이미 납부한 탄소가격 공제는 공식 산식 확인 전까지 반영하지 않습니다.';
 
 export function normalizeScenarioAssumptions(value: Partial<ScenarioAssumptions> | undefined): ScenarioAssumptions {
     const cbamFactor = value?.cbam_factor;
