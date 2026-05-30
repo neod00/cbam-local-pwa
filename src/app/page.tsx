@@ -2,7 +2,15 @@
 
 import { PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
-import { listLocalItems, seedLocalData } from '@/lib/local-db';
+import { evaluateEuExportReadiness } from '@/lib/eu-template-export';
+import { getLocalSetting, listLocalItems, seedLocalData } from '@/lib/local-db';
+import type { ImportedBenchmarkReference, ImportedDefaultValueReference } from '@/lib/reference-workbooks';
+import {
+  calculateProductScenarios,
+  summarizeScenarioRisks,
+  type ScenarioAssumptions,
+  type ScenarioRiskSummary,
+} from '@/lib/scenario-calculation';
 import { AlertTriangle, CheckCircle2, Factory, FileSpreadsheet, Package, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -14,7 +22,26 @@ function formatNumber(value: number) {
 type DashboardTask = {
   label: string;
   href: string;
-  tone: 'success' | 'warning';
+  tone: 'success' | 'warning' | 'danger' | 'info';
+};
+
+const DASHBOARD_SCENARIO_ASSUMPTIONS: ScenarioAssumptions = {
+  origin_country: 'South Korea',
+  default_value_year: '2026',
+  cbam_factor: 0.975,
+  cscf: 1,
+  certificate_price_eur: 80,
+};
+
+const EMPTY_SCENARIO_RISK_SUMMARY: ScenarioRiskSummary = {
+  missing_cn_count: 0,
+  missing_official_reference_count: 0,
+  missing_reference_count: 0,
+  above_default_count: 0,
+  certificate_exposure_count: 0,
+  total_certificate_quantity_indicator: 0,
+  total_certificate_cost_indicator_eur: 0,
+  is_ready_for_review: false,
 };
 
 export default function Home() {
@@ -22,25 +49,52 @@ export default function Home() {
   const [productCount, setProductCount] = useState(0);
   const [processCount, setProcessCount] = useState(0);
   const [precursorCount, setPrecursorCount] = useState(0);
+  const [scenarioRiskSummary, setScenarioRiskSummary] = useState<ScenarioRiskSummary>(EMPTY_SCENARIO_RISK_SUMMARY);
+  const [exportIssueCount, setExportIssueCount] = useState(0);
+  const [exportErrorCount, setExportErrorCount] = useState(0);
+  const [hasBenchmarkReference, setHasBenchmarkReference] = useState(false);
+  const [hasDefaultValueReference, setHasDefaultValueReference] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadDashboard() {
       setLoading(true);
       await seedLocalData();
-      const [processes, precursors, products, periods, sourceStreams, productOutputLines] = await Promise.all([
+      const [
+        processes,
+        precursors,
+        products,
+        periods,
+        sourceStreams,
+        productOutputLines,
+        benchmarks,
+        defaultValues,
+      ] = await Promise.all([
         listLocalItems('processes'),
         listLocalItems('precursors'),
         listLocalItems('products'),
         listLocalItems('periods'),
         listLocalItems('source_streams'),
         listLocalItems('product_output_lines'),
+        getLocalSetting<ImportedBenchmarkReference>('reference:benchmarks'),
+        getLocalSetting<ImportedDefaultValueReference>('reference:default-values'),
       ]);
+      const localResults = calculateLocalResults({ processes, precursors, products, periods, sourceStreams, productOutputLines });
+      const scenarios = calculateProductScenarios(localResults, DASHBOARD_SCENARIO_ASSUMPTIONS, {
+        benchmarks,
+        defaultValues,
+      });
+      const exportReadiness = evaluateEuExportReadiness({ processes, sourceStreams, precursors, products });
 
       setProductCount(products.length);
       setProcessCount(processes.length);
       setPrecursorCount(precursors.length);
-      setResults(calculateLocalResults({ processes, precursors, products, periods, sourceStreams, productOutputLines }));
+      setResults(localResults);
+      setScenarioRiskSummary(summarizeScenarioRisks(scenarios));
+      setExportIssueCount(exportReadiness.issues.length);
+      setExportErrorCount(exportReadiness.errorCount);
+      setHasBenchmarkReference(Boolean(benchmarks));
+      setHasDefaultValueReference(Boolean(defaultValues));
       setLoading(false);
     }
 
@@ -58,21 +112,59 @@ export default function Home() {
         tone: 'warning' as const,
       }))
     );
-    const warningCount = warningTasks.length;
+    const scenarioActionTasks: DashboardTask[] = [];
+
+    if (scenarioRiskSummary.missing_cn_count > 0) {
+      scenarioActionTasks.push({
+        label: `CN 코드가 없는 품목 ${scenarioRiskSummary.missing_cn_count}건을 먼저 확인하세요.`,
+        href: '/products',
+        tone: 'danger',
+      });
+    }
+
+    if (scenarioRiskSummary.missing_official_reference_count > 0 || !hasBenchmarkReference || !hasDefaultValueReference) {
+      scenarioActionTasks.push({
+        label: '벤치마크와 국가/CN 기본값 기준자료를 가져오세요.',
+        href: '/upload',
+        tone: 'warning',
+      });
+    }
+
+    if (scenarioRiskSummary.above_default_count > 0) {
+      scenarioActionTasks.push({
+        label: `기본값보다 SEE가 높은 품목 ${scenarioRiskSummary.above_default_count}건의 대응 시나리오를 검토하세요.`,
+        href: '/scenarios',
+        tone: 'warning',
+      });
+    }
+
+    if (exportErrorCount > 0) {
+      scenarioActionTasks.push({
+        label: `EU Export를 막는 오류 ${exportErrorCount}건을 해결하세요.`,
+        href: '/export',
+        tone: 'danger',
+      });
+    }
+
+    const warningCount = warningTasks.length + scenarioRiskSummary.missing_reference_count + scenarioRiskSummary.above_default_count + exportIssueCount;
     const sourceStreamWarningCount = results.filter(
       (result) => result.source_stream_count > 0 && Math.abs(result.source_stream_delta_tco2e) > 0.01
     ).length;
     const indirectApplicableCount = results.filter((result) => result.indirect_emissions_applicable).length;
     const indirectCompleted = results.some((result) => result.indirect_emissions_applicable && result.indirect_see > 0);
     const indirectNotRequired = results.length > 0 && indirectApplicableCount === 0;
+    const hasOfficialReferences = hasBenchmarkReference && hasDefaultValueReference;
     const completedSteps = [
       productCount > 0,
       processCount > 0,
       sourceStreamWarningCount === 0 && results.some((result) => result.source_stream_count > 0),
       indirectCompleted || indirectNotRequired,
       precursorCount > 0,
+      hasOfficialReferences,
+      scenarioRiskSummary.is_ready_for_review,
+      exportErrorCount === 0,
     ].filter(Boolean).length;
-    const readinessRate = Math.round((completedSteps / 6) * 100);
+    const readinessRate = Math.round((completedSteps / 8) * 100);
 
     const steps = [
       { name: '품목 식별', status: productCount > 0 ? '완료' : '미완료', tone: productCount > 0 ? 'success' as const : 'neutral' as const },
@@ -88,16 +180,31 @@ export default function Home() {
         tone: indirectNotRequired || indirectCompleted ? 'success' as const : 'neutral' as const,
       },
       { name: '전구물질 입력', status: precursorCount > 0 ? '완료' : '미완료', tone: precursorCount > 0 ? 'success' as const : 'neutral' as const },
-      { name: 'EU Export', status: warningCount > 0 ? '검토중' : '대기', tone: warningCount > 0 ? 'warning' as const : 'pending' as const },
+      {
+        name: '공식 기준자료 연결',
+        status: hasOfficialReferences ? '완료' : '확인필요',
+        tone: hasOfficialReferences ? 'success' as const : 'warning' as const,
+      },
+      {
+        name: 'SEFA·인증서 검토',
+        status: scenarioRiskSummary.is_ready_for_review ? '검토가능' : '확인필요',
+        tone: scenarioRiskSummary.is_ready_for_review ? 'success' as const : 'warning' as const,
+      },
+      {
+        name: 'EU Export',
+        status: exportErrorCount > 0 ? '오류' : exportIssueCount > 0 ? '검토중' : '대기',
+        tone: exportErrorCount > 0 ? 'danger' as const : exportIssueCount > 0 ? 'warning' as const : 'pending' as const,
+      },
     ];
 
-    const recentTasks: DashboardTask[] = warningTasks.length > 0
-      ? warningTasks.slice(0, 4)
+    const priorityTasks = [...scenarioActionTasks, ...warningTasks];
+    const recentTasks: DashboardTask[] = priorityTasks.length > 0
+      ? priorityTasks.slice(0, 4)
       : [
         { label: 'EU 템플릿 Parameters_CNCodes 기준으로 제품 CN 코드 확인', href: '/products', tone: 'success' as const },
+        { label: '공식 기준자료를 가져와 SEFA·인증서 시나리오를 확인', href: '/scenarios', tone: 'success' as const },
         { label: indirectNotRequired ? 'CN 코드별 간접배출 제외 여부 확인' : '생산공정별 전력 사용량 입력', href: '/processes', tone: 'success' as const },
-        { label: '구매 전구물질 공급업체 자료 출처 확인', href: '/precursors', tone: 'success' as const },
-        { label: '.cbam 백업 파일 최신화', href: '/settings', tone: 'success' as const },
+        { label: 'EU 원본 템플릿 복사본 Export 준비', href: '/export', tone: 'success' as const },
       ];
 
     return {
@@ -107,7 +214,17 @@ export default function Home() {
       steps,
       recentTasks,
     };
-  }, [precursorCount, processCount, productCount, results]);
+  }, [
+    exportErrorCount,
+    exportIssueCount,
+    hasBenchmarkReference,
+    hasDefaultValueReference,
+    precursorCount,
+    processCount,
+    productCount,
+    results,
+    scenarioRiskSummary,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -120,9 +237,33 @@ export default function Home() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="CBAM 대상 품목" value={loading ? '-' : `${productCount}개`} helper="CN 8자리 기준 관리" icon={Package} tone="pending" />
         <StatCard label="총 생산량" value={loading ? '-' : `${formatNumber(dashboard.totalOutput)}t`} helper={`${processCount}개 공정 기준`} icon={Factory} tone="info" />
-        <StatCard label="보고 준비율" value={loading ? '-' : `${dashboard.readinessRate}%`} helper="로컬 입력 데이터 기준" icon={TrendingUp} tone="success" />
-        <StatCard label="확인 필요 항목" value={loading ? '-' : `${dashboard.warningCount}건`} helper="입력 누락과 경고 포함" icon={AlertTriangle} tone="warning" />
+        <StatCard label="보고 준비율" value={loading ? '-' : `${dashboard.readinessRate}%`} helper="산정·기준자료·Export 기준" icon={TrendingUp} tone="success" />
+        <StatCard label="확인 필요 항목" value={loading ? '-' : `${dashboard.warningCount}건`} helper="시나리오와 Export 경고 포함" icon={AlertTriangle} tone="warning" />
       </div>
+
+      <SectionCard
+        title="제출 전 리스크 요약"
+        description="SEE 산정 이후 SEFA·인증서 시나리오와 EU Export 준비 상태를 함께 확인합니다."
+      >
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="rounded-2xl bg-slate-50 px-4 py-3">
+            <p className="text-xs font-semibold text-slate-500">CN 코드 확인</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-950">{scenarioRiskSummary.missing_cn_count}건</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 px-4 py-3">
+            <p className="text-xs font-semibold text-slate-500">기준자료 미연결</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-950">{scenarioRiskSummary.missing_official_reference_count}건</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 px-4 py-3">
+            <p className="text-xs font-semibold text-slate-500">기본값 초과</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-950">{scenarioRiskSummary.above_default_count}건</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 px-4 py-3">
+            <p className="text-xs font-semibold text-slate-500">Export 오류</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-950">{exportErrorCount}건</p>
+          </div>
+        </div>
+      </SectionCard>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
         <SectionCard
@@ -149,7 +290,7 @@ export default function Home() {
             {dashboard.recentTasks.map((task) => (
               <li key={`${task.href}-${task.label}`}>
                 <Link href={task.href} className="flex gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 transition hover:bg-teal-50">
-                  {task.tone === 'warning' ? (
+                  {task.tone === 'warning' || task.tone === 'danger' ? (
                     <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
                   ) : (
                     <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-700" />
