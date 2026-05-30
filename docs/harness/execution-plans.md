@@ -84,6 +84,7 @@ Completed:
 - Added an MVP release checklist covering verification, excluded reference documents, user notices, license decisions, and deferred post-MVP scope.
 - Added `npm run verify:pwa` to assert PWA manifest metadata, service-worker app-shell routes, README release guidance, and absence of unused default assets.
 - Added an in-app settings notice clarifying that CBAM Local supports calculation and submission preparation but does not replace legal advice, official verification, or final filing responsibility.
+- Added a security policy for public repository use, warning users not to share company CBAM data, `.cbam` backups, or EU template files in issues or pull requests.
 
 Next:
 

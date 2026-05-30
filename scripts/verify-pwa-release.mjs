@@ -6,6 +6,7 @@ const manifest = JSON.parse(readFileSync('public/manifest.webmanifest', 'utf8'))
 const serviceWorker = readFileSync('public/sw.js', 'utf8');
 const readme = readFileSync('README.md', 'utf8');
 const releaseChecklist = readFileSync('docs/mvp-release-checklist.md', 'utf8');
+const securityPolicy = readFileSync('SECURITY.md', 'utf8');
 
 assert.equal(manifest.name, 'CBAM Local PWA');
 assert.equal(manifest.short_name, 'CBAM Local');
@@ -46,10 +47,14 @@ assert.ok(readme.includes('로컬 우선'), 'README should explain local-first d
 assert.ok(readme.includes('서버 전송 없음'), 'README should state the no-server-upload posture');
 assert.ok(readme.includes('CBAM_documents/'), 'README should explain local reference document exclusion');
 assert.ok(readme.includes('docs/mvp-release-checklist.md'), 'README should link the release checklist');
+assert.ok(readme.includes('SECURITY.md'), 'README should link the security policy');
 
 assert.ok(releaseChecklist.includes('CBAM_documents/'), 'release checklist should mention local reference document exclusion');
 assert.ok(releaseChecklist.includes('라이선스'), 'release checklist should include the license decision');
 assert.ok(releaseChecklist.includes('Docker/on-premise'), 'release checklist should keep on-premise scope deferred');
+assert.ok(securityPolicy.includes('.cbam'), 'security policy should mention backup files');
+assert.ok(securityPolicy.includes('민감자료 공유 금지'), 'security policy should warn against sharing sensitive data');
+assert.ok(securityPolicy.includes('EU Communication template'), 'security policy should mention EU template files');
 
 const trackedFiles = execFileSync('git', ['ls-files'], { encoding: 'utf8' })
   .split(/\r?\n/)
