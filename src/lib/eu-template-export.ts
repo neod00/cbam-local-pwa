@@ -1,5 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import type { Installation, Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod } from './local-db';
+import type { Installation, Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import type { CnCodeOption } from './cn-code-options';
 
 export const REQUIRED_EU_TEMPLATE_SHEETS = [
@@ -36,12 +36,13 @@ export interface EuTemplateExportData {
     installations?: Installation[];
     periods?: ReportingPeriod[];
     processes: ProductionProcess[];
+    sourceStreams?: SourceStream[];
     precursors: PurchasedPrecursor[];
     products: Product[];
 }
 
 type EuCnCodeMap = Map<string, string>;
-type EuExportSheetName = 'A_InstData' | 'D_Processes' | 'E_PurchPrec';
+type EuExportSheetName = 'A_InstData' | 'B_EmInst' | 'C_Emissions&Energy' | 'D_Processes' | 'E_PurchPrec';
 
 export interface EuTemplateExportCellWrite {
     sheetName: EuExportSheetName;
@@ -191,6 +192,14 @@ export function evaluateEuExportReadiness(
             severity: 'error',
             area: '템플릿 한계',
             message: `현재 Export MVP는 구매 전구물질 20개까지 지원합니다. 현재 ${data.precursors.length}개입니다.`,
+        });
+    }
+
+    if ((data.sourceStreams?.length ?? 0) > 75) {
+        issues.push({
+            severity: 'error',
+            area: '템플릿 한계',
+            message: `현재 Export MVP는 배출원 자료 75개까지 지원합니다. 현재 ${data.sourceStreams?.length ?? 0}개입니다.`,
         });
     }
 
@@ -620,6 +629,76 @@ function createProcessCellWrites(processes: ProductionProcess[]): EuTemplateExpo
     return writes;
 }
 
+const EU_MONITORING_APPROACHES = new Set(['Combustion', 'Process Emissions', 'Mass balance']);
+
+function getSourceStreamMonitoringApproach(sourceStream: SourceStream): string {
+    if (EU_MONITORING_APPROACHES.has(sourceStream.method)) {
+        return sourceStream.method;
+    }
+
+    if (sourceStream.stream_type === 'PROCESS_MATERIAL') {
+        return 'Process Emissions';
+    }
+
+    return 'Combustion';
+}
+
+function toEuPercent(value: number): number {
+    return value <= 1 ? value * 100 : value;
+}
+
+function getEmissionFactorUnit(sourceStream: SourceStream): string {
+    if (sourceStream.stream_type === 'FUEL') {
+        return 'tCO2/TJ';
+    }
+
+    return `tCO2/${sourceStream.activity_unit}`;
+}
+
+function createSourceStreamCellWrites(sourceStreams: SourceStream[] = []): EuTemplateExportCellWrite[] {
+    const writes: EuTemplateExportCellWrite[] = [];
+
+    sourceStreams.slice(0, 75).forEach((sourceStream, index) => {
+        const row = 17 + index;
+
+        writes.push(
+            { sheetName: 'B_EmInst', cell: `D${row}`, label: 'Monitoring approach', value: getSourceStreamMonitoringApproach(sourceStream), sourceId: sourceStream.id },
+            { sheetName: 'B_EmInst', cell: `E${row}`, label: 'Source stream name', value: sourceStream.name, sourceId: sourceStream.id },
+            { sheetName: 'B_EmInst', cell: `F${row}`, label: 'Activity data', value: sourceStream.activity_data, sourceId: sourceStream.id },
+            { sheetName: 'B_EmInst', cell: `G${row}`, label: 'Activity data unit', value: sourceStream.activity_unit, sourceId: sourceStream.id },
+            { sheetName: 'B_EmInst', cell: `H${row}`, label: 'Net calorific value', value: sourceStream.ncv_gj_per_unit, sourceId: sourceStream.id },
+            { sheetName: 'B_EmInst', cell: `J${row}`, label: 'Emission factor', value: sourceStream.emission_factor_tco2e_per_unit, sourceId: sourceStream.id },
+            { sheetName: 'B_EmInst', cell: `K${row}`, label: 'Emission factor unit', value: getEmissionFactorUnit(sourceStream), sourceId: sourceStream.id },
+            { sheetName: 'B_EmInst', cell: `N${row}`, label: 'Oxidation factor', value: toEuPercent(sourceStream.oxidation_factor), sourceId: sourceStream.id },
+            { sheetName: 'B_EmInst', cell: `P${row}`, label: 'Conversion factor', value: toEuPercent(sourceStream.conversion_factor), sourceId: sourceStream.id },
+            { sheetName: 'B_EmInst', cell: `R${row}`, label: 'Biomass content', value: toEuPercent(sourceStream.biomass_fraction), sourceId: sourceStream.id }
+        );
+    });
+
+    return writes;
+}
+
+function createEmissionsEnergyCellWrites(processes: ProductionProcess[]): EuTemplateExportCellWrite[] {
+    const indirectEmissions = processes.reduce(
+        (sum, process) => sum + process.electricity_mwh * process.electricity_ef_tco2e_per_mwh,
+        0
+    );
+
+    if (indirectEmissions <= 0) {
+        return [];
+    }
+
+    return [
+        {
+            sheetName: 'C_Emissions&Energy',
+            cell: 'M26',
+            label: 'Total indirect emissions',
+            value: indirectEmissions,
+            sourceId: processes[0]?.id ?? 'processes',
+        },
+    ];
+}
+
 function createInstallationCellWrites(
     installations: Installation[] = [],
     periods: ReportingPeriod[] = []
@@ -756,6 +835,8 @@ export function createEuTemplateExportCellWrites(
 
     return [
         ...createInstallationCellWrites(data.installations, data.periods),
+        ...createSourceStreamCellWrites(data.sourceStreams),
+        ...createEmissionsEnergyCellWrites(data.processes),
         ...createProcessCellWrites(data.processes),
         ...createPrecursorCellWrites(data.precursors),
     ];
@@ -805,14 +886,20 @@ export async function createEuTemplateExportCopyResult(file: File, data: EuTempl
 
     const sheetTargetByName = parseWorkbookSheetTargets(zip);
     const installationSheetPath = sheetTargetByName.get('A_InstData');
+    const sourceStreamSheetPath = sheetTargetByName.get('B_EmInst');
+    const emissionsEnergySheetPath = sheetTargetByName.get('C_Emissions&Energy');
     const processSheetPath = sheetTargetByName.get('D_Processes');
     const precursorSheetPath = sheetTargetByName.get('E_PurchPrec');
 
     if (
         !installationSheetPath ||
+        !sourceStreamSheetPath ||
+        !emissionsEnergySheetPath ||
         !processSheetPath ||
         !precursorSheetPath ||
         !zip[installationSheetPath] ||
+        !zip[sourceStreamSheetPath] ||
+        !zip[emissionsEnergySheetPath] ||
         !zip[processSheetPath] ||
         !zip[precursorSheetPath]
     ) {
@@ -821,10 +908,14 @@ export async function createEuTemplateExportCopyResult(file: File, data: EuTempl
 
     const cellWrites = createEuTemplateExportCellWrites(data, cnCodeMap);
     const installationCellWrites = cellWrites.filter((write) => write.sheetName === 'A_InstData');
+    const sourceStreamCellWrites = cellWrites.filter((write) => write.sheetName === 'B_EmInst');
+    const emissionsEnergyCellWrites = cellWrites.filter((write) => write.sheetName === 'C_Emissions&Energy');
     const processCellWrites = cellWrites.filter((write) => write.sheetName === 'D_Processes');
     const precursorCellWrites = cellWrites.filter((write) => write.sheetName === 'E_PurchPrec');
 
     zip[installationSheetPath] = strToU8(applyCellWrites(strFromU8(zip[installationSheetPath]), installationCellWrites));
+    zip[sourceStreamSheetPath] = strToU8(applyCellWrites(strFromU8(zip[sourceStreamSheetPath]), sourceStreamCellWrites));
+    zip[emissionsEnergySheetPath] = strToU8(applyCellWrites(strFromU8(zip[emissionsEnergySheetPath]), emissionsEnergyCellWrites));
     zip[processSheetPath] = strToU8(applyCellWrites(strFromU8(zip[processSheetPath]), processCellWrites));
     zip[precursorSheetPath] = strToU8(applyCellWrites(strFromU8(zip[precursorSheetPath]), precursorCellWrites));
 

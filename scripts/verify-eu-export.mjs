@@ -282,6 +282,25 @@ const process = {
   electricity_mwh: 500,
   electricity_ef_tco2e_per_mwh: 0.47,
 };
+const sourceStream = {
+  id: 'source-stream-1',
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+  period_id: period.id,
+  process_id: process.id,
+  name: 'Natural gas combustion',
+  stream_type: 'FUEL',
+  method: 'Combustion',
+  activity_data: 250,
+  activity_unit: 't',
+  ncv_gj_per_unit: 45,
+  emission_factor_tco2e_per_unit: 73,
+  oxidation_factor: 1,
+  conversion_factor: 1,
+  fossil_fraction: 1,
+  biomass_fraction: 0,
+  source: 'Monthly fuel invoice',
+};
 const precursor = {
   id: 'precursor-1',
   created_at: '2026-01-01T00:00:00.000Z',
@@ -304,6 +323,7 @@ const data = {
   periods: [period],
   products: [product],
   processes: [process],
+  sourceStreams: [sourceStream],
   precursors: [precursor],
 };
 const file = createSyntheticWorkbook(euExport.REQUIRED_EU_TEMPLATE_SHEETS);
@@ -311,11 +331,13 @@ const validation = await euExport.validateEuTemplateFile(file);
 
 assertEqual(String(validation.isValid), 'true', 'synthetic workbook validity');
 assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
-assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '24', 'planned cell writes');
+assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '35', 'planned cell writes');
 
 const exportedBlob = await euExport.createEuTemplateExportCopy(file, data);
 const exportedZip = fflate.unzipSync(new Uint8Array(await exportedBlob.arrayBuffer()));
 const installationSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet5.xml']);
+const sourceStreamSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet6.xml']);
+const emissionsEnergySheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet7.xml']);
 const processSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet8.xml']);
 const precursorSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet9.xml']);
 
@@ -331,6 +353,17 @@ assertEqual(readCell(installationSheet, 'I26'), 'KR', 'A_InstData I26');
 assertEqual(readCell(installationSheet, 'I30'), 'Local CBAM Manager', 'A_InstData I30');
 assertEqual(readCell(installationSheet, 'I31'), 'cbam@example.com', 'A_InstData I31');
 assertEqual(readCell(installationSheet, 'I32'), '+82-32-000-0000', 'A_InstData I32');
+assertEqual(readCell(sourceStreamSheet, 'D17'), 'Combustion', 'B_EmInst D17');
+assertEqual(readCell(sourceStreamSheet, 'E17'), 'Natural gas combustion', 'B_EmInst E17');
+assertEqual(readCell(sourceStreamSheet, 'F17'), '250', 'B_EmInst F17');
+assertEqual(readCell(sourceStreamSheet, 'G17'), 't', 'B_EmInst G17');
+assertEqual(readCell(sourceStreamSheet, 'H17'), '45', 'B_EmInst H17');
+assertEqual(readCell(sourceStreamSheet, 'J17'), '73', 'B_EmInst J17');
+assertEqual(readCell(sourceStreamSheet, 'K17'), 'tCO2/TJ', 'B_EmInst K17');
+assertEqual(readCell(sourceStreamSheet, 'N17'), '100', 'B_EmInst N17');
+assertEqual(readCell(sourceStreamSheet, 'P17'), '100', 'B_EmInst P17');
+assertEqual(readCell(sourceStreamSheet, 'R17'), '0', 'B_EmInst R17');
+assertEqual(readCell(emissionsEnergySheet, 'M26'), '235', 'C_Emissions&Energy M26');
 assertEqual(readCell(processSheet, 'L16'), '1000', 'D_Processes L16');
 assertEqual(readCell(processSheet, 'L27'), '950', 'D_Processes L27');
 assertEqual(readCell(processSheet, 'L32'), '50', 'D_Processes L32');

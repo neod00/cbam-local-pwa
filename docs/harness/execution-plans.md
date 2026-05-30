@@ -43,10 +43,11 @@ Completed:
 - Added first-pass `A_InstData` export for reporting-period dates and basic installation identity.
 - Expanded the installation model and UI for `A_InstData` address/contact fields, including local/internal and English installation names.
 - Added the source-stream data model and Korean-first `배출원 자료` screen for future `B_EmInst` and `C_Emissions&Energy` export work.
+- Added first-pass source-stream export writes into `B_EmInst` and manual total indirect emissions into `C_Emissions&Energy`.
 
 Next:
 
-- Map unlocked `B_EmInst` and `C_Emissions&Energy` cells against the official workbook before writing source-stream data into the EU template.
+- Add stricter source-stream unit and monitoring-approach validation against official dropdown/code-list values.
 
 ## Decision Log
 

@@ -51,6 +51,33 @@ Each production process block starts at row `11 + index * 65`.
 
 The app does not currently write production process labels or goods-category text into `D_Processes`, because those visible block labels are protected in the official workbook.
 
+### `B_EmInst`
+
+Each calculation-based source-stream row starts at row `17 + index`. The app currently writes up to 75 source streams.
+
+| App field | Official cell | Notes |
+| --- | --- | --- |
+| `SourceStream.method` / `stream_type` | `D{row}` | Monitoring approach. Unsupported free-text methods fall back to `Combustion` or `Process Emissions` from `stream_type`. |
+| `SourceStream.name` | `E{row}` | Source stream name. |
+| `SourceStream.activity_data` | `F{row}` | Activity data. |
+| `SourceStream.activity_unit` | `G{row}` | Activity data unit. |
+| `SourceStream.ncv_gj_per_unit` | `H{row}` | Net calorific value. |
+| `SourceStream.emission_factor_tco2e_per_unit` | `J{row}` | Emission factor. |
+| derived EF unit | `K{row}` | `tCO2/TJ` for fuel source streams; otherwise `tCO2/{activity_unit}`. |
+| `SourceStream.oxidation_factor` | `N{row}` | Written as percent value. |
+| `SourceStream.conversion_factor` | `P{row}` | Written as percent value. |
+| `SourceStream.biomass_fraction` | `R{row}` | Written as percent value. |
+
+The app does not overwrite calculated fossil/bio CO2e, energy-content, consistency, or completeness cells in `B_EmInst`.
+
+### `C_Emissions&Energy`
+
+| App field | Official cell | Notes |
+| --- | --- | --- |
+| `sum(process.electricity_mwh * process.electricity_ef_tco2e_per_mwh)` | `M26` | Manual total indirect emissions entry. |
+
+Fuel and GHG balance rows that are formula-driven from `B_EmInst` remain read-only.
+
 ### `E_PurchPrec`
 
 Each purchased precursor block starts at row `14 + index * 44`.
@@ -68,5 +95,5 @@ The app does not currently write `indirect_see_tco2e_per_t` directly into `E_Pur
 
 ## Known Gaps
 
-- `B_EmInst` and `C_Emissions&Energy` require a more detailed source-stream and energy model before reliable export.
 - Production routes and aggregated goods categories should be driven through `A_InstData` and official dropdown/code-list relationships rather than by overwriting protected labels.
+- Source-stream unit handling still needs stricter validation against official dropdown/code-list values before submission-grade export.

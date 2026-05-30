@@ -473,11 +473,11 @@ export async function seedLocalData(): Promise<void> {
         process_id: processId,
         name: "Natural gas combustion",
         stream_type: "FUEL",
-        method: "Standard method",
+        method: "Combustion",
         activity_data: 250,
-        activity_unit: "MWh",
-        ncv_gj_per_unit: 3.6,
-        emission_factor_tco2e_per_unit: 0.202,
+        activity_unit: "t",
+        ncv_gj_per_unit: 45,
+        emission_factor_tco2e_per_unit: 73,
         oxidation_factor: 1,
         conversion_factor: 1,
         fossil_fraction: 1,
@@ -540,11 +540,11 @@ export async function seedLocalData(): Promise<void> {
       process_id: demoProcess.id,
       name: "Natural gas combustion",
       stream_type: "FUEL",
-      method: "Standard method",
+      method: "Combustion",
       activity_data: 250,
-      activity_unit: "MWh",
-      ncv_gj_per_unit: 3.6,
-      emission_factor_tco2e_per_unit: 0.202,
+      activity_unit: "t",
+      ncv_gj_per_unit: 45,
+      emission_factor_tco2e_per_unit: 73,
       oxidation_factor: 1,
       conversion_factor: 1,
       fossil_fraction: 1,
@@ -557,6 +557,17 @@ export async function seedLocalData(): Promise<void> {
     await updateLocalItem("source_streams", {
       ...demoSourceStream,
       process_id: demoProcess?.id,
+    });
+  }
+
+  if (demoSourceStream && demoSourceStream.method === "Standard method") {
+    await updateLocalItem("source_streams", {
+      ...demoSourceStream,
+      method: "Combustion",
+      activity_unit: demoSourceStream.activity_unit === "MWh" ? "t" : demoSourceStream.activity_unit,
+      ncv_gj_per_unit: demoSourceStream.ncv_gj_per_unit === 3.6 ? 45 : demoSourceStream.ncv_gj_per_unit,
+      emission_factor_tco2e_per_unit:
+        demoSourceStream.emission_factor_tco2e_per_unit === 0.202 ? 73 : demoSourceStream.emission_factor_tco2e_per_unit,
     });
   }
 }

@@ -21,6 +21,7 @@ import {
     type ProductionProcess,
     type PurchasedPrecursor,
     type ReportingPeriod,
+    type SourceStream,
 } from '@/lib/local-db';
 import { AlertTriangle, CheckCircle2, Circle, Download, FileCheck2, FileSpreadsheet, PackageCheck, ShieldCheck, Workflow } from 'lucide-react';
 import Link from 'next/link';
@@ -74,6 +75,7 @@ export default function ExportPage() {
     const [installations, setInstallations] = useState<Installation[]>([]);
     const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
     const [processes, setProcesses] = useState<ProductionProcess[]>([]);
+    const [sourceStreams, setSourceStreams] = useState<SourceStream[]>([]);
     const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [exportError, setExportError] = useState('');
@@ -82,10 +84,11 @@ export default function ExportPage() {
     useEffect(() => {
         async function loadPreviewData() {
             await seedLocalData();
-            const [installations, periods, processes, precursors, products] = await Promise.all([
+            const [installations, periods, processes, sourceStreams, precursors, products] = await Promise.all([
                 listLocalItems('installations'),
                 listLocalItems('periods'),
                 listLocalItems('processes'),
+                listLocalItems('source_streams'),
                 listLocalItems('precursors'),
                 listLocalItems('products'),
             ]);
@@ -93,6 +96,7 @@ export default function ExportPage() {
             setInstallations(installations);
             setPeriods(periods);
             setProcesses(processes);
+            setSourceStreams(sourceStreams);
             setPrecursors(precursors);
             setProducts(products);
             setResults(calculateLocalResults({ processes, precursors, products, periods }));
@@ -115,13 +119,13 @@ export default function ExportPage() {
     }, [results]);
 
     const readiness = useMemo(
-        () => evaluateEuExportReadiness({ processes, precursors, products }, validation?.cnCodeMap),
-        [processes, precursors, products, validation?.cnCodeMap]
+        () => evaluateEuExportReadiness({ processes, sourceStreams, precursors, products }, validation?.cnCodeMap),
+        [processes, sourceStreams, precursors, products, validation?.cnCodeMap]
     );
 
     const plannedCellWrites = useMemo(
-        () => createEuTemplateExportCellWrites({ installations, periods, processes, precursors, products }, validation?.cnCodeMap),
-        [installations, periods, processes, precursors, products, validation?.cnCodeMap]
+        () => createEuTemplateExportCellWrites({ installations, periods, processes, sourceStreams, precursors, products }, validation?.cnCodeMap),
+        [installations, periods, processes, sourceStreams, precursors, products, validation?.cnCodeMap]
     );
 
     const exportChecklist = useMemo<ExportChecklistItem[]>(
@@ -243,6 +247,7 @@ export default function ExportPage() {
                 installations,
                 periods,
                 processes,
+                sourceStreams,
                 precursors,
                 products,
             });
