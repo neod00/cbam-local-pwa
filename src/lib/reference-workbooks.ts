@@ -332,3 +332,55 @@ export async function parseDefaultValueWorkbook(file: File): Promise<ImportedDef
         rows,
     };
 }
+
+export function findDefaultValueReference(
+    reference: ImportedDefaultValueReference | undefined,
+    country: string,
+    cnCode: string,
+    year: '2026' | '2027' | '2028_ONWARDS'
+): DefaultValueReferenceRow | undefined {
+    if (!reference) {
+        return undefined;
+    }
+
+    const normalizedCountry = country.trim().toLowerCase();
+    const normalizedCnCode = normalizeCode(cnCode);
+    const candidates = reference.rows.filter(
+        (row) =>
+            row.country.trim().toLowerCase() === normalizedCountry &&
+            row.cn_code === normalizedCnCode
+    );
+
+    if (candidates.length === 0) {
+        return undefined;
+    }
+
+    const valueForYear = (row: DefaultValueReferenceRow) => {
+        if (year === '2026') {
+            return row.markup_2026;
+        }
+
+        if (year === '2027') {
+            return row.markup_2027;
+        }
+
+        return row.markup_2028_onwards;
+    };
+
+    return candidates.find((row) => valueForYear(row) !== undefined) ?? candidates[0];
+}
+
+export function getDefaultValueTotalForYear(
+    row: DefaultValueReferenceRow,
+    year: '2026' | '2027' | '2028_ONWARDS'
+) {
+    if (year === '2026') {
+        return row.markup_2026 ?? row.total_default;
+    }
+
+    if (year === '2027') {
+        return row.markup_2027 ?? row.total_default;
+    }
+
+    return row.markup_2028_onwards ?? row.total_default;
+}

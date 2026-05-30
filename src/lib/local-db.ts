@@ -95,8 +95,14 @@ export interface PurchasedPrecursor extends LocalEntity {
   process_id?: string;
   product_id?: string;
   name: string;
+  precursor_cn_code?: string;
   aggregated_goods_category: string;
   production_route: string;
+  supplier_country: string;
+  supplier_installation: string;
+  data_mode: "ACTUAL" | "SEMI_ACTUAL" | "DEFAULT";
+  verification_status: "UNVERIFIED" | "SUPPLIER_CONFIRMED" | "VERIFIED";
+  default_value_year: "2026" | "2027" | "2028_ONWARDS";
   purchased_mass_t: number;
   consumed_mass_t: number;
   consumed_for_non_cbam_mass_t: number;
@@ -484,8 +490,14 @@ export async function seedLocalData(): Promise<void> {
         process_id: processId,
         product_id: defaultProductId,
         name: "Purchased hot rolled coil",
+        precursor_cn_code: "72083900",
         aggregated_goods_category: "Iron or steel products",
         production_route: "External precursor",
+        supplier_country: "South Korea",
+        supplier_installation: "Supplier steel mill",
+        data_mode: "ACTUAL",
+        verification_status: "SUPPLIER_CONFIRMED",
+        default_value_year: "2026",
         purchased_mass_t: 1100,
         consumed_mass_t: 1000,
         consumed_for_non_cbam_mass_t: 0,
@@ -566,11 +578,25 @@ export async function seedLocalData(): Promise<void> {
 
   const demoPrecursor = currentPrecursors.find((precursor) => precursor.name === "Purchased hot rolled coil");
 
-  if (defaultProduct && demoPrecursor && (!demoPrecursor.product_id || !demoPrecursor.process_id)) {
+  if (defaultProduct && demoPrecursor && (
+    !demoPrecursor.product_id ||
+    !demoPrecursor.process_id ||
+    !demoPrecursor.precursor_cn_code ||
+    !demoPrecursor.supplier_country ||
+    !demoPrecursor.data_mode ||
+    !demoPrecursor.verification_status ||
+    !demoPrecursor.default_value_year
+  )) {
     await updateLocalItem("precursors", {
       ...demoPrecursor,
       product_id: demoPrecursor.product_id ?? defaultProduct.id,
       process_id: demoPrecursor.process_id ?? demoProcess?.id,
+      precursor_cn_code: demoPrecursor.precursor_cn_code ?? defaultProduct.cn_code ?? defaultProduct.hs_code,
+      supplier_country: demoPrecursor.supplier_country ?? "South Korea",
+      supplier_installation: demoPrecursor.supplier_installation ?? "",
+      data_mode: demoPrecursor.data_mode ?? "ACTUAL",
+      verification_status: demoPrecursor.verification_status ?? "SUPPLIER_CONFIRMED",
+      default_value_year: demoPrecursor.default_value_year ?? "2026",
     });
   }
 

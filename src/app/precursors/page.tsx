@@ -1,9 +1,10 @@
 'use client';
 
-import { Button, DataTable, PageHeader, SectionCard, StatCard } from '@/components/ui';
+import { Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import {
     createLocalItem,
     deleteLocalItem,
+    getLocalSetting,
     listLocalItems,
     Product,
     ProductionProcess,
@@ -12,6 +13,11 @@ import {
     seedLocalData,
     updateLocalItem,
 } from '@/lib/local-db';
+import {
+    findDefaultValueReference,
+    getDefaultValueTotalForYear,
+    type ImportedDefaultValueReference,
+} from '@/lib/reference-workbooks';
 import { Boxes, Factory, Pencil, Plus, Scale, Trash2, X } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
@@ -23,8 +29,14 @@ const emptyDraft: PrecursorDraft = {
     process_id: '',
     product_id: '',
     name: '',
+    precursor_cn_code: '',
     aggregated_goods_category: 'Iron or steel products',
     production_route: '',
+    supplier_country: 'South Korea',
+    supplier_installation: '',
+    data_mode: 'ACTUAL',
+    verification_status: 'UNVERIFIED',
+    default_value_year: '2026',
     purchased_mass_t: 0,
     consumed_mass_t: 0,
     consumed_for_non_cbam_mass_t: 0,
@@ -46,11 +58,37 @@ function formatNumber(value: number) {
     return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value);
 }
 
+function getDataModeLabel(mode: PurchasedPrecursor['data_mode'] | undefined) {
+    if (mode === 'DEFAULT') {
+        return '기본값';
+    }
+
+    if (mode === 'SEMI_ACTUAL') {
+        return '혼합';
+    }
+
+    return '실측';
+}
+
+function getVerificationLabel(status: PurchasedPrecursor['verification_status'] | undefined) {
+    if (status === 'VERIFIED') {
+        return '검증완료';
+    }
+
+    if (status === 'SUPPLIER_CONFIRMED') {
+        return '공급사 확인';
+    }
+
+    return '미검증';
+}
+
 export default function PrecursorsPage() {
     const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
     const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
     const [processes, setProcesses] = useState<ProductionProcess[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
+    const [defaultValueReference, setDefaultValueReference] = useState<ImportedDefaultValueReference | undefined>();
+    const [defaultLookupMessage, setDefaultLookupMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingPrecursorId, setEditingPrecursorId] = useState<string | null>(null);
@@ -61,11 +99,12 @@ export default function PrecursorsPage() {
         async function loadData() {
             setLoading(true);
             await seedLocalData();
-            const [precursorData, periodData, processData, productData] = await Promise.all([
+            const [precursorData, periodData, processData, productData, defaultReference] = await Promise.all([
                 listLocalItems('precursors'),
                 listLocalItems('periods'),
                 listLocalItems('processes'),
                 listLocalItems('products'),
+                getLocalSetting<ImportedDefaultValueReference>('reference:default-values'),
             ]);
             const sortedPrecursors = precursorData.sort((a, b) => b.created_at.localeCompare(a.created_at));
             const editPrecursorId = new URLSearchParams(window.location.search).get('edit');
@@ -75,14 +114,21 @@ export default function PrecursorsPage() {
             setPeriods(periodData.sort((a, b) => b.start_date.localeCompare(a.start_date)));
             setProcesses(processData.sort((a, b) => a.name.localeCompare(b.name)));
             setProducts(productData.sort((a, b) => a.name.localeCompare(b.name)));
+            setDefaultValueReference(defaultReference);
             if (editPrecursor) {
                 setNewItem({
                     period_id: editPrecursor.period_id ?? '',
                     process_id: editPrecursor.process_id ?? '',
                     product_id: editPrecursor.product_id ?? '',
                     name: editPrecursor.name,
+                    precursor_cn_code: editPrecursor.precursor_cn_code ?? '',
                     aggregated_goods_category: editPrecursor.aggregated_goods_category,
                     production_route: editPrecursor.production_route,
+                    supplier_country: editPrecursor.supplier_country ?? 'South Korea',
+                    supplier_installation: editPrecursor.supplier_installation ?? '',
+                    data_mode: editPrecursor.data_mode ?? 'ACTUAL',
+                    verification_status: editPrecursor.verification_status ?? 'UNVERIFIED',
+                    default_value_year: editPrecursor.default_value_year ?? '2026',
                     purchased_mass_t: editPrecursor.purchased_mass_t,
                     consumed_mass_t: editPrecursor.consumed_mass_t,
                     consumed_for_non_cbam_mass_t: editPrecursor.consumed_for_non_cbam_mass_t,
@@ -99,6 +145,7 @@ export default function PrecursorsPage() {
                     period_id: periodData[0]?.id ?? '',
                     process_id: processData[0]?.id ?? '',
                     product_id: productData[0]?.id ?? '',
+                    precursor_cn_code: productData[0]?.cn_code ?? productData[0]?.hs_code ?? '',
                 });
             }
             setLoading(false);
@@ -117,7 +164,8 @@ export default function PrecursorsPage() {
             (sum, precursor) => sum + precursor.direct_see_tco2e_per_t + precursor.indirect_see_tco2e_per_t,
             0
         );
-        return { consumedMass, totalSee };
+        const defaultModeCount = precursors.filter((precursor) => precursor.data_mode === 'DEFAULT').length;
+        return { consumedMass, totalSee, defaultModeCount };
     }, [precursors]);
 
     function createDefaultDraft(): PrecursorDraft {
@@ -126,6 +174,7 @@ export default function PrecursorsPage() {
             period_id: periods[0]?.id ?? '',
             process_id: processes[0]?.id ?? '',
             product_id: products[0]?.id ?? '',
+            precursor_cn_code: products[0]?.cn_code ?? products[0]?.hs_code ?? '',
         };
     }
 
@@ -153,8 +202,14 @@ export default function PrecursorsPage() {
             process_id: precursor.process_id ?? '',
             product_id: precursor.product_id ?? '',
             name: precursor.name,
+            precursor_cn_code: precursor.precursor_cn_code ?? '',
             aggregated_goods_category: precursor.aggregated_goods_category,
             production_route: precursor.production_route,
+            supplier_country: precursor.supplier_country ?? 'South Korea',
+            supplier_installation: precursor.supplier_installation ?? '',
+            data_mode: precursor.data_mode ?? 'ACTUAL',
+            verification_status: precursor.verification_status ?? 'UNVERIFIED',
+            default_value_year: precursor.default_value_year ?? '2026',
             purchased_mass_t: precursor.purchased_mass_t,
             consumed_mass_t: precursor.consumed_mass_t,
             consumed_for_non_cbam_mass_t: precursor.consumed_for_non_cbam_mass_t,
@@ -192,6 +247,14 @@ export default function PrecursorsPage() {
             nextErrors.product_id = '연결 제품을 선택하세요.';
         }
 
+        if (!newItem.precursor_cn_code?.trim() || !/^\d{4,10}$/.test(newItem.precursor_cn_code.trim())) {
+            nextErrors.precursor_cn_code = '전구물질 CN/HS 코드를 숫자 4자리 이상으로 입력하세요.';
+        }
+
+        if (!newItem.supplier_country.trim()) {
+            nextErrors.supplier_country = '공급국가를 입력하세요. 예: South Korea';
+        }
+
         if (newItem.purchased_mass_t < 0) {
             nextErrors.purchased_mass_t = '구매량은 0 이상이어야 합니다.';
         }
@@ -216,6 +279,10 @@ export default function PrecursorsPage() {
             nextErrors.source = '출처를 입력하세요. 예: 공급업체 회신, 기본값, 내부 산정자료';
         }
 
+        if (newItem.data_mode === 'DEFAULT' && !newItem.default_value_justification.trim()) {
+            nextErrors.default_value_justification = '기본값을 사용하는 사유 또는 기준자료 출처를 입력하세요.';
+        }
+
         setErrors(nextErrors);
 
         if (Object.keys(nextErrors).length > 0) {
@@ -233,9 +300,13 @@ export default function PrecursorsPage() {
                 ...existingPrecursor,
                 ...newItem,
                 name: newItem.name.trim(),
+                precursor_cn_code: newItem.precursor_cn_code?.trim(),
                 aggregated_goods_category: newItem.aggregated_goods_category.trim(),
                 production_route: newItem.production_route.trim(),
+                supplier_country: newItem.supplier_country.trim(),
+                supplier_installation: newItem.supplier_installation.trim(),
                 source: newItem.source.trim(),
+                default_value_justification: newItem.default_value_justification.trim(),
                 period_id: newItem.period_id || undefined,
                 process_id: newItem.process_id || undefined,
                 product_id: newItem.product_id || undefined,
@@ -252,9 +323,13 @@ export default function PrecursorsPage() {
         const precursor = await createLocalItem('precursors', {
             ...newItem,
             name: newItem.name.trim(),
+            precursor_cn_code: newItem.precursor_cn_code?.trim(),
             aggregated_goods_category: newItem.aggregated_goods_category.trim(),
             production_route: newItem.production_route.trim(),
+            supplier_country: newItem.supplier_country.trim(),
+            supplier_installation: newItem.supplier_installation.trim(),
             source: newItem.source.trim(),
+            default_value_justification: newItem.default_value_justification.trim(),
             period_id: newItem.period_id || undefined,
             process_id: newItem.process_id || undefined,
             product_id: newItem.product_id || undefined,
@@ -280,6 +355,35 @@ export default function PrecursorsPage() {
         }
     }
 
+    function applyDefaultValueFromReference() {
+        const match = findDefaultValueReference(
+            defaultValueReference,
+            newItem.supplier_country,
+            newItem.precursor_cn_code ?? '',
+            newItem.default_value_year
+        );
+
+        if (!match) {
+            setDefaultLookupMessage('일치하는 국가/CN 기본값을 찾지 못했습니다. 공식 기본값 파일을 가져왔는지와 전구물질 CN 코드를 확인하세요.');
+            return;
+        }
+
+        const totalDefault = getDefaultValueTotalForYear(match, newItem.default_value_year);
+        setNewItem({
+            ...newItem,
+            name: newItem.name || match.description,
+            direct_see_tco2e_per_t: match.direct_default ?? 0,
+            indirect_see_tco2e_per_t: Math.max(0, (totalDefault ?? match.total_default ?? 0) - (match.direct_default ?? 0)),
+            data_mode: 'DEFAULT',
+            verification_status: 'UNVERIFIED',
+            source: `${defaultValueReference?.summary.filename ?? 'DVsasadopted'} / ${match.country} / ${match.cn_code}`,
+            default_value_justification:
+                newItem.default_value_justification ||
+                `${newItem.default_value_year} 국가/CN 기본값 적용: ${match.country}, CN ${match.cn_code}`,
+        });
+        setDefaultLookupMessage(`기본값을 적용했습니다: ${match.country} CN ${match.cn_code}, 총 ${formatNumber(totalDefault ?? match.total_default ?? 0)} tCO2e/t`);
+    }
+
     return (
         <div className="space-y-6">
             <PageHeader
@@ -297,7 +401,7 @@ export default function PrecursorsPage() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <StatCard label="등록 전구물질" value={precursors.length} helper="E_PurchPrec 후보" icon={Boxes} tone="info" />
                 <StatCard label="총 소비량" value={formatNumber(summary.consumedMass)} helper="tonne" icon={Scale} tone="success" />
-                <StatCard label="SEE 합계" value={formatNumber(summary.totalSee)} helper="직접 + 간접" icon={Factory} tone="warning" />
+                <StatCard label="기본값 사용" value={summary.defaultModeCount} helper={`SEE 합계 ${formatNumber(summary.totalSee)}`} icon={Factory} tone={summary.defaultModeCount > 0 ? 'warning' : 'pending'} />
             </div>
 
             {showForm && (
@@ -327,6 +431,34 @@ export default function PrecursorsPage() {
                             <input id="precursor-route" className={fieldClass} value={newItem.production_route} onChange={(event) => setNewItem({ ...newItem, production_route: event.target.value })} />
                         </div>
                         <div>
+                            <label htmlFor="precursor-cn-code" className="text-sm font-semibold text-slate-700">전구물질 CN/HS 코드</label>
+                            <input
+                                id="precursor-cn-code"
+                                inputMode="numeric"
+                                className={fieldClass}
+                                value={newItem.precursor_cn_code ?? ''}
+                                onChange={(event) => setNewItem({ ...newItem, precursor_cn_code: event.target.value.replace(/\D/g, '').slice(0, 10) })}
+                                placeholder="예: 72083900"
+                            />
+                            {errors.precursor_cn_code && <p className="mt-1 text-xs font-medium text-red-600">{errors.precursor_cn_code}</p>}
+                        </div>
+                        <div>
+                            <label htmlFor="precursor-data-mode" className="text-sm font-semibold text-slate-700">데이터 모드</label>
+                            <select id="precursor-data-mode" className={fieldClass} value={newItem.data_mode} onChange={(event) => setNewItem({ ...newItem, data_mode: event.target.value as PrecursorDraft['data_mode'] })}>
+                                <option value="ACTUAL">실측/공급사 회신</option>
+                                <option value="SEMI_ACTUAL">혼합</option>
+                                <option value="DEFAULT">공식 기본값</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="precursor-verification" className="text-sm font-semibold text-slate-700">검증 상태</label>
+                            <select id="precursor-verification" className={fieldClass} value={newItem.verification_status} onChange={(event) => setNewItem({ ...newItem, verification_status: event.target.value as PrecursorDraft['verification_status'] })}>
+                                <option value="UNVERIFIED">미검증</option>
+                                <option value="SUPPLIER_CONFIRMED">공급사 확인</option>
+                                <option value="VERIFIED">검증완료</option>
+                            </select>
+                        </div>
+                        <div>
                             <label htmlFor="precursor-period" className="text-sm font-semibold text-slate-700">보고기간</label>
                             <select id="precursor-period" className={fieldClass} value={newItem.period_id} onChange={(event) => setNewItem({ ...newItem, period_id: event.target.value })}>
                                 <option value="">미지정</option>
@@ -349,6 +481,37 @@ export default function PrecursorsPage() {
                                 {products.map((product) => <option key={product.id} value={product.id}>{product.name} ({product.hs_code})</option>)}
                             </select>
                             {errors.product_id && <p className="mt-1 text-xs font-medium text-red-600">{errors.product_id}</p>}
+                        </div>
+                        <div>
+                            <label htmlFor="precursor-country" className="text-sm font-semibold text-slate-700">공급국가</label>
+                            <input id="precursor-country" className={fieldClass} value={newItem.supplier_country} onChange={(event) => setNewItem({ ...newItem, supplier_country: event.target.value })} placeholder="예: South Korea" />
+                            {errors.supplier_country && <p className="mt-1 text-xs font-medium text-red-600">{errors.supplier_country}</p>}
+                        </div>
+                        <div>
+                            <label htmlFor="precursor-supplier-installation" className="text-sm font-semibold text-slate-700">공급사/사업장</label>
+                            <input id="precursor-supplier-installation" className={fieldClass} value={newItem.supplier_installation} onChange={(event) => setNewItem({ ...newItem, supplier_installation: event.target.value })} />
+                        </div>
+                        <div>
+                            <label htmlFor="precursor-default-year" className="text-sm font-semibold text-slate-700">기본값 적용연도</label>
+                            <select id="precursor-default-year" className={fieldClass} value={newItem.default_value_year} onChange={(event) => setNewItem({ ...newItem, default_value_year: event.target.value as PrecursorDraft['default_value_year'] })}>
+                                <option value="2026">2026</option>
+                                <option value="2027">2027</option>
+                                <option value="2028_ONWARDS">2028년 이후</option>
+                            </select>
+                        </div>
+                        <div className="rounded-xl border border-teal-100 bg-teal-50 p-4 md:col-span-3">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <p className="text-sm font-semibold text-teal-950">공식 기본값 조회</p>
+                                    <p className="mt-1 text-xs leading-5 text-teal-800">
+                                        자료 업로드 화면에서 가져온 국가/CN 기본값 파일을 기준으로 직접 SEE와 총 기본값을 적용합니다.
+                                    </p>
+                                </div>
+                                <Button type="button" variant="secondary" onClick={applyDefaultValueFromReference}>
+                                    기본값 적용
+                                </Button>
+                            </div>
+                            {defaultLookupMessage && <p className="mt-3 text-xs font-medium text-teal-900">{defaultLookupMessage}</p>}
                         </div>
                         <div>
                             <label htmlFor="precursor-purchased-mass" className="text-sm font-semibold text-slate-700">구매량(t)</label>
@@ -388,6 +551,7 @@ export default function PrecursorsPage() {
                                 value={newItem.default_value_justification}
                                 onChange={(event) => setNewItem({ ...newItem, default_value_justification: event.target.value })}
                             />
+                            {errors.default_value_justification && <p className="mt-1 text-xs font-medium text-red-600">{errors.default_value_justification}</p>}
                         </div>
                         <div className="md:col-span-3">
                             <Button type="submit">{editingPrecursorId ? '수정 저장' : '전구물질 저장'}</Button>
@@ -411,6 +575,14 @@ export default function PrecursorsPage() {
                                 <div className="rounded-xl bg-slate-50 p-3">
                                     <dt className="text-xs text-slate-500">소비량</dt>
                                     <dd className="mt-1 font-medium text-slate-900">{formatNumber(precursor.consumed_mass_t)}t</dd>
+                                </div>
+                                <div className="rounded-xl bg-slate-50 p-3">
+                                    <dt className="text-xs text-slate-500">데이터 모드</dt>
+                                    <dd className="mt-1 font-medium text-slate-900">{getDataModeLabel(precursor.data_mode)}</dd>
+                                </div>
+                                <div className="rounded-xl bg-slate-50 p-3">
+                                    <dt className="text-xs text-slate-500">공급국가</dt>
+                                    <dd className="mt-1 font-medium text-slate-900">{precursor.supplier_country || '-'}</dd>
                                 </div>
                                 <div className="rounded-xl bg-slate-50 p-3">
                                     <dt className="text-xs text-slate-500">직접 SEE</dt>
@@ -444,6 +616,8 @@ export default function PrecursorsPage() {
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">공정</th>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">보고기간</th>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">제품</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">모드</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">공급국가</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">소비량(t)</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">간접 SEE</th>
@@ -453,9 +627,9 @@ export default function PrecursorsPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
                         {loading ? (
-                            <tr><td colSpan={9} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
+                            <tr><td colSpan={11} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
                         ) : precursors.length === 0 ? (
-                            <tr><td colSpan={9} className="p-6 text-center text-sm text-slate-500">등록된 구매 전구물질이 없습니다.</td></tr>
+                            <tr><td colSpan={11} className="p-6 text-center text-sm text-slate-500">등록된 구매 전구물질이 없습니다.</td></tr>
                         ) : (
                             precursors.map((precursor) => {
                                 const totalSee = precursor.direct_see_tco2e_per_t + precursor.indirect_see_tco2e_per_t;
@@ -465,6 +639,16 @@ export default function PrecursorsPage() {
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{precursor.process_id ? processNames.get(precursor.process_id) ?? '알 수 없음' : '-'}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{precursor.period_id ? periodNames.get(precursor.period_id) ?? '알 수 없음' : '-'}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{precursor.product_id ? productNames.get(precursor.product_id) ?? '알 수 없음' : '-'}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">
+                                            <StatusBadge tone={precursor.data_mode === 'DEFAULT' ? 'warning' : precursor.data_mode === 'SEMI_ACTUAL' ? 'pending' : 'success'}>
+                                                {getDataModeLabel(precursor.data_mode)}
+                                            </StatusBadge>
+                                            <div className="mt-1 text-xs text-slate-400">{getVerificationLabel(precursor.verification_status)}</div>
+                                        </td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">
+                                            {precursor.supplier_country || '-'}
+                                            {precursor.precursor_cn_code && <div className="mt-1 text-xs text-slate-400">CN {precursor.precursor_cn_code}</div>}
+                                        </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(precursor.consumed_mass_t)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(precursor.direct_see_tco2e_per_t)}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(precursor.indirect_see_tco2e_per_t)}</td>

@@ -59,11 +59,11 @@ Completed:
 - Added the first product-line allocation model: production processes can store product output lines, choose mass/manual allocation, and calculate product-level SEE from allocated direct, indirect, and precursor emissions.
 - Added local reference workbook import for CBAM benchmark and country/CN default-value files so future SEFA/default scenarios can use user-supplied official workbooks without server upload.
 - Added first-pass CN-specific indirect-emissions applicability so HS 72/73 iron and steel products exclude electricity from SEE unless an explicit included CN rule applies.
+- Added precursor data modes, supplier country/installation fields, verification status, and local country/CN default-value lookup for purchased precursor SEE entry.
 
 Next:
 
 - Tighten product-line allocation UX and export mapping after confirming the official template cells for product-level summaries.
-- Add precursor data modes and supplier-country/default lookup before expanding broad source-stream unit coverage.
 - Add SEFA and certificate scenario modules after confirming the paid-carbon-price formula and current official factors.
 
 ## Decision Log
