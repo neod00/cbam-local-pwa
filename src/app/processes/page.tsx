@@ -13,6 +13,7 @@ import {
     SourceStream,
     updateLocalItem,
 } from '@/lib/local-db';
+import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from '@/lib/source-stream-calculation';
 import { Factory, Gauge, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
@@ -112,6 +113,30 @@ export default function ProcessesPage() {
         const totalElectricity = processes.reduce((sum, process) => sum + process.electricity_mwh, 0);
         return { totalOutput, totalElectricity };
     }, [processes]);
+
+    const editingSourceStreamSummary = useMemo(() => {
+        if (!editingProcessId) {
+            return undefined;
+        }
+
+        const linkedSourceStreams = sourceStreams.filter((sourceStream) => sourceStream.process_id === editingProcessId);
+        const emissions = linkedSourceStreams.reduce(
+            (sum, sourceStream) => sum + calculateSourceStreamEmissions(sourceStream),
+            0
+        );
+        const energy = linkedSourceStreams.reduce(
+            (sum, sourceStream) => sum + calculateSourceStreamEnergyBreakdown(sourceStream).total,
+            0
+        );
+        const delta = emissions - newItem.direct_attributable_emissions_tco2e;
+
+        return {
+            count: linkedSourceStreams.length,
+            emissions,
+            energy,
+            delta,
+        };
+    }, [editingProcessId, newItem.direct_attributable_emissions_tco2e, sourceStreams]);
 
     function createDefaultDraft(): ProcessDraft {
         return {
@@ -358,6 +383,38 @@ export default function ProcessesPage() {
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.direct_attributable_emissions_tco2e} onChange={(event) => setNewItem({ ...newItem, direct_attributable_emissions_tco2e: toNumber(event.target.value) })} />
                             {errors.direct_attributable_emissions_tco2e && <p className="mt-1 text-xs font-medium text-red-600">{errors.direct_attributable_emissions_tco2e}</p>}
                         </div>
+                        {editingSourceStreamSummary && editingSourceStreamSummary.count > 0 && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 md:col-span-2">
+                                <p className="font-semibold">연결된 배출원 자료 합계</p>
+                                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                                    <div>
+                                        <p className="text-xs text-amber-800">배출량</p>
+                                        <p className="font-semibold">{formatNumber(editingSourceStreamSummary.emissions)} tCO2e</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-amber-800">에너지</p>
+                                        <p className="font-semibold">{formatNumber(editingSourceStreamSummary.energy)} TJ</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-amber-800">현재 차이</p>
+                                        <p className="font-semibold">{formatNumber(editingSourceStreamSummary.delta)} tCO2e</p>
+                                    </div>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    className="mt-3"
+                                    onClick={() =>
+                                        setNewItem({
+                                            ...newItem,
+                                            direct_attributable_emissions_tco2e: editingSourceStreamSummary.emissions,
+                                        })
+                                    }
+                                >
+                                    배출원 합계를 직접배출량에 적용
+                                </Button>
+                            </div>
+                        )}
                         <div>
                             <label className="text-sm font-semibold text-slate-700">전력 사용량(MWh)</label>
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.electricity_mwh} onChange={(event) => setNewItem({ ...newItem, electricity_mwh: toNumber(event.target.value) })} />

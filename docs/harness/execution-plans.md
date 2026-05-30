@@ -48,6 +48,7 @@ Completed:
 - Aligned source-stream on-screen emission estimates with the EU template combustion structure and added a focused calculation verification gate.
 - Added source-stream energy-content previews so fuel rows show the same audit concept used by `B_EmInst` energy calculations.
 - Added source-stream direct-emissions mismatch warnings to Results and EU Export readiness checks.
+- Added a production-process edit helper that shows linked source-stream totals and lets users apply the total to direct attributable emissions.
 
 Next:
 
