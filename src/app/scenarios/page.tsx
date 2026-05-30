@@ -102,11 +102,95 @@ export default function ScenariosPage() {
             (sum, scenario) => sum + (scenario.certificate_cost_indicator_eur ?? 0),
             0
         );
-        const missingReferenceCount = scenarios.filter((scenario) => scenario.data_quality !== 'READY').length;
+        const missingCnCount = scenarios.filter((scenario) => scenario.data_quality === 'MISSING_CN').length;
+        const missingOfficialReferenceCount = scenarios.filter((scenario) => scenario.data_quality === 'MISSING_REFERENCE').length;
+        const missingReferenceCount = missingCnCount + missingOfficialReferenceCount;
         const aboveDefaultCount = scenarios.filter((scenario) => (scenario.default_gap ?? 0) > 0).length;
 
-        return { totalOutput, totalCertificateQuantity, totalCost, missingReferenceCount, aboveDefaultCount };
+        return {
+            totalOutput,
+            totalCertificateQuantity,
+            totalCost,
+            missingReferenceCount,
+            missingCnCount,
+            missingOfficialReferenceCount,
+            aboveDefaultCount,
+        };
     }, [scenarios]);
+
+    const actionItems = useMemo(() => {
+        const items: Array<{
+            key: string;
+            title: string;
+            description: string;
+            count: number;
+            unit: string;
+            tone: 'danger' | 'warning' | 'info' | 'success';
+            href?: string;
+            cta?: string;
+        }> = [];
+
+        if (summary.missingCnCount > 0) {
+            items.push({
+                key: 'missing-cn',
+                title: 'CN 코드 확인',
+                description: 'CN 코드가 없는 품목은 기본값, 벤치마크, EU 제출용 매핑을 연결할 수 없습니다.',
+                count: summary.missingCnCount,
+                unit: '건',
+                tone: 'danger',
+                href: '/products',
+                cta: '품목 관리로 이동',
+            });
+        }
+
+        if (summary.missingOfficialReferenceCount > 0 || !benchmarkReference || !defaultValueReference) {
+            items.push({
+                key: 'missing-reference',
+                title: '공식 기준자료 연결',
+                description: 'EU 벤치마크와 국가/CN 기본값 파일을 가져와야 SEFA 및 인증서 지표를 비교할 수 있습니다.',
+                count: summary.missingOfficialReferenceCount,
+                unit: '건',
+                tone: 'warning',
+                href: '/upload',
+                cta: '기준자료 가져오기',
+            });
+        }
+
+        if (summary.aboveDefaultCount > 0) {
+            items.push({
+                key: 'above-default',
+                title: '기본값 대비 실측 SEE 초과',
+                description: '실측값이 기본값보다 높은 품목은 기본값 사용, 공급망 자료 보완, 배출 저감 시나리오를 비교해야 합니다.',
+                count: summary.aboveDefaultCount,
+                unit: '건',
+                tone: 'warning',
+            });
+        }
+
+        if (summary.totalCertificateQuantity > 0) {
+            items.push({
+                key: 'certificate-exposure',
+                title: '인증서 수량 발생 가능',
+                description: '현재 가정 기준으로 인증서 수량 지표가 발생합니다. 가격 가정을 바꿔 민감도를 확인하세요.',
+                count: summary.totalCertificateQuantity,
+                unit: 'tCO2e',
+                tone: 'info',
+            });
+        }
+
+        if (items.length === 0 && !loading) {
+            items.push({
+                key: 'ready',
+                title: '즉시 확인할 주요 위험 없음',
+                description: '현재 입력 기준으로 CN 코드와 공식 기준자료가 연결되어 있습니다. 보고서 반영 전 산식 가정만 재확인하세요.',
+                count: scenarios.length,
+                unit: '건',
+                tone: 'success',
+            });
+        }
+
+        return items;
+    }, [benchmarkReference, defaultValueReference, loading, scenarios.length, summary]);
 
     return (
         <div className="space-y-6">
@@ -150,6 +234,35 @@ export default function ScenariosPage() {
                     </div>
                 </SectionCard>
             )}
+
+            <SectionCard
+                title="우선 조치"
+                description="현재 입력값 기준으로 먼저 확인해야 할 항목을 업무 순서대로 정리했습니다."
+            >
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    {actionItems.map((item) => (
+                        <div key={item.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <h3 className="text-sm font-semibold text-slate-950">{item.title}</h3>
+                                        <StatusBadge tone={item.tone}>{formatNumber(item.count)}{item.unit}</StatusBadge>
+                                    </div>
+                                    <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+                                </div>
+                                {item.href && item.cta && (
+                                    <Link
+                                        href={item.href}
+                                        className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-100"
+                                    >
+                                        {item.cta}
+                                    </Link>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </SectionCard>
 
             <SectionCard
                 title="시나리오 가정"
