@@ -4,11 +4,18 @@ import { PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui'
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import { listLocalItems, seedLocalData } from '@/lib/local-db';
 import { AlertTriangle, CheckCircle2, Factory, FileSpreadsheet, Package, TrendingUp } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value);
 }
+
+type DashboardTask = {
+  label: string;
+  href: string;
+  tone: 'success' | 'warning';
+};
 
 export default function Home() {
   const [results, setResults] = useState<LocalCalculationResult[]>([]);
@@ -41,9 +48,14 @@ export default function Home() {
 
   const dashboard = useMemo(() => {
     const totalOutput = results.reduce((sum, result) => sum + result.output_mass_t, 0);
-    const warnings = results.flatMap((result) =>
-      result.warnings.map((warning) => `${result.process_name}: ${warning}`)
+    const warningTasks: DashboardTask[] = results.flatMap((result) =>
+      result.warnings.map((warning) => ({
+        label: `${result.process_name}: ${warning}`,
+        href: `/processes?edit=${result.process_id}`,
+        tone: 'warning' as const,
+      }))
     );
+    const warningCount = warningTasks.length;
     const sourceStreamWarningCount = results.filter(
       (result) => result.source_stream_count > 0 && Math.abs(result.source_stream_delta_tco2e) > 0.01
     ).length;
@@ -66,21 +78,21 @@ export default function Home() {
       },
       { name: '간접배출량 입력', status: results.some((result) => result.indirect_see > 0) ? '완료' : '미완료', tone: results.some((result) => result.indirect_see > 0) ? 'success' as const : 'neutral' as const },
       { name: '전구물질 입력', status: precursorCount > 0 ? '완료' : '미완료', tone: precursorCount > 0 ? 'success' as const : 'neutral' as const },
-      { name: 'EU Export', status: warnings.length > 0 ? '검토중' : '대기', tone: warnings.length > 0 ? 'warning' as const : 'pending' as const },
+      { name: 'EU Export', status: warningCount > 0 ? '검토중' : '대기', tone: warningCount > 0 ? 'warning' as const : 'pending' as const },
     ];
 
-    const recentTasks = warnings.length > 0
-      ? warnings.slice(0, 4)
+    const recentTasks: DashboardTask[] = warningTasks.length > 0
+      ? warningTasks.slice(0, 4)
       : [
-        'EU 템플릿 Parameters_CNCodes 기준으로 제품 CN 코드 확인',
-        '생산공정별 전력 사용량 입력',
-        '구매 전구물질 공급업체 자료 출처 확인',
-        '.cbam 백업 파일 최신화',
+        { label: 'EU 템플릿 Parameters_CNCodes 기준으로 제품 CN 코드 확인', href: '/products', tone: 'success' as const },
+        { label: '생산공정별 전력 사용량 입력', href: '/processes', tone: 'success' as const },
+        { label: '구매 전구물질 공급업체 자료 출처 확인', href: '/precursors', tone: 'success' as const },
+        { label: '.cbam 백업 파일 최신화', href: '/settings', tone: 'success' as const },
       ];
 
     return {
       totalOutput,
-      warningCount: warnings.length,
+      warningCount,
       readinessRate,
       steps,
       recentTasks,
@@ -125,9 +137,15 @@ export default function Home() {
         <SectionCard title="최근 작업 항목" description="다음 작업을 우선 처리하면 Export 준비율이 올라갑니다.">
           <ul className="space-y-3">
             {dashboard.recentTasks.map((task) => (
-              <li key={task} className="flex gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-700" />
-                <span>{task}</span>
+              <li key={`${task.href}-${task.label}`}>
+                <Link href={task.href} className="flex gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 transition hover:bg-teal-50">
+                  {task.tone === 'warning' ? (
+                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+                  ) : (
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-700" />
+                  )}
+                  <span>{task.label}</span>
+                </Link>
               </li>
             ))}
           </ul>
