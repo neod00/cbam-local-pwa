@@ -44,10 +44,11 @@ Completed:
 - Expanded the installation model and UI for `A_InstData` address/contact fields, including local/internal and English installation names.
 - Added the source-stream data model and Korean-first `배출원 자료` screen for future `B_EmInst` and `C_Emissions&Energy` export work.
 - Added first-pass source-stream export writes into `B_EmInst` and manual total indirect emissions into `C_Emissions&Energy`.
+- Added conservative source-stream validation for EU-supported monitoring approaches, activity units, and source-stream type/method combinations.
 
 Next:
 
-- Add stricter source-stream unit and monitoring-approach validation against official dropdown/code-list values.
+- Expand source-stream unit support only after confirming each additional official dropdown value against workbook formulas and validation lists.
 
 ## Decision Log
 

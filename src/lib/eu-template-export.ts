@@ -73,6 +73,7 @@ export interface EuTemplateExportCopyResult {
 export type EuExportIssueTarget =
     | { type: 'product'; id: string }
     | { type: 'process'; id: string }
+    | { type: 'sourceStream'; id: string }
     | { type: 'precursor'; id: string };
 
 export interface EuExportReadinessIssue {
@@ -112,6 +113,8 @@ const EU_GOODS = [
 ];
 
 const EU_GOODS_SET = new Set(EU_GOODS);
+const EU_SOURCE_STREAM_METHODS = new Set(['Combustion', 'Process Emissions', 'Mass balance']);
+const EU_SOURCE_STREAM_ACTIVITY_UNITS = new Set(['t', 'Nm3']);
 const STEEL_FINISHED_GOODS_PREFIXES = ['7208', '7209', '7210', '7211', '7212', '7213', '7214', '7215', '7216', '7217', '7218', '7219', '7220', '7221', '7222', '7223', '7224', '7225', '7226', '7227', '7228', '7229', '73'];
 const CRUDE_STEEL_PREFIXES = ['7206', '7207'];
 const PIG_IRON_PREFIXES = ['7201'];
@@ -170,6 +173,94 @@ function mapPrecursorToEuGood(
     }
 
     return mapProductToEuGood(product, cnCodeMap);
+}
+
+function validateSourceStreamForEuExport(sourceStream: SourceStream): EuExportReadinessIssue[] {
+    const issues: EuExportReadinessIssue[] = [];
+    const target: EuExportIssueTarget = { type: 'sourceStream', id: sourceStream.id };
+
+    if (!sourceStream.process_id) {
+        issues.push({
+            severity: 'error',
+            area: '생산공정',
+            message: `${sourceStream.name}: 연결된 생산공정이 없어 B_EmInst 행을 공정과 대조할 수 없습니다.`,
+            target,
+        });
+    }
+
+    if (!EU_SOURCE_STREAM_METHODS.has(sourceStream.method)) {
+        issues.push({
+            severity: 'error',
+            area: '템플릿 한계',
+            message: `${sourceStream.name}: EU 템플릿에서 지원하지 않는 산정방법입니다. Combustion, Process Emissions, Mass balance 중 하나를 선택하세요.`,
+            target,
+        });
+    }
+
+    if (sourceStream.stream_type === 'FUEL' && sourceStream.method !== 'Combustion') {
+        issues.push({
+            severity: 'error',
+            area: '템플릿 한계',
+            message: `${sourceStream.name}: 연료 배출원은 Combustion 방식으로 입력해야 합니다.`,
+            target,
+        });
+    }
+
+    if (sourceStream.stream_type === 'PROCESS_MATERIAL' && sourceStream.method === 'Combustion') {
+        issues.push({
+            severity: 'error',
+            area: '템플릿 한계',
+            message: `${sourceStream.name}: 공정 원료는 Process Emissions 또는 Mass balance 방식으로 입력하세요.`,
+            target,
+        });
+    }
+
+    if (sourceStream.stream_type === 'OTHER') {
+        issues.push({
+            severity: 'error',
+            area: '템플릿 한계',
+            message: `${sourceStream.name}: 기타 배출원 유형은 아직 EU Export 대상이 아닙니다. 연료 또는 공정 원료로 분류하세요.`,
+            target,
+        });
+    }
+
+    if (!EU_SOURCE_STREAM_ACTIVITY_UNITS.has(sourceStream.activity_unit)) {
+        issues.push({
+            severity: 'error',
+            area: '템플릿 한계',
+            message: `${sourceStream.name}: EU 템플릿에서 검증한 활동자료 단위는 t 또는 Nm3입니다. 현재 값은 ${sourceStream.activity_unit || '비어 있음'}입니다.`,
+            target,
+        });
+    }
+
+    if (sourceStream.stream_type === 'FUEL' && sourceStream.ncv_gj_per_unit <= 0) {
+        issues.push({
+            severity: 'error',
+            area: '템플릿 한계',
+            message: `${sourceStream.name}: 연료 배출원은 순발열량을 0보다 크게 입력해야 합니다.`,
+            target,
+        });
+    }
+
+    if (sourceStream.stream_type !== 'FUEL' && sourceStream.emission_factor_tco2e_per_unit <= 0) {
+        issues.push({
+            severity: 'error',
+            area: '템플릿 한계',
+            message: `${sourceStream.name}: 공정 원료 배출원은 배출계수를 0보다 크게 입력해야 합니다.`,
+            target,
+        });
+    }
+
+    if (!sourceStream.source) {
+        issues.push({
+            severity: 'warning',
+            area: '생산공정',
+            message: `${sourceStream.name}: 활동자료 또는 배출계수 출처가 비어 있습니다.`,
+            target,
+        });
+    }
+
+    return issues;
 }
 
 export function evaluateEuExportReadiness(
@@ -266,6 +357,10 @@ export function evaluateEuExportReadiness(
                 target: { type: 'process', id: process.id },
             });
         }
+    }
+
+    for (const sourceStream of data.sourceStreams ?? []) {
+        issues.push(...validateSourceStreamForEuExport(sourceStream));
     }
 
     for (const precursor of data.precursors) {

@@ -69,6 +69,8 @@ Each calculation-based source-stream row starts at row `17 + index`. The app cur
 | `SourceStream.biomass_fraction` | `R{row}` | Written as percent value. |
 
 The app does not overwrite calculated fossil/bio CO2e, energy-content, consistency, or completeness cells in `B_EmInst`.
+Before Export, source streams are checked against the currently supported official input shape:
+`method` must be `Combustion`, `Process Emissions`, or `Mass balance`; activity unit must be `t` or `Nm3`; fuel streams must use `Combustion`; process-material streams must use `Process Emissions` or `Mass balance`.
 
 ### `C_Emissions&Energy`
 
@@ -96,4 +98,4 @@ The app does not currently write `indirect_see_tco2e_per_t` directly into `E_Pur
 ## Known Gaps
 
 - Production routes and aggregated goods categories should be driven through `A_InstData` and official dropdown/code-list relationships rather than by overwriting protected labels.
-- Source-stream unit handling still needs stricter validation against official dropdown/code-list values before submission-grade export.
+- Source-stream validation is still intentionally conservative. Additional official unit/dropdown values should be added only after confirming the corresponding workbook formulas and validation lists.

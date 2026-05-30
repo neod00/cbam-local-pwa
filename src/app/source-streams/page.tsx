@@ -22,9 +22,9 @@ const emptyDraft: SourceStreamDraft = {
     process_id: '',
     name: '',
     stream_type: 'FUEL',
-    method: 'Standard method',
+    method: 'Combustion',
     activity_data: 0,
-    activity_unit: 'MWh',
+    activity_unit: 't',
     ncv_gj_per_unit: 0,
     emission_factor_tco2e_per_unit: 0,
     oxidation_factor: 1,
@@ -36,6 +36,9 @@ const emptyDraft: SourceStreamDraft = {
 
 const fieldClass =
     'mt-1 block h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100';
+
+const sourceStreamMethods = ['Combustion', 'Process Emissions', 'Mass balance'] as const;
+const activityUnits = ['t', 'Nm3'] as const;
 
 function toNumber(value: string) {
     const parsed = Number(value);
@@ -68,6 +71,84 @@ function streamTypeLabel(streamType: SourceStream['stream_type']) {
     return '기타';
 }
 
+function createSourceStreamValidationErrors(sourceStream: SourceStreamDraft): SourceStreamErrors {
+    const nextErrors: SourceStreamErrors = {};
+
+    if (!sourceStream.name.trim()) {
+        nextErrors.name = '배출원 이름을 입력하세요.';
+    }
+
+    if (!sourceStream.period_id) {
+        nextErrors.period_id = '보고기간을 선택하세요.';
+    }
+
+    if (!sourceStream.process_id) {
+        nextErrors.process_id = '연결 생산공정을 선택하세요.';
+    }
+
+    if (!sourceStreamMethods.includes(sourceStream.method as (typeof sourceStreamMethods)[number])) {
+        nextErrors.method = 'EU 템플릿에서 지원하는 산정방법을 선택하세요.';
+    }
+
+    if (sourceStream.stream_type === 'FUEL' && sourceStream.method !== 'Combustion') {
+        nextErrors.method = '연료 배출원은 Combustion 방식으로 입력하세요.';
+    }
+
+    if (sourceStream.stream_type === 'PROCESS_MATERIAL' && sourceStream.method === 'Combustion') {
+        nextErrors.method = '공정 원료는 Process Emissions 또는 Mass balance로 입력하세요.';
+    }
+
+    if (sourceStream.stream_type === 'OTHER') {
+        nextErrors.stream_type = '기타 배출원은 아직 EU Export 대상이 아닙니다. 연료 또는 공정 원료로 분류하세요.';
+    }
+
+    if (sourceStream.activity_data < 0) {
+        nextErrors.activity_data = '활동자료는 0 이상이어야 합니다.';
+    }
+
+    if (!activityUnits.includes(sourceStream.activity_unit as (typeof activityUnits)[number])) {
+        nextErrors.activity_unit = 'EU 템플릿에서 지원하는 활동자료 단위를 선택하세요.';
+    }
+
+    if (sourceStream.ncv_gj_per_unit < 0) {
+        nextErrors.ncv_gj_per_unit = '순발열량은 0 이상이어야 합니다.';
+    }
+
+    if (sourceStream.stream_type === 'FUEL' && sourceStream.ncv_gj_per_unit <= 0) {
+        nextErrors.ncv_gj_per_unit = '연료 배출원은 순발열량을 0보다 크게 입력하세요.';
+    }
+
+    if (sourceStream.emission_factor_tco2e_per_unit < 0) {
+        nextErrors.emission_factor_tco2e_per_unit = '배출계수는 0 이상이어야 합니다.';
+    }
+
+    if (sourceStream.stream_type !== 'FUEL' && sourceStream.emission_factor_tco2e_per_unit <= 0) {
+        nextErrors.emission_factor_tco2e_per_unit = '공정 원료 배출원은 배출계수를 0보다 크게 입력하세요.';
+    }
+
+    if (sourceStream.oxidation_factor < 0 || sourceStream.oxidation_factor > 1) {
+        nextErrors.oxidation_factor = '산화계수는 0부터 1 사이로 입력하세요.';
+    }
+
+    if (sourceStream.conversion_factor < 0 || sourceStream.conversion_factor > 1) {
+        nextErrors.conversion_factor = '전환계수는 0부터 1 사이로 입력하세요.';
+    }
+
+    if (sourceStream.fossil_fraction < 0 || sourceStream.fossil_fraction > 1) {
+        nextErrors.fossil_fraction = '화석탄소 비율은 0부터 1 사이로 입력하세요.';
+    }
+
+    if (sourceStream.biomass_fraction < 0 || sourceStream.biomass_fraction > 1) {
+        nextErrors.biomass_fraction = '바이오매스 비율은 0부터 1 사이로 입력하세요.';
+    }
+
+    if (!sourceStream.source.trim()) {
+        nextErrors.source = '출처를 입력하세요. 예: 월별 연료 청구서, 계측기 검침표';
+    }
+
+    return nextErrors;
+}
+
 export default function SourceStreamsPage() {
     const [sourceStreams, setSourceStreams] = useState<SourceStream[]>([]);
     const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
@@ -88,15 +169,40 @@ export default function SourceStreamsPage() {
                 listLocalItems('processes'),
             ]);
             const sortedSourceStreams = sourceStreamData.sort((a, b) => b.created_at.localeCompare(a.created_at));
+            const editSourceStreamId = new URLSearchParams(window.location.search).get('edit');
+            const editSourceStream = editSourceStreamId
+                ? sortedSourceStreams.find((item) => item.id === editSourceStreamId)
+                : undefined;
 
             setSourceStreams(sortedSourceStreams);
             setPeriods(periodData.sort((a, b) => b.start_date.localeCompare(a.start_date)));
             setProcesses(processData.sort((a, b) => a.name.localeCompare(b.name)));
-            setNewItem({
-                ...emptyDraft,
-                period_id: periodData[0]?.id ?? '',
-                process_id: processData[0]?.id ?? '',
-            });
+            if (editSourceStream) {
+                setNewItem({
+                    period_id: editSourceStream.period_id ?? '',
+                    process_id: editSourceStream.process_id ?? '',
+                    name: editSourceStream.name,
+                    stream_type: editSourceStream.stream_type,
+                    method: editSourceStream.method,
+                    activity_data: editSourceStream.activity_data,
+                    activity_unit: editSourceStream.activity_unit,
+                    ncv_gj_per_unit: editSourceStream.ncv_gj_per_unit,
+                    emission_factor_tco2e_per_unit: editSourceStream.emission_factor_tco2e_per_unit,
+                    oxidation_factor: editSourceStream.oxidation_factor,
+                    conversion_factor: editSourceStream.conversion_factor,
+                    fossil_fraction: editSourceStream.fossil_fraction,
+                    biomass_fraction: editSourceStream.biomass_fraction,
+                    source: editSourceStream.source,
+                });
+                setEditingSourceStreamId(editSourceStream.id);
+                setShowForm(true);
+            } else {
+                setNewItem({
+                    ...emptyDraft,
+                    period_id: periodData[0]?.id ?? '',
+                    process_id: processData[0]?.id ?? '',
+                });
+            }
             setLoading(false);
         }
 
@@ -163,59 +269,7 @@ export default function SourceStreamsPage() {
 
     async function handleSubmit(event: FormEvent) {
         event.preventDefault();
-        const nextErrors: SourceStreamErrors = {};
-
-        if (!newItem.name.trim()) {
-            nextErrors.name = '배출원 이름을 입력하세요.';
-        }
-
-        if (!newItem.period_id) {
-            nextErrors.period_id = '보고기간을 선택하세요.';
-        }
-
-        if (!newItem.process_id) {
-            nextErrors.process_id = '연결 생산공정을 선택하세요.';
-        }
-
-        if (!newItem.method.trim()) {
-            nextErrors.method = '산정방법을 입력하세요.';
-        }
-
-        if (newItem.activity_data < 0) {
-            nextErrors.activity_data = '활동자료는 0 이상이어야 합니다.';
-        }
-
-        if (!newItem.activity_unit.trim()) {
-            nextErrors.activity_unit = '활동자료 단위를 입력하세요.';
-        }
-
-        if (newItem.ncv_gj_per_unit < 0) {
-            nextErrors.ncv_gj_per_unit = '순발열량은 0 이상이어야 합니다.';
-        }
-
-        if (newItem.emission_factor_tco2e_per_unit < 0) {
-            nextErrors.emission_factor_tco2e_per_unit = '배출계수는 0 이상이어야 합니다.';
-        }
-
-        if (newItem.oxidation_factor < 0 || newItem.oxidation_factor > 1) {
-            nextErrors.oxidation_factor = '산화계수는 0부터 1 사이로 입력하세요.';
-        }
-
-        if (newItem.conversion_factor < 0 || newItem.conversion_factor > 1) {
-            nextErrors.conversion_factor = '전환계수는 0부터 1 사이로 입력하세요.';
-        }
-
-        if (newItem.fossil_fraction < 0 || newItem.fossil_fraction > 1) {
-            nextErrors.fossil_fraction = '화석탄소 비율은 0부터 1 사이로 입력하세요.';
-        }
-
-        if (newItem.biomass_fraction < 0 || newItem.biomass_fraction > 1) {
-            nextErrors.biomass_fraction = '바이오매스 비율은 0부터 1 사이로 입력하세요.';
-        }
-
-        if (!newItem.source.trim()) {
-            nextErrors.source = '출처를 입력하세요. 예: 월별 연료 청구서, 계측기 검침표';
-        }
+        const nextErrors = createSourceStreamValidationErrors(newItem);
 
         setErrors(nextErrors);
 
@@ -319,7 +373,9 @@ export default function SourceStreamsPage() {
                         </div>
                         <div>
                             <label htmlFor="source-stream-method" className="text-sm font-semibold text-slate-700">산정방법</label>
-                            <input id="source-stream-method" required className={fieldClass} value={newItem.method} onChange={(event) => setNewItem({ ...newItem, method: event.target.value })} />
+                            <select id="source-stream-method" required className={fieldClass} value={newItem.method} onChange={(event) => setNewItem({ ...newItem, method: event.target.value })}>
+                                {sourceStreamMethods.map((method) => <option key={method} value={method}>{method}</option>)}
+                            </select>
                             {errors.method && <p className="mt-1 text-xs font-medium text-red-600">{errors.method}</p>}
                         </div>
                         <div>
@@ -345,7 +401,9 @@ export default function SourceStreamsPage() {
                         </div>
                         <div>
                             <label htmlFor="source-stream-unit" className="text-sm font-semibold text-slate-700">활동자료 단위</label>
-                            <input id="source-stream-unit" required className={fieldClass} value={newItem.activity_unit} onChange={(event) => setNewItem({ ...newItem, activity_unit: event.target.value })} />
+                            <select id="source-stream-unit" required className={fieldClass} value={newItem.activity_unit} onChange={(event) => setNewItem({ ...newItem, activity_unit: event.target.value })}>
+                                {activityUnits.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+                            </select>
                             {errors.activity_unit && <p className="mt-1 text-xs font-medium text-red-600">{errors.activity_unit}</p>}
                         </div>
                         <div>

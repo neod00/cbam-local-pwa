@@ -63,6 +63,10 @@ function getIssueEditHref(issue: EuExportReadinessIssue) {
         return `/processes?edit=${encodedId}`;
     }
 
+    if (issue.target.type === 'sourceStream') {
+        return `/source-streams?edit=${encodedId}`;
+    }
+
     return `/precursors?edit=${encodedId}`;
 }
 
