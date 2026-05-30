@@ -166,6 +166,32 @@ const warningDashboard = createDashboardSummary({
 assert.equal(warningDashboard.recentTasks[0].href, '/precursors?edit=precursor%201');
 assert.equal(warningDashboard.recentTasks[0].tone, 'warning');
 
+const missingSourceStreamDashboard = createDashboardSummary({
+  results: [{
+    ...result,
+    source_stream_count: 0,
+    direct_emissions_tco2e: 120,
+    warningDetails: [
+      {
+        message: '직접배출량은 입력되어 있지만 연결된 배출원 자료가 없습니다.',
+        target: { type: 'process', id: 'process-1' },
+      },
+    ],
+  }],
+  productCount: 1,
+  processCount: 1,
+  precursorCount: 1,
+  scenarioRiskSummary: baseRiskSummary,
+  exportIssueCount: 0,
+  exportErrorCount: 0,
+  hasBenchmarkReference: true,
+  hasDefaultValueReference: true,
+});
+
+assert.equal(missingSourceStreamDashboard.steps.find((step) => step.name === '직접배출량 입력').status, '확인필요');
+assert.equal(missingSourceStreamDashboard.steps.find((step) => step.name === '직접배출량 입력').tone, 'warning');
+assert.ok(missingSourceStreamDashboard.readinessRate < 100);
+
 const scenarioBasisDashboard = createDashboardSummary({
   results: [result],
   productCount: 1,

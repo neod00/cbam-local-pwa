@@ -127,9 +127,15 @@ export function createDashboardSummary(input: DashboardSummaryInput): DashboardS
         + scenarioRiskSummary.above_default_count
         + scenarioRiskSummary.default_lower_certificate_count
         + exportIssueCount;
-    const sourceStreamWarningCount = results.filter(
-        (result) => result.source_stream_count > 0 && Math.abs(result.source_stream_delta_tco2e) > 0.01
-    ).length;
+    const sourceStreamIssueProcessIds = new Set(
+        results
+            .filter((result) =>
+                (result.direct_emissions_tco2e > 0 && result.source_stream_count === 0)
+                || (result.source_stream_count > 0 && Math.abs(result.source_stream_delta_tco2e) > 0.01)
+            )
+            .map((result) => result.process_id)
+    );
+    const sourceStreamIssueCount = sourceStreamIssueProcessIds.size;
     const indirectApplicableCount = results.filter((result) => result.indirect_emissions_applicable).length;
     const indirectCompleted = results.some((result) => result.indirect_emissions_applicable && result.indirect_see > 0);
     const indirectNotRequired = results.length > 0 && indirectApplicableCount === 0;
@@ -137,7 +143,7 @@ export function createDashboardSummary(input: DashboardSummaryInput): DashboardS
     const completedSteps = [
         productCount > 0,
         processCount > 0,
-        sourceStreamWarningCount === 0 && results.some((result) => result.source_stream_count > 0),
+        sourceStreamIssueCount === 0 && results.some((result) => result.source_stream_count > 0),
         indirectCompleted || indirectNotRequired,
         precursorCount > 0,
         hasOfficialReferences,
@@ -151,8 +157,8 @@ export function createDashboardSummary(input: DashboardSummaryInput): DashboardS
         { name: '생산공정 설정', status: processCount > 0 ? '완료' : '미완료', tone: processCount > 0 ? 'success' : 'neutral' },
         {
             name: '직접배출량 입력',
-            status: sourceStreamWarningCount > 0 ? '확인필요' : results.some((result) => result.source_stream_count > 0) ? '완료' : '진행중',
-            tone: sourceStreamWarningCount > 0 ? 'warning' : results.some((result) => result.source_stream_count > 0) ? 'success' : 'info',
+            status: sourceStreamIssueCount > 0 ? '확인필요' : results.some((result) => result.source_stream_count > 0) ? '완료' : '진행중',
+            tone: sourceStreamIssueCount > 0 ? 'warning' : results.some((result) => result.source_stream_count > 0) ? 'success' : 'info',
         },
         {
             name: '간접배출량 입력',

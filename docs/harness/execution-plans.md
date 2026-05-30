@@ -71,6 +71,7 @@ Completed:
 - Added EU Export readiness warnings when process direct emissions have no linked source-stream evidence.
 - Surfaced missing source-stream evidence in local calculation warnings so Results and Dashboard show the issue before Export.
 - Restored Korean-first copy on the source-stream entry screen so B_EmInst/C_Emissions&Energy data entry is usable for domestic operators.
+- Updated dashboard progress logic so missing or mismatched source-stream evidence marks the direct-emissions step as requiring review.
 
 Next:
 
