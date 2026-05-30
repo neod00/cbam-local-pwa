@@ -33,6 +33,8 @@ const storeLabels: Record<string, string> = {
     products: '제품',
     periods: '보고기간',
     processes: '생산공정',
+    product_output_lines: '제품 생산라인',
+    source_streams: '배출원 자료',
     precursors: '구매 전구물질',
     settings: '설정',
 };
