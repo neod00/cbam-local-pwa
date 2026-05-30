@@ -52,6 +52,7 @@ Completed:
 - Added source-stream review status to the production-process list so mismatch cases are visible before opening the edit form.
 - Connected the dashboard to local calculation results so readiness, warnings, and next tasks reflect the user's current browser-local data.
 - Linked dashboard next-task items to the relevant local edit screens so warnings can be resolved from the dashboard.
+- Added structured calculation warning targets and linked Results warnings to the relevant process or precursor edit screen.
 
 Next:
 

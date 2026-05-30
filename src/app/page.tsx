@@ -49,9 +49,11 @@ export default function Home() {
   const dashboard = useMemo(() => {
     const totalOutput = results.reduce((sum, result) => sum + result.output_mass_t, 0);
     const warningTasks: DashboardTask[] = results.flatMap((result) =>
-      result.warnings.map((warning) => ({
-        label: `${result.process_name}: ${warning}`,
-        href: `/processes?edit=${result.process_id}`,
+      result.warningDetails.map((warning) => ({
+        label: `${result.process_name}: ${warning.message}`,
+        href: warning.target.type === 'precursor'
+          ? `/precursors?edit=${encodeURIComponent(warning.target.id)}`
+          : `/processes?edit=${encodeURIComponent(warning.target.id)}`,
         tone: 'warning' as const,
       }))
     );

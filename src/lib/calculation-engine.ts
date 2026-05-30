@@ -49,7 +49,16 @@ export interface LocalCalculationResult {
     precursor_see: number;
     total_see: number;
     warnings: string[];
+    warningDetails: LocalCalculationWarning[];
 }
+
+export type LocalCalculationWarning = {
+    message: string;
+    target: {
+        type: 'process' | 'precursor';
+        id: string;
+    };
+};
 
 export function calculateEmission(input: CalcInput): CalcResult {
     const { output_mass_t, electricity_mwh, electricity_ef, fuel_usage, precursors, input_mass_t } = input;
@@ -132,21 +141,26 @@ export function calculateLocalResults(input: {
 
     return input.processes.map((process) => {
         const warnings: string[] = [];
+        const warningDetails: LocalCalculationWarning[] = [];
         const product = process.product_id ? productById.get(process.product_id) : undefined;
         const period = process.period_id ? periodById.get(process.period_id) : undefined;
         const processPrecursors = precursorsByProcess.get(process.id) ?? [];
         const processSourceStreams = sourceStreamsByProcess.get(process.id) ?? [];
+        const addWarning = (message: string, target: LocalCalculationWarning['target']) => {
+            warnings.push(message);
+            warningDetails.push({ message, target });
+        };
 
         if (process.output_mass_t <= 0) {
-            warnings.push('생산량이 0 이하입니다. SEE 산정이 제한됩니다.');
+            addWarning('생산량이 0 이하입니다. SEE 산정이 제한됩니다.', { type: 'process', id: process.id });
         }
 
         if (!process.product_id) {
-            warnings.push('연결 제품이 지정되지 않았습니다.');
+            addWarning('연결 제품이 지정되지 않았습니다.', { type: 'process', id: process.id });
         }
 
         if (!process.period_id) {
-            warnings.push('보고기간이 지정되지 않았습니다.');
+            addWarning('보고기간이 지정되지 않았습니다.', { type: 'process', id: process.id });
         }
 
         const output = process.output_mass_t > 0 ? process.output_mass_t : 0;
@@ -169,16 +183,16 @@ export function calculateLocalResults(input: {
 
         for (const precursor of processPrecursors) {
             if (precursor.consumed_mass_t > process.output_mass_t && process.output_mass_t > 0) {
-                warnings.push(`${precursor.name} 소비량이 공정 생산량보다 큽니다.`);
+                addWarning(`${precursor.name} 소비량이 공정 생산량보다 큽니다.`, { type: 'precursor', id: precursor.id });
             }
 
             if (!precursor.source) {
-                warnings.push(`${precursor.name}의 SEE 출처가 비어 있습니다.`);
+                addWarning(`${precursor.name}의 SEE 출처가 비어 있습니다.`, { type: 'precursor', id: precursor.id });
             }
         }
 
         if (processSourceStreams.length > 0 && Math.abs(sourceStreamDelta) > Math.max(0.01, directEmissions * 0.01)) {
-            warnings.push(`배출원 자료 합계와 공정 직접배출량 입력값이 ${sourceStreamDelta.toFixed(4)} tCO2e 차이납니다.`);
+            addWarning(`배출원 자료 합계와 공정 직접배출량 입력값이 ${sourceStreamDelta.toFixed(4)} tCO2e 차이납니다.`, { type: 'process', id: process.id });
         }
 
         const direct_see = output > 0 ? directEmissions / output : 0;
@@ -208,6 +222,7 @@ export function calculateLocalResults(input: {
             precursor_see,
             total_see,
             warnings,
+            warningDetails,
         };
     });
 }

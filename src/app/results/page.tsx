@@ -4,7 +4,8 @@ import { DataTable, PageHeader, SectionCard, StatCard } from '@/components/ui';
 import { calculateLocalResults } from '@/lib/calculation-engine';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
 import { listLocalItems, seedLocalData } from '@/lib/local-db';
-import { AlertTriangle, Factory, Gauge, Scale } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Factory, Gauge, Scale } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 function formatNumber(value: number) {
@@ -19,6 +20,16 @@ function average(values: number[]) {
     }
 
     return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function getWarningHref(warning: LocalCalculationResult['warningDetails'][number]) {
+    const encodedId = encodeURIComponent(warning.target.id);
+
+    if (warning.target.type === 'precursor') {
+        return `/precursors?edit=${encodedId}`;
+    }
+
+    return `/processes?edit=${encodedId}`;
 }
 
 export default function ResultsPage() {
@@ -49,9 +60,10 @@ export default function ResultsPage() {
         const totalSourceStreamEmissions = results.reduce((sum, result) => sum + result.source_stream_emissions_tco2e, 0);
         const totalSourceStreamEnergy = results.reduce((sum, result) => sum + result.source_stream_energy_tj, 0);
         const allWarnings = results.flatMap((result) =>
-            result.warnings.map((warning) => ({
+            result.warningDetails.map((warning) => ({
                 resultId: result.id,
                 processName: result.process_name,
+                href: getWarningHref(warning),
                 warning,
             }))
         );
@@ -176,8 +188,20 @@ export default function ResultsPage() {
                     </div>
                     <ul className="mt-3 space-y-2 text-sm text-amber-900">
                         {summary.warnings.map((item) => (
-                            <li key={`${item.resultId}-${item.warning}`}>
-                                <span className="font-medium">{item.processName}</span>: {item.warning}
+                            <li key={`${item.resultId}-${item.warning.message}`}>
+                                <Link
+                                    href={item.href}
+                                    className="flex flex-col gap-2 rounded-xl px-3 py-2 transition hover:bg-amber-50 sm:flex-row sm:items-center sm:justify-between"
+                                >
+                                    <span>
+                                        <span className="font-medium">{item.processName}</span>
+                                        <span className="ml-2">{item.warning.message}</span>
+                                    </span>
+                                    <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-amber-700">
+                                        수정하기
+                                        <ArrowRight className="h-3.5 w-3.5" />
+                                    </span>
+                                </Link>
                             </li>
                         ))}
                     </ul>
