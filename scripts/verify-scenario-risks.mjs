@@ -120,6 +120,9 @@ assert.equal(readyScenarios[0].certificate_cost_indicator_eur, 7500);
 assertClose(readyScenarios[0].default_sefa_indicator, 1.6575);
 assertClose(readyScenarios[0].default_certificate_quantity_indicator, 34.25);
 assertClose(readyScenarios[0].default_certificate_cost_indicator_eur, 2740);
+assertClose(readyScenarios[0].certificate_quantity_delta_indicator, 59.5);
+assertClose(readyScenarios[0].certificate_cost_delta_eur, 4760);
+assert.equal(readyScenarios[0].lower_certificate_basis, 'DEFAULT');
 
 const readySummary = summarizeScenarioRisks(readyScenarios);
 assert.equal(readySummary.missing_cn_count, 0);
@@ -128,6 +131,9 @@ assert.equal(readySummary.missing_reference_count, 0);
 assert.equal(readySummary.above_default_count, 1);
 assert.equal(readySummary.certificate_exposure_count, 1);
 assert.equal(readySummary.default_certificate_exposure_count, 1);
+assert.equal(readySummary.actual_lower_certificate_count, 0);
+assert.equal(readySummary.default_lower_certificate_count, 1);
+assert.equal(readySummary.equal_certificate_count, 0);
 assert.equal(readySummary.total_certificate_quantity_indicator, 93.75);
 assert.equal(readySummary.total_certificate_cost_indicator_eur, 7500);
 assertClose(readySummary.total_default_certificate_quantity_indicator, 34.25);
@@ -138,6 +144,7 @@ assertAction(getScenarioReviewAction(readySummary, false, true), { href: '/uploa
 
 const missingCnScenarios = calculateProductScenarios([{ ...baseResult, id: 'result-2', cn_code: '', hs_code: '' }], assumptions, references);
 assert.equal(missingCnScenarios[0].data_quality, 'MISSING_CN');
+assert.equal(missingCnScenarios[0].lower_certificate_basis, 'UNKNOWN');
 assert.equal(summarizeScenarioRisks(missingCnScenarios).missing_cn_count, 1);
 assert.equal(summarizeScenarioRisks(missingCnScenarios).is_ready_for_review, false);
 assertAction(getScenarioReviewAction(summarizeScenarioRisks(missingCnScenarios), true, true), { href: '/products', label: '품목 관리' });

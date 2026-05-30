@@ -49,6 +49,22 @@ function getQualityBadge(result: ProductScenarioResult) {
     return <StatusBadge tone="warning">기준값 필요</StatusBadge>;
 }
 
+function getBasisBadge(result: ProductScenarioResult) {
+    if (result.lower_certificate_basis === 'ACTUAL') {
+        return <StatusBadge tone="success">실측 유리</StatusBadge>;
+    }
+
+    if (result.lower_certificate_basis === 'DEFAULT') {
+        return <StatusBadge tone="warning">기본값 유리</StatusBadge>;
+    }
+
+    if (result.lower_certificate_basis === 'TIE') {
+        return <StatusBadge tone="neutral">동일</StatusBadge>;
+    }
+
+    return <StatusBadge tone="pending">판단 전</StatusBadge>;
+}
+
 export default function ScenariosPage() {
     const [scenarios, setScenarios] = useState<ProductScenarioResult[]>([]);
     const [benchmarkReference, setBenchmarkReference] = useState<ImportedBenchmarkReference | undefined>();
@@ -148,6 +164,8 @@ export default function ScenariosPage() {
             missingCnCount: riskSummary.missing_cn_count,
             missingOfficialReferenceCount: riskSummary.missing_official_reference_count,
             aboveDefaultCount: riskSummary.above_default_count,
+            actualLowerCertificateCount: riskSummary.actual_lower_certificate_count,
+            defaultLowerCertificateCount: riskSummary.default_lower_certificate_count,
         };
     }, [scenarios]);
 
@@ -208,6 +226,28 @@ export default function ScenariosPage() {
                 count: summary.totalCertificateQuantity,
                 unit: 'tCO2e',
                 tone: 'info',
+            });
+        }
+
+        if (summary.defaultLowerCertificateCount > 0) {
+            items.push({
+                key: 'default-lower',
+                title: '기본값 시나리오 비용 우위',
+                description: '일부 품목은 현재 가정상 기본값 시나리오의 인증서 비용 지표가 더 낮습니다. 기본값 사용 가능성과 증빙 요건을 함께 검토하세요.',
+                count: summary.defaultLowerCertificateCount,
+                unit: '건',
+                tone: 'warning',
+            });
+        }
+
+        if (summary.actualLowerCertificateCount > 0) {
+            items.push({
+                key: 'actual-lower',
+                title: '실측자료 시나리오 비용 우위',
+                description: '일부 품목은 실측자료 기준 인증서 비용 지표가 더 낮습니다. 공급망 자료와 검증 가능성을 우선 보완하세요.',
+                count: summary.actualLowerCertificateCount,
+                unit: '건',
+                tone: 'success',
             });
         }
 
@@ -416,6 +456,8 @@ export default function ScenariosPage() {
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 SEFA</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 인증서</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 비용</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">비용 차이</th>
+                            <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">유리한 기준</th>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">상태</th>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">검토</th>
                         </tr>
@@ -423,7 +465,7 @@ export default function ScenariosPage() {
                     <tbody className="divide-y divide-slate-100 bg-white">
                         {scenarios.length === 0 ? (
                             <tr>
-                                <td colSpan={15} className="p-6 text-center text-sm text-slate-500">
+                                <td colSpan={17} className="p-6 text-center text-sm text-slate-500">
                                     시나리오를 만들 산정 결과가 없습니다.
                                 </td>
                             </tr>
@@ -448,6 +490,8 @@ export default function ScenariosPage() {
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.default_sefa_indicator)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.default_certificate_quantity_indicator)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-950">{formatCurrency(scenario.default_certificate_cost_indicator_eur)}</td>
+                                    <td className={`whitespace-nowrap px-4 py-4 text-right text-sm ${(scenario.certificate_cost_delta_eur ?? 0) > 0 ? 'font-semibold text-amber-700' : 'text-slate-600'}`}>{formatCurrency(scenario.certificate_cost_delta_eur)}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-sm">{getBasisBadge(scenario)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-sm">{getQualityBadge(scenario)}</td>
                                     <td className="min-w-64 px-4 py-4 text-sm text-slate-600">{scenario.review_message}</td>
                                 </tr>

@@ -57,6 +57,9 @@ export interface ProductScenarioResult {
     default_sefa_indicator?: number;
     default_certificate_quantity_indicator?: number;
     default_certificate_cost_indicator_eur?: number;
+    certificate_quantity_delta_indicator?: number;
+    certificate_cost_delta_eur?: number;
+    lower_certificate_basis: 'ACTUAL' | 'DEFAULT' | 'TIE' | 'UNKNOWN';
     data_quality: 'READY' | 'MISSING_REFERENCE' | 'MISSING_CN';
     review_message: string;
 }
@@ -68,6 +71,9 @@ export interface ScenarioRiskSummary {
     above_default_count: number;
     certificate_exposure_count: number;
     default_certificate_exposure_count: number;
+    actual_lower_certificate_count: number;
+    default_lower_certificate_count: number;
+    equal_certificate_count: number;
     total_certificate_quantity_indicator: number;
     total_certificate_cost_indicator_eur: number;
     total_default_certificate_quantity_indicator: number;
@@ -107,6 +113,9 @@ export function summarizeScenarioRisks(scenarios: ProductScenarioResult[]): Scen
         above_default_count: scenarios.filter((scenario) => (scenario.default_gap ?? 0) > 0).length,
         certificate_exposure_count: scenarios.filter((scenario) => (scenario.certificate_quantity_indicator ?? 0) > 0).length,
         default_certificate_exposure_count: scenarios.filter((scenario) => (scenario.default_certificate_quantity_indicator ?? 0) > 0).length,
+        actual_lower_certificate_count: scenarios.filter((scenario) => scenario.lower_certificate_basis === 'ACTUAL').length,
+        default_lower_certificate_count: scenarios.filter((scenario) => scenario.lower_certificate_basis === 'DEFAULT').length,
+        equal_certificate_count: scenarios.filter((scenario) => scenario.lower_certificate_basis === 'TIE').length,
         total_certificate_quantity_indicator: totalCertificateQuantityIndicator,
         total_certificate_cost_indicator_eur: totalCertificateCostIndicatorEur,
         total_default_certificate_quantity_indicator: totalDefaultCertificateQuantityIndicator,
@@ -152,6 +161,7 @@ export function calculateProductScenarios(
                 product_name: result.product_name,
                 output_mass_t: result.output_mass_t,
                 actual_see: result.total_see,
+                lower_certificate_basis: 'UNKNOWN',
                 data_quality: 'MISSING_CN',
                 review_message: 'CN 코드가 없어 공식 기준값과 비교할 수 없습니다.',
             };
@@ -186,6 +196,20 @@ export function calculateProductScenarios(
         const defaultCertificateCostIndicator = defaultCertificateQuantityIndicator === undefined
             ? undefined
             : defaultCertificateQuantityIndicator * assumptions.certificate_price_eur;
+        const certificateQuantityDelta = certificateQuantityIndicator === undefined || defaultCertificateQuantityIndicator === undefined
+            ? undefined
+            : certificateQuantityIndicator - defaultCertificateQuantityIndicator;
+        const certificateCostDelta = certificateCostIndicator === undefined || defaultCertificateCostIndicator === undefined
+            ? undefined
+            : certificateCostIndicator - defaultCertificateCostIndicator;
+        const lowerCertificateBasis =
+            certificateCostDelta === undefined
+                ? 'UNKNOWN'
+                : Math.abs(certificateCostDelta) < 0.0000001
+                    ? 'TIE'
+                    : certificateCostDelta < 0
+                        ? 'ACTUAL'
+                        : 'DEFAULT';
 
         return {
             result_id: result.id,
@@ -203,6 +227,9 @@ export function calculateProductScenarios(
             default_sefa_indicator: defaultSefaIndicator,
             default_certificate_quantity_indicator: defaultCertificateQuantityIndicator,
             default_certificate_cost_indicator_eur: defaultCertificateCostIndicator,
+            certificate_quantity_delta_indicator: certificateQuantityDelta,
+            certificate_cost_delta_eur: certificateCostDelta,
+            lower_certificate_basis: lowerCertificateBasis,
             data_quality: benchmark && defaultValue ? 'READY' : 'MISSING_REFERENCE',
             review_message: benchmark && defaultValue
                 ? defaultGap !== undefined && defaultGap > 0

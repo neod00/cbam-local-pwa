@@ -64,6 +64,7 @@ Completed:
 - Added shared product-line allocation summary checks, including mixed allocation-basis warnings and an in-form line-total review box.
 - Connected product-line allocation checks to EU Export readiness so submission prep warns about output-total differences and mixed allocation bases before workbook download.
 - Added default-value scenario SEFA and certificate indicators using Benchmark Column B, while keeping actual-data indicators on Benchmark Column A.
+- Added actual-vs-default certificate comparison fields so the scenario screen can show which basis has the lower certificate cost indicator.
 
 Next:
 

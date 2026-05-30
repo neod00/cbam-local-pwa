@@ -80,6 +80,7 @@ Then add:
 - SEFA calculation, with Column A used for actual-data scenarios and Column B used for default-value scenarios.
 - CBAM factor and CSCF handling.
 - Certificate quantity and cost comparison.
+- A clear basis comparison that flags whether actual data or default values currently produce the lower certificate indicator.
 
 ## UX Direction
 
