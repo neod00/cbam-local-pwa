@@ -471,6 +471,15 @@ export function evaluateEuExportReadiness(
             });
         }
 
+        if (process.direct_attributable_emissions_tco2e > 0 && processSourceStreams.length === 0) {
+            issues.push({
+                severity: 'warning',
+                area: '생산공정',
+                message: `${process.name}: 직접배출량은 입력되어 있지만 연결된 배출원 자료가 없습니다. B_EmInst 근거 자료를 확인하세요.`,
+                target: { type: 'process', id: process.id },
+            });
+        }
+
         if (processSourceStreams.length > 0) {
             const sourceStreamEmissions = processSourceStreams.reduce(
                 (sum, sourceStream) => sum + calculateSourceStreamEmissions(sourceStream),

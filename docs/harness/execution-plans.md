@@ -68,6 +68,7 @@ Completed:
 - Surfaced actual-vs-default certificate basis decisions in dashboard tasks and the EU Export checklist.
 - Clarified scenario assumption displays with origin country, CSCF, and a visible notice that paid-carbon-price offsets are not included yet.
 - Added EU Export readiness warnings for default precursor justification gaps and unverified actual/semi-actual precursor data.
+- Added EU Export readiness warnings when process direct emissions have no linked source-stream evidence.
 
 Next:
 

@@ -392,9 +392,18 @@ assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
 const readiness = euExport.evaluateEuExportReadiness(data, validation.cnCodeMap);
 assertEqual(String(readiness.errorCount), '0', 'readiness error count');
 assertEqual(String(readiness.warningCount), '1', 'readiness warning count');
-const precursorEvidenceReadiness = euExport.evaluateEuExportReadiness({
+const missingSourceStreamReadiness = euExport.evaluateEuExportReadiness({
   ...data,
   sourceStreams: [],
+}, validation.cnCodeMap);
+assertEqual(String(missingSourceStreamReadiness.warningCount), '1', 'missing source stream warning count');
+assertEqual(
+  String(missingSourceStreamReadiness.issues.some((issue) => issue.message.includes('연결된 배출원 자료가 없습니다'))),
+  'true',
+  'missing source stream basis warning'
+);
+const precursorEvidenceReadiness = euExport.evaluateEuExportReadiness({
+  ...data,
   precursors: [
     {
       ...precursor,
@@ -411,7 +420,7 @@ const precursorEvidenceReadiness = euExport.evaluateEuExportReadiness({
     },
   ],
 }, validation.cnCodeMap);
-assertEqual(String(precursorEvidenceReadiness.warningCount), '2', 'precursor evidence warning count');
+assertEqual(String(precursorEvidenceReadiness.warningCount), '3', 'precursor evidence warning count');
 assertEqual(
   String(precursorEvidenceReadiness.issues.some((issue) => issue.message.includes('기본값을 사용하는 사유'))),
   'true',
@@ -431,7 +440,7 @@ const allocationReadiness = euExport.evaluateEuExportReadiness({
   ],
 }, validation.cnCodeMap);
 assertEqual(String(allocationReadiness.errorCount), '0', 'allocation readiness error count');
-assertEqual(String(allocationReadiness.warningCount), '2', 'allocation readiness warning count');
+assertEqual(String(allocationReadiness.warningCount), '3', 'allocation readiness warning count');
 assertEqual(
   String(allocationReadiness.issues.some((issue) => issue.message.includes('제품 생산라인 합계'))),
   'true',
