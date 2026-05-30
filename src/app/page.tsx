@@ -34,6 +34,33 @@ function formatDateTime(value?: string) {
   }).format(new Date(value));
 }
 
+function getBackupStatus(value?: string) {
+  if (!value) {
+    return {
+      helper: '아직 백업 파일을 만든 기록이 없습니다.',
+      label: '백업 필요',
+      tone: 'warning' as const,
+    };
+  }
+
+  const backupTime = new Date(value).getTime();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+  if (!Number.isFinite(backupTime) || Date.now() - backupTime > sevenDaysMs) {
+    return {
+      helper: '최근 백업이 오래되었습니다. 주요 입력 후 새 백업을 권장합니다.',
+      label: '백업 점검',
+      tone: 'warning' as const,
+    };
+  }
+
+  return {
+    helper: '최근 백업 기록이 있습니다.',
+    label: '백업 완료',
+    tone: 'success' as const,
+  };
+}
+
 const EMPTY_SCENARIO_RISK_SUMMARY: ScenarioRiskSummary = {
   missing_cn_count: 0,
   missing_official_reference_count: 0,
@@ -130,6 +157,7 @@ export default function Home() {
     results,
     scenarioRiskSummary,
   ]);
+  const backupStatus = useMemo(() => getBackupStatus(lastBackupAt), [lastBackupAt]);
 
   return (
     <div className="space-y-6">
@@ -216,8 +244,14 @@ export default function Home() {
               `.cbam` 백업을 내려받아 회사의 안전한 폴더에 보관하세요.
             </div>
             <Link href="/settings" className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm transition hover:bg-slate-50">
-              <span className="font-semibold text-slate-900">마지막 백업</span>
-              <span className="text-right text-slate-600">{formatDateTime(lastBackupAt)}</span>
+              <span>
+                <span className="block font-semibold text-slate-900">마지막 백업</span>
+                <span className="mt-1 block text-xs text-slate-500">{backupStatus.helper}</span>
+              </span>
+              <span className="flex flex-col items-end gap-2 text-right text-slate-600">
+                <StatusBadge tone={backupStatus.tone}>{backupStatus.label}</StatusBadge>
+                <span>{formatDateTime(lastBackupAt)}</span>
+              </span>
             </Link>
           </div>
         </SectionCard>
