@@ -129,6 +129,7 @@ Completed:
 - Added `필수`, `선택`, and `검토용` priority badges to guided form sections so first-time users can distinguish required calculation inputs from review/supporting fields.
 - Added mobile card fallbacks for EU Export `Summary_Products` and SEE preview rows so submission review is readable without horizontal table scrolling in the PWA.
 - Added a mobile card fallback for SEFA/certificate scenario review so users can compare actual/default SEE and certificate cost indicators without reading the full desktop table.
+- Detailed the free-license/admin rollout with client API contracts, forbidden server fields, phased implementation, and the rule that license/update controls must not block local `.cbam` backup access.
 
 Pending product decisions:
 

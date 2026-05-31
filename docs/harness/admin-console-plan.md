@@ -74,6 +74,96 @@
 
 모든 API는 CBAM 입력자료, 산정 결과, EU 템플릿, `.cbam` 백업 파일을 요청 본문이나 응답에 포함하지 않는다.
 
+## Client API Contracts
+
+사용자 PWA가 서버와 통신할 때의 최소 계약은 아래 범위로 제한한다.
+
+### `POST /api/license/register`
+
+Request:
+
+- `email`
+- `company_name`
+- `contact_name`
+- `country`
+- `industry`
+- `accepted_terms_version`
+- `app_version`
+
+Response:
+
+- `license_status`
+- `license_key`
+- `accepted_terms_version`
+- `next_check_after`
+- `message`
+
+### `GET /api/license/status`
+
+Request query:
+
+- `license_key`
+- `app_version`
+
+Response:
+
+- `license_status`
+- `minimum_supported_version`
+- `terms_version`
+- `notice_count`
+- `next_check_after`
+
+### `GET /api/update-manifest`
+
+Response:
+
+- `latest_version`
+- `minimum_supported_version`
+- `update_policy`
+- `notice_title`
+- `notice_body`
+- `release_notes_url`
+- `effective_from`
+
+Forbidden fields:
+
+- `installation`
+- `period`
+- `product`
+- `process`
+- `source_stream`
+- `precursor`
+- `result`
+- `scenario`
+- `template_file`
+- `backup_file`
+
+## Implementation Phases
+
+### Phase 0: Current MVP
+
+- 사용자 PWA는 로컬 mock 등록과 정적 `public/update-manifest.json`만 사용한다.
+- 라이선스가 없어도 계산, 백업, Export 준비 기능을 막지 않는다.
+- 서버로 CBAM 업무 데이터를 전송하지 않는 문구를 설정 화면에 표시한다.
+
+### Phase 1: Hosted License API
+
+- `license-api`를 별도 서비스로 만든다.
+- 무료 라이선스 등록, 상태 확인, update manifest 조회만 제공한다.
+- PWA에는 `NEXT_PUBLIC_LICENSE_API_URL`이 있을 때만 원격 확인을 켠다.
+- 원격 확인 실패 또는 오프라인 상태에서는 마지막 확인 결과와 로컬 mock 상태로 계속 동작한다.
+
+### Phase 2: Admin Console MVP
+
+- 관리자 로그인, 사용자 목록, 라이선스 상태 변경, 업데이트 정책 게시, 공지 게시를 만든다.
+- 관리자 화면에는 allowed data만 표시한다.
+- 관리자 API에는 역할 기반 인증과 기본 rate limit을 둔다.
+
+### Phase 3: Paid/On-Prem 준비
+
+- 유료 라이선스, 조직별 계약, Docker/on-prem 배포 관리는 별도 테이블과 별도 약관으로 분리한다.
+- 무료 PWA의 로컬 데이터 경계는 유지한다.
+
 ## Update Control Flow
 
 1. PWA는 시작 시 정적 `public/update-manifest.json` 또는 향후 `GET /api/update-manifest`를 확인한다.
