@@ -49,6 +49,10 @@ assert.ok(exportPage.includes('첫 번째 항목 수정'), 'Export should guide 
 assert.ok(exportPage.includes('제출용 복사본 생성'), 'Export should expose a clear final copy generation action');
 assert.ok(exportPage.includes('공식 수식 셀이 계산하도록 직접 덮어쓰지 않습니다'), 'Export should preserve official formula cells');
 assert.ok(exportPage.includes('Excel에서 생성된 복사본을 열면'), 'Export should tell users to review Excel formula outputs');
+assert.ok(exportPage.includes('제출 전 최종 확인'), 'Export should show a final pre-submission review card');
+assert.ok(exportPage.includes('최신 EU 원본 템플릿'), 'Export should remind users to upload the latest official EU template');
+assert.ok(exportPage.includes('법률 자문, 공식 검증, 회사 내부 승인, 최종 제출 책임을 대체하지 않습니다'), 'Export should repeat the final responsibility notice');
+assert.ok(exportPage.includes('.cbam 백업 보관'), 'Export should remind users to keep a matching local backup');
 assert.ok(installationsPage.includes('1. 사업장 식별정보'), 'Installations form should group required installation identification inputs');
 assert.ok(installationsPage.includes('2. 주소와 위치'), 'Installations form should group address and location inputs');
 assert.ok(installationsPage.includes('등록된 사업장이 없습니다'), 'Installations should show a guided empty state');

@@ -711,6 +711,67 @@ export default function ExportPage() {
             <SectionCard>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div>
+                        <h2 className="text-lg font-semibold text-slate-950">제출 전 최종 확인</h2>
+                        <p className="mt-1 text-sm text-slate-600">
+                            Export 복사본은 제출 준비 파일입니다. 실제 제출 전에는 최신 원본 템플릿, 공식 수식 재계산, 내부 승인, 백업 보관을 한 번 더 확인하세요.
+                        </p>
+                    </div>
+                    <StatusBadge tone={validation?.isValid && readiness.canExportDraft ? 'warning' : 'pending'}>
+                        사용자 확인 필요
+                    </StatusBadge>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex gap-3">
+                            <FileCheck2 className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-950">최신 EU 원본 템플릿</h3>
+                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                    앱에 템플릿을 내장하지 않습니다. 사용자가 보유한 최신 공식 Communication template을 업로드한 경우에만 제출용 복사본을 생성하세요.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex gap-3">
+                            <FileSpreadsheet className="mt-0.5 h-5 w-5 flex-none text-blue-700" />
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-950">Excel 공식 수식 재계산</h3>
+                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                    다운로드 후 Microsoft Excel에서 `Summary_Products` I:J:K 열의 공식 수식 결과를 확인하고, 이 화면의 SEE 검토값과 차이를 기록하세요.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex gap-3">
+                            <ShieldCheck className="mt-0.5 h-5 w-5 flex-none text-emerald-700" />
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-950">최종 책임과 검증</h3>
+                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                    이 앱은 산정과 제출 준비를 돕는 도구입니다. 법률 자문, 공식 검증, 회사 내부 승인, 최종 제출 책임을 대체하지 않습니다.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex gap-3">
+                            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-700" />
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-950">.cbam 백업 보관</h3>
+                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                    제출용 Excel과 별도로 같은 시점의 `.cbam` 백업을 내려받아 회사 보안정책에 맞는 위치에 보관하세요.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </SectionCard>
+
+            <SectionCard>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
                         <h2 className="text-lg font-semibold text-slate-950">Summary_Products 반영 검토</h2>
                         <p className="mt-1 text-sm text-slate-600">
                             EU 템플릿에는 생산공정, CN 코드, 제품명을 입력하고 직접, 간접, 총 SEE는 공식 수식 셀이 계산하도록 둡니다.
