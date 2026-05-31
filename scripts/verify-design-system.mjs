@@ -14,6 +14,7 @@ for (const required of [
   'NextActionPanel',
   'WorkflowStepper',
   'FixCard',
+  'ActionItemCard',
   'ExportGate',
   'LocalDataNotice',
   '한국어',

@@ -114,6 +114,7 @@ Completed:
 - Added purchased-precursor next-action guidance for default-value justification, actual/semi-actual verification status, evidence source gaps, and scenario handoff.
 - Added a reusable action item card and applied it to production-process, source-stream, precursor, and SEFA/certificate priority-action areas so guided-workflow cards can move toward one consistent design system.
 - Applied the shared action item card to dashboard tasks, Results calculation warnings, and EU Export checklist/readiness issues for a more consistent guided workflow.
+- Documented `ActionItemCard` as a core design-system pattern and added it to the design-system verification guard.
 
 Pending product decisions:
 
