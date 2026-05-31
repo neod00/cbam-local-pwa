@@ -15,6 +15,7 @@ const excelReview = readFileSync('docs/excel-recalculation-review.md', 'utf8');
 const userNotices = readFileSync('docs/mvp-user-notices.md', 'utf8');
 const freeTermsDraft = readFileSync('docs/free-pwa-terms-draft.md', 'utf8');
 const deploymentGuide = readFileSync('docs/pwa-deployment-guide.md', 'utf8');
+const firstDeploymentRunbook = readFileSync('docs/first-deployment-runbook.md', 'utf8');
 const securityPolicy = readFileSync('SECURITY.md', 'utf8');
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 
@@ -87,6 +88,7 @@ assert.ok(readme.includes('docs/mvp-rehearsal-report.md'), 'README should link t
 assert.ok(readme.includes('docs/excel-recalculation-review.md'), 'README should link the Excel recalculation review');
 assert.ok(readme.includes('docs/free-pwa-terms-draft.md'), 'README should link the free PWA terms draft');
 assert.ok(readme.includes('docs/pwa-deployment-guide.md'), 'README should link the PWA deployment guide');
+assert.ok(readme.includes('docs/first-deployment-runbook.md'), 'README should link the first deployment runbook');
 assert.ok(readme.includes('SECURITY.md'), 'README should link the security policy');
 
 assert.ok(releaseChecklist.includes('CBAM_documents/'), 'release checklist should mention local reference document exclusion');
@@ -94,6 +96,7 @@ assert.ok(releaseChecklist.includes('저장소는 Private'), 'release checklist 
 assert.ok(releaseChecklist.includes('무료 사용 약관'), 'release checklist should include the free-use terms decision');
 assert.ok(releaseChecklist.includes('docs/free-pwa-terms-draft.md'), 'release checklist should link the free PWA terms draft');
 assert.ok(releaseChecklist.includes('docs/pwa-deployment-guide.md'), 'release checklist should link the PWA deployment guide');
+assert.ok(releaseChecklist.includes('docs/first-deployment-runbook.md'), 'release checklist should link the first deployment runbook');
 assert.ok(releaseChecklist.includes('docs/mvp-rehearsal-plan.md'), 'release checklist should link the MVP rehearsal plan');
 assert.ok(releaseChecklist.includes('docs/mvp-fictional-dataset.md'), 'release checklist should link the MVP fictional dataset');
 assert.ok(releaseChecklist.includes('docs/mvp-rehearsal-report.md'), 'release checklist should link the MVP rehearsal report');
@@ -175,6 +178,20 @@ assert.ok(deploymentGuide.includes('CBAM_documents/'), 'deployment guide should 
 assert.ok(deploymentGuide.includes('공식 EU 템플릿'), 'deployment guide should forbid bundling official EU templates');
 assert.ok(deploymentGuide.includes('npm run verify'), 'deployment guide should require the standard verification command');
 assert.ok(deploymentGuide.includes('JavaScript 번들'), 'deployment guide should explain browser bundle visibility');
+assert.ok(deploymentGuide.includes('docs/first-deployment-runbook.md'), 'deployment guide should link the first deployment runbook');
+
+for (const required of [
+  'Private GitHub',
+  'Vercel',
+  'npm run verify',
+  'CBAM_documents/',
+  '.cbam',
+  'Network',
+  'docs/mvp-fictional-dataset.md',
+  '롤백',
+]) {
+  assert.ok(firstDeploymentRunbook.includes(required), `first deployment runbook should include ${required}`);
+}
 
 assert.ok(securityPolicy.includes('.cbam'), 'security policy should mention backup files');
 assert.ok(securityPolicy.includes('민감자료 공유 금지'), 'security policy should warn against sharing sensitive data');

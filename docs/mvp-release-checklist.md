@@ -10,6 +10,7 @@ CBAM Local PWA를 무료 배포하기 전에 확인할 항목입니다. 소스 �
 - `CBAM_documents/`와 공식 EU 템플릿 원본 파일이 Git에 포함되지 않는다.
 - README의 실행 방법과 데이터 보안 안내가 최신 상태다.
 - [docs/pwa-deployment-guide.md](pwa-deployment-guide.md)의 배포 금지 항목을 확인했다.
+- 첫 배포는 [docs/first-deployment-runbook.md](first-deployment-runbook.md)의 순서로 진행한다.
 - PWA manifest와 service worker가 현재 주요 라우트를 포함한다.
 - 설정 화면에서 `.cbam` 백업 내보내기/가져오기가 동작한다.
 - Export 화면에서 오류와 경고가 수정 화면으로 연결된다.

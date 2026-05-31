@@ -63,6 +63,8 @@ npm run verify:routes
 
 ## 배포 후 확인
 
+첫 배포는 [docs/first-deployment-runbook.md](first-deployment-runbook.md)의 순서대로 진행합니다.
+
 - 설치 가능한 PWA로 표시되는지 확인합니다.
 - 새 브라우저 프로필에서 데이터가 비어 있는 상태로 시작하는지 확인합니다.
 - `.cbam` 백업 내보내기/가져오기가 동작하는지 확인합니다.
