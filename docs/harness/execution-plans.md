@@ -94,6 +94,7 @@ Completed:
 - Extended EU Export writes into `A_InstData` aggregated-goods and production-process boundary tables so the official workbook receives product category, route, process boundary, and process name declarations before process-level totals.
 - Added first-pass `Summary_Products` export writes for production process, CN code, and product name while preserving official direct/indirect/total SEE formula cells.
 - Added an Export-page `Summary_Products` review table that shows the target EU row, process, CN code, product name, allocation share, and app-calculated SEE before workbook download.
+- Restored Korean-first copy on the EU Export page, including template selection, validation status, checklist, Export principles, readiness issues, and SEE preview labels.
 
 Pending product decisions:
 

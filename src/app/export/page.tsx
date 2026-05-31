@@ -1,7 +1,7 @@
 'use client';
 
-import { Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummary';
+import { Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import {
     createEuExportFilename,
@@ -39,7 +39,17 @@ import {
     summarizeScenarioRisks,
     type ScenarioAssumptions,
 } from '@/lib/scenario-calculation';
-import { AlertTriangle, CheckCircle2, Circle, Download, FileCheck2, FileSpreadsheet, PackageCheck, ShieldCheck, Workflow } from 'lucide-react';
+import {
+    AlertTriangle,
+    CheckCircle2,
+    Circle,
+    Download,
+    FileCheck2,
+    FileSpreadsheet,
+    PackageCheck,
+    ShieldCheck,
+    Workflow,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -51,7 +61,7 @@ type LastExportResult = {
 };
 
 function formatNumber(value: number) {
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat('ko-KR', {
         maximumFractionDigits: 4,
     }).format(value);
 }
@@ -61,6 +71,10 @@ function formatPercent(value: number) {
         maximumFractionDigits: 1,
         style: 'percent',
     }).format(value);
+}
+
+function getIssueSeverityLabel(severity: 'error' | 'warning') {
+    return severity === 'error' ? '오류' : '경고';
 }
 
 export default function ExportPage() {
@@ -87,16 +101,17 @@ export default function ExportPage() {
         async function loadPreviewData() {
             await seedLocalData();
             setLastBackupAt(window.localStorage.getItem(CBAM_LAST_BACKUP_AT_KEY) ?? undefined);
+
             const [
-                installations,
-                periods,
-                processes,
-                productOutputLines,
-                sourceStreams,
-                precursors,
-                products,
-                benchmarks,
-                defaultValues,
+                installationData,
+                periodData,
+                processData,
+                outputLineData,
+                sourceStreamData,
+                precursorData,
+                productData,
+                benchmarkData,
+                defaultValueData,
                 savedScenarioAssumptions,
             ] = await Promise.all([
                 listLocalItems('installations'),
@@ -111,17 +126,24 @@ export default function ExportPage() {
                 getLocalSetting<ScenarioAssumptions>(SCENARIO_ASSUMPTIONS_SETTING_KEY),
             ]);
 
-            setInstallations(installations);
-            setPeriods(periods);
-            setProcesses(processes);
-            setProductOutputLines(productOutputLines);
-            setSourceStreams(sourceStreams);
-            setPrecursors(precursors);
-            setProducts(products);
-            setBenchmarkReference(benchmarks);
-            setDefaultValueReference(defaultValues);
+            setInstallations(installationData);
+            setPeriods(periodData);
+            setProcesses(processData);
+            setProductOutputLines(outputLineData);
+            setSourceStreams(sourceStreamData);
+            setPrecursors(precursorData);
+            setProducts(productData);
+            setBenchmarkReference(benchmarkData);
+            setDefaultValueReference(defaultValueData);
             setScenarioAssumptions(normalizeScenarioAssumptions(savedScenarioAssumptions));
-            setResults(calculateLocalResults({ processes, precursors, products, periods, sourceStreams, productOutputLines }));
+            setResults(calculateLocalResults({
+                processes: processData,
+                precursors: precursorData,
+                products: productData,
+                periods: periodData,
+                sourceStreams: sourceStreamData,
+                productOutputLines: outputLineData,
+            }));
         }
 
         loadPreviewData();
@@ -166,6 +188,7 @@ export default function ExportPage() {
         () => createEuTemplateExportCellWrites({ installations, periods, processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
         [installations, periods, processes, productOutputLines, sourceStreams, precursors, products, validation?.cnCodeMap]
     );
+
     const backupStatus = useMemo(() => getBackupStatus(lastBackupAt), [lastBackupAt]);
 
     const exportChecklist = useMemo(
@@ -181,9 +204,9 @@ export default function ExportPage() {
             validation,
         }),
         [
+            backupStatus,
             lastExportResult,
             plannedCellWrites.length,
-            backupStatus,
             readiness,
             results.length,
             scenarioChecklistAction,
@@ -202,23 +225,25 @@ export default function ExportPage() {
         }),
         [backupStatus, readiness, templateFile, validation]
     );
+
     const issueAreaSummaries = useMemo(() => {
         const summaryByArea = new Map<string, { errorCount: number; warningCount: number }>();
 
         for (const issue of readiness.issues) {
-            const summary = summaryByArea.get(issue.area) ?? { errorCount: 0, warningCount: 0 };
+            const current = summaryByArea.get(issue.area) ?? { errorCount: 0, warningCount: 0 };
 
             if (issue.severity === 'error') {
-                summary.errorCount += 1;
+                current.errorCount += 1;
             } else {
-                summary.warningCount += 1;
+                current.warningCount += 1;
             }
 
-            summaryByArea.set(issue.area, summary);
+            summaryByArea.set(issue.area, current);
         }
 
-        return Array.from(summaryByArea.entries()).map(([area, summary]) => ({ area, ...summary }));
+        return Array.from(summaryByArea.entries()).map(([area, areaSummary]) => ({ area, ...areaSummary }));
     }, [readiness.issues]);
+
     const sortedReadinessIssues = useMemo(
         () => [...readiness.issues].sort((a, b) => {
             if (a.severity !== b.severity) {
@@ -229,6 +254,7 @@ export default function ExportPage() {
         }),
         [readiness.issues]
     );
+
     const summaryProductPreviewRows = useMemo(
         () => results.slice(0, 100).map((result, index) => ({
             rowNumber: 10 + index,
@@ -243,6 +269,7 @@ export default function ExportPage() {
         })),
         [results]
     );
+
     const summaryProductsWriteCount = useMemo(
         () => plannedCellWrites.filter((write) => write.sheetName === 'Summary_Products').length,
         [plannedCellWrites]
@@ -305,7 +332,7 @@ export default function ExportPage() {
             <PageHeader
                 eyebrow="제출 파일 준비"
                 title="EU 템플릿 Export"
-                description="사용자가 보유한 EU 원본 Communication template을 브라우저에서만 검증하고, 원본 구조를 유지한 복사본을 생성합니다."
+                description="사용자가 보유한 EU 원본 Communication template을 브라우저에서만 검증하고, 원본 구조를 보존한 제출용 복사본을 생성합니다."
             />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -322,17 +349,14 @@ export default function ExportPage() {
                         <div>
                             <h2 className="text-lg font-semibold text-slate-950">EU 원본 템플릿 선택</h2>
                             <p className="mt-1 text-sm text-slate-600">
-                                `CBAM Communication template for installations_en_20241213.xlsx` 같은 EU 원본
-                                `.xlsx` 파일을 선택합니다. 파일은 서버로 전송되지 않습니다.
+                                EU에서 제공한 최신 `.xlsx` 템플릿을 선택합니다. 파일은 서버로 전송하지 않고 브라우저 안에서만 처리합니다.
                             </p>
                         </div>
                     </div>
 
                     <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center hover:bg-teal-50">
                         <FileSpreadsheet className="h-10 w-10 text-teal-700" />
-                        <span className="mt-3 text-sm font-semibold text-teal-800">
-                            EU 원본 템플릿 파일 선택
-                        </span>
+                        <span className="mt-3 text-sm font-semibold text-teal-800">EU 원본 템플릿 파일 선택</span>
                         <span className="mt-1 text-xs text-slate-500">XLSX 파일만 지원</span>
                         <input
                             type="file"
@@ -344,7 +368,7 @@ export default function ExportPage() {
 
                     {templateFile && (
                         <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                            선택된 파일: <span className="font-medium">{templateFile.name}</span>
+                            선택한 파일: <span className="font-medium">{templateFile.name}</span>
                         </div>
                     )}
 
@@ -378,12 +402,11 @@ export default function ExportPage() {
                                 <div>
                                     <p className="text-sm font-medium text-gray-900">
                                         {validation.isValid
-                                            ? '필수 EU 시트가 모두 확인되었습니다.'
+                                            ? '필수 EU 시트를 모두 확인했습니다.'
                                             : '필수 EU 시트 일부가 없습니다.'}
                                     </p>
                                     <p className="mt-1 text-xs text-gray-600">
-                                        확인된 시트 {validation.sheetNames.length}개 / 필수 시트{' '}
-                                        {REQUIRED_EU_TEMPLATE_SHEETS.length}개
+                                        확인된 시트 {validation.sheetNames.length}개 / 필수 시트 {REQUIRED_EU_TEMPLATE_SHEETS.length}개
                                     </p>
                                     <p className="mt-1 text-xs text-gray-600">
                                         Parameters_CNCodes에서 CN 코드 {validation.cnCodeCount}개를 읽었습니다.
@@ -508,10 +531,10 @@ export default function ExportPage() {
                                 <h3 className="text-sm font-semibold text-teal-900">Export 원칙</h3>
                                 <ul className="mt-2 space-y-2 text-xs leading-5 text-teal-900/80">
                                     <li>원본 EU 템플릿 파일은 앱에 내장하지 않습니다.</li>
-                                    <li>업로드된 파일은 브라우저 메모리에서만 처리합니다.</li>
-                                    <li>공식 시트명, 수식, 영문 라벨은 유지합니다.</li>
+                                    <li>업로드한 파일은 브라우저 메모리에서만 처리합니다.</li>
+                                    <li>공식 시트명, 서식, 수식, 영문 라벨은 유지합니다.</li>
                                     <li>A_InstData, B_EmInst, C_Emissions&Energy, D_Processes, E_PurchPrec, Summary_Products의 확인된 입력 셀에 현재 로컬 데이터를 반영합니다.</li>
-                                    <li>품목군과 생산공정 경계는 A_InstData에 선언하고, 제품 생산라인은 Summary_Products의 생산공정·CN 코드·제품명 입력 셀에 반영합니다. SEE 값은 공식 수식 셀이 계산하도록 직접 덮어쓰지 않습니다.</li>
+                                    <li>품목군과 생산공정 경계는 A_InstData에 선언하고, 제품 생산라인은 Summary_Products의 생산공정, CN 코드, 제품명 입력 셀에 반영합니다. SEE 값은 공식 수식 셀이 계산하도록 직접 덮어쓰지 않습니다.</li>
                                 </ul>
                             </div>
                         </div>
@@ -524,7 +547,7 @@ export default function ExportPage() {
                     <div>
                         <h2 className="text-lg font-semibold text-slate-950">Export 데이터 검토</h2>
                         <p className="mt-1 text-sm text-slate-600">
-                            다운로드를 막는 오류와 제출 전 검토가 필요한 경고를 구분해서 확인합니다.
+                            다운로드를 막는 오류와 제출 전 확인이 필요한 경고를 구분해서 확인합니다.
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -535,11 +558,11 @@ export default function ExportPage() {
 
                 {issueAreaSummaries.length > 0 && (
                     <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
-                        {issueAreaSummaries.map((summary) => (
-                            <div key={summary.area} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm">
-                                <p className="font-semibold text-slate-900">{summary.area}</p>
+                        {issueAreaSummaries.map((areaSummary) => (
+                            <div key={areaSummary.area} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm">
+                                <p className="font-semibold text-slate-900">{areaSummary.area}</p>
                                 <p className="mt-1 text-xs text-slate-600">
-                                    오류 {summary.errorCount}건 / 경고 {summary.warningCount}건
+                                    오류 {areaSummary.errorCount}건 / 경고 {areaSummary.warningCount}건
                                 </p>
                             </div>
                         ))}
@@ -567,7 +590,7 @@ export default function ExportPage() {
                                     <div className="min-w-0 flex-1">
                                         <div>
                                             <StatusBadge tone={issue.severity === 'error' ? 'danger' : 'warning'}>
-                                                {issue.severity === 'error' ? '오류' : '경고'}
+                                                {getIssueSeverityLabel(issue.severity)}
                                             </StatusBadge>{' '}
                                             <span className="ml-1 font-medium text-gray-900">[{issue.area}]</span>{' '}
                                             <span className="text-gray-700">{issue.message}</span>
@@ -593,7 +616,7 @@ export default function ExportPage() {
                     <div>
                         <h2 className="text-lg font-semibold text-slate-950">Summary_Products 반영 검토</h2>
                         <p className="mt-1 text-sm text-slate-600">
-                            EU 템플릿에는 생산공정, CN 코드, 제품명을 입력하고 직접·간접·총 SEE는 공식 수식 셀이 계산하도록 둡니다.
+                            EU 템플릿에는 생산공정, CN 코드, 제품명을 입력하고 직접, 간접, 총 SEE는 공식 수식 셀이 계산하도록 둡니다.
                             아래 값은 앱 내부 product-line 산정 결과와 비교하기 위한 사전 검토용입니다.
                         </p>
                     </div>
@@ -627,27 +650,19 @@ export default function ExportPage() {
                                 ) : (
                                     summaryProductPreviewRows.map((row) => (
                                         <tr key={`${row.rowNumber}-${row.productCode}-${row.productName}`} className="hover:bg-slate-50">
-                                            <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-900">
-                                                {row.rowNumber}
-                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-900">{row.rowNumber}</td>
                                             <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{row.processName}</td>
                                             <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{row.productCode}</td>
                                             <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{row.productName}</td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">
-                                                {formatPercent(row.allocationShare)}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">
-                                                {formatNumber(row.directSee)}
-                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{formatPercent(row.allocationShare)}</td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{formatNumber(row.directSee)}</td>
                                             <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">
                                                 <div>{formatNumber(row.indirectSee)}</div>
                                                 <div className={row.isIndirectIncluded ? 'text-xs text-slate-400' : 'text-xs font-semibold text-amber-700'}>
                                                     {row.isIndirectIncluded ? '포함' : '제외'}
                                                 </div>
                                             </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-950">
-                                                {formatNumber(row.totalSee)}
-                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-950">{formatNumber(row.totalSee)}</td>
                                         </tr>
                                     ))
                                 )}
@@ -678,33 +693,23 @@ export default function ExportPage() {
                         {results.length === 0 ? (
                             <tr>
                                 <td colSpan={6} className="p-4 text-center text-sm text-gray-500">
-                                    Export 미리보기에 표시할 산정결과가 없습니다.
+                                    Export 미리보기에 표시할 산정 결과가 없습니다.
                                 </td>
                             </tr>
                         ) : (
                             results.map((result) => (
                                 <tr key={result.id}>
-                                    <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-900">
-                                        {result.process_name}
-                                    </td>
-                                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                        {result.product_name}
-                                    </td>
-                                    <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">
-                                        {formatNumber(result.output_mass_t)}
-                                    </td>
-                                    <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">
-                                        {formatNumber(result.direct_see)}
-                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-900">{result.process_name}</td>
+                                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{result.product_name}</td>
+                                    <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">{formatNumber(result.output_mass_t)}</td>
+                                    <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">{formatNumber(result.direct_see)}</td>
                                     <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">
                                         {formatNumber(result.indirect_see)}
                                         <div className={result.indirect_emissions_applicable ? 'text-xs text-slate-400' : 'text-xs font-semibold text-amber-700'}>
                                             {result.indirect_emissions_applicable ? '간접 포함' : '간접 제외'}
                                         </div>
                                     </td>
-                                    <td className="whitespace-nowrap px-3 py-4 text-right text-sm font-semibold text-gray-900">
-                                        {formatNumber(result.total_see)}
-                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-4 text-right text-sm font-semibold text-gray-900">{formatNumber(result.total_see)}</td>
                                 </tr>
                             ))
                         )}
