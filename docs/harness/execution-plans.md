@@ -97,6 +97,7 @@ Completed:
 - Restored Korean-first copy on the EU Export page, including template selection, validation status, checklist, Export principles, readiness issues, and SEE preview labels.
 - Restored Korean-first copy on the Results page, including allocation labels, SEE table headers, loading/empty states, and warning actions.
 - Added synthetic EU Export verification that `Summary_Products` direct, indirect, and total SEE formula cells remain intact while the app writes only product-identification inputs.
+- Extended local official-template verification to report and assert the presence of `Summary_Products` SEE formulas after Export copy generation.
 
 Pending product decisions:
 

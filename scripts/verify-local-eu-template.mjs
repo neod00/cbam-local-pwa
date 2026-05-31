@@ -198,6 +198,18 @@ function readCell(sheetXml, cell) {
   return textMatch ? textMatch[1] : '';
 }
 
+function readFormula(sheetXml, cell) {
+  const pattern = new RegExp(`<c\\s+[^>]*r="${cell}"[^>]*>([\\s\\S]*?)<\\/c>`);
+  const match = sheetXml.match(pattern);
+
+  if (!match) {
+    return '';
+  }
+
+  const formulaMatch = match[1].match(/<f>([\s\S]*?)<\/f>/);
+  return formulaMatch ? unescapeXml(formulaMatch[1]) : '';
+}
+
 function makeSampleData() {
   const product = {
     id: 'product-1',
@@ -340,6 +352,12 @@ function readExportedCell(sheetName, cell) {
   return readCell(fflate.strFromU8(exportedZip[sheetPath]), cell);
 }
 
+function readExportedFormula(sheetName, cell) {
+  const sheetPath = sheetTargetByName.get(sheetName);
+  assert.ok(sheetPath, `${sheetName} sheet should exist in exported copy`);
+  return readFormula(fflate.strFromU8(exportedZip[sheetPath]), cell);
+}
+
 const checkedCells = {
   'A_InstData!I9': readExportedCell('A_InstData', 'I9'),
   'A_InstData!L9': readExportedCell('A_InstData', 'L9'),
@@ -360,6 +378,12 @@ const checkedCells = {
   'Summary_Products!H10': readExportedCell('Summary_Products', 'H10'),
 };
 
+const checkedFormulas = {
+  'Summary_Products!I10': readExportedFormula('Summary_Products', 'I10'),
+  'Summary_Products!J10': readExportedFormula('Summary_Products', 'J10'),
+  'Summary_Products!K10': readExportedFormula('Summary_Products', 'K10'),
+};
+
 assert.equal(checkedCells['A_InstData!I9'], '45292');
 assert.equal(checkedCells['A_InstData!L9'], '45657');
 assert.equal(checkedCells['A_InstData!I20'], 'Main Factory A');
@@ -377,6 +401,9 @@ assert.equal(checkedCells['E_PurchPrec!L49'], '1.2');
 assert.equal(checkedCells['Summary_Products!D10'], 'Rolling and finishing');
 assert.equal(checkedCells['Summary_Products!F10'], '72083900');
 assert.equal(checkedCells['Summary_Products!H10'], 'Hot Rolled Coil');
+assert.ok(checkedFormulas['Summary_Products!I10'], 'Summary_Products!I10 should keep an official direct SEE formula');
+assert.ok(checkedFormulas['Summary_Products!J10'], 'Summary_Products!J10 should keep an official indirect SEE formula');
+assert.ok(checkedFormulas['Summary_Products!K10'], 'Summary_Products!K10 should keep an official total SEE formula');
 
 await mkdir('artifacts', { recursive: true });
 const report = {
@@ -388,6 +415,7 @@ const report = {
   checkedCellCount: exportResult.verification.checkedCellCount,
   warningCount: readiness.warningCount,
   checkedCells,
+  checkedFormulas,
 };
 writeFileSync(join('artifacts', 'local-eu-template-verification.json'), `${JSON.stringify(report, null, 2)}\n`);
 
