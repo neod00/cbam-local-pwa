@@ -138,6 +138,7 @@ Completed:
 - Strengthened the free PWA terms draft with license-scope, official-material rights, support limits, warranty disclaimer, access restriction, and pre-release legal review placeholders.
 - Added `npm run verify:deployment` to guard private-source deployment readiness, including forbidden tracked local files, package privacy, deployment docs, release checklist, and rehearsal report coverage.
 - Added a fictional MVP rehearsal dataset so browser walkthroughs can use repeatable non-company inputs for installation, period, products, allocation, source streams, precursors, scenarios, Export, Excel review, and `.cbam` backup.
+- Added `npm run verify:routes` so the full verification gate builds the app, starts a local production server, and checks the main PWA routes before release.
 
 Pending product decisions:
 

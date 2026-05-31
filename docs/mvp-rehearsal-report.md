@@ -12,7 +12,7 @@ Standard project verification passed:
 npm.cmd run verify
 ```
 
-This includes calculation, source-stream, scenario, dashboard, synthetic EU Export, backup, PWA release, MVP flow, design-system, update-policy, lint, and build checks.
+This includes calculation, source-stream, scenario, dashboard, synthetic EU Export, backup, PWA release, MVP flow, design-system, update-policy, deployment-readiness, lint, build, and production route checks.
 
 ## Local EU Template Check
 
@@ -87,6 +87,7 @@ Completed in this pass:
   - `/upload`
   - `/export`
   - `/settings`
+  - `/design-preview`
 
 Remaining manual UI rehearsal:
 

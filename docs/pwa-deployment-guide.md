@@ -54,9 +54,12 @@ Cloudflare Pages와 Netlify도 사용할 수 있지만, Next.js App Router 지�
 ```bash
 npm run verify
 npm run verify:deployment
+npm run verify:routes
 ```
 
 `verify:deployment`는 Git 추적 파일에 `CBAM_documents/`, `artifacts/`, `.env*`, `.vercel`, `.cbam`, Excel/PDF/ZIP 같은 로컬 자료가 포함되지 않았는지 확인합니다. 또한 저장소가 private-source 배포 전제에 맞게 `package.json`의 `private` 설정과 배포 문서 링크를 유지하는지 확인합니다.
+
+`verify:routes`는 production build를 기준으로 로컬 Next.js 서버를 잠깐 실행하고 주요 PWA 화면이 HTTP 200으로 열리는지 확인합니다.
 
 ## 배포 후 확인
 
