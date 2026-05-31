@@ -303,7 +303,8 @@ export default function ExportPage() {
             allocationShare: result.allocation_share,
             directSee: result.direct_see,
             indirectSee: result.indirect_see,
-            totalSee: result.total_see,
+            cbamBasisSee: result.see_cbam_basis,
+            informationalTotalSee: result.see_informational_total,
             isIndirectIncluded: result.indirect_emissions_applicable,
         })),
         [results]
@@ -774,7 +775,7 @@ export default function ExportPage() {
                     <div>
                         <h2 className="text-lg font-semibold text-slate-950">Summary_Products 반영 검토</h2>
                         <p className="mt-1 text-sm text-slate-600">
-                            EU 템플릿에는 생산공정, CN 코드, 제품명을 입력하고 직접, 간접, 총 SEE는 공식 수식 셀이 계산하도록 둡니다.
+                            EU 템플릿에는 생산공정, CN 코드, 제품명을 입력하고 직접, 간접, 총 SEE는 공식 수식 셀이 계산하도록 둡니다. 아래 SEE는 앱의 사전 검토값입니다.
                             아래 값은 앱 내부 product-line 산정 결과와 비교하기 위한 사전 검토용입니다.
                         </p>
                     </div>
@@ -805,8 +806,8 @@ export default function ExportPage() {
                                         <dd className="mt-1 font-semibold text-slate-900">{formatPercent(row.allocationShare)}</dd>
                                     </div>
                                     <div>
-                                        <dt className="text-xs text-slate-500">총 SEE</dt>
-                                        <dd className="mt-1 font-semibold text-slate-900">{formatNumber(row.totalSee)}</dd>
+                                        <dt className="text-xs text-slate-500">CBAM 기준 SEE</dt>
+                                        <dd className="mt-1 font-semibold text-slate-900">{formatNumber(row.cbamBasisSee)}</dd>
                                     </div>
                                     <div>
                                         <dt className="text-xs text-slate-500">직접 SEE</dt>
@@ -817,9 +818,13 @@ export default function ExportPage() {
                                         <dd className="mt-1 text-slate-700">
                                             {formatNumber(row.indirectSee)}
                                             <span className={row.isIndirectIncluded ? 'ml-1 text-xs text-slate-400' : 'ml-1 text-xs font-semibold text-amber-700'}>
-                                                {row.isIndirectIncluded ? '포함' : '제외'}
+                                                {row.isIndirectIncluded ? '포함' : '인증서 제외'}
                                             </span>
                                         </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-slate-500">참고용 총 SEE</dt>
+                                        <dd className="mt-1 text-slate-700">{formatNumber(row.informationalTotalSee)}</dd>
                                     </div>
                                 </dl>
                             </div>
@@ -839,13 +844,14 @@ export default function ExportPage() {
                                     <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">배분율</th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">직접 SEE</th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">간접 SEE</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">총 SEE</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">CBAM 기준 SEE</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">참고용 총 SEE</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 bg-white">
                                 {summaryProductPreviewRows.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="px-4 py-6 text-center text-sm text-slate-500">
+                                        <td colSpan={9} className="px-4 py-6 text-center text-sm text-slate-500">
                                             Summary_Products에 반영할 제품 산정 결과가 없습니다.
                                         </td>
                                     </tr>
@@ -861,10 +867,11 @@ export default function ExportPage() {
                                             <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">
                                                 <div>{formatNumber(row.indirectSee)}</div>
                                                 <div className={row.isIndirectIncluded ? 'text-xs text-slate-400' : 'text-xs font-semibold text-amber-700'}>
-                                                    {row.isIndirectIncluded ? '포함' : '제외'}
+                                                    {row.isIndirectIncluded ? '포함' : '인증서 제외'}
                                                 </div>
                                             </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-950">{formatNumber(row.totalSee)}</td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-950">{formatNumber(row.cbamBasisSee)}</td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{formatNumber(row.informationalTotalSee)}</td>
                                         </tr>
                                     ))
                                 )}
@@ -893,7 +900,7 @@ export default function ExportPage() {
                                     <p className="mt-1 break-words text-xs text-slate-600">{result.process_name}</p>
                                 </div>
                                 <StatusBadge tone={result.indirect_emissions_applicable ? 'success' : 'warning'}>
-                                    {result.indirect_emissions_applicable ? '간접 포함' : '간접 제외'}
+                                    {result.indirect_emissions_applicable ? '간접 포함' : '인증서 산정 제외'}
                                 </StatusBadge>
                             </div>
                             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -902,8 +909,8 @@ export default function ExportPage() {
                                     <dd className="mt-1 font-semibold text-slate-900">{formatNumber(result.output_mass_t)} t</dd>
                                 </div>
                                 <div>
-                                    <dt className="text-xs text-slate-500">총 SEE</dt>
-                                    <dd className="mt-1 font-semibold text-slate-900">{formatNumber(result.total_see)}</dd>
+                                    <dt className="text-xs text-slate-500">CBAM 기준 SEE</dt>
+                                    <dd className="mt-1 font-semibold text-slate-900">{formatNumber(result.see_cbam_basis)}</dd>
                                 </div>
                                 <div>
                                     <dt className="text-xs text-slate-500">직접 SEE</dt>
@@ -912,6 +919,10 @@ export default function ExportPage() {
                                 <div>
                                     <dt className="text-xs text-slate-500">간접 SEE</dt>
                                     <dd className="mt-1 text-slate-700">{formatNumber(result.indirect_see)}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs text-slate-500">참고용 총 SEE</dt>
+                                    <dd className="mt-1 text-slate-700">{formatNumber(result.see_informational_total)}</dd>
                                 </div>
                             </dl>
                         </div>
@@ -928,13 +939,14 @@ export default function ExportPage() {
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">생산량(t)</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">간접 SEE</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">총 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 기준 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">참고용 총 SEE</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white">
                         {results.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="p-4 text-center text-sm text-gray-500">
+                                <td colSpan={7} className="p-4 text-center text-sm text-gray-500">
                                     Export 미리보기에 표시할 산정 결과가 없습니다.
                                 </td>
                             </tr>
@@ -948,10 +960,11 @@ export default function ExportPage() {
                                     <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">
                                         {formatNumber(result.indirect_see)}
                                         <div className={result.indirect_emissions_applicable ? 'text-xs text-slate-400' : 'text-xs font-semibold text-amber-700'}>
-                                            {result.indirect_emissions_applicable ? '간접 포함' : '간접 제외'}
+                                            {result.indirect_emissions_applicable ? '간접 포함' : '인증서 산정 제외'}
                                         </div>
                                     </td>
-                                    <td className="whitespace-nowrap px-3 py-4 text-right text-sm font-semibold text-gray-900">{formatNumber(result.total_see)}</td>
+                                    <td className="whitespace-nowrap px-3 py-4 text-right text-sm font-semibold text-gray-900">{formatNumber(result.see_cbam_basis)}</td>
+                                    <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">{formatNumber(result.see_informational_total)}</td>
                                 </tr>
                             ))
                         )}

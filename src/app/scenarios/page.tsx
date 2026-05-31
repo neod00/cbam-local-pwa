@@ -211,8 +211,8 @@ export default function ScenariosPage() {
         if (summary.aboveDefaultCount > 0) {
             items.push({
                 key: 'above-default',
-                title: '기본값 대비 실측 SEE 초과',
-                description: '실측값이 기본값보다 높은 품목은 기본값 사용, 공급망 자료 보완, 배출 저감 시나리오를 비교해야 합니다.',
+                title: '기본값 대비 CBAM 기준 SEE 초과',
+                description: 'CBAM 산정 기준 SEE가 기본값보다 높은 품목은 기본값 사용, 공급망 자료 보완, 배출 저감 시나리오를 비교해야 합니다.',
                 count: summary.aboveDefaultCount,
                 unit: '건',
                 tone: 'warning',
@@ -271,7 +271,7 @@ export default function ScenariosPage() {
             <PageHeader
                 eyebrow="시나리오"
                 title="SEFA 및 CBAM 인증서 시나리오"
-                description="제품별 SEE, 공식 기본값, 벤치마크를 비교해 인증서 부담 가능성을 1차로 판단합니다. 현재 화면은 검증 전 의사결정 보조용입니다."
+                description="제품별 CBAM 산정 기준 SEE, 공식 기본값, 벤치마크를 비교해 인증서 부담 가능성을 1차로 판단합니다. 현재 화면은 검증 전 의사결정 보조용입니다."
             />
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
@@ -428,7 +428,7 @@ export default function ScenariosPage() {
                         <p className="mt-1 text-2xl font-semibold text-slate-950">{summary.missingReferenceCount}건</p>
                     </div>
                     <div className="rounded-xl bg-slate-50 px-4 py-3">
-                        <p className="text-xs font-semibold text-slate-500">실측 SEE가 기본값 초과</p>
+                        <p className="text-xs font-semibold text-slate-500">CBAM 기준 SEE가 기본값 초과</p>
                         <p className="mt-1 text-2xl font-semibold text-slate-950">{summary.aboveDefaultCount}건</p>
                     </div>
                     <div className="rounded-xl bg-slate-50 px-4 py-3">
@@ -460,15 +460,19 @@ export default function ScenariosPage() {
                             </div>
                             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                                 <div>
-                                    <dt className="text-xs text-slate-500">실측 SEE</dt>
+                                    <dt className="text-xs text-slate-500">CBAM 기준 SEE</dt>
                                     <dd className="mt-1 font-semibold text-slate-900">{formatNumber(scenario.actual_see)}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs text-slate-500">참고용 총 SEE</dt>
+                                    <dd className="mt-1 text-slate-700">{formatNumber(scenario.informational_total_see)}</dd>
                                 </div>
                                 <div>
                                     <dt className="text-xs text-slate-500">기본값 SEE</dt>
                                     <dd className="mt-1 font-semibold text-slate-900">{formatNumber(scenario.default_see)}</dd>
                                 </div>
                                 <div>
-                                    <dt className="text-xs text-slate-500">실측 인증서 비용</dt>
+                                    <dt className="text-xs text-slate-500">CBAM 기준 인증서 비용</dt>
                                     <dd className="mt-1 text-slate-700">{formatCurrency(scenario.certificate_cost_indicator_eur)}</dd>
                                 </div>
                                 <div>
@@ -494,14 +498,15 @@ export default function ScenariosPage() {
                         <tr>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">제품</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">생산량(t)</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">실측 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 기준 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">참고용 총 SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 차이</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">Benchmark A</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">Benchmark B</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">실측 SEFA</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">실측 인증서</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">실측 비용</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 기준 SEFA</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 기준 인증서</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 기준 비용</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 SEFA</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 인증서</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 비용</th>
@@ -514,7 +519,7 @@ export default function ScenariosPage() {
                     <tbody className="divide-y divide-slate-100 bg-white">
                         {scenarios.length === 0 ? (
                             <tr>
-                                <td colSpan={17} className="p-6 text-center text-sm text-slate-500">
+                                <td colSpan={18} className="p-6 text-center text-sm text-slate-500">
                                     시나리오를 만들 산정 결과가 없습니다.
                                 </td>
                             </tr>
@@ -529,6 +534,7 @@ export default function ScenariosPage() {
                                     </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.output_mass_t)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.actual_see)}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.informational_total_see)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.default_see)}</td>
                                     <td className={`whitespace-nowrap px-4 py-4 text-right text-sm ${(scenario.default_gap ?? 0) > 0 ? 'font-semibold text-amber-700' : 'text-slate-600'}`}>{formatNumber(scenario.default_gap)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.benchmark_column_a)}</td>

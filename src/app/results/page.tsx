@@ -54,7 +54,7 @@ function getAllocationTone(result: LocalCalculationResult) {
 }
 
 function getIndirectApplicabilityLabel(result: LocalCalculationResult) {
-    return result.indirect_emissions_applicable ? '간접 포함' : '간접 제외';
+    return result.indirect_emissions_applicable ? '간접 포함' : '인증서 산정 제외';
 }
 
 export default function ResultsPage() {
@@ -84,11 +84,7 @@ export default function ResultsPage() {
     const summary = useMemo(() => {
         const totalOutput = results.reduce((sum, result) => sum + result.output_mass_t, 0);
         const allocatedEmissions = results.reduce(
-            (sum, result) =>
-                sum +
-                result.direct_emissions_tco2e +
-                result.indirect_see * result.output_mass_t +
-                result.precursor_see * result.output_mass_t,
+            (sum, result) => sum + result.see_cbam_basis * result.output_mass_t,
             0
         );
         const productLineCount = results.filter((result) => result.product_output_line_id).length;
@@ -106,7 +102,8 @@ export default function ResultsPage() {
             productLineCount,
             totalOutput,
             allocatedEmissions,
-            averageTotalSee: average(results.map((result) => result.total_see)),
+            averageCbamBasisSee: average(results.map((result) => result.see_cbam_basis)),
+            averageInformationalTotalSee: average(results.map((result) => result.see_informational_total)),
             warningCount: allWarnings.length,
             warnings: allWarnings,
         };
@@ -123,7 +120,7 @@ export default function ResultsPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard label="산정 라인 수" value={summary.lineCount} helper={`제품라인 ${summary.productLineCount}개`} icon={Factory} tone="info" />
                 <StatCard label="총 생산량" value={formatNumber(summary.totalOutput)} helper="tonne" icon={Scale} tone="pending" />
-                <StatCard label="배분 배출량" value={formatNumber(summary.allocatedEmissions)} helper="tCO2e" icon={Gauge} tone="success" />
+                <StatCard label="CBAM 기준 배출량" value={formatNumber(summary.allocatedEmissions)} helper="tCO2e" icon={Gauge} tone="success" />
                 <StatCard label="확인 필요" value={summary.warningCount} helper="경고 항목" icon={AlertTriangle} tone="warning" />
             </div>
 
@@ -141,19 +138,20 @@ export default function ResultsPage() {
                                 <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 SEE</th>
                                 <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">간접 SEE</th>
                                 <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">전구물질 SEE</th>
-                                <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">총 SEE</th>
+                                <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 기준 SEE</th>
+                                <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">참고용 총 SEE</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={10} className="p-6 text-center text-sm text-slate-500">
+                                    <td colSpan={11} className="p-6 text-center text-sm text-slate-500">
                                         산정 결과를 불러오는 중입니다.
                                     </td>
                                 </tr>
                             ) : results.length === 0 ? (
                                 <tr>
-                                    <td colSpan={10} className="p-6 text-center text-sm text-slate-500">
+                                    <td colSpan={11} className="p-6 text-center text-sm text-slate-500">
                                         산정할 생산공정이 없습니다.
                                     </td>
                                 </tr>
@@ -207,7 +205,10 @@ export default function ResultsPage() {
                                             {formatNumber(result.precursor_see)}
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-950">
-                                            {formatNumber(result.total_see)}
+                                            {formatNumber(result.see_cbam_basis)}
+                                        </td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
+                                            {formatNumber(result.see_informational_total)}
                                         </td>
                                     </tr>
                                 ))
@@ -241,8 +242,8 @@ export default function ResultsPage() {
                             </div>
                             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                                 <div>
-                                    <dt className="text-xs text-slate-500">총 SEE</dt>
-                                    <dd className="mt-1 font-semibold text-slate-950">{formatNumber(result.total_see)}</dd>
+                                    <dt className="text-xs text-slate-500">CBAM 기준 SEE</dt>
+                                    <dd className="mt-1 font-semibold text-slate-950">{formatNumber(result.see_cbam_basis)}</dd>
                                 </div>
                                 <div>
                                     <dt className="text-xs text-slate-500">생산량</dt>
@@ -261,6 +262,10 @@ export default function ResultsPage() {
                                 <div>
                                     <dt className="text-xs text-slate-500">전구물질 SEE</dt>
                                     <dd className="mt-1 font-medium text-slate-900">{formatNumber(result.precursor_see)}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs text-slate-500">참고용 총 SEE</dt>
+                                    <dd className="mt-1 font-medium text-slate-900">{formatNumber(result.see_informational_total)}</dd>
                                 </div>
                                 <div>
                                     <dt className="text-xs text-slate-500">배분율</dt>
