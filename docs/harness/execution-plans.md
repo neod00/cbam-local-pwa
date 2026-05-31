@@ -119,6 +119,7 @@ Completed:
 - Added reusable empty states with direct add actions for core input screens so first-time users can start products, processes, source streams, and precursors from the empty list view.
 - Expanded the admin-console plan with minimal license/update/announcement tables, API routes, and required-update flow while preserving the no-CBAM-data server boundary.
 - Added an EU Export submission review procedure covering latest-template upload, readiness errors, Excel recalculation, formula preservation, SEE comparison, warning review, and `.cbam` backup.
+- Updated the free PWA terms draft to cover free-license registration data, update notices, and the rule that license/update checks do not collect CBAM calculation data or `.cbam` backups.
 
 Pending product decisions:
 
