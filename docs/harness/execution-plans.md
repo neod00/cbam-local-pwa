@@ -96,6 +96,7 @@ Completed:
 - Added an Export-page `Summary_Products` review table that shows the target EU row, process, CN code, product name, allocation share, and app-calculated SEE before workbook download.
 - Restored Korean-first copy on the EU Export page, including template selection, validation status, checklist, Export principles, readiness issues, and SEE preview labels.
 - Restored Korean-first copy on the Results page, including allocation labels, SEE table headers, loading/empty states, and warning actions.
+- Added synthetic EU Export verification that `Summary_Products` direct, indirect, and total SEE formula cells remain intact while the app writes only product-identification inputs.
 
 Pending product decisions:
 
@@ -104,7 +105,7 @@ Pending product decisions:
 
 Next:
 
-- Review generated workbook formula outputs in `Summary_Products` against local product-line SEE results before deciding whether any direct SEE-value writes are appropriate.
+- Review generated workbook formula outputs from a user-supplied official template against local product-line SEE results before deciding whether any direct SEE-value writes are appropriate.
 - Refine certificate calculations after confirming the paid-carbon-price formula and current official factors.
 
 ## Decision Log

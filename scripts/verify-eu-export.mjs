@@ -170,6 +170,21 @@ function installationSheetXml() {
   ].join('');
 }
 
+function summaryProductsSheetXml() {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<sheetData>',
+    '<row r="10">',
+    '<c r="I10"><f>D10&amp;" direct SEE"</f><v>0</v></c>',
+    '<c r="J10"><f>D10&amp;" indirect SEE"</f><v>0</v></c>',
+    '<c r="K10"><f>I10+J10</f><v>0</v></c>',
+    '</row>',
+    '</sheetData>',
+    '</worksheet>',
+  ].join('');
+}
+
 function cnCodeSheetXml() {
   return [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -253,7 +268,13 @@ function createSyntheticWorkbook(sheetNames) {
 
   sheetNames.forEach((name, index) => {
     zip[`xl/worksheets/sheet${index + 1}.xml`] = fflate.strToU8(
-      name === 'Parameters_CNCodes' ? cnCodeSheetXml() : name === 'A_InstData' ? installationSheetXml() : emptySheetXml()
+      name === 'Parameters_CNCodes'
+        ? cnCodeSheetXml()
+        : name === 'A_InstData'
+          ? installationSheetXml()
+          : name === 'Summary_Products'
+            ? summaryProductsSheetXml()
+            : emptySheetXml()
     );
   });
 
@@ -277,6 +298,18 @@ function readCell(sheetXml, cell) {
 
   const textMatch = match[1].match(/<t>([\s\S]*?)<\/t>/);
   return textMatch ? textMatch[1] : '';
+}
+
+function readFormula(sheetXml, cell) {
+  const pattern = new RegExp(`<c\\s+[^>]*r="${cell}"[^>]*>([\\s\\S]*?)<\\/c>`);
+  const match = sheetXml.match(pattern);
+
+  if (!match) {
+    return '';
+  }
+
+  const formulaMatch = match[1].match(/<f>([\s\S]*?)<\/f>/);
+  return formulaMatch ? unescapeXml(formulaMatch[1]) : '';
 }
 
 function assertEqual(actual, expected, label) {
@@ -686,5 +719,8 @@ assertEqual(readCell(precursorSheet, 'L54'), '', 'E_PurchPrec L54');
 assertEqual(readCell(summaryProductsSheet, 'D10'), 'Rolling and finishing', 'Summary_Products D10');
 assertEqual(readCell(summaryProductsSheet, 'F10'), '72083900', 'Summary_Products F10');
 assertEqual(readCell(summaryProductsSheet, 'H10'), 'Hot Rolled Coil', 'Summary_Products H10');
+assertEqual(readFormula(summaryProductsSheet, 'I10'), 'D10&" direct SEE"', 'Summary_Products I10 formula');
+assertEqual(readFormula(summaryProductsSheet, 'J10'), 'D10&" indirect SEE"', 'Summary_Products J10 formula');
+assertEqual(readFormula(summaryProductsSheet, 'K10'), 'I10+J10', 'Summary_Products K10 formula');
 
 console.log('EU export synthetic workbook verification passed.');
