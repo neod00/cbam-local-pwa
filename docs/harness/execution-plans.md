@@ -113,6 +113,7 @@ Completed:
 - Added source-stream next-action guidance for production-process linking, evidence-source completion, unsupported type review, and process comparison.
 - Added purchased-precursor next-action guidance for default-value justification, actual/semi-actual verification status, evidence source gaps, and scenario handoff.
 - Added a reusable action item card and applied it to production-process, source-stream, precursor, and SEFA/certificate priority-action areas so guided-workflow cards can move toward one consistent design system.
+- Applied the shared action item card to dashboard tasks, Results calculation warnings, and EU Export checklist/readiness issues for a more consistent guided workflow.
 
 Pending product decisions:
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummary';
-import { Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import {
     createEuExportFilename,
@@ -593,33 +593,33 @@ export default function ExportPage() {
                                     const Icon = item.complete ? CheckCircle2 : Circle;
 
                                     return (
-                                        <li key={item.label} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
-                                            <div className="flex items-start gap-3">
-                                                <Icon
-                                                    className={
-                                                        item.complete
-                                                            ? 'mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-600'
-                                                            : item.tone === 'danger'
-                                                              ? 'mt-0.5 h-4 w-4 flex-shrink-0 text-red-600'
-                                                              : 'mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600'
-                                                    }
-                                                />
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <p className="text-sm font-semibold text-slate-900">{item.label}</p>
+                                        <li key={item.label}>
+                                            <ActionItemCard
+                                                title={item.label}
+                                                description={item.description}
+                                                badge={
+                                                    <>
+                                                        <Icon
+                                                            className={
+                                                                item.complete
+                                                                    ? 'h-4 w-4 text-emerald-600'
+                                                                    : item.tone === 'danger'
+                                                                      ? 'h-4 w-4 text-red-600'
+                                                                      : 'h-4 w-4 text-amber-600'
+                                                            }
+                                                        />
                                                         <StatusBadge tone={item.tone}>{item.status}</StatusBadge>
-                                                    </div>
-                                                    <p className="mt-1 text-xs leading-5 text-slate-600">{item.description}</p>
-                                                    {item.actionHref && item.actionLabel && (
-                                                        <Link
-                                                            href={item.actionHref}
-                                                            className="mt-2 inline-flex min-h-8 items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100"
-                                                        >
-                                                            {item.actionLabel}
-                                                        </Link>
-                                                    )}
-                                                </div>
-                                            </div>
+                                                    </>
+                                                }
+                                                action={item.actionHref && item.actionLabel ? (
+                                                    <Link
+                                                        href={item.actionHref}
+                                                        className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100"
+                                                    >
+                                                        {item.actionLabel}
+                                                    </Link>
+                                                ) : undefined}
+                                            />
                                         </li>
                                     );
                                 })}
@@ -672,36 +672,35 @@ export default function ExportPage() {
                         현재 로컬 데이터는 Export 매핑 검토를 통과했습니다.
                     </div>
                 ) : (
-                    <ul className="mt-4 divide-y divide-gray-100 rounded-md border border-gray-200">
+                    <ul className="mt-4 space-y-3">
                         {sortedReadinessIssues.map((issue, index) => {
                             const issueEditHref = getEuExportIssueEditHref(issue);
 
                             return (
-                                <li key={`${issue.area}-${issue.message}-${index}`} className="flex gap-3 px-4 py-3 text-sm">
-                                    <AlertTriangle
-                                        className={
-                                            issue.severity === 'error'
-                                                ? 'mt-0.5 h-4 w-4 flex-shrink-0 text-red-600'
-                                                : 'mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600'
+                                <li key={`${issue.area}-${issue.message}-${index}`}>
+                                    <ActionItemCard
+                                        title={issue.area}
+                                        description={issue.message}
+                                        className={issue.severity === 'error' ? 'border-red-100 bg-red-50' : 'border-amber-100 bg-amber-50'}
+                                        badge={
+                                            <>
+                                                <AlertTriangle
+                                                    className={issue.severity === 'error' ? 'h-4 w-4 text-red-600' : 'h-4 w-4 text-amber-600'}
+                                                />
+                                                <StatusBadge tone={issue.severity === 'error' ? 'danger' : 'warning'}>
+                                                    {getIssueSeverityLabel(issue.severity)}
+                                                </StatusBadge>
+                                            </>
                                         }
-                                    />
-                                    <div className="min-w-0 flex-1">
-                                        <div>
-                                            <StatusBadge tone={issue.severity === 'error' ? 'danger' : 'warning'}>
-                                                {getIssueSeverityLabel(issue.severity)}
-                                            </StatusBadge>{' '}
-                                            <span className="ml-1 font-medium text-gray-900">[{issue.area}]</span>{' '}
-                                            <span className="text-gray-700">{issue.message}</span>
-                                        </div>
-                                        {issueEditHref && (
+                                        action={issueEditHref ? (
                                             <Link
                                                 href={issueEditHref}
-                                                className="mt-2 inline-flex min-h-9 items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                                                className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
                                             >
                                                 해당 화면에서 수정
                                             </Link>
-                                        )}
-                                    </div>
+                                        ) : undefined}
+                                    />
                                 </li>
                             );
                         })}

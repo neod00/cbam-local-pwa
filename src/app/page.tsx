@@ -1,7 +1,7 @@
 'use client';
 
 import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummary';
-import { Button, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { ActionItemCard, Button, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import { createDashboardSummary } from '@/lib/dashboard-summary';
 import { evaluateEuExportReadiness } from '@/lib/eu-template-export';
@@ -243,14 +243,25 @@ export default function Home() {
           <ul className="space-y-3">
             {dashboard.recentTasks.map((task) => (
               <li key={`${task.href}-${task.label}`}>
-                <Link href={task.href} className="flex gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 transition hover:bg-teal-50">
-                  {task.tone === 'warning' || task.tone === 'danger' ? (
-                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
-                  ) : (
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-700" />
-                  )}
-                  <span>{task.label}</span>
-                </Link>
+                <ActionItemCard
+                  title={task.label}
+                  description={task.tone === 'success' ? '현재 단계는 제출 준비 흐름상 완료된 상태입니다.' : '해당 화면으로 이동해 누락되거나 확인이 필요한 입력을 정리하세요.'}
+                  badge={
+                    task.tone === 'warning' || task.tone === 'danger' ? (
+                      <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    ) : (
+                      <CheckCircle2 className="h-5 w-5 text-teal-700" />
+                    )
+                  }
+                  action={
+                    <Link href={task.href}>
+                      <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5">
+                        이동
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  }
+                />
               </li>
             ))}
           </ul>

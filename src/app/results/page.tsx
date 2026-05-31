@@ -1,6 +1,6 @@
 'use client';
 
-import { DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { ActionItemCard, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, getLocalCalculationWarningHref } from '@/lib/calculation-engine';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
 import { listLocalItems, seedLocalData } from '@/lib/local-db';
@@ -224,19 +224,21 @@ export default function ResultsPage() {
                     <ul className="mt-3 space-y-2 text-sm text-amber-900">
                         {summary.warnings.map((item) => (
                             <li key={`${item.resultId}-${item.warning.message}`}>
-                                <Link
-                                    href={item.href}
-                                    className="flex flex-col gap-2 rounded-xl px-3 py-2 transition hover:bg-amber-50 sm:flex-row sm:items-center sm:justify-between"
-                                >
-                                    <span>
-                                        <span className="font-medium">{item.processName}</span>
-                                        <span className="ml-2">{item.warning.message}</span>
-                                    </span>
-                                    <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-amber-700">
-                                        수정하기
-                                        <ArrowRight className="h-3.5 w-3.5" />
-                                    </span>
-                                </Link>
+                                <ActionItemCard
+                                    title={item.processName}
+                                    description={item.warning.message}
+                                    className="border-amber-100 bg-amber-50"
+                                    badge={<StatusBadge tone="warning">확인 필요</StatusBadge>}
+                                    action={
+                                        <Link
+                                            href={item.href}
+                                            className="inline-flex min-h-9 items-center rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100"
+                                        >
+                                            수정하기
+                                            <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                                        </Link>
+                                    }
+                                />
                             </li>
                         ))}
                     </ul>
