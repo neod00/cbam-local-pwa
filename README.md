@@ -121,3 +121,5 @@ EU 제출용 Excel 복사본의 공식 수식 재계산 확인은 [docs/excel-re
 현재 이 프로젝트는 오픈소스 라이선스를 부여하지 않습니다. 무료 PWA 사용 조건, 재배포 제한, 책임 제한은 배포 전 별도 약관 또는 고지로 확정합니다.
 
 무료 PWA 약관/고지 초안은 [docs/free-pwa-terms-draft.md](docs/free-pwa-terms-draft.md)에 정리되어 있으며, 실제 배포 전 법률 검토가 필요합니다.
+
+무료 배포 공지문 초안은 [docs/free-pwa-release-announcement-draft.md](docs/free-pwa-release-announcement-draft.md)를 기준으로 검토합니다.

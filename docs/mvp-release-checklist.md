@@ -33,6 +33,7 @@ CBAM Local PWA를 무료 배포하기 전에 확인할 항목입니다. 소스 �
 ## 배포 전 결정 필요
 
 - 무료 사용 약관: [docs/free-pwa-terms-draft.md](free-pwa-terms-draft.md) 초안을 기준으로 무료 사용 범위, 재배포 금지, 상업적 이용 제한, 책임 제한을 법률 검토 후 확정해야 한다.
+- 무료 배포 공지문: [docs/free-pwa-release-announcement-draft.md](free-pwa-release-announcement-draft.md) 초안을 기준으로 로컬 우선, 최신 EU 템플릿 직접 업로드, `.cbam` 백업, 공식 검증 대체 아님을 명확히 고지해야 한다.
 - 배포 채널: MVP 기본 채널은 [docs/pwa-deployment-guide.md](pwa-deployment-guide.md) 기준으로 Vercel + Private GitHub 저장소로 둔다. Cloudflare Pages, Netlify, 자체 정적 호스팅은 비용, 접속 품질, 보안 정책상 필요가 생길 때 전환 후보로 검토한다.
 - 소스 보호 범위: PWA 번들 노출을 감안해 고급 계산 로직을 어느 시점에 서버/API 또는 Docker/on-premise 버전으로 분리할지 결정해야 한다.
 

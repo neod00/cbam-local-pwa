@@ -14,6 +14,7 @@ const fictionalDataset = readFileSync('docs/mvp-fictional-dataset.md', 'utf8');
 const excelReview = readFileSync('docs/excel-recalculation-review.md', 'utf8');
 const userNotices = readFileSync('docs/mvp-user-notices.md', 'utf8');
 const freeTermsDraft = readFileSync('docs/free-pwa-terms-draft.md', 'utf8');
+const releaseAnnouncementDraft = readFileSync('docs/free-pwa-release-announcement-draft.md', 'utf8');
 const deploymentGuide = readFileSync('docs/pwa-deployment-guide.md', 'utf8');
 const firstDeploymentRunbook = readFileSync('docs/first-deployment-runbook.md', 'utf8');
 const securityPolicy = readFileSync('SECURITY.md', 'utf8');
@@ -87,6 +88,7 @@ assert.ok(readme.includes('docs/mvp-fictional-dataset.md'), 'README should link 
 assert.ok(readme.includes('docs/mvp-rehearsal-report.md'), 'README should link the MVP rehearsal report');
 assert.ok(readme.includes('docs/excel-recalculation-review.md'), 'README should link the Excel recalculation review');
 assert.ok(readme.includes('docs/free-pwa-terms-draft.md'), 'README should link the free PWA terms draft');
+assert.ok(readme.includes('docs/free-pwa-release-announcement-draft.md'), 'README should link the release announcement draft');
 assert.ok(readme.includes('docs/pwa-deployment-guide.md'), 'README should link the PWA deployment guide');
 assert.ok(readme.includes('docs/first-deployment-runbook.md'), 'README should link the first deployment runbook');
 assert.ok(readme.includes('SECURITY.md'), 'README should link the security policy');
@@ -95,6 +97,7 @@ assert.ok(releaseChecklist.includes('CBAM_documents/'), 'release checklist shoul
 assert.ok(releaseChecklist.includes('저장소는 Private'), 'release checklist should require the repository to remain private');
 assert.ok(releaseChecklist.includes('무료 사용 약관'), 'release checklist should include the free-use terms decision');
 assert.ok(releaseChecklist.includes('docs/free-pwa-terms-draft.md'), 'release checklist should link the free PWA terms draft');
+assert.ok(releaseChecklist.includes('docs/free-pwa-release-announcement-draft.md'), 'release checklist should link the release announcement draft');
 assert.ok(releaseChecklist.includes('docs/pwa-deployment-guide.md'), 'release checklist should link the PWA deployment guide');
 assert.ok(releaseChecklist.includes('docs/first-deployment-runbook.md'), 'release checklist should link the first deployment runbook');
 assert.ok(releaseChecklist.includes('docs/mvp-rehearsal-plan.md'), 'release checklist should link the MVP rehearsal plan');
@@ -171,6 +174,18 @@ assert.ok(freeTermsDraft.includes('재배포'), 'free PWA terms draft should res
 assert.ok(freeTermsDraft.includes('법률 자문'), 'free PWA terms draft should include liability limits');
 assert.ok(freeTermsDraft.includes('JavaScript 번들'), 'free PWA terms draft should explain PWA bundle visibility');
 assert.ok(freeTermsDraft.includes('브라우저 로컬 저장소'), 'free PWA terms draft should explain local browser storage');
+
+for (const required of [
+  '로컬',
+  '최신 EU 원본 템플릿',
+  '.cbam',
+  'Microsoft Excel',
+  '공식 검증',
+  'JavaScript 번들',
+  '[문의 이메일]',
+]) {
+  assert.ok(releaseAnnouncementDraft.includes(required), `release announcement draft should include ${required}`);
+}
 
 assert.equal(packageJson.private, true, 'package.json should keep private true');
 assert.ok(deploymentGuide.includes('GitHub 저장소는 Private'), 'deployment guide should keep the source repository private');
