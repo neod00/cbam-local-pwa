@@ -12,6 +12,7 @@ CBAM Local PWA를 무료 배포하기 전에 확인할 항목입니다. 소스 �
 - 설정 화면에서 `.cbam` 백업 내보내기/가져오기가 동작한다.
 - Export 화면에서 오류와 경고가 수정 화면으로 연결된다.
 - [docs/mvp-rehearsal-plan.md](mvp-rehearsal-plan.md)의 흐름대로 사업장부터 `.cbam` 백업까지 실제 리허설을 완료한다.
+- [docs/mvp-rehearsal-report.md](mvp-rehearsal-report.md)에 자동 검증, 로컬 EU 템플릿 검증, 기준자료 검증, 남은 수동 확인 항목을 기록한다.
 - 저장소는 Private 상태를 유지한다.
 - 배포된 PWA의 JavaScript 번들은 사용자가 확인할 수 있다는 한계를 사용자/운영자 문서에 반영한다.
 
