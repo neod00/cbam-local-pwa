@@ -104,6 +104,8 @@ npm run verify:pwa
 
 MVP 배포 전 확인 항목은 [docs/mvp-release-checklist.md](docs/mvp-release-checklist.md)를 기준으로 관리합니다.
 
+배포 채널과 설정 기준은 [docs/pwa-deployment-guide.md](docs/pwa-deployment-guide.md)에 정리합니다.
+
 ## 사용권
 
 현재 이 프로젝트는 오픈소스 라이선스를 부여하지 않습니다. 무료 PWA 사용 조건, 재배포 제한, 책임 제한은 배포 전 별도 약관 또는 고지로 확정합니다.

@@ -87,10 +87,11 @@ Completed:
 - Added a security policy for public repository use, warning users not to share company CBAM data, `.cbam` backups, or EU template files in issues or pull requests.
 - Updated release documentation for the private-source distribution strategy: keep GitHub private, distribute the free PWA by URL, and defer protected logic to future server/API or Docker/on-premise editions.
 - Added a free PWA terms draft covering free-use scope, redistribution limits, local data handling, liability notice, and source-protection limits.
+- Added a PWA deployment guide for private-source URL distribution, with Vercel as the lowest-friction MVP path and explicit exclusions for local reference documents, official EU templates, and company data.
 
 Pending product decisions:
 
-- Choose the free PWA hosting channel: Vercel, Cloudflare Pages, Netlify, or self-hosted static hosting.
+- Choose the final free PWA hosting channel after comparing Vercel, Cloudflare Pages, Netlify, or self-hosted static hosting.
 - Review and finalize the free-use terms with legal wording before public distribution.
 
 Next:

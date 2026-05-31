@@ -7,7 +7,9 @@ const serviceWorker = readFileSync('public/sw.js', 'utf8');
 const readme = readFileSync('README.md', 'utf8');
 const releaseChecklist = readFileSync('docs/mvp-release-checklist.md', 'utf8');
 const freeTermsDraft = readFileSync('docs/free-pwa-terms-draft.md', 'utf8');
+const deploymentGuide = readFileSync('docs/pwa-deployment-guide.md', 'utf8');
 const securityPolicy = readFileSync('SECURITY.md', 'utf8');
+const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 
 assert.equal(manifest.name, 'CBAM Local PWA');
 assert.equal(manifest.short_name, 'CBAM Local');
@@ -51,18 +53,27 @@ assert.ok(readme.includes('JavaScript 번들'), 'README should explain the PWA b
 assert.ok(readme.includes('CBAM_documents/'), 'README should explain local reference document exclusion');
 assert.ok(readme.includes('docs/mvp-release-checklist.md'), 'README should link the release checklist');
 assert.ok(readme.includes('docs/free-pwa-terms-draft.md'), 'README should link the free PWA terms draft');
+assert.ok(readme.includes('docs/pwa-deployment-guide.md'), 'README should link the PWA deployment guide');
 assert.ok(readme.includes('SECURITY.md'), 'README should link the security policy');
 
 assert.ok(releaseChecklist.includes('CBAM_documents/'), 'release checklist should mention local reference document exclusion');
 assert.ok(releaseChecklist.includes('저장소는 Private'), 'release checklist should require the repository to remain private');
 assert.ok(releaseChecklist.includes('무료 사용 약관'), 'release checklist should include the free-use terms decision');
 assert.ok(releaseChecklist.includes('docs/free-pwa-terms-draft.md'), 'release checklist should link the free PWA terms draft');
+assert.ok(releaseChecklist.includes('docs/pwa-deployment-guide.md'), 'release checklist should link the PWA deployment guide');
 assert.ok(releaseChecklist.includes('Docker/on-premise'), 'release checklist should keep on-premise scope deferred');
 
 assert.ok(freeTermsDraft.includes('재배포'), 'free PWA terms draft should restrict redistribution');
 assert.ok(freeTermsDraft.includes('법률 자문'), 'free PWA terms draft should include liability limits');
 assert.ok(freeTermsDraft.includes('JavaScript 번들'), 'free PWA terms draft should explain PWA bundle visibility');
 assert.ok(freeTermsDraft.includes('브라우저 로컬 저장소'), 'free PWA terms draft should explain local browser storage');
+
+assert.equal(packageJson.private, true, 'package.json should keep private true');
+assert.ok(deploymentGuide.includes('GitHub 저장소는 Private'), 'deployment guide should keep the source repository private');
+assert.ok(deploymentGuide.includes('CBAM_documents/'), 'deployment guide should forbid local reference documents in deploy artifacts');
+assert.ok(deploymentGuide.includes('공식 EU 템플릿'), 'deployment guide should forbid bundling official EU templates');
+assert.ok(deploymentGuide.includes('npm run verify'), 'deployment guide should require the standard verification command');
+assert.ok(deploymentGuide.includes('JavaScript 번들'), 'deployment guide should explain browser bundle visibility');
 
 assert.ok(securityPolicy.includes('.cbam'), 'security policy should mention backup files');
 assert.ok(securityPolicy.includes('민감자료 공유 금지'), 'security policy should warn against sharing sensitive data');
