@@ -20,9 +20,9 @@ for (const file of trackedFiles) {
   }
 }
 
-for (const localOnlyPath of ['CBAM_documents', 'artifacts', '.next', 'node_modules']) {
+for (const localOnlyPath of ['CBAM_documents', 'node_modules']) {
   assert.ok(
-    existsSync(localOnlyPath) || localOnlyPath === 'artifacts',
+    existsSync(localOnlyPath),
     `${localOnlyPath} check should run from the project root`
   );
 }

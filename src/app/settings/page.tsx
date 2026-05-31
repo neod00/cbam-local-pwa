@@ -290,6 +290,58 @@ export default function SettingsPage() {
             </SectionCard>
 
             <SectionCard
+                title="로컬 사용 안전 체크리스트"
+                description="무료 PWA를 실제 업무에 쓰기 전에 데이터 보관 위치와 제출 전 확인 책임을 먼저 점검하세요."
+            >
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex gap-3">
+                            <ShieldCheck className="mt-0.5 h-5 w-5 flex-none text-emerald-700" />
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-950">서버 전송 없음</h3>
+                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                    CBAM 입력자료, EU 템플릿, `.cbam` 백업 파일은 무료 PWA의 라이선스/업데이트 확인 과정에서 서버로 전송하지 않습니다.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex gap-3">
+                            <Database className="mt-0.5 h-5 w-5 flex-none text-blue-700" />
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-950">브라우저 로컬 저장</h3>
+                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                    데이터는 IndexedDB에 저장됩니다. 브라우저 데이터 삭제, PC 교체, 보안 프로그램 정리 전에 반드시 백업하세요.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex gap-3">
+                            <Download className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-950">중요 변경 후 .cbam 백업</h3>
+                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                    사업장, 품목, 생산공정, 전구물질, 시나리오 가정값을 수정한 뒤에는 같은 시점의 `.cbam` 백업을 보관하세요.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex gap-3">
+                            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-700" />
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-950">제출 전 공식 확인</h3>
+                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                    최신 EU 원본 템플릿을 사용하고, Export 후 Microsoft Excel에서 공식 수식 재계산 결과를 확인하세요.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </SectionCard>
+
+            <SectionCard
                 title="무료 라이선스"
                 description="무료 라이선스는 배포 관리, 공지, 업데이트 안내를 위한 준비 기능입니다. CBAM 산정 데이터, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다."
                 actions={<StatusBadge tone={licenseStatus.tone}>{licenseStatus.label}</StatusBadge>}
