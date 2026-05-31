@@ -136,6 +136,20 @@ The app does not overwrite `I:K` SEE cells in `Summary_Products`; those are offi
 
 The script does not recalculate Excel formulas. For real submission checks, open the generated workbook copy in Excel and compare the recalculated `Summary_Products` SEE values with the app's local SEE review values before relying on the file.
 
+## Submission Review Procedure
+
+Before a company uses an exported workbook for official communication, the user should complete this review sequence:
+
+1. Upload the latest official EU installation communication template from the EU source, not a workbook bundled inside the app.
+2. Generate the Export copy from the app only after the Export readiness gate has no blocking errors.
+3. Open the generated copy in Microsoft Excel and allow workbook formulas to recalculate.
+4. Confirm that official sheet names, English labels, styles, and formula cells are still intact.
+5. Compare `Summary_Products` formula outputs in `I:K` with the app's local SEE review values shown on the Export page.
+6. Review warnings about source-stream evidence, precursor evidence, default-value justification, and product-line allocation before submission.
+7. Save a `.cbam` backup separately from the Excel workbook so the local calculation inputs can be restored later.
+
+The app can prepare and verify the copy, but it does not replace the reporting declarant's final Excel review, internal approval, or external verification.
+
 ## Known Gaps
 
 - Product-level allocation result values are still not written directly into official SEE cells; the app now writes the official product identification inputs and leaves formula SEE cells intact.

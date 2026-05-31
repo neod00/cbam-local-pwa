@@ -118,6 +118,7 @@ Completed:
 - Added a mobile card fallback for Results SEE rows so users do not have to read the dense calculation table on small PWA screens.
 - Added reusable empty states with direct add actions for core input screens so first-time users can start products, processes, source streams, and precursors from the empty list view.
 - Expanded the admin-console plan with minimal license/update/announcement tables, API routes, and required-update flow while preserving the no-CBAM-data server boundary.
+- Added an EU Export submission review procedure covering latest-template upload, readiness errors, Excel recalculation, formula preservation, SEE comparison, warning review, and `.cbam` backup.
 
 Pending product decisions:
 
