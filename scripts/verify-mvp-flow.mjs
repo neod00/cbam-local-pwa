@@ -47,6 +47,9 @@ assert.ok(settingsPage.includes('법률 자문, 공식 검증, 최종 제출 책
 assert.ok(settingsPage.includes('.cbam 백업'), 'Settings should guide backup handling');
 assert.ok(settingsPage.includes('무료 라이선스'), 'Settings should include the free license placeholder');
 assert.ok(settingsPage.includes('CBAM 산정 데이터, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다'), 'Settings should explain the license data boundary');
+assert.ok(settingsPage.includes('업데이트 상태'), 'Settings should include update status in the free license area');
+assert.ok(settingsPage.includes('업데이트 상태 확인'), 'Settings should expose a manual update status check');
+assert.ok(settingsPage.includes('CBAM 입력자료와 백업 파일은 로컬에 남습니다'), 'Settings should keep license/update data boundaries clear');
 assert.ok(settingsPage.includes('license:free-registration'), 'Settings should store free license mock registration in local settings');
 
 console.log('MVP flow verification passed.');

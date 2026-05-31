@@ -107,6 +107,7 @@ Completed:
 - Added a settings-page free-license placeholder with local mock registration, explicit server non-transfer notice for CBAM data/templates/backups, and `.cbam` backup inclusion through the existing settings store.
 - Reworked the dashboard toward a guided submission workspace with current status, next action, workflow steps, fix-list tasks, evidence checklist, local backup status, and Export formula-review reminders.
 - Added a free-PWA update manifest, app-shell update notice, service-worker cache entry, and `npm run verify:update-policy` so optional/recommended/required update behavior can be managed without collecting CBAM calculation data.
+- Refined the settings free-license area with registration status, update status, a local-only data-boundary card, and a manual update status check backed by the static update manifest.
 
 Pending product decisions:
 
@@ -115,8 +116,8 @@ Pending product decisions:
 
 Next:
 
-- Refine the settings free-license area into a clearer registration/update status panel while keeping it local-only until the admin API exists.
 - Review the remaining high-friction screens against the guided workflow and reduce dense table-first interactions where users need next-action guidance.
+- Prepare a lightweight admin/API implementation plan for license registration, notices, and update manifest publishing after the PWA UI stabilizes.
 
 ## Decision Log
 

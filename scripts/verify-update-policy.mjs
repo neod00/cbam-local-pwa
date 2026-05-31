@@ -7,6 +7,7 @@ const serviceWorker = readFileSync('public/sw.js', 'utf8');
 const updatePolicy = readFileSync('src/lib/update-policy.ts', 'utf8');
 const updateNotice = readFileSync('src/components/UpdateNotice.tsx', 'utf8');
 const appShell = readFileSync('src/components/AppShell.tsx', 'utf8');
+const settingsPage = readFileSync('src/app/settings/page.tsx', 'utf8');
 const policyDoc = readFileSync('docs/harness/update-policy.md', 'utf8');
 
 assert.equal(updateManifest.latest_version, packageJson.version, 'update manifest should start at the package version');
@@ -38,6 +39,8 @@ assert.ok(updateNotice.includes('업데이트 확인'), 'update notice should ex
 assert.ok(updateNotice.includes('CBAM 입력자료, EU 템플릿, .cbam 백업 파일은 전송하지 않습니다'), 'update notice should state the data boundary');
 assert.ok(updateNotice.includes('localStorage'), 'dismissed optional/recommended updates should stay local');
 assert.ok(updateNotice.includes('navigator.serviceWorker'), 'update action should check the service worker');
+assert.ok(settingsPage.includes('업데이트 상태 확인'), 'settings should expose manual update status checks');
+assert.ok(settingsPage.includes('정적 update manifest'), 'settings should make the current static manifest phase explicit');
 
 for (const required of [
   'optional',

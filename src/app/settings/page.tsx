@@ -20,7 +20,8 @@ import {
     SCENARIO_ASSUMPTIONS_SETTING_KEY,
     type ScenarioAssumptions,
 } from '@/lib/scenario-calculation';
-import { AlertTriangle, Database, Download, FileUp, KeyRound, ShieldCheck, Trash2 } from 'lucide-react';
+import { evaluateUpdateStatus, fetchUpdateManifest, type UpdateStatus } from '@/lib/update-policy';
+import { AlertTriangle, Database, Download, FileUp, KeyRound, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 const FREE_LICENSE_SETTING_KEY = 'license:free-registration';
@@ -86,6 +87,7 @@ export default function SettingsPage() {
     const [message, setMessage] = useState('');
     const [lastBackupAt, setLastBackupAt] = useState<string | undefined>();
     const [scenarioAssumptions, setScenarioAssumptions] = useState<ScenarioAssumptions>();
+    const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(() => evaluateUpdateStatus());
     const [licenseRegistration, setLicenseRegistration] = useState<FreeLicenseRegistration>({
         email: '',
         company_name: '',
@@ -106,6 +108,9 @@ export default function SettingsPage() {
                 }
             })
             .catch(() => undefined);
+        fetchUpdateManifest()
+            .then((manifest) => setUpdateStatus(evaluateUpdateStatus(manifest)))
+            .catch(() => setUpdateStatus(evaluateUpdateStatus()));
     }, []);
 
     const totalPreviewItems = useMemo(() => {
@@ -167,6 +172,17 @@ export default function SettingsPage() {
         await setLocalSetting(FREE_LICENSE_SETTING_KEY, nextRegistration);
         setLicenseRegistration(nextRegistration);
         setMessage('무료 라이선스 정보를 로컬 설정에 저장했습니다. 현재 단계에서는 서버 검증을 수행하지 않습니다.');
+    }
+
+    async function handleUpdateCheck() {
+        const manifest = await fetchUpdateManifest().catch(() => undefined);
+        const nextStatus = evaluateUpdateStatus(manifest);
+        setUpdateStatus(nextStatus);
+        setMessage(
+            nextStatus.shouldShow
+                ? `업데이트 상태를 확인했습니다. 현재 v${nextStatus.currentVersion}, 최신 v${nextStatus.latestVersion}입니다.`
+                : `현재 v${nextStatus.currentVersion}은 최신 무료 PWA 버전입니다.`
+        );
     }
 
     async function handleFileSelected(event: ChangeEvent<HTMLInputElement>) {
@@ -279,6 +295,30 @@ export default function SettingsPage() {
                 actions={<StatusBadge tone={licenseStatus.tone}>{licenseStatus.label}</StatusBadge>}
             >
                 <form onSubmit={handleLicenseSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p className="text-xs font-semibold text-slate-500">등록 상태</p>
+                            <div className="mt-2">
+                                <StatusBadge tone={licenseStatus.tone}>{licenseStatus.label}</StatusBadge>
+                            </div>
+                            <p className="mt-3 text-sm leading-6 text-slate-600">{licenseStatus.helper}</p>
+                        </div>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p className="text-xs font-semibold text-slate-500">업데이트 상태</p>
+                            <p className="mt-2 text-sm font-semibold text-slate-950">
+                                현재 v{updateStatus.currentVersion} / 최신 v{updateStatus.latestVersion}
+                            </p>
+                            <p className="mt-2 text-sm leading-6 text-slate-600">
+                                {updateStatus.shouldShow ? updateStatus.title : '현재 버전은 계속 사용할 수 있습니다.'}
+                            </p>
+                        </div>
+                        <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
+                            <p className="text-xs font-semibold text-teal-800">데이터 경계</p>
+                            <p className="mt-2 text-sm leading-6 text-teal-900">
+                                라이선스와 업데이트 확인은 배포 관리 정보만 다룹니다. CBAM 입력자료와 백업 파일은 로컬에 남습니다.
+                            </p>
+                        </div>
+                    </div>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <label className="space-y-1 text-sm font-semibold text-slate-700">
                             <span>이메일</span>
@@ -326,6 +366,15 @@ export default function SettingsPage() {
                             </p>
                         </div>
                         <Button type="submit" className="md:flex-none">로컬 저장</Button>
+                    </div>
+                    <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700 md:flex-row md:items-center md:justify-between">
+                        <p>
+                            관리자 콘솔이 연결되면 이 영역에서 공지, 선택 업데이트, 강제 업데이트 상태를 확인하게 됩니다. 현재는 정적 update manifest만 확인합니다.
+                        </p>
+                        <Button type="button" variant="secondary" onClick={() => void handleUpdateCheck()} className="md:flex-none">
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            업데이트 상태 확인
+                        </Button>
                     </div>
                 </form>
             </SectionCard>
