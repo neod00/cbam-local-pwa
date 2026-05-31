@@ -6,6 +6,7 @@ const appShell = readFileSync('src/components/AppShell.tsx', 'utf8');
 const layout = readFileSync('src/app/layout.tsx', 'utf8');
 const dashboard = readFileSync('src/app/page.tsx', 'utf8');
 const exportPage = readFileSync('src/app/export/page.tsx', 'utf8');
+const installationsPage = readFileSync('src/app/installations/page.tsx', 'utf8');
 const processesPage = readFileSync('src/app/processes/page.tsx', 'utf8');
 const sourceStreamsPage = readFileSync('src/app/source-streams/page.tsx', 'utf8');
 const precursorsPage = readFileSync('src/app/precursors/page.tsx', 'utf8');
@@ -47,6 +48,9 @@ assert.ok(exportPage.includes('첫 번째 항목 수정'), 'Export should guide 
 assert.ok(exportPage.includes('제출용 복사본 생성'), 'Export should expose a clear final copy generation action');
 assert.ok(exportPage.includes('공식 수식 셀이 계산하도록 직접 덮어쓰지 않습니다'), 'Export should preserve official formula cells');
 assert.ok(exportPage.includes('Excel에서 생성된 복사본을 열면'), 'Export should tell users to review Excel formula outputs');
+assert.ok(installationsPage.includes('1. 사업장 식별정보'), 'Installations form should group required installation identification inputs');
+assert.ok(installationsPage.includes('2. 주소와 위치'), 'Installations form should group address and location inputs');
+assert.ok(installationsPage.includes('등록된 사업장이 없습니다'), 'Installations should show a guided empty state');
 assert.ok(processesPage.includes('생산공정 다음 작업'), 'Processes should show next-action guidance');
 assert.ok(processesPage.includes('제품 생산라인 배분'), 'Processes should guide allocation review');
 assert.ok(processesPage.includes('배출원 자료부터 보완하세요'), 'Processes should guide missing source-stream evidence');

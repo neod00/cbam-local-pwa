@@ -130,6 +130,7 @@ Completed:
 - Added mobile card fallbacks for EU Export `Summary_Products` and SEE preview rows so submission review is readable without horizontal table scrolling in the PWA.
 - Added a mobile card fallback for SEFA/certificate scenario review so users can compare actual/default SEE and certificate cost indicators without reading the full desktop table.
 - Detailed the free-license/admin rollout with client API contracts, forbidden server fields, phased implementation, and the rule that license/update controls must not block local `.cbam` backup access.
+- Split the installation form into required identification, optional address/location, and contact sections, and added a guided empty state for first-time setup.
 
 Pending product decisions:
 
