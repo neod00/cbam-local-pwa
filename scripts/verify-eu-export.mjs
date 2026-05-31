@@ -462,15 +462,15 @@ assertEqual(
   'true',
   'mixed allocation basis warning'
 );
-assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '34', 'planned cell writes');
+assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '39', 'planned cell writes');
 const checklist = euExport.createExportChecklist({
   backupStatus: {
     helper: '최근 백업 기록이 있습니다.',
     label: '백업 완료',
     tone: 'success',
   },
-  lastExportResult: { checkedCellCount: 34 },
-  plannedCellWriteCount: 34,
+  lastExportResult: { checkedCellCount: 39 },
+  plannedCellWriteCount: 39,
   readiness: {
     ...readiness,
     warningCount: 0,
@@ -506,8 +506,8 @@ const scenarioChecklist = euExport.createExportChecklist({
     label: '백업 완료',
     tone: 'success',
   },
-  lastExportResult: { checkedCellCount: 34 },
-  plannedCellWriteCount: 34,
+  lastExportResult: { checkedCellCount: 39 },
+  plannedCellWriteCount: 39,
   readiness: {
     ...readiness,
     warningCount: 0,
@@ -546,7 +546,7 @@ const incompleteChecklist = euExport.createExportChecklist({
     label: '백업 필요',
     tone: 'warning',
   },
-  plannedCellWriteCount: 34,
+  plannedCellWriteCount: 39,
   readiness,
   resultCount: 0,
   scenarioAction: { href: '/upload', label: '기준자료 가져오기' },
@@ -654,6 +654,11 @@ assertEqual(readCell(installationSheet, 'I26'), 'KR', 'A_InstData I26');
 assertEqual(readCell(installationSheet, 'I30'), 'Local CBAM Manager', 'A_InstData I30');
 assertEqual(readCell(installationSheet, 'I31'), 'cbam@example.com', 'A_InstData I31');
 assertEqual(readCell(installationSheet, 'I32'), '+82-32-000-0000', 'A_InstData I32');
+assertEqual(readCell(installationSheet, 'E62'), 'Iron or steel products', 'A_InstData E62');
+assertEqual(readCell(installationSheet, 'I62'), 'Flat steel processing', 'A_InstData I62');
+assertEqual(readCell(installationSheet, 'E83'), 'Iron or steel products', 'A_InstData E83');
+assertEqual(readCell(installationSheet, 'F83'), 'Only direct production', 'A_InstData F83');
+assertEqual(readCell(installationSheet, 'L83'), 'Rolling and finishing', 'A_InstData L83');
 assertEqual(readCell(sourceStreamSheet, 'D17'), 'Combustion', 'B_EmInst D17');
 assertEqual(readCell(sourceStreamSheet, 'E17'), 'Natural gas combustion', 'B_EmInst E17');
 assertEqual(readCell(sourceStreamSheet, 'F17'), '250', 'B_EmInst F17');

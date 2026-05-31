@@ -1191,6 +1191,128 @@ function createInstallationCellWrites(
     return writes;
 }
 
+interface EuAggregatedGoodExportRow {
+    good: string;
+    sourceId: string;
+    routes: string[];
+}
+
+function uniqueNonEmpty(values: Array<string | undefined>): string[] {
+    return Array.from(new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value))));
+}
+
+function createAggregatedGoodsAndBoundaryCellWrites(
+    data: EuTemplateExportData,
+    cnCodeMap?: EuCnCodeMap
+): EuTemplateExportCellWrite[] {
+    const productById = new Map(data.products.map((product) => [product.id, product]));
+    const outputLinesByProcess = new Map<string, ProductOutputLine[]>();
+    const rowByGood = new Map<string, EuAggregatedGoodExportRow>();
+
+    for (const outputLine of data.productOutputLines ?? []) {
+        if (!outputLine.process_id) {
+            continue;
+        }
+
+        const group = outputLinesByProcess.get(outputLine.process_id) ?? [];
+        group.push(outputLine);
+        outputLinesByProcess.set(outputLine.process_id, group);
+    }
+
+    for (const product of data.products) {
+        const euGood = mapProductToEuGood(product, cnCodeMap);
+
+        if (!euGood) {
+            continue;
+        }
+
+        const routes = data.processes
+            .filter((process) => process.product_id === product.id)
+            .map((process) => process.production_route);
+        const existing = rowByGood.get(euGood);
+
+        rowByGood.set(euGood, {
+            good: euGood,
+            sourceId: existing?.sourceId ?? product.id,
+            routes: uniqueNonEmpty([...(existing?.routes ?? []), ...routes]),
+        });
+    }
+
+    const writes: EuTemplateExportCellWrite[] = [];
+    const aggregatedGoods = Array.from(rowByGood.values()).slice(0, 10);
+
+    aggregatedGoods.forEach((row, index) => {
+        const sheetRow = 62 + index;
+
+        writes.push({
+            sheetName: 'A_InstData',
+            cell: `E${sheetRow}`,
+            label: 'Aggregated goods category',
+            value: row.good,
+            sourceId: row.sourceId,
+        });
+
+        row.routes.slice(0, 6).forEach((route, routeIndex) => {
+            writes.push({
+                sheetName: 'A_InstData',
+                cell: `${String.fromCharCode('I'.charCodeAt(0) + routeIndex)}${sheetRow}`,
+                label: 'Production route',
+                value: route,
+                sourceId: row.sourceId,
+            });
+        });
+    });
+
+    data.processes.slice(0, 10).forEach((process, index) => {
+        const product = process.product_id ? productById.get(process.product_id) : undefined;
+        const euGood = mapProductToEuGood(product, cnCodeMap);
+
+        if (!euGood) {
+            return;
+        }
+
+        const sheetRow = 83 + index;
+        const outputLines = outputLinesByProcess.get(process.id) ?? [];
+        const includedGoods = uniqueNonEmpty(
+            outputLines
+                .map((line) => (line.product_id ? productById.get(line.product_id) : undefined))
+                .map((lineProduct) => mapProductToEuGood(lineProduct, cnCodeMap))
+        );
+        const boundaryValues = includedGoods.length > 1 || (includedGoods.length === 1 && includedGoods[0] !== euGood)
+            ? includedGoods.slice(0, 6)
+            : ['Only direct production'];
+
+        writes.push(
+            {
+                sheetName: 'A_InstData',
+                cell: `E${sheetRow}`,
+                label: 'Production process aggregated goods category',
+                value: euGood,
+                sourceId: process.id,
+            },
+            {
+                sheetName: 'A_InstData',
+                cell: `L${sheetRow}`,
+                label: 'Production process name',
+                value: process.name,
+                sourceId: process.id,
+            }
+        );
+
+        boundaryValues.forEach((value, boundaryIndex) => {
+            writes.push({
+                sheetName: 'A_InstData',
+                cell: `${String.fromCharCode('F'.charCodeAt(0) + boundaryIndex)}${sheetRow}`,
+                label: 'Included goods category',
+                value,
+                sourceId: process.id,
+            });
+        });
+    });
+
+    return writes;
+}
+
 function addOptionalInstallationWrite(
     writes: EuTemplateExportCellWrite[],
     installation: Installation,
@@ -1262,10 +1384,9 @@ export function createEuTemplateExportCellWrites(
     data: EuTemplateExportData,
     cnCodeMap?: EuCnCodeMap
 ): EuTemplateExportCellWrite[] {
-    void cnCodeMap;
-
     return [
         ...createInstallationCellWrites(data.installations, data.periods),
+        ...createAggregatedGoodsAndBoundaryCellWrites(data, cnCodeMap),
         ...createSourceStreamCellWrites(data.sourceStreams),
         ...createEmissionsEnergyCellWrites(data.processes, data.products),
         ...createProcessCellWrites(data.processes),

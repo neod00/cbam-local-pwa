@@ -344,6 +344,11 @@ const checkedCells = {
   'A_InstData!I9': readExportedCell('A_InstData', 'I9'),
   'A_InstData!L9': readExportedCell('A_InstData', 'L9'),
   'A_InstData!I20': readExportedCell('A_InstData', 'I20'),
+  'A_InstData!E62': readExportedCell('A_InstData', 'E62'),
+  'A_InstData!I62': readExportedCell('A_InstData', 'I62'),
+  'A_InstData!E83': readExportedCell('A_InstData', 'E83'),
+  'A_InstData!F83': readExportedCell('A_InstData', 'F83'),
+  'A_InstData!L83': readExportedCell('A_InstData', 'L83'),
   'B_EmInst!D17': readExportedCell('B_EmInst', 'D17'),
   'B_EmInst!E17': readExportedCell('B_EmInst', 'E17'),
   'D_Processes!L16': readExportedCell('D_Processes', 'L16'),
@@ -355,6 +360,11 @@ const checkedCells = {
 assert.equal(checkedCells['A_InstData!I9'], '45292');
 assert.equal(checkedCells['A_InstData!L9'], '45657');
 assert.equal(checkedCells['A_InstData!I20'], 'Main Factory A');
+assert.equal(checkedCells['A_InstData!E62'], 'Iron or steel products');
+assert.equal(checkedCells['A_InstData!I62'], 'Flat steel processing');
+assert.equal(checkedCells['A_InstData!E83'], 'Iron or steel products');
+assert.equal(checkedCells['A_InstData!F83'], 'Only direct production');
+assert.equal(checkedCells['A_InstData!L83'], 'Rolling and finishing');
 assert.equal(checkedCells['B_EmInst!D17'], 'Combustion');
 assert.equal(checkedCells['B_EmInst!E17'], 'Natural gas combustion');
 assert.equal(checkedCells['D_Processes!L16'], '1000');

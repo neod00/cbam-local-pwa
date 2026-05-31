@@ -37,6 +37,16 @@ The app writes reporting-period, installation identity, address, location, and c
 | `Installation.email` | `I31` | Contact email. |
 | `Installation.telephone` | `I32` | Contact telephone. |
 
+The app also declares aggregated goods and production process boundaries in the official `A_InstData` input tables:
+
+| App field | Official cell | Notes |
+| --- | --- | --- |
+| mapped product EU goods category | `E62:E71` | Up to 10 distinct aggregated goods categories from local products. |
+| linked production routes | `I62:N71` | Up to 6 production routes per aggregated goods category. |
+| process mapped EU goods category | `E83:E92` | Up to 10 local production processes. |
+| process included goods/boundary | `F83:K92` | Uses `Only direct production` unless product output lines indicate multiple included categories. |
+| `ProductionProcess.name` | `L83:L92` | Production process display name. |
+
 ### `D_Processes`
 
 Each production process block starts at row `11 + index * 65`.
@@ -58,7 +68,7 @@ Export readiness also checks product output-line consistency before download:
 - Mixed allocation bases inside one production process are reported as warnings.
 - Manual allocation lines with no valid manual percentage total are reported as warnings.
 
-These checks are intentionally handled as readiness warnings rather than direct workbook writes, because the current confirmed unlocked `D_Processes` cells accept process-level totals, not a separate product-line allocation table.
+These checks are intentionally handled as readiness warnings rather than direct SEE workbook writes, because the current confirmed unlocked `D_Processes` cells accept process-level totals, not a separate product-line allocation result table.
 
 ### `B_EmInst`
 
@@ -106,6 +116,5 @@ The app does not currently write `indirect_see_tco2e_per_t` directly into `E_Pur
 
 ## Known Gaps
 
-- Production routes and aggregated goods categories should be driven through `A_InstData` and official dropdown/code-list relationships rather than by overwriting protected labels.
-- Product-level output and allocation mapping still needs official-cell confirmation before the app writes product-line summaries into the template.
+- Product-level output and allocation result mapping still needs official-cell confirmation before the app writes SEE summaries into the template.
 - Source-stream validation is still intentionally conservative. Additional official unit/dropdown values should be added only after confirming the corresponding workbook formulas and validation lists.

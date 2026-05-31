@@ -54,8 +54,8 @@ assert.equal(
   'dashboard should not describe export as D_Processes/E_PurchPrec only'
 );
 assert.ok(
-  exportPage.includes('제품 생산라인 배분 결과는 계산·검토에 사용'),
-  'export page should explain product-line allocation is not directly written yet'
+  exportPage.includes('A_InstData') && exportPage.includes('SEE'),
+  'export page should explain A_InstData boundary writes and deferred product-line SEE writes'
 );
 
 for (const asset of ['file.svg', 'globe.svg', 'next.svg', 'vercel.svg', 'window.svg']) {

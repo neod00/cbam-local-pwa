@@ -91,6 +91,7 @@ Completed:
 - Clarified the Export screen and checklist so users can see the current written sheets and understand that product-line allocation results are reviewed/calculated but not directly written into a separate EU product-line table before official cell confirmation.
 - Ran local Chrome-based route and screenshot checks for dashboard, Export, settings, and mobile dashboard; fixed stale dashboard copy that described Export as `D_Processes`/`E_PurchPrec` only.
 - Added a reusable local official-template verification script and fixed EU Export cell replacement for self-closing official workbook cells while preserving cell style IDs.
+- Extended EU Export writes into `A_InstData` aggregated-goods and production-process boundary tables so the official workbook receives product category, route, process boundary, and process name declarations before process-level totals.
 
 Pending product decisions:
 
@@ -99,7 +100,7 @@ Pending product decisions:
 
 Next:
 
-- Confirm official product-level summary cells before writing product-line allocation details into the EU template copy.
+- Confirm official product-level SEE summary cells before writing product-line allocation result values into the EU template copy.
 - Refine certificate calculations after confirming the paid-carbon-price formula and current official factors.
 
 ## Decision Log
