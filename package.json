@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "verify": "npm run verify:source-streams && npm run verify:calculation && npm run verify:scenarios && npm run verify:dashboard && npm run verify:export && npm run verify:backup && npm run verify:pwa && npm run verify:mvp-flow && npm run verify:design-system && npm run lint && npm run build",
+    "verify": "npm run verify:source-streams && npm run verify:calculation && npm run verify:scenarios && npm run verify:dashboard && npm run verify:export && npm run verify:backup && npm run verify:pwa && npm run verify:mvp-flow && npm run verify:design-system && npm run verify:update-policy && npm run lint && npm run build",
     "verify:backup": "node scripts/verify-local-backup.mjs",
     "verify:calculation": "node scripts/verify-local-calculation.mjs",
     "verify:dashboard": "node scripts/verify-dashboard-summary.mjs",
@@ -17,7 +17,8 @@
     "verify:pwa": "node scripts/verify-pwa-release.mjs",
     "verify:mvp-flow": "node scripts/verify-mvp-flow.mjs",
     "verify:scenarios": "node scripts/verify-scenario-risks.mjs",
-    "verify:source-streams": "node scripts/verify-source-stream-calculation.mjs"
+    "verify:source-streams": "node scripts/verify-source-stream-calculation.mjs",
+    "verify:update-policy": "node scripts/verify-update-policy.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.1",

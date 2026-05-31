@@ -1,6 +1,7 @@
 'use client';
 
 import Sidebar from '@/components/Sidebar';
+import UpdateNotice from '@/components/UpdateNotice';
 import { Bell, Building2, CalendarDays, CircleHelp } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -61,6 +62,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                         </div>
                     </div>
                 </header>
+                <UpdateNotice />
                 <main className="px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-8">
                     <div className="mx-auto max-w-7xl">{children}</div>
                 </main>

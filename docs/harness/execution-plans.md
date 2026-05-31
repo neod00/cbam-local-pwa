@@ -106,6 +106,7 @@ Completed:
 - Established the post-MVP productization plan with `DESIGN.md`, a guided CBAM workflow, free-license strategy, update policy, admin-console plan, and `npm run verify:design-system`.
 - Added a settings-page free-license placeholder with local mock registration, explicit server non-transfer notice for CBAM data/templates/backups, and `.cbam` backup inclusion through the existing settings store.
 - Reworked the dashboard toward a guided submission workspace with current status, next action, workflow steps, fix-list tasks, evidence checklist, local backup status, and Export formula-review reminders.
+- Added a free-PWA update manifest, app-shell update notice, service-worker cache entry, and `npm run verify:update-policy` so optional/recommended/required update behavior can be managed without collecting CBAM calculation data.
 
 Pending product decisions:
 
@@ -114,8 +115,8 @@ Pending product decisions:
 
 Next:
 
-- Redesign the dashboard around the guided workflow: current status, next action, workflow stepper, fix cards, Export gate, and backup status.
-- Add a settings-page free-license placeholder that stores only local mock registration data and clearly states that CBAM calculation data is not sent to a server.
+- Refine the settings free-license area into a clearer registration/update status panel while keeping it local-only until the admin API exists.
+- Review the remaining high-friction screens against the guided workflow and reduce dense table-first interactions where users need next-action guidance.
 
 ## Decision Log
 

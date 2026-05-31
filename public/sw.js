@@ -14,6 +14,7 @@ const APP_SHELL = [
   "/source-streams",
   "/upload",
   "/manifest.webmanifest",
+  "/update-manifest.json",
   "/icon.svg"
 ];
 

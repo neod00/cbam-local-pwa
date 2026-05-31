@@ -1,0 +1,10 @@
+{
+  "latest_version": "0.1.0",
+  "minimum_supported_version": "0.1.0",
+  "update_policy": "none",
+  "notice_title": "CBAM Local 최신 버전입니다",
+  "notice_body": "현재 배포된 무료 PWA 버전은 계속 사용할 수 있습니다.",
+  "release_notes_url": "/docs/releases",
+  "effective_from": "2026-05-31",
+  "target_audience": "free-pwa"
+}
