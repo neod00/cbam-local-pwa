@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionItemCard, Button, DataTable, EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { ActionItemCard, Button, DataTable, EmptyState, FormSection, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import {
     createLocalItem,
     deleteLocalItem,
@@ -483,7 +483,11 @@ export default function PrecursorsPage() {
                         </Button>
                     }
                 >
-                    <form noValidate onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <form noValidate onSubmit={handleSubmit} className="space-y-5">
+                        <FormSection
+                            title="1. 전구물질 기본정보"
+                            description="구매한 전구물질의 이름, 상품군, 생산경로, CN/HS 코드를 먼저 정리합니다."
+                        >
                         <div>
                             <label htmlFor="precursor-name" className="text-sm font-semibold text-slate-700">전구물질명</label>
                             <input id="precursor-name" required className={fieldClass} value={newItem.name} onChange={(event) => setNewItem({ ...newItem, name: event.target.value })} />
@@ -510,6 +514,12 @@ export default function PrecursorsPage() {
                             />
                             {errors.precursor_cn_code && <p className="mt-1 text-xs font-medium text-red-600">{errors.precursor_cn_code}</p>}
                         </div>
+                        </FormSection>
+
+                        <FormSection
+                            title="2. 자료 모드와 검증 상태"
+                            description="공급사 실제자료인지, 혼합자료인지, 공식 기본값인지 구분하고 검증 상태를 함께 남깁니다."
+                        >
                         <div>
                             <label htmlFor="precursor-data-mode" className="text-sm font-semibold text-slate-700">데이터 모드</label>
                             <select id="precursor-data-mode" className={fieldClass} value={newItem.data_mode} onChange={(event) => setNewItem({ ...newItem, data_mode: event.target.value as PrecursorDraft['data_mode'] })}>
@@ -542,6 +552,12 @@ export default function PrecursorsPage() {
                                 </p>
                             </div>
                         )}
+                        </FormSection>
+
+                        <FormSection
+                            title="3. 연결 대상과 공급사 정보"
+                            description="전구물질이 어느 보고기간, 공정, 제품에 소비되는지 연결하고 공급국가와 공급사 정보를 입력합니다."
+                        >
                         <div>
                             <label htmlFor="precursor-period" className="text-sm font-semibold text-slate-700">보고기간</label>
                             <select id="precursor-period" className={fieldClass} value={newItem.period_id} onChange={(event) => setNewItem({ ...newItem, period_id: event.target.value })}>
@@ -575,6 +591,12 @@ export default function PrecursorsPage() {
                             <label htmlFor="precursor-supplier-installation" className="text-sm font-semibold text-slate-700">공급사/사업장</label>
                             <input id="precursor-supplier-installation" className={fieldClass} value={newItem.supplier_installation} onChange={(event) => setNewItem({ ...newItem, supplier_installation: event.target.value })} />
                         </div>
+                        </FormSection>
+
+                        <FormSection
+                            title="4. 기본값 조회와 수량"
+                            description="공식 기본값 파일을 가져온 경우 CN/국가 기준으로 값을 적용하고, 구매량과 실제 소비량을 입력합니다."
+                        >
                         <div>
                             <label htmlFor="precursor-default-year" className="text-sm font-semibold text-slate-700">기본값 적용연도</label>
                             <select id="precursor-default-year" className={fieldClass} value={newItem.default_value_year} onChange={(event) => setNewItem({ ...newItem, default_value_year: event.target.value as PrecursorDraft['default_value_year'] })}>
@@ -612,6 +634,12 @@ export default function PrecursorsPage() {
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.consumed_for_non_cbam_mass_t} onChange={(event) => setNewItem({ ...newItem, consumed_for_non_cbam_mass_t: toNumber(event.target.value) })} />
                             {errors.consumed_for_non_cbam_mass_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.consumed_for_non_cbam_mass_t}</p>}
                         </div>
+                        </FormSection>
+
+                        <FormSection
+                            title="5. SEE와 증빙"
+                            description="공급사 회신 또는 공식 기본값에서 확인한 직접/간접 SEE와 출처, 기본값 사용 사유를 남깁니다."
+                        >
                         <div>
                             <label className="text-sm font-semibold text-slate-700">직접 SEE(tCO2e/t)</label>
                             <input required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.direct_see_tco2e_per_t} onChange={(event) => setNewItem({ ...newItem, direct_see_tco2e_per_t: toNumber(event.target.value) })} />
@@ -637,7 +665,9 @@ export default function PrecursorsPage() {
                             />
                             {errors.default_value_justification && <p className="mt-1 text-xs font-medium text-red-600">{errors.default_value_justification}</p>}
                         </div>
-                        <div className="md:col-span-3">
+                        </FormSection>
+
+                        <div className="flex flex-wrap gap-2">
                             <Button type="submit">{editingPrecursorId ? '수정 저장' : '전구물질 저장'}</Button>
                         </div>
                     </form>

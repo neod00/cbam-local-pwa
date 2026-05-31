@@ -122,6 +122,7 @@ Completed:
 - Updated the free PWA terms draft to cover free-license registration data, update notices, and the rule that license/update checks do not collect CBAM calculation data or `.cbam` backups.
 - Documented `EmptyState` as a design-system pattern and added it to the design-system verification guard.
 - Added `FormSection` as a design-system pattern and used it to split the production-process form into basic information, product-line allocation, and emissions/production sections.
+- Split the purchased-precursor form into guided sections for basic information, data mode/verification, process links, default-value quantity inputs, and SEE evidence.
 
 Pending product decisions:
 
