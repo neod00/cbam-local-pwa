@@ -60,9 +60,14 @@ The app UI may localize these concepts into Korean, but any EU submission/export
 
 ## Calculation Principle
 
-Start from a transparent MVP:
+The initial MVP started from a transparent review formula:
 
 `Total SEE = Direct SEE + Indirect SEE + Precursor SEE`
+
+For 2026 definitive-period work, this must be split into at least two outputs:
+
+- `see_informational_total`: operational/review total SEE.
+- `see_cbam_basis`: CBAM certificate-basis SEE after Annex II direct-only treatment and eligible precursor contribution.
 
 Then extend toward EU template process attribution:
 
@@ -72,9 +77,12 @@ Then extend toward EU template process attribution:
 - Precursor emissions: consumed precursor quantity per output unit times precursor SEE.
 - Warnings: missing values, negative values, abnormal yield, precursor share anomalies, missing version metadata.
 
-Final-period extension:
+Definitive-period extension:
 
 - Product/CN rules determine whether indirect emissions are included.
+- Annex II means direct-only for the final good's certificate-basis treatment; it is not an out-of-scope flag.
+- The final good's own indirect emissions can be excluded from `see_cbam_basis` while still being kept as report/review data.
+- Precursor contribution must be classified per precursor; a final Annex II good does not automatically exclude every precursor indirect component.
 - Actual/semi-actual/default data modes affect both SEE and SEFA.
 - SEFA is not a display-only field; it changes certificate quantity and the user's reporting strategy.
 - Reference values must be imported from the user's current official workbooks rather than hard-coded into the app.
