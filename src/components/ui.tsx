@@ -212,15 +212,22 @@ export function FormSection({
     description,
     children,
     className,
+    badge,
 }: {
     title: string;
     description?: string;
     children: ReactNode;
     className?: string;
+    badge?: ReactNode;
 }) {
     return (
         <fieldset className={clsx('min-w-0 rounded-2xl border border-slate-200 bg-white p-4', className)}>
-            <legend className="px-1 text-sm font-semibold text-slate-950">{title}</legend>
+            <legend className="px-1">
+                <span className="inline-flex max-w-full flex-wrap items-center gap-2">
+                    <span className="break-words text-sm font-semibold text-slate-950">{title}</span>
+                    {badge}
+                </span>
+            </legend>
             {description && <p className="mt-1 break-words text-xs leading-5 text-slate-600">{description}</p>}
             <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 md:grid-cols-3">{children}</div>
         </fieldset>

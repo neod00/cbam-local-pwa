@@ -410,6 +410,7 @@ export default function SourceStreamsPage() {
                         <FormSection
                             title="1. 배출원 기본정보"
                             description="연료 또는 공정 원료 배출원을 만들고, 어떤 보고기간과 생산공정의 직접배출 근거인지 연결합니다."
+                            badge={<StatusBadge tone="warning">필수</StatusBadge>}
                         >
                         <div>
                             <label htmlFor="source-stream-name" className="text-sm font-semibold text-slate-700">배출원명</label>
@@ -453,6 +454,7 @@ export default function SourceStreamsPage() {
                         <FormSection
                             title="2. 활동자료와 배출계수"
                             description="활동자료 단위와 배출계수 단위가 같은 기준인지 확인하세요. 연료 배출원은 순발열량도 필요합니다."
+                            badge={<StatusBadge tone="warning">필수</StatusBadge>}
                         >
                         <div>
                             <label htmlFor="source-stream-activity" className="text-sm font-semibold text-slate-700">활동자료</label>
@@ -481,6 +483,7 @@ export default function SourceStreamsPage() {
                         <FormSection
                             title="3. 계수와 근거"
                             description="산화계수, 전환계수, 화석탄소/바이오매스 비율과 자료 출처를 남깁니다. 출처는 검증 대응의 핵심 증빙입니다."
+                            badge={<StatusBadge tone="pending">검토용</StatusBadge>}
                         >
                         <div>
                             <label htmlFor="source-stream-oxidation" className="text-sm font-semibold text-slate-700">산화계수</label>

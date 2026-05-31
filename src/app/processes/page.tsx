@@ -519,6 +519,7 @@ export default function ProcessesPage() {
                         <FormSection
                             title="1. 공정 기본정보"
                             description="어떤 제품을 어떤 공정에서 생산하는지 먼저 연결합니다. CN 코드가 있는 제품과 보고기간이 연결되어야 Export 검토가 쉬워집니다."
+                            badge={<StatusBadge tone="warning">필수</StatusBadge>}
                         >
                         <div>
                             <label htmlFor="process-name" className="text-sm font-semibold text-slate-700">공정명</label>
@@ -556,6 +557,7 @@ export default function ProcessesPage() {
                         <FormSection
                             title="2. 제품 생산라인 배분"
                             description="한 공정에서 여러 제품이 나오면 제품별 생산량과 배분 기준을 입력합니다. 라인 합계가 공정 총 생산량과 맞는지 확인하세요."
+                            badge={<StatusBadge tone="pending">검토용</StatusBadge>}
                         >
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-3">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -659,6 +661,7 @@ export default function ProcessesPage() {
                         <FormSection
                             title="3. 생산량과 배출량"
                             description="시장 출하량, 내부 소비량, 직접배출량, 전력 사용량을 입력합니다. 직접배출량은 가능하면 배출원 자료 합계와 대조하세요."
+                            badge={<StatusBadge tone="warning">필수</StatusBadge>}
                         >
                         <div>
                             <label className="text-sm font-semibold text-slate-700">시장 출하량(t)</label>
