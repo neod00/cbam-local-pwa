@@ -11,6 +11,7 @@ const releaseChecklist = readFileSync('docs/mvp-release-checklist.md', 'utf8');
 const rehearsalPlan = readFileSync('docs/mvp-rehearsal-plan.md', 'utf8');
 const rehearsalReport = readFileSync('docs/mvp-rehearsal-report.md', 'utf8');
 const fictionalDataset = readFileSync('docs/mvp-fictional-dataset.md', 'utf8');
+const excelReview = readFileSync('docs/excel-recalculation-review.md', 'utf8');
 const userNotices = readFileSync('docs/mvp-user-notices.md', 'utf8');
 const freeTermsDraft = readFileSync('docs/free-pwa-terms-draft.md', 'utf8');
 const deploymentGuide = readFileSync('docs/pwa-deployment-guide.md', 'utf8');
@@ -83,6 +84,7 @@ assert.ok(readme.includes('docs/mvp-release-checklist.md'), 'README should link 
 assert.ok(readme.includes('docs/mvp-rehearsal-plan.md'), 'README should link the MVP rehearsal plan');
 assert.ok(readme.includes('docs/mvp-fictional-dataset.md'), 'README should link the MVP fictional dataset');
 assert.ok(readme.includes('docs/mvp-rehearsal-report.md'), 'README should link the MVP rehearsal report');
+assert.ok(readme.includes('docs/excel-recalculation-review.md'), 'README should link the Excel recalculation review');
 assert.ok(readme.includes('docs/free-pwa-terms-draft.md'), 'README should link the free PWA terms draft');
 assert.ok(readme.includes('docs/pwa-deployment-guide.md'), 'README should link the PWA deployment guide');
 assert.ok(readme.includes('SECURITY.md'), 'README should link the security policy');
@@ -95,6 +97,7 @@ assert.ok(releaseChecklist.includes('docs/pwa-deployment-guide.md'), 'release ch
 assert.ok(releaseChecklist.includes('docs/mvp-rehearsal-plan.md'), 'release checklist should link the MVP rehearsal plan');
 assert.ok(releaseChecklist.includes('docs/mvp-fictional-dataset.md'), 'release checklist should link the MVP fictional dataset');
 assert.ok(releaseChecklist.includes('docs/mvp-rehearsal-report.md'), 'release checklist should link the MVP rehearsal report');
+assert.ok(releaseChecklist.includes('docs/excel-recalculation-review.md'), 'release checklist should link the Excel recalculation review');
 assert.ok(releaseChecklist.includes('Docker/on-premise'), 'release checklist should keep on-premise scope deferred');
 
 for (const required of [
@@ -114,6 +117,10 @@ assert.ok(
   rehearsalPlan.includes('docs/mvp-fictional-dataset.md'),
   'MVP rehearsal plan should link the fictional dataset'
 );
+assert.ok(
+  rehearsalPlan.includes('docs/excel-recalculation-review.md'),
+  'MVP rehearsal plan should link the Excel recalculation review'
+);
 
 for (const required of [
   'Main Factory A',
@@ -132,8 +139,21 @@ for (const required of [
   'Local Reference Workbook Check',
   'Manual follow-up',
   'Release Blockers',
+  'docs/excel-recalculation-review.md',
 ]) {
   assert.ok(rehearsalReport.includes(required), `MVP rehearsal report should include ${required}`);
+}
+
+for (const required of [
+  'Summary_Products',
+  'I10',
+  'J10',
+  'K10',
+  'Microsoft Excel',
+  'localSummaryProductReview',
+  '.cbam',
+]) {
+  assert.ok(excelReview.includes(required), `Excel recalculation review should include ${required}`);
 }
 
 assert.ok(userNotices.includes('법률 자문'), 'user notices should state that the app does not replace legal advice');

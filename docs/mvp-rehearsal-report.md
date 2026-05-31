@@ -41,6 +41,7 @@ Manual follow-up:
 - Open the generated workbook copy in Microsoft Excel.
 - Let Excel recalculate workbook formulas.
 - Compare recalculated `Summary_Products` SEE values with the app's local SEE review values before relying on the file.
+- Use `docs/excel-recalculation-review.md` to record the manual review result.
 
 ## Local Reference Workbook Check
 

@@ -139,6 +139,7 @@ Completed:
 - Added `npm run verify:deployment` to guard private-source deployment readiness, including forbidden tracked local files, package privacy, deployment docs, release checklist, and rehearsal report coverage.
 - Added a fictional MVP rehearsal dataset so browser walkthroughs can use repeatable non-company inputs for installation, period, products, allocation, source streams, precursors, scenarios, Export, Excel review, and `.cbam` backup.
 - Added `npm run verify:routes` so the full verification gate builds the app, starts a local production server, and checks the main PWA routes before release.
+- Added an Excel recalculation review checklist so generated EU workbook copies can be compared against app SEE review values before public MVP distribution.
 
 Pending product decisions:
 
@@ -147,7 +148,7 @@ Pending product decisions:
 Next:
 
 - Complete the remaining manual browser walkthrough in `docs/mvp-rehearsal-plan.md` using `docs/mvp-fictional-dataset.md`.
-- Open an exported workbook copy in Microsoft Excel and compare recalculated `Summary_Products` formula outputs with the app's local SEE review values.
+- Open an exported workbook copy in Microsoft Excel and compare recalculated `Summary_Products` formula outputs with the app's local SEE review values using `docs/excel-recalculation-review.md`.
 - Review and finalize `docs/free-pwa-terms-draft.md` with legal wording before public distribution.
 - Prepare the first private-source PWA deployment run using `docs/pwa-deployment-guide.md`.
 

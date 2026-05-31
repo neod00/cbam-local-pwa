@@ -110,6 +110,8 @@ MVP 배포 전 확인 항목은 [docs/mvp-release-checklist.md](docs/mvp-release
 
 현재 리허설 실행 결과는 [docs/mvp-rehearsal-report.md](docs/mvp-rehearsal-report.md)에 기록합니다.
 
+EU 제출용 Excel 복사본의 공식 수식 재계산 확인은 [docs/excel-recalculation-review.md](docs/excel-recalculation-review.md)를 기준으로 진행합니다.
+
 배포 채널과 설정 기준은 [docs/pwa-deployment-guide.md](docs/pwa-deployment-guide.md)에 정리합니다.
 
 ## 사용권

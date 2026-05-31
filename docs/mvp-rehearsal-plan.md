@@ -84,7 +84,7 @@ npm run verify:local-references -- "<path-to-CBAMBenchmarks.xlsx>" "<path-to-DVs
 
 12. 제출용 복사본 생성
     - 복사본 파일이 다운로드되는지 확인한다.
-    - Microsoft Excel에서 복사본을 열어 공식 수식 재계산 결과를 확인한다.
+    - [docs/excel-recalculation-review.md](excel-recalculation-review.md)에 따라 Microsoft Excel에서 복사본을 열어 공식 수식 재계산 결과를 확인한다.
     - 앱의 SEE 검토값과 Excel 재계산 결과를 비교한다.
 
 13. `.cbam` 백업

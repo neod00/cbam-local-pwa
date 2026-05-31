@@ -142,7 +142,7 @@ Before a company uses an exported workbook for official communication, the user 
 
 1. Upload the latest official EU installation communication template from the EU source, not a workbook bundled inside the app.
 2. Generate the Export copy from the app only after the Export readiness gate has no blocking errors.
-3. Open the generated copy in Microsoft Excel and allow workbook formulas to recalculate.
+3. Open the generated copy in Microsoft Excel and allow workbook formulas to recalculate. Use [docs/excel-recalculation-review.md](../excel-recalculation-review.md) as the manual review checklist.
 4. Confirm that official sheet names, English labels, styles, and formula cells are still intact.
 5. Compare `Summary_Products` formula outputs in `I:K` with the app's local SEE review values shown on the Export page.
 6. Review warnings about source-stream evidence, precursor evidence, default-value justification, and product-line allocation before submission.
