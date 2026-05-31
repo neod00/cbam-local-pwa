@@ -206,7 +206,7 @@ function readFormula(sheetXml, cell) {
     return '';
   }
 
-  const formulaMatch = match[1].match(/<f>([\s\S]*?)<\/f>/);
+  const formulaMatch = match[1].match(/<f\b[^>]*>([\s\S]*?)<\/f>/);
   return formulaMatch ? unescapeXml(formulaMatch[1]) : '';
 }
 

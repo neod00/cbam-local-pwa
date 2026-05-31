@@ -98,6 +98,7 @@ Completed:
 - Restored Korean-first copy on the Results page, including allocation labels, SEE table headers, loading/empty states, and warning actions.
 - Added synthetic EU Export verification that `Summary_Products` direct, indirect, and total SEE formula cells remain intact while the app writes only product-identification inputs.
 - Extended local official-template verification to report and assert the presence of `Summary_Products` SEE formulas after Export copy generation.
+- Verified the local official EU installation communication template dated 2024-12-13: 19 sheets, 569 CN rows, 42 planned/written/checked cells, and preserved `Summary_Products` I/J/K formulas.
 
 Pending product decisions:
 
