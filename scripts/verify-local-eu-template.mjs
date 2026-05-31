@@ -304,6 +304,7 @@ function makeSampleData() {
     process_id: process.id,
     product_id: product.id,
     name: 'Purchased hot rolled coil',
+    supplier_country: 'South Korea',
     aggregated_goods_category: 'Iron or steel products',
     production_route: 'External precursor',
     purchased_mass_t: 1100,
@@ -372,12 +373,17 @@ const checkedCells = {
   'A_InstData!E83': readExportedCell('A_InstData', 'E83'),
   'A_InstData!F83': readExportedCell('A_InstData', 'F83'),
   'A_InstData!L83': readExportedCell('A_InstData', 'L83'),
+  'A_InstData!E102': readExportedCell('A_InstData', 'E102'),
+  'A_InstData!F102': readExportedCell('A_InstData', 'F102'),
+  'A_InstData!L102': readExportedCell('A_InstData', 'L102'),
   'B_EmInst!D17': readExportedCell('B_EmInst', 'D17'),
   'B_EmInst!E17': readExportedCell('B_EmInst', 'E17'),
   'D_Processes!L16': readExportedCell('D_Processes', 'L16'),
   'D_Processes!L54': readExportedCell('D_Processes', 'L54'),
   'E_PurchPrec!L17': readExportedCell('E_PurchPrec', 'L17'),
   'E_PurchPrec!L49': readExportedCell('E_PurchPrec', 'L49'),
+  'E_PurchPrec!L50': readExportedCell('E_PurchPrec', 'L50'),
+  'E_PurchPrec!L51': readExportedCell('E_PurchPrec', 'L51'),
   'Summary_Products!D10': readExportedCell('Summary_Products', 'D10'),
   'Summary_Products!F10': readExportedCell('Summary_Products', 'F10'),
   'Summary_Products!H10': readExportedCell('Summary_Products', 'H10'),
@@ -432,12 +438,17 @@ assert.equal(checkedCells['A_InstData!I62'], 'Flat steel processing');
 assert.equal(checkedCells['A_InstData!E83'], 'Iron or steel products');
 assert.equal(checkedCells['A_InstData!F83'], 'Only direct production');
 assert.equal(checkedCells['A_InstData!L83'], 'Rolling and finishing');
+assert.equal(checkedCells['A_InstData!E102'], 'Iron or steel products');
+assert.equal(checkedCells['A_InstData!F102'], 'South Korea');
+assert.equal(checkedCells['A_InstData!L102'], 'Purchased hot rolled coil');
 assert.equal(checkedCells['B_EmInst!D17'], 'Combustion');
 assert.equal(checkedCells['B_EmInst!E17'], 'Natural gas combustion');
 assert.equal(checkedCells['D_Processes!L16'], '1000');
 assert.equal(checkedCells['D_Processes!L54'], '120');
 assert.equal(checkedCells['E_PurchPrec!L17'], '1100');
 assert.equal(checkedCells['E_PurchPrec!L49'], '1.2');
+assert.equal(checkedCells['E_PurchPrec!L50'], '1');
+assert.equal(checkedCells['E_PurchPrec!L51'], '0.25');
 assert.equal(checkedCells['Summary_Products!D10'], 'Rolling and finishing');
 assert.equal(checkedCells['Summary_Products!F10'], '72083900');
 assert.equal(checkedCells['Summary_Products!H10'], 'Hot Rolled Coil');
@@ -453,6 +464,8 @@ assert.equal(localSummaryProductReview.appCbamBasisSee, 1.57);
 assert.equal(localSummaryProductReview.appInformationalTotalSee, 1.805);
 
 await mkdir('artifacts', { recursive: true });
+const exportedWorkbookPath = join('artifacts', 'local-eu-template-verification.xlsx');
+writeFileSync(exportedWorkbookPath, Buffer.from(await exportResult.blob.arrayBuffer()));
 const report = {
   template: templatePath,
   sheetCount: validation.sheetNames.length,
@@ -463,6 +476,7 @@ const report = {
   warningCount: readiness.warningCount,
   checkedCells,
   checkedFormulas,
+  exportedWorkbookPath,
   localSummaryProductReview,
   manualExcelReviewRequired:
     'Open the exported workbook in Excel and compare recalculated Summary_Products I/J/K values against localSummaryProductReview. Treat appCbamBasisSee and appInformationalTotalSee as separate review values before real submission.',

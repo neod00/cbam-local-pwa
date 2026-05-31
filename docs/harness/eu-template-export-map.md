@@ -46,6 +46,10 @@ The app also declares aggregated goods and production process boundaries in the 
 | process mapped EU goods category | `E83:E92` | Up to 10 local production processes. |
 | process included goods/boundary | `F83:K92` | Uses `Only direct production` unless product output lines indicate multiple included categories. |
 | `ProductionProcess.name` | `L83:L92` | Production process display name. |
+| purchased precursor EU goods category | `E102:E121` | Registers purchased precursors so `E_PurchPrec` rows are linked into the official formula chain. |
+| `PurchasedPrecursor.supplier_country` | `F102:F121` | Supplier country value used by the purchased-precursor declaration table. |
+| purchased precursor production route | `G102:K121` | Written only when the local precursor has a non-external production route. |
+| `PurchasedPrecursor.name` | `L102:L121` | Purchased precursor name referenced by `E_PurchPrec` formula-driven labels and matrices. |
 
 ### `D_Processes`
 
@@ -110,9 +114,10 @@ Each purchased precursor block starts at row `14 + index * 44`.
 | `consumed_for_non_cbam_mass_t` | `L{start + 24}` | Consumed for other purposes. |
 | `direct_see_tco2e_per_t` | `L{start + 35}` | Specific embedded direct emissions. |
 | `source` | `M{start + 35}` | Source for direct SEE. |
+| derived indirect SEE bridge | `L{start + 36}` / `L{start + 37}` | Interim decomposition of stored `indirect_see_tco2e_per_t` as `1 * indirect SEE`, because the official workbook calculates precursor indirect SEE from specific electricity consumption and an electricity emission factor. |
 | `default_value_justification` | `L{start + 40}` | Justification for use of default values, if relevant. |
 
-The app does not currently write `indirect_see_tco2e_per_t` directly into `E_PurchPrec`, because the official indirect SEE row is formula-driven. A later model should capture specific electricity consumption and electricity emission factor separately before writing those unlocked inputs.
+The current app model stores precursor indirect SEE as one value. Export therefore uses a temporary bridge: electricity consumption `1` and electricity emission factor equal to `indirect_see_tco2e_per_t`. A later model should capture those two source inputs separately and write the real values without changing the official formula cells.
 
 ### `Summary_Products`
 
@@ -133,12 +138,14 @@ For 2026 definitive-period review, the app separates these local values:
 | App review value | Meaning | Export treatment |
 | --- | --- | --- |
 | `appCbamBasisSee` / `see_cbam_basis` | SEE basis used by the app's CBAM certificate scenario indicators. | Not written into `Summary_Products!I:K`; shown on the Export page and verification report for comparison. |
-| `appInformationalTotalSee` / `see_informational_total` | Operational review total including final-good own indirect emissions where available. | Not written into `Summary_Products!I:K`; shown separately so users do not confuse it with certificate-basis SEE. |
-| `Summary_Products!I:J:K` | Official workbook formulas for direct, indirect, and total SEE. | Preserved and recalculated in Microsoft Excel after download. |
+| `appInformationalTotalSee` / `see_informational_total` | Operational review total including final-good own indirect emissions where available. | Not written into `Summary_Products!I:K`; shown separately so users do not confuse it with certificate-basis SEE. This is the closest local review value to the official workbook `K` total when all precursor inputs are mapped. |
+| `Summary_Products!I:J:K` | Official workbook formulas for direct, indirect, and total SEE. | Preserved and recalculated in Microsoft Excel after download. `K` should be compared with the app's informational total, while `CBAM 기준 SEE` remains the certificate-scenario basis. |
 
 `npm run verify:local-eu-template -- "<path-to-official-template.xlsx>"` writes `artifacts/local-eu-template-verification.json`. That report now includes:
 
 - the product-identification cells written to `Summary_Products`;
+- the purchased precursor registration cells in `A_InstData!E102:F102:L102`;
+- the precursor direct and indirect bridge cells in `E_PurchPrec!L49:L51`;
 - the preserved official formulas in `Summary_Products!I10:J10:K10`;
 - the app-calculated local SEE review values for the sample product row, split into `appCbamBasisSee` and `appInformationalTotalSee`.
 

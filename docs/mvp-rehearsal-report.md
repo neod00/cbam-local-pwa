@@ -27,14 +27,20 @@ Result:
 - Status: passed
 - Sheet count: 19
 - CN code count: 569
-- Planned cell writes: 42
-- Written cell count: 42
-- Checked cell count: 42
+- Planned cell writes: 47
+- Written cell count: 47
+- Checked cell count: 47
 - Warning count: 1
 - `Summary_Products` formula cells preserved:
   - `I10`
   - `J10`
   - `K10`
+- Generated workbook artifact: `artifacts/local-eu-template-verification.xlsx`
+- Microsoft Excel recalculation check:
+  - `Summary_Products!I10`: 1.32
+  - `Summary_Products!J10`: 0.485
+  - `Summary_Products!K10`: 1.805
+  - Result: `K10` matches the app's informational total SEE for the sample product after purchased precursor mapping.
 
 Manual follow-up:
 

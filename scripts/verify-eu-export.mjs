@@ -407,6 +407,7 @@ const precursor = {
   process_id: process.id,
   product_id: product.id,
   name: 'Purchased hot rolled coil',
+  supplier_country: 'South Korea',
   aggregated_goods_category: 'Iron or steel products',
   production_route: 'External precursor',
   purchased_mass_t: 1100,
@@ -495,15 +496,15 @@ assertEqual(
   'true',
   'mixed allocation basis warning'
 );
-assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '42', 'planned cell writes');
+assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '47', 'planned cell writes');
 const checklist = euExport.createExportChecklist({
   backupStatus: {
     helper: '최근 백업 기록이 있습니다.',
     label: '백업 완료',
     tone: 'success',
   },
-  lastExportResult: { checkedCellCount: 42 },
-  plannedCellWriteCount: 42,
+  lastExportResult: { checkedCellCount: 47 },
+  plannedCellWriteCount: 47,
   readiness: {
     ...readiness,
     warningCount: 0,
@@ -539,8 +540,8 @@ const scenarioChecklist = euExport.createExportChecklist({
     label: '백업 완료',
     tone: 'success',
   },
-  lastExportResult: { checkedCellCount: 42 },
-  plannedCellWriteCount: 42,
+  lastExportResult: { checkedCellCount: 47 },
+  plannedCellWriteCount: 47,
   readiness: {
     ...readiness,
     warningCount: 0,
@@ -579,7 +580,7 @@ const incompleteChecklist = euExport.createExportChecklist({
     label: '백업 필요',
     tone: 'warning',
   },
-  plannedCellWriteCount: 42,
+  plannedCellWriteCount: 47,
   readiness,
   resultCount: 0,
   scenarioAction: { href: '/upload', label: '기준자료 가져오기' },
@@ -693,6 +694,9 @@ assertEqual(readCell(installationSheet, 'I62'), 'Flat steel processing', 'A_Inst
 assertEqual(readCell(installationSheet, 'E83'), 'Iron or steel products', 'A_InstData E83');
 assertEqual(readCell(installationSheet, 'F83'), 'Only direct production', 'A_InstData F83');
 assertEqual(readCell(installationSheet, 'L83'), 'Rolling and finishing', 'A_InstData L83');
+assertEqual(readCell(installationSheet, 'E102'), 'Iron or steel products', 'A_InstData E102');
+assertEqual(readCell(installationSheet, 'F102'), 'South Korea', 'A_InstData F102');
+assertEqual(readCell(installationSheet, 'L102'), 'Purchased hot rolled coil', 'A_InstData L102');
 assertEqual(readCell(sourceStreamSheet, 'D17'), 'Combustion', 'B_EmInst D17');
 assertEqual(readCell(sourceStreamSheet, 'E17'), 'Natural gas combustion', 'B_EmInst E17');
 assertEqual(readCell(sourceStreamSheet, 'F17'), '250', 'B_EmInst F17');
@@ -715,6 +719,8 @@ assertEqual(readCell(precursorSheet, 'L28'), '1000', 'E_PurchPrec L28');
 assertEqual(readCell(precursorSheet, 'L38'), '0', 'E_PurchPrec L38');
 assertEqual(readCell(precursorSheet, 'L49'), '1.2', 'E_PurchPrec L49');
 assertEqual(readCell(precursorSheet, 'M49'), 'Supplier communication template', 'E_PurchPrec M49');
+assertEqual(readCell(precursorSheet, 'L50'), '1', 'E_PurchPrec L50');
+assertEqual(readCell(precursorSheet, 'L51'), '0.25', 'E_PurchPrec L51');
 assertEqual(readCell(precursorSheet, 'L54'), '', 'E_PurchPrec L54');
 assertEqual(readCell(summaryProductsSheet, 'D10'), 'Rolling and finishing', 'Summary_Products D10');
 assertEqual(readCell(summaryProductsSheet, 'F10'), '72083900', 'Summary_Products F10');

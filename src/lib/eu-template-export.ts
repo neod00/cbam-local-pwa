@@ -1219,6 +1219,16 @@ interface EuSummaryProductExportRow {
     sourceId: string;
 }
 
+function getPrecursorRoutesForEuExport(precursor: PurchasedPrecursor): string[] {
+    const route = precursor.production_route.trim();
+
+    if (!route || route.toLowerCase() === 'external precursor') {
+        return [];
+    }
+
+    return [route];
+}
+
 function uniqueNonEmpty(values: Array<string | undefined>): string[] {
     return Array.from(new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value))));
 }
@@ -1365,6 +1375,51 @@ function createAggregatedGoodsAndBoundaryCellWrites(
         });
     });
 
+    data.precursors.slice(0, 20).forEach((precursor, index) => {
+        const product = precursor.product_id ? productById.get(precursor.product_id) : undefined;
+        const euGood = mapPrecursorToEuGood(precursor, product, cnCodeMap);
+
+        if (!euGood) {
+            return;
+        }
+
+        const sheetRow = 102 + index;
+
+        writes.push(
+            {
+                sheetName: 'A_InstData',
+                cell: `E${sheetRow}`,
+                label: 'Purchased precursor goods category',
+                value: euGood,
+                sourceId: precursor.id,
+            },
+            {
+                sheetName: 'A_InstData',
+                cell: `F${sheetRow}`,
+                label: 'Purchased precursor country code',
+                value: precursor.supplier_country,
+                sourceId: precursor.id,
+            },
+            {
+                sheetName: 'A_InstData',
+                cell: `L${sheetRow}`,
+                label: 'Purchased precursor name',
+                value: precursor.name,
+                sourceId: precursor.id,
+            }
+        );
+
+        getPrecursorRoutesForEuExport(precursor).slice(0, 5).forEach((route, routeIndex) => {
+            writes.push({
+                sheetName: 'A_InstData',
+                cell: `${String.fromCharCode('G'.charCodeAt(0) + routeIndex)}${sheetRow}`,
+                label: 'Purchased precursor production route',
+                value: route,
+                sourceId: precursor.id,
+            });
+        });
+    });
+
     return writes;
 }
 
@@ -1422,6 +1477,20 @@ function createPrecursorCellWrites(precursors: PurchasedPrecursor[]): EuTemplate
             },
             { sheetName: 'E_PurchPrec', cell: `L${startRow + 35}`, label: '직접 SEE', value: precursor.direct_see_tco2e_per_t, sourceId: precursor.id },
             { sheetName: 'E_PurchPrec', cell: `M${startRow + 35}`, label: '직접 SEE 출처', value: precursor.source, sourceId: precursor.id },
+            {
+                sheetName: 'E_PurchPrec',
+                cell: `L${startRow + 36}`,
+                label: '전구물질 간접 SEE 환산 전력사용량',
+                value: precursor.indirect_see_tco2e_per_t > 0 ? 1 : 0,
+                sourceId: precursor.id,
+            },
+            {
+                sheetName: 'E_PurchPrec',
+                cell: `L${startRow + 37}`,
+                label: '전구물질 간접 SEE 환산 전력계수',
+                value: precursor.indirect_see_tco2e_per_t,
+                sourceId: precursor.id,
+            },
             {
                 sheetName: 'E_PurchPrec',
                 cell: `L${startRow + 40}`,
