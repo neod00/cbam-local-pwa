@@ -285,7 +285,7 @@ export default function ExportPage() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard label="제품 수" value={summary.productCount} helper="Export 대상" icon={PackageCheck} tone="pending" />
-                <StatCard label="공정 수" value={summary.processCount} helper="D_Processes 반영" icon={Workflow} tone="info" />
+                <StatCard label="공정 수" value={summary.processCount} helper="A/D/Summary 반영" icon={Workflow} tone="info" />
                 <StatCard label="총 생산량" value={formatNumber(summary.totalOutput)} helper="tonne" icon={FileSpreadsheet} tone="success" />
                 <StatCard label="검토 경고" value={summary.warningCount + readiness.warningCount} helper="산정 + Export" icon={AlertTriangle} tone="warning" />
             </div>
@@ -485,8 +485,8 @@ export default function ExportPage() {
                                     <li>원본 EU 템플릿 파일은 앱에 내장하지 않습니다.</li>
                                     <li>업로드된 파일은 브라우저 메모리에서만 처리합니다.</li>
                                     <li>공식 시트명, 수식, 영문 라벨은 유지합니다.</li>
-                                    <li>A_InstData, B_EmInst, C_Emissions&Energy, D_Processes, E_PurchPrec의 확인된 입력 셀에 현재 로컬 데이터를 반영합니다.</li>
-                                    <li>품목군과 생산공정 경계는 A_InstData에 선언하고, 제품 생산라인별 SEE 배분 숫자는 공식 셀 확인 전에는 별도 제품라인 표로 직접 기입하지 않습니다.</li>
+                                    <li>A_InstData, B_EmInst, C_Emissions&Energy, D_Processes, E_PurchPrec, Summary_Products의 확인된 입력 셀에 현재 로컬 데이터를 반영합니다.</li>
+                                    <li>품목군과 생산공정 경계는 A_InstData에 선언하고, 제품 생산라인은 Summary_Products의 생산공정·CN 코드·제품명 입력 셀에 반영합니다. SEE 값은 공식 수식 셀이 계산하도록 직접 덮어쓰지 않습니다.</li>
                                 </ul>
                             </div>
                         </div>

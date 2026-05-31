@@ -92,6 +92,7 @@ Completed:
 - Ran local Chrome-based route and screenshot checks for dashboard, Export, settings, and mobile dashboard; fixed stale dashboard copy that described Export as `D_Processes`/`E_PurchPrec` only.
 - Added a reusable local official-template verification script and fixed EU Export cell replacement for self-closing official workbook cells while preserving cell style IDs.
 - Extended EU Export writes into `A_InstData` aggregated-goods and production-process boundary tables so the official workbook receives product category, route, process boundary, and process name declarations before process-level totals.
+- Added first-pass `Summary_Products` export writes for production process, CN code, and product name while preserving official direct/indirect/total SEE formula cells.
 
 Pending product decisions:
 
@@ -100,7 +101,7 @@ Pending product decisions:
 
 Next:
 
-- Confirm official product-level SEE summary cells before writing product-line allocation result values into the EU template copy.
+- Review generated workbook formula outputs in `Summary_Products` against local product-line SEE results before deciding whether any direct SEE-value writes are appropriate.
 - Refine certificate calculations after confirming the paid-carbon-price formula and current official factors.
 
 ## Decision Log

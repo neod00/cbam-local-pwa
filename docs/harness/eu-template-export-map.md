@@ -114,7 +114,21 @@ Each purchased precursor block starts at row `14 + index * 44`.
 
 The app does not currently write `indirect_see_tco2e_per_t` directly into `E_PurchPrec`, because the official indirect SEE row is formula-driven. A later model should capture specific electricity consumption and electricity emission factor separately before writing those unlocked inputs.
 
+### `Summary_Products`
+
+The app writes the minimum product-line inputs needed for the official workbook to identify products and calculate the formula-driven SEE columns.
+
+Rows start at row `10` and currently support up to 100 local product summary rows.
+
+| App field | Official cell | Notes |
+| --- | --- | --- |
+| `ProductionProcess.name` | `D{row}` | Must match the process name declared in `A_InstData!L83:L92`. |
+| `Product.cn_code` or `Product.hs_code` | `F{row}` | CN code used by the official workbook product row. |
+| `Product.name` | `H{row}` | Product name for communication with the reporting declarant. |
+
+The app does not overwrite `I:K` SEE cells in `Summary_Products`; those are official formula cells for direct, indirect, and total SEE. Local product-line SEE is used for app review and scenario analysis, while the workbook formula output should be reviewed after opening the generated copy in Excel.
+
 ## Known Gaps
 
-- Product-level output and allocation result mapping still needs official-cell confirmation before the app writes SEE summaries into the template.
+- Product-level allocation result values are still not written directly into official SEE cells; the app now writes the official product identification inputs and leaves formula SEE cells intact.
 - Source-stream validation is still intentionally conservative. Additional official unit/dropdown values should be added only after confirming the corresponding workbook formulas and validation lists.

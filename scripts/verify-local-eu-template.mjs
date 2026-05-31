@@ -355,6 +355,9 @@ const checkedCells = {
   'D_Processes!L54': readExportedCell('D_Processes', 'L54'),
   'E_PurchPrec!L17': readExportedCell('E_PurchPrec', 'L17'),
   'E_PurchPrec!L49': readExportedCell('E_PurchPrec', 'L49'),
+  'Summary_Products!D10': readExportedCell('Summary_Products', 'D10'),
+  'Summary_Products!F10': readExportedCell('Summary_Products', 'F10'),
+  'Summary_Products!H10': readExportedCell('Summary_Products', 'H10'),
 };
 
 assert.equal(checkedCells['A_InstData!I9'], '45292');
@@ -371,6 +374,9 @@ assert.equal(checkedCells['D_Processes!L16'], '1000');
 assert.equal(checkedCells['D_Processes!L54'], '120');
 assert.equal(checkedCells['E_PurchPrec!L17'], '1100');
 assert.equal(checkedCells['E_PurchPrec!L49'], '1.2');
+assert.equal(checkedCells['Summary_Products!D10'], 'Rolling and finishing');
+assert.equal(checkedCells['Summary_Products!F10'], '72083900');
+assert.equal(checkedCells['Summary_Products!H10'], 'Hot Rolled Coil');
 
 await mkdir('artifacts', { recursive: true });
 const report = {

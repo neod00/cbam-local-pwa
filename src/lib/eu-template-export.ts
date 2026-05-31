@@ -47,7 +47,13 @@ export interface EuTemplateExportData {
 }
 
 type EuCnCodeMap = Map<string, string>;
-type EuExportSheetName = 'A_InstData' | 'B_EmInst' | 'C_Emissions&Energy' | 'D_Processes' | 'E_PurchPrec';
+type EuExportSheetName =
+    | 'A_InstData'
+    | 'B_EmInst'
+    | 'C_Emissions&Energy'
+    | 'D_Processes'
+    | 'E_PurchPrec'
+    | 'Summary_Products';
 
 export interface EuTemplateExportCellWrite {
     sheetName: EuExportSheetName;
@@ -378,6 +384,16 @@ export function evaluateEuExportReadiness(
         });
     }
 
+    const summaryProductLineCount = createSummaryProductRows(data).length;
+
+    if (summaryProductLineCount > 100) {
+        issues.push({
+            severity: 'error',
+            area: '템플릿 한계',
+            message: `현재 Export MVP는 Summary_Products 제품 행을 100개까지 지원합니다. 현재 ${summaryProductLineCount}개입니다.`,
+        });
+    }
+
     for (const product of data.products) {
         const hsCode = getProductCnOrHsCode(product);
 
@@ -657,7 +673,7 @@ export function createExportChecklist(input: ExportChecklistInput): ExportCheckl
             description: lastExportResult
                 ? `복사본 생성 중 ${lastExportResult.checkedCellCount}개 셀을 검증했습니다.`
                 : plannedCellWriteCount > 0
-                    ? `A_InstData, B_EmInst, C_Emissions&Energy, D_Processes, E_PurchPrec에 반영할 셀 ${plannedCellWriteCount}개를 생성 후 검증합니다.`
+                    ? `A_InstData, B_EmInst, C_Emissions&Energy, D_Processes, E_PurchPrec, Summary_Products에 반영할 셀 ${plannedCellWriteCount}개를 생성 후 검증합니다.`
                     : '반영할 공정 또는 전구물질 데이터가 없습니다.',
             status: lastExportResult ? '완료' : plannedCellWriteCount > 0 ? '대기' : '확인 필요',
             tone: lastExportResult ? 'success' : plannedCellWriteCount > 0 ? 'pending' : 'warning',
@@ -1197,8 +1213,47 @@ interface EuAggregatedGoodExportRow {
     routes: string[];
 }
 
+interface EuSummaryProductExportRow {
+    process: ProductionProcess;
+    product: Product;
+    sourceId: string;
+}
+
 function uniqueNonEmpty(values: Array<string | undefined>): string[] {
     return Array.from(new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value))));
+}
+
+function createSummaryProductRows(data: EuTemplateExportData): EuSummaryProductExportRow[] {
+    const productById = new Map(data.products.map((product) => [product.id, product]));
+    const processById = new Map(data.processes.map((process) => [process.id, process]));
+    const rows: EuSummaryProductExportRow[] = [];
+
+    for (const outputLine of data.productOutputLines ?? []) {
+        const process = processById.get(outputLine.process_id);
+        const product = outputLine.product_id ? productById.get(outputLine.product_id) : undefined;
+
+        if (!process || !product) {
+            continue;
+        }
+
+        rows.push({ process, product, sourceId: outputLine.id });
+    }
+
+    if (rows.length > 0) {
+        return rows;
+    }
+
+    for (const process of data.processes) {
+        const product = process.product_id ? productById.get(process.product_id) : undefined;
+
+        if (!product) {
+            continue;
+        }
+
+        rows.push({ process, product, sourceId: process.id });
+    }
+
+    return rows;
 }
 
 function createAggregatedGoodsAndBoundaryCellWrites(
@@ -1380,6 +1435,42 @@ function createPrecursorCellWrites(precursors: PurchasedPrecursor[]): EuTemplate
     return writes;
 }
 
+function createSummaryProductCellWrites(data: EuTemplateExportData): EuTemplateExportCellWrite[] {
+    const writes: EuTemplateExportCellWrite[] = [];
+    const rows = createSummaryProductRows(data).slice(0, 100);
+
+    rows.forEach((row, index) => {
+        const sheetRow = 10 + index;
+        const productCode = getProductCnOrHsCode(row.product);
+
+        writes.push(
+            {
+                sheetName: 'Summary_Products',
+                cell: `D${sheetRow}`,
+                label: 'Summary product production process',
+                value: row.process.name,
+                sourceId: row.sourceId,
+            },
+            {
+                sheetName: 'Summary_Products',
+                cell: `F${sheetRow}`,
+                label: 'Summary product CN code',
+                value: productCode,
+                sourceId: row.sourceId,
+            },
+            {
+                sheetName: 'Summary_Products',
+                cell: `H${sheetRow}`,
+                label: 'Summary product name',
+                value: row.product.name,
+                sourceId: row.sourceId,
+            }
+        );
+    });
+
+    return writes;
+}
+
 export function createEuTemplateExportCellWrites(
     data: EuTemplateExportData,
     cnCodeMap?: EuCnCodeMap
@@ -1391,6 +1482,7 @@ export function createEuTemplateExportCellWrites(
         ...createEmissionsEnergyCellWrites(data.processes, data.products),
         ...createProcessCellWrites(data.processes),
         ...createPrecursorCellWrites(data.precursors),
+        ...createSummaryProductCellWrites(data),
     ];
 }
 
@@ -1442,6 +1534,7 @@ export async function createEuTemplateExportCopyResult(file: File, data: EuTempl
     const emissionsEnergySheetPath = sheetTargetByName.get('C_Emissions&Energy');
     const processSheetPath = sheetTargetByName.get('D_Processes');
     const precursorSheetPath = sheetTargetByName.get('E_PurchPrec');
+    const summaryProductsSheetPath = sheetTargetByName.get('Summary_Products');
 
     if (
         !installationSheetPath ||
@@ -1449,11 +1542,13 @@ export async function createEuTemplateExportCopyResult(file: File, data: EuTempl
         !emissionsEnergySheetPath ||
         !processSheetPath ||
         !precursorSheetPath ||
+        !summaryProductsSheetPath ||
         !zip[installationSheetPath] ||
         !zip[sourceStreamSheetPath] ||
         !zip[emissionsEnergySheetPath] ||
         !zip[processSheetPath] ||
-        !zip[precursorSheetPath]
+        !zip[precursorSheetPath] ||
+        !zip[summaryProductsSheetPath]
     ) {
         throw new Error('EU 템플릿에서 A_InstData, D_Processes 또는 E_PurchPrec 시트를 찾을 수 없습니다.');
     }
@@ -1464,12 +1559,14 @@ export async function createEuTemplateExportCopyResult(file: File, data: EuTempl
     const emissionsEnergyCellWrites = cellWrites.filter((write) => write.sheetName === 'C_Emissions&Energy');
     const processCellWrites = cellWrites.filter((write) => write.sheetName === 'D_Processes');
     const precursorCellWrites = cellWrites.filter((write) => write.sheetName === 'E_PurchPrec');
+    const summaryProductCellWrites = cellWrites.filter((write) => write.sheetName === 'Summary_Products');
 
     zip[installationSheetPath] = strToU8(applyCellWrites(strFromU8(zip[installationSheetPath]), installationCellWrites));
     zip[sourceStreamSheetPath] = strToU8(applyCellWrites(strFromU8(zip[sourceStreamSheetPath]), sourceStreamCellWrites));
     zip[emissionsEnergySheetPath] = strToU8(applyCellWrites(strFromU8(zip[emissionsEnergySheetPath]), emissionsEnergyCellWrites));
     zip[processSheetPath] = strToU8(applyCellWrites(strFromU8(zip[processSheetPath]), processCellWrites));
     zip[precursorSheetPath] = strToU8(applyCellWrites(strFromU8(zip[precursorSheetPath]), precursorCellWrites));
+    zip[summaryProductsSheetPath] = strToU8(applyCellWrites(strFromU8(zip[summaryProductsSheetPath]), summaryProductCellWrites));
 
     const verification = verifyExportCellWrites(zip, sheetTargetByName, cellWrites);
 

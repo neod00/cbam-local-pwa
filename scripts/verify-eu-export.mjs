@@ -462,15 +462,15 @@ assertEqual(
   'true',
   'mixed allocation basis warning'
 );
-assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '39', 'planned cell writes');
+assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '42', 'planned cell writes');
 const checklist = euExport.createExportChecklist({
   backupStatus: {
     helper: '최근 백업 기록이 있습니다.',
     label: '백업 완료',
     tone: 'success',
   },
-  lastExportResult: { checkedCellCount: 39 },
-  plannedCellWriteCount: 39,
+  lastExportResult: { checkedCellCount: 42 },
+  plannedCellWriteCount: 42,
   readiness: {
     ...readiness,
     warningCount: 0,
@@ -506,8 +506,8 @@ const scenarioChecklist = euExport.createExportChecklist({
     label: '백업 완료',
     tone: 'success',
   },
-  lastExportResult: { checkedCellCount: 39 },
-  plannedCellWriteCount: 39,
+  lastExportResult: { checkedCellCount: 42 },
+  plannedCellWriteCount: 42,
   readiness: {
     ...readiness,
     warningCount: 0,
@@ -546,7 +546,7 @@ const incompleteChecklist = euExport.createExportChecklist({
     label: '백업 필요',
     tone: 'warning',
   },
-  plannedCellWriteCount: 39,
+  plannedCellWriteCount: 42,
   readiness,
   resultCount: 0,
   scenarioAction: { href: '/upload', label: '기준자료 가져오기' },
@@ -641,6 +641,7 @@ const sourceStreamSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet6.xml
 const emissionsEnergySheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet7.xml']);
 const processSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet8.xml']);
 const precursorSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet9.xml']);
+const summaryProductsSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet13.xml']);
 
 assertEqual(readCell(installationSheet, 'I9'), '45292', 'A_InstData I9');
 assertEqual(readCell(installationSheet, 'L9'), '45657', 'A_InstData L9');
@@ -682,5 +683,8 @@ assertEqual(readCell(precursorSheet, 'L38'), '0', 'E_PurchPrec L38');
 assertEqual(readCell(precursorSheet, 'L49'), '1.2', 'E_PurchPrec L49');
 assertEqual(readCell(precursorSheet, 'M49'), 'Supplier communication template', 'E_PurchPrec M49');
 assertEqual(readCell(precursorSheet, 'L54'), '', 'E_PurchPrec L54');
+assertEqual(readCell(summaryProductsSheet, 'D10'), 'Rolling and finishing', 'Summary_Products D10');
+assertEqual(readCell(summaryProductsSheet, 'F10'), '72083900', 'Summary_Products F10');
+assertEqual(readCell(summaryProductsSheet, 'H10'), 'Hot Rolled Coil', 'Summary_Products H10');
 
 console.log('EU export synthetic workbook verification passed.');
