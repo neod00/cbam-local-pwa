@@ -79,8 +79,10 @@ const baseRiskSummary = {
 const result = {
   id: 'result-1',
   process_name: 'Rolling',
+  process_id: 'process-1',
   product_name: 'Hot Rolled Coil',
   output_mass_t: 100,
+  direct_emissions_tco2e: 120,
   source_stream_count: 1,
   source_stream_delta_tco2e: 0,
   indirect_emissions_applicable: false,
@@ -137,7 +139,7 @@ const riskDashboard = createDashboardSummary({
 
 assert.equal(riskDashboard.warningCount, 6);
 assert.ok(riskDashboard.readinessRate < 100);
-assert.equal(riskDashboard.steps.find((step) => step.name === '공식 기준자료 연결').status, '확인필요');
+assert.equal(riskDashboard.steps.find((step) => step.name === '공식 기준자료').status, '확인 필요');
 assert.equal(riskDashboard.steps.find((step) => step.name === 'EU Export').status, '오류');
 assert.equal(riskDashboard.recentTasks[0].href, '/products');
 assert.equal(riskDashboard.recentTasks[0].tone, 'danger');
@@ -188,8 +190,8 @@ const missingSourceStreamDashboard = createDashboardSummary({
   hasDefaultValueReference: true,
 });
 
-assert.equal(missingSourceStreamDashboard.steps.find((step) => step.name === '직접배출량 입력').status, '확인필요');
-assert.equal(missingSourceStreamDashboard.steps.find((step) => step.name === '직접배출량 입력').tone, 'warning');
+assert.equal(missingSourceStreamDashboard.steps.find((step) => step.name === '배출원 자료').status, '확인 필요');
+assert.equal(missingSourceStreamDashboard.steps.find((step) => step.name === '배출원 자료').tone, 'warning');
 assert.ok(missingSourceStreamDashboard.readinessRate < 100);
 
 const scenarioBasisDashboard = createDashboardSummary({

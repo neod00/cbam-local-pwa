@@ -1,7 +1,7 @@
 'use client';
 
-import { PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummary';
+import { Button, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import { createDashboardSummary } from '@/lib/dashboard-summary';
 import { evaluateEuExportReadiness } from '@/lib/eu-template-export';
@@ -15,12 +15,12 @@ import {
   type ScenarioAssumptions,
   type ScenarioRiskSummary,
 } from '@/lib/scenario-calculation';
-import { AlertTriangle, CheckCircle2, Factory, FileSpreadsheet, Package, TrendingUp } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, Factory, FileSpreadsheet, Package, ShieldCheck, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 function formatNumber(value: number) {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value);
+  return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 4 }).format(value);
 }
 
 function formatDateTime(value?: string) {
@@ -28,7 +28,7 @@ function formatDateTime(value?: string) {
     return '아직 백업하지 않음';
   }
 
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat('ko-KR', {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
@@ -137,14 +137,80 @@ export default function Home() {
     scenarioRiskSummary,
   ]);
   const backupStatus = useMemo(() => getBackupStatus(lastBackupAt), [lastBackupAt]);
+  const nextTask = dashboard.recentTasks[0];
+  const currentStatus = exportErrorCount > 0
+    ? 'Export 오류를 먼저 해결해야 합니다.'
+    : dashboard.warningCount > 0
+      ? `${dashboard.warningCount}개 항목을 확인하면 제출 준비율이 올라갑니다.`
+      : '제출용 복사본 생성 전 최종 검토 단계입니다.';
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Local-first CBAM 산정"
-        title="2025년 4분기 CBAM 산정 현황"
+        eyebrow="Guided Compliance Workspace"
+        title="CBAM 제출 준비 작업실"
         description="사업장, 제품, 생산공정, 전구물질 데이터를 로컬에서 관리하고 EU 원본 템플릿으로 제출용 파일을 준비합니다."
       />
+
+      <section className="rounded-3xl border border-teal-100 bg-white p-6 shadow-sm">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800">
+              <ClipboardCheck className="h-4 w-4" />
+              현재 준비율 {loading ? '-' : `${dashboard.readinessRate}%`}
+            </div>
+            <h2 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
+              {currentStatus}
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              계산식보다 업무 순서를 먼저 따라가세요. 아래 단계에서 확인 필요 항목을 해결한 뒤 Export 화면에서 EU 원본 템플릿과 공식 수식 재계산 결과를 검토합니다.
+            </p>
+            {nextTask && (
+              <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex gap-3">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-700" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-700">다음 작업</p>
+                    <p className="mt-1 text-sm font-semibold text-amber-950">{nextTask.label}</p>
+                  </div>
+                </div>
+                <Link href={nextTask.href}>
+                  <Button className="w-full md:w-auto">
+                    다음 작업 계속하기
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-950">제출 전 핵심 상태</p>
+            <dl className="mt-4 space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-500">Export 오류</dt>
+                <dd className="font-semibold text-slate-950">{exportErrorCount}건</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-500">확인 필요</dt>
+                <dd className="font-semibold text-slate-950">{dashboard.warningCount}건</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-500">기준자료 연결</dt>
+                <dd>
+                  <StatusBadge tone={hasBenchmarkReference && hasDefaultValueReference ? 'success' : 'warning'}>
+                    {hasBenchmarkReference && hasDefaultValueReference ? '완료' : '필요'}
+                  </StatusBadge>
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-500">백업</dt>
+                <dd><StatusBadge tone={backupStatus.tone}>{backupStatus.label}</StatusBadge></dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="CBAM 대상 품목" value={loading ? '-' : `${productCount}개`} helper="CN 8자리 기준 관리" icon={Package} tone="pending" />
@@ -154,50 +220,26 @@ export default function Home() {
       </div>
 
       <SectionCard
-        title="제출 전 리스크 요약"
-        description="SEE 산정 이후 SEFA·인증서 시나리오와 EU Export 준비 상태를 함께 확인합니다."
+        title="제출 준비 단계"
+        description="EU 제출용 파일을 만들기 전에 필요한 업무 흐름을 단계별로 확인합니다."
       >
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-          <div className="rounded-2xl bg-slate-50 px-4 py-3">
-            <p className="text-xs font-semibold text-slate-500">CN 코드 확인</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-950">{scenarioRiskSummary.missing_cn_count}건</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 px-4 py-3">
-            <p className="text-xs font-semibold text-slate-500">기준자료 미연결</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-950">{scenarioRiskSummary.missing_official_reference_count}건</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 px-4 py-3">
-            <p className="text-xs font-semibold text-slate-500">기본값 초과</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-950">{scenarioRiskSummary.above_default_count}건</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 px-4 py-3">
-            <p className="text-xs font-semibold text-slate-500">Export 오류</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-950">{exportErrorCount}건</p>
-          </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {dashboard.steps.map((step, index) => (
+            <div key={step.name} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
+                  {index + 1}
+                </div>
+                <div className="font-semibold text-slate-900">{step.name}</div>
+              </div>
+              <StatusBadge tone={step.tone}>{step.status}</StatusBadge>
+            </div>
+          ))}
         </div>
       </SectionCard>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
-        <SectionCard
-          title="산정 진행 단계"
-          description="EU 제출용 파일을 만들기 전 필요한 업무 흐름을 단계별로 확인합니다."
-        >
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {dashboard.steps.map((step, index) => (
-              <div key={step.name} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
-                    {index + 1}
-                  </div>
-                  <div className="font-semibold text-slate-900">{step.name}</div>
-                </div>
-                <StatusBadge tone={step.tone}>{step.status}</StatusBadge>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-
-        <SectionCard title="최근 작업 항목" description="다음 작업을 우선 처리하면 Export 준비율이 올라갑니다.">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,1fr)]">
+        <SectionCard title="해결할 작업" description="위에서부터 처리하면 제출 준비 흐름이 가장 빨리 정리됩니다.">
           <ul className="space-y-3">
             {dashboard.recentTasks.map((task) => (
               <li key={`${task.href}-${task.label}`}>
@@ -213,14 +255,24 @@ export default function Home() {
             ))}
           </ul>
         </SectionCard>
+
+        <SectionCard title="자료 준비 체크리스트" description="계산 화면에 들어가기 전 준비해야 할 기본 자료입니다.">
+          <ul className="space-y-2 text-sm text-slate-700">
+            {['CN 코드', '생산량과 판매/내부소비 수량', '연료·공정 원료 사용량', '전력 사용량과 배출계수', '전구물질 구매량과 공급사 SEE 자료', '최신 EU 원본 템플릿', '.cbam 백업'].map((item) => (
+              <li key={item} className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-teal-700" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <SectionCard title="데이터 보관 원칙" description="무료 PWA 버전은 기업 데이터를 서버로 전송하지 않는 구조를 우선합니다.">
+        <SectionCard title="로컬 데이터 보관 원칙" description="무료 PWA 버전은 기업 데이터를 서버로 전송하지 않는 구조를 우선합니다.">
           <div className="space-y-3">
             <div className="rounded-2xl bg-teal-50 p-4 text-sm leading-6 text-teal-900">
-              입력 데이터는 브라우저 로컬 DB에 저장됩니다. PC 교체나 브라우저 데이터 삭제에 대비해 중요한 입력 후에는
-              `.cbam` 백업을 내려받아 회사의 안전한 폴더에 보관하세요.
+              입력 데이터는 브라우저 로컬 DB에 저장됩니다. PC 교체나 브라우저 데이터 삭제에 대비해 중요한 입력 후에는 `.cbam` 백업을 내려받아 회사의 안전한 폴더에 보관하세요.
             </div>
             <Link href="/settings" className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm transition hover:bg-slate-50">
               <span>
@@ -243,9 +295,18 @@ export default function Home() {
             <div>
               <div className="font-semibold text-slate-950">원본 템플릿 유지</div>
               <p className="mt-1 text-sm leading-6 text-slate-600">
-                공식 시트명, 영문 라벨, 수식은 변경하지 않고 확인된 입력 셀에만 데이터를 반영합니다.
+                공식 시트명, 영어 라벨, 수식은 변경하지 않고 확인된 입력 셀에만 데이터를 반영합니다. Export 후 Excel에서 공식 수식 재계산 결과를 검토하세요.
               </p>
             </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard title="제출 책임 안내" description="앱은 제출 준비를 돕지만 최종 제출 판단을 대신하지 않습니다.">
+          <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+            <ShieldCheck className="mt-0.5 h-5 w-5 flex-none" />
+            <p>
+              제출 전에는 회사 내부 검토와 필요한 경우 전문기관 검증을 진행하세요. SEFA 및 인증서 지표는 현재 검토용 시나리오입니다.
+            </p>
           </div>
         </SectionCard>
       </div>

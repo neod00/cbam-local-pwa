@@ -105,6 +105,7 @@ Completed:
 - Restored Korean-first global navigation/topbar labels and added `npm run verify:mvp-flow` to guard the MVP flow from dashboard through results, scenarios, Export, and backup notices.
 - Established the post-MVP productization plan with `DESIGN.md`, a guided CBAM workflow, free-license strategy, update policy, admin-console plan, and `npm run verify:design-system`.
 - Added a settings-page free-license placeholder with local mock registration, explicit server non-transfer notice for CBAM data/templates/backups, and `.cbam` backup inclusion through the existing settings store.
+- Reworked the dashboard toward a guided submission workspace with current status, next action, workflow steps, fix-list tasks, evidence checklist, local backup status, and Export formula-review reminders.
 
 Pending product decisions:
 

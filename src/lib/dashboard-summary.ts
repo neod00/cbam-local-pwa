@@ -153,27 +153,27 @@ export function createDashboardSummary(input: DashboardSummaryInput): DashboardS
     const readinessRate = Math.round((completedSteps / 8) * 100);
 
     const steps: DashboardStep[] = [
-        { name: '품목 식별', status: productCount > 0 ? '완료' : '미완료', tone: productCount > 0 ? 'success' : 'neutral' },
-        { name: '생산공정 설정', status: processCount > 0 ? '완료' : '미완료', tone: processCount > 0 ? 'success' : 'neutral' },
+        { name: '품목 등록', status: productCount > 0 ? '완료' : '입력 필요', tone: productCount > 0 ? 'success' : 'neutral' },
+        { name: '생산공정 설정', status: processCount > 0 ? '완료' : '입력 필요', tone: processCount > 0 ? 'success' : 'neutral' },
         {
-            name: '직접배출량 입력',
-            status: sourceStreamIssueCount > 0 ? '확인필요' : results.some((result) => result.source_stream_count > 0) ? '완료' : '진행중',
+            name: '배출원 자료',
+            status: sourceStreamIssueCount > 0 ? '확인 필요' : results.some((result) => result.source_stream_count > 0) ? '완료' : '진행중',
             tone: sourceStreamIssueCount > 0 ? 'warning' : results.some((result) => result.source_stream_count > 0) ? 'success' : 'info',
         },
         {
-            name: '간접배출량 입력',
-            status: indirectNotRequired ? '해당없음' : indirectCompleted ? '완료' : '미완료',
+            name: '간접배출량',
+            status: indirectNotRequired ? '해당 없음' : indirectCompleted ? '완료' : '입력 필요',
             tone: indirectNotRequired || indirectCompleted ? 'success' : 'neutral',
         },
-        { name: '전구물질 입력', status: precursorCount > 0 ? '완료' : '미완료', tone: precursorCount > 0 ? 'success' : 'neutral' },
+        { name: '전구물질', status: precursorCount > 0 ? '완료' : '입력 필요', tone: precursorCount > 0 ? 'success' : 'neutral' },
         {
-            name: '공식 기준자료 연결',
-            status: hasOfficialReferences ? '완료' : '확인필요',
+            name: '공식 기준자료',
+            status: hasOfficialReferences ? '완료' : '확인 필요',
             tone: hasOfficialReferences ? 'success' : 'warning',
         },
         {
-            name: 'SEFA·인증서 검토',
-            status: scenarioRiskSummary.is_ready_for_review ? '검토가능' : '확인필요',
+            name: 'SEFA·인증서',
+            status: scenarioRiskSummary.is_ready_for_review ? '검토 가능' : '확인 필요',
             tone: scenarioRiskSummary.is_ready_for_review ? 'success' : 'warning',
         },
         {
@@ -187,10 +187,10 @@ export function createDashboardSummary(input: DashboardSummaryInput): DashboardS
     const recentTasks: DashboardTask[] = priorityTasks.length > 0
         ? priorityTasks.slice(0, 4)
         : [
-            { label: 'EU 템플릿 Parameters_CNCodes 기준으로 제품 CN 코드 확인', href: '/products', tone: 'success' },
-            { label: '공식 기준자료를 가져와 SEFA·인증서 시나리오를 확인', href: '/scenarios', tone: 'success' },
-            { label: indirectNotRequired ? 'CN 코드별 간접배출 제외 여부 확인' : '생산공정별 전력 사용량 입력', href: '/processes', tone: 'success' },
-            { label: 'EU 원본 템플릿 복사본 Export 준비', href: '/export', tone: 'success' },
+            { label: 'EU 템플릿 Parameters_CNCodes 기준으로 제품 CN 코드를 확인하세요.', href: '/products', tone: 'success' },
+            { label: '공식 기준자료를 가져와 SEFA·인증서 시나리오를 확인하세요.', href: '/scenarios', tone: 'success' },
+            { label: indirectNotRequired ? 'CN 코드별 간접배출 제외 여부를 확인하세요.' : '생산공정별 전력 사용량을 입력하세요.', href: '/processes', tone: 'success' },
+            { label: 'EU 원본 템플릿 복사본 Export를 준비하세요.', href: '/export', tone: 'success' },
         ];
 
     return {
