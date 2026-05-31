@@ -108,6 +108,7 @@ Completed:
 - Reworked the dashboard toward a guided submission workspace with current status, next action, workflow steps, fix-list tasks, evidence checklist, local backup status, and Export formula-review reminders.
 - Added a free-PWA update manifest, app-shell update notice, service-worker cache entry, and `npm run verify:update-policy` so optional/recommended/required update behavior can be managed without collecting CBAM calculation data.
 - Refined the settings free-license area with registration status, update status, a local-only data-boundary card, and a manual update status check backed by the static update manifest.
+- Reworked the EU Export page entry state into a submission gate with export-blocking status, first-issue navigation, template/readiness/backup summary, and clearer final copy generation CTA.
 
 Pending product decisions:
 
@@ -116,7 +117,7 @@ Pending product decisions:
 
 Next:
 
-- Review the remaining high-friction screens against the guided workflow and reduce dense table-first interactions where users need next-action guidance.
+- Review production-process, source-stream, and precursor screens against the guided workflow and reduce dense table-first interactions where users need next-action guidance.
 - Prepare a lightweight admin/API implementation plan for license registration, notices, and update manifest publishing after the PWA UI stabilizes.
 
 ## Decision Log

@@ -41,6 +41,7 @@ import {
 } from '@/lib/scenario-calculation';
 import {
     AlertTriangle,
+    ArrowRight,
     CheckCircle2,
     Circle,
     Download,
@@ -255,6 +256,44 @@ export default function ExportPage() {
         [readiness.issues]
     );
 
+    const firstBlockingIssue = sortedReadinessIssues.find((issue) => issue.severity === 'error') ?? sortedReadinessIssues[0];
+    const firstBlockingIssueHref = firstBlockingIssue ? getEuExportIssueEditHref(firstBlockingIssue) : undefined;
+    const exportGate = useMemo(() => {
+        if (readiness.errorCount > 0) {
+            return {
+                title: '오류 항목을 먼저 해결해야 합니다',
+                description: `EU 제출용 복사본을 만들기 전에 오류 ${readiness.errorCount}건을 수정해야 합니다. 첫 번째 항목부터 정리하면 Export 가능 상태로 이동합니다.`,
+                badge: 'Export 차단',
+                tone: 'danger' as const,
+            };
+        }
+
+        if (!templateFile || !validation?.isValid) {
+            return {
+                title: '최신 EU 원본 템플릿을 선택하세요',
+                description: '사용자가 보유한 최신 EU Communication template을 업로드하면 공식 시트와 CN 코드 기준을 확인한 뒤 복사본을 만들 수 있습니다.',
+                badge: '템플릿 필요',
+                tone: 'warning' as const,
+            };
+        }
+
+        if (readiness.warningCount > 0 || !exportChecklist.isComplete) {
+            return {
+                title: '복사본 생성은 가능하지만 제출 전 검토가 필요합니다',
+                description: `경고 ${readiness.warningCount}건과 체크리스트 검토 항목을 확인하세요. 다운로드 후 Excel에서 공식 수식 결과도 반드시 확인해야 합니다.`,
+                badge: '검토 필요',
+                tone: 'warning' as const,
+            };
+        }
+
+        return {
+            title: 'EU 제출용 복사본을 생성할 수 있습니다',
+            description: '현재 로컬 데이터, 공식 템플릿 구조, Export 쓰기 계획이 모두 준비되었습니다. 다운로드 후 Excel 수식 결과를 최종 검토하세요.',
+            badge: '생성 가능',
+            tone: 'success' as const,
+        };
+    }, [exportChecklist.isComplete, readiness.errorCount, readiness.warningCount, templateFile, validation?.isValid]);
+
     const summaryProductPreviewRows = useMemo(
         () => results.slice(0, 100).map((result, index) => ({
             rowNumber: 10 + index,
@@ -334,6 +373,65 @@ export default function ExportPage() {
                 title="EU 템플릿 Export"
                 description="사용자가 보유한 EU 원본 Communication template을 브라우저에서만 검증하고, 원본 구조를 보존한 제출용 복사본을 생성합니다."
             />
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+                    <div>
+                        <StatusBadge tone={exportGate.tone}>{exportGate.badge}</StatusBadge>
+                        <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{exportGate.title}</h2>
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{exportGate.description}</p>
+                        <div className="mt-5 flex flex-wrap gap-2">
+                            {firstBlockingIssueHref && firstBlockingIssue ? (
+                                <Link href={firstBlockingIssueHref}>
+                                    <Button type="button">
+                                        첫 번째 항목 수정
+                                        <ArrowRight className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </Link>
+                            ) : (
+                                <Button
+                                    type="button"
+                                    onClick={handleDownloadCopy}
+                                    disabled={!validation?.isValid || !readiness.canExportDraft}
+                                >
+                                    <Download className="mr-2 h-4 w-4" />
+                                    제출용 복사본 생성
+                                </Button>
+                            )}
+                            <Link href="/settings">
+                                <Button type="button" variant="secondary">
+                                    백업 상태 확인
+                                </Button>
+                            </Link>
+                        </div>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-sm font-semibold text-slate-950">게이트 요약</p>
+                        <dl className="mt-4 space-y-3 text-sm">
+                            <div className="flex items-center justify-between gap-3">
+                                <dt className="text-slate-500">EU 템플릿</dt>
+                                <dd>
+                                    <StatusBadge tone={validation?.isValid ? 'success' : templateFile ? 'warning' : 'pending'}>
+                                        {validation?.isValid ? '확인 완료' : templateFile ? '검증 필요' : '선택 필요'}
+                                    </StatusBadge>
+                                </dd>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                                <dt className="text-slate-500">오류</dt>
+                                <dd className="font-semibold text-slate-950">{readiness.errorCount}건</dd>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                                <dt className="text-slate-500">경고</dt>
+                                <dd className="font-semibold text-slate-950">{readiness.warningCount}건</dd>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                                <dt className="text-slate-500">백업</dt>
+                                <dd><StatusBadge tone={backupStatus.tone}>{backupStatus.label}</StatusBadge></dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+            </section>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard label="제품 수" value={summary.productCount} helper="Export 대상" icon={PackageCheck} tone="pending" />
