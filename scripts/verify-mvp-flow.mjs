@@ -8,6 +8,7 @@ const dashboard = readFileSync('src/app/page.tsx', 'utf8');
 const exportPage = readFileSync('src/app/export/page.tsx', 'utf8');
 const processesPage = readFileSync('src/app/processes/page.tsx', 'utf8');
 const sourceStreamsPage = readFileSync('src/app/source-streams/page.tsx', 'utf8');
+const precursorsPage = readFileSync('src/app/precursors/page.tsx', 'utf8');
 const resultsPage = readFileSync('src/app/results/page.tsx', 'utf8');
 const scenariosPage = readFileSync('src/app/scenarios/page.tsx', 'utf8');
 const settingsPage = readFileSync('src/app/settings/page.tsx', 'utf8');
@@ -52,6 +53,9 @@ assert.ok(processesPage.includes('배출원 자료부터 보완하세요'), 'Pro
 assert.ok(sourceStreamsPage.includes('배출원 자료 다음 작업'), 'Source streams should show next-action guidance');
 assert.ok(sourceStreamsPage.includes('생산공정 연결'), 'Source streams should guide process linking');
 assert.ok(sourceStreamsPage.includes('증빙 출처'), 'Source streams should guide evidence sources');
+assert.ok(precursorsPage.includes('전구물질 다음 작업'), 'Precursors should show next-action guidance');
+assert.ok(precursorsPage.includes('기본값 사용 사유'), 'Precursors should guide default-value justification');
+assert.ok(precursorsPage.includes('실제자료 검증 상태'), 'Precursors should guide actual-data verification');
 assert.ok(resultsPage.includes('제품별 SEE 산정 결과'), 'Results page should show product-level SEE results');
 assert.ok(scenariosPage.includes('SEFA 및 CBAM 인증서 시나리오'), 'Scenarios page should show SEFA/certificate review');
 assert.ok(settingsPage.includes('법률 자문, 공식 검증, 최종 제출 책임을 대체하지 않습니다'), 'Settings should show the liability notice');

@@ -18,7 +18,8 @@ import {
     getDefaultValueTotalForYear,
     type ImportedDefaultValueReference,
 } from '@/lib/reference-workbooks';
-import { Boxes, Factory, Pencil, Plus, Scale, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Boxes, Factory, Pencil, Plus, Scale, Trash2, X } from 'lucide-react';
+import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type PrecursorDraft = Omit<PurchasedPrecursor, 'id' | 'created_at' | 'updated_at'>;
@@ -184,7 +185,10 @@ export default function PrecursorsPage() {
         );
         const defaultModeCount = precursors.filter((precursor) => precursor.data_mode === 'DEFAULT').length;
         const evidenceReviewCount = precursors.filter((precursor) => getPrecursorEvidenceIssues(precursor).length > 0).length;
-        return { consumedMass, totalSee, defaultModeCount, evidenceReviewCount };
+        const missingDefaultJustificationCount = precursors.filter((precursor) => precursor.data_mode === 'DEFAULT' && !precursor.default_value_justification?.trim()).length;
+        const unverifiedActualCount = precursors.filter((precursor) => precursor.data_mode !== 'DEFAULT' && precursor.verification_status === 'UNVERIFIED').length;
+        const missingSourceCount = precursors.filter((precursor) => !precursor.source?.trim()).length;
+        return { consumedMass, defaultModeCount, evidenceReviewCount, missingDefaultJustificationCount, missingSourceCount, totalSee, unverifiedActualCount };
     }, [precursors]);
 
     function createDefaultDraft(): PrecursorDraft {
@@ -423,6 +427,57 @@ export default function PrecursorsPage() {
                 <StatCard label="기본값 사용" value={summary.defaultModeCount} helper={`SEE 합계 ${formatNumber(summary.totalSee)}`} icon={Factory} tone={summary.defaultModeCount > 0 ? 'warning' : 'pending'} />
                 <StatCard label="증빙 검토" value={summary.evidenceReviewCount} helper="사유·출처·검증 상태" icon={Factory} tone={summary.evidenceReviewCount > 0 ? 'warning' : 'success'} />
             </div>
+
+            <SectionCard
+                title="전구물질 다음 작업"
+                description="전구물질은 공급업체 회신, 기본값 사용 사유, 검증 상태가 함께 남아야 SEFA와 Export 검토가 쉬워집니다."
+            >
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-slate-950">기본값 사용 사유</p>
+                            <StatusBadge tone={summary.missingDefaultJustificationCount > 0 ? 'warning' : 'success'}>
+                                {summary.missingDefaultJustificationCount > 0 ? `${summary.missingDefaultJustificationCount}건 필요` : '정리 완료'}
+                            </StatusBadge>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                            기본값을 쓰는 경우에는 왜 실제자료 대신 기본값을 적용했는지 근거를 남겨야 합니다.
+                        </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-slate-950">실제자료 검증 상태</p>
+                            <StatusBadge tone={summary.unverifiedActualCount > 0 ? 'warning' : 'success'}>
+                                {summary.unverifiedActualCount > 0 ? `${summary.unverifiedActualCount}건 미검증` : '확인 완료'}
+                            </StatusBadge>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                            Actual 또는 Semi-actual 자료는 공급업체 확인 또는 검증 상태를 함께 기록하세요.
+                        </p>
+                    </div>
+                    <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
+                        <div className="flex gap-3">
+                            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
+                            <div>
+                                <p className="text-sm font-semibold text-teal-950">
+                                    {summary.evidenceReviewCount > 0 ? '증빙 누락 항목을 먼저 정리하세요' : '시나리오 검토로 이동하세요'}
+                                </p>
+                                <p className="mt-2 text-sm leading-6 text-teal-900">
+                                    {summary.evidenceReviewCount > 0
+                                        ? `출처 누락 ${summary.missingSourceCount}건을 포함해 전구물질 증빙 상태를 보완하면 Export 경고가 줄어듭니다.`
+                                        : '전구물질 자료가 준비되었으면 SEFA와 CBAM 인증서 시나리오를 비교하세요.'}
+                                </p>
+                                <Link href={summary.evidenceReviewCount > 0 ? '/precursors' : '/scenarios'}>
+                                    <Button type="button" className="mt-3" onClick={summary.evidenceReviewCount > 0 ? startNewPrecursor : undefined}>
+                                        {summary.evidenceReviewCount > 0 ? '전구물질 보완' : '시나리오 확인'}
+                                        <ArrowRight className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </SectionCard>
 
             {showForm && (
                 <SectionCard

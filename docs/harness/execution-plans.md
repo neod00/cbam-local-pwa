@@ -111,6 +111,7 @@ Completed:
 - Reworked the EU Export page entry state into a submission gate with export-blocking status, first-issue navigation, template/readiness/backup summary, and clearer final copy generation CTA.
 - Added production-process next-action guidance that surfaces product-line allocation review and source-stream evidence gaps before users reach the dense process table.
 - Added source-stream next-action guidance for production-process linking, evidence-source completion, unsupported type review, and process comparison.
+- Added purchased-precursor next-action guidance for default-value justification, actual/semi-actual verification status, evidence source gaps, and scenario handoff.
 
 Pending product decisions:
 
@@ -119,7 +120,7 @@ Pending product decisions:
 
 Next:
 
-- Review the precursor screen against the guided workflow and reduce dense table-first interactions where users need next-action guidance.
+- Review route-level visual consistency after the guided-workflow cards, especially spacing, mobile stacking, and dense table fallback behavior.
 - Prepare a lightweight admin/API implementation plan for license registration, notices, and update manifest publishing after the PWA UI stabilizes.
 
 ## Decision Log
