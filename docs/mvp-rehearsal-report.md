@@ -71,6 +71,10 @@ Result:
 
 Completed in this pass:
 
+- Production route verification now checks rendered page content, not only HTTP 200 responses.
+- Rendered route checks confirm the Results, Scenarios, and EU Export pages show `CBAM 기준 SEE` separately from `참고용 총 SEE`.
+- Rendered route checks confirm EU Export still shows `Summary_Products` review and official formula guidance.
+- Rendered route checks confirm Dashboard and Settings still show `.cbam` backup guidance.
 - Installation setup form split into required and optional sections.
 - Installation empty state added for first-time setup.
 - Upload screen clarified so available reference workbook imports are separated from post-MVP activity-data bulk upload.
@@ -95,6 +99,10 @@ Remaining manual UI rehearsal:
 - Run the app in a browser.
 - Follow `docs/mvp-rehearsal-plan.md` from Dashboard through `.cbam` backup.
 - Confirm Korean copy, button labels, empty states, and mobile layout are understandable without developer context.
+
+Automation note:
+
+- In-app browser automation was attempted on 2026-05-31 but the local browser bridge failed with the known Windows sandbox startup issue. Until that is resolved, the manual browser walkthrough remains open even though rendered route-content checks pass.
 
 ## Release Blockers
 

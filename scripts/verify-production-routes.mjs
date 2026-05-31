@@ -49,10 +49,30 @@ async function waitForServer(deadlineMs = 25000) {
 }
 
 async function verifyRoutes() {
+  const renderedHtmlByRoute = new Map();
+
   for (const route of routes) {
     const response = await fetch(`${baseUrl}${route}`, { redirect: 'manual' });
     assert.equal(response.status, 200, `${route} should return HTTP 200`);
+    renderedHtmlByRoute.set(route, await response.text());
   }
+
+  assert.ok(renderedHtmlByRoute.get('/')?.includes('다음 작업'), 'dashboard should render guided next-action copy');
+  assert.ok(renderedHtmlByRoute.get('/')?.includes('.cbam'), 'dashboard should render local backup guidance');
+
+  assert.ok(renderedHtmlByRoute.get('/results')?.includes('CBAM 기준 SEE'), 'results should render CBAM-basis SEE labels');
+  assert.ok(renderedHtmlByRoute.get('/results')?.includes('참고용 총 SEE'), 'results should render informational SEE labels');
+
+  assert.ok(renderedHtmlByRoute.get('/scenarios')?.includes('CBAM 기준 SEE'), 'scenarios should render CBAM-basis SEE labels');
+  assert.ok(renderedHtmlByRoute.get('/scenarios')?.includes('참고용 총 SEE'), 'scenarios should render informational SEE labels');
+
+  assert.ok(renderedHtmlByRoute.get('/export')?.includes('Summary_Products 반영 검토'), 'export should render Summary_Products review');
+  assert.ok(renderedHtmlByRoute.get('/export')?.includes('공식 수식'), 'export should render official formula guidance');
+  assert.ok(renderedHtmlByRoute.get('/export')?.includes('CBAM 기준 SEE'), 'export should render CBAM-basis SEE labels');
+  assert.ok(renderedHtmlByRoute.get('/export')?.includes('참고용 총 SEE'), 'export should render informational SEE labels');
+
+  assert.ok(renderedHtmlByRoute.get('/settings')?.includes('로컬 사용 안전 체크리스트'), 'settings should render local-use safety checklist');
+  assert.ok(renderedHtmlByRoute.get('/settings')?.includes('.cbam'), 'settings should render backup guidance');
 }
 
 function stopServer(child) {
