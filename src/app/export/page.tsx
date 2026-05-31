@@ -485,7 +485,8 @@ export default function ExportPage() {
                                     <li>원본 EU 템플릿 파일은 앱에 내장하지 않습니다.</li>
                                     <li>업로드된 파일은 브라우저 메모리에서만 처리합니다.</li>
                                     <li>공식 시트명, 수식, 영문 라벨은 유지합니다.</li>
-                                    <li>D_Processes와 E_PurchPrec 입력 셀에 현재 로컬 데이터를 반영합니다.</li>
+                                    <li>A_InstData, B_EmInst, C_Emissions&Energy, D_Processes, E_PurchPrec의 확인된 입력 셀에 현재 로컬 데이터를 반영합니다.</li>
+                                    <li>제품 생산라인 배분 결과는 계산·검토에 사용하며, 공식 셀 확인 전에는 별도 제품라인 표로 직접 기입하지 않습니다.</li>
                                 </ul>
                             </div>
                         </div>

@@ -657,7 +657,7 @@ export function createExportChecklist(input: ExportChecklistInput): ExportCheckl
             description: lastExportResult
                 ? `복사본 생성 중 ${lastExportResult.checkedCellCount}개 셀을 검증했습니다.`
                 : plannedCellWriteCount > 0
-                    ? `D_Processes와 E_PurchPrec에 반영할 셀 ${plannedCellWriteCount}개를 생성 후 검증합니다.`
+                    ? `A_InstData, B_EmInst, C_Emissions&Energy, D_Processes, E_PurchPrec에 반영할 셀 ${plannedCellWriteCount}개를 생성 후 검증합니다.`
                     : '반영할 공정 또는 전구물질 데이터가 없습니다.',
             status: lastExportResult ? '완료' : plannedCellWriteCount > 0 ? '대기' : '확인 필요',
             tone: lastExportResult ? 'success' : plannedCellWriteCount > 0 ? 'pending' : 'warning',

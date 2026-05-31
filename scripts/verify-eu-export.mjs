@@ -563,6 +563,11 @@ assertEqual(
   'first warning checklist action href'
 );
 assertEqual(
+  String(incompleteChecklist.items.find((item) => item.label === '반영 셀 검증')?.description.includes('A_InstData')),
+  'true',
+  'checklist should describe all current export sheets'
+);
+assertEqual(
   euExport.getEuExportIssueEditHref({ target: { type: 'product', id: 'product 1' } }),
   '/products?edit=product%201',
   'product issue edit href'
