@@ -882,28 +882,55 @@ function splitCellReference(cellReference: string): { column: string; row: numbe
     };
 }
 
-function createCellXml(cellReference: string, value: string | number): string {
-    if (typeof value === 'number') {
-        return `<c r="${cellReference}"><v>${Number.isFinite(value) ? value : 0}</v></c>`;
+function buildPreservedCellAttributes(rawAttributes: string): string {
+    const attributes = new Map<string, string>();
+
+    for (const match of rawAttributes.matchAll(/([A-Za-z_:][\w:.-]*)="([^"]*)"/g)) {
+        attributes.set(match[1], match[2]);
     }
 
-    return `<c r="${cellReference}" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`;
+    const preservedAttributes = ['s']
+        .map((attributeName) => {
+            const value = attributes.get(attributeName);
+            return value === undefined ? '' : ` ${attributeName}="${escapeXml(value)}"`;
+        })
+        .join('');
+
+    return preservedAttributes;
+}
+
+function createCellXml(cellReference: string, value: string | number, rawAttributes = ''): string {
+    const preservedAttributes = buildPreservedCellAttributes(rawAttributes);
+
+    if (typeof value === 'number') {
+        return `<c r="${cellReference}"${preservedAttributes}><v>${Number.isFinite(value) ? value : 0}</v></c>`;
+    }
+
+    return `<c r="${cellReference}"${preservedAttributes} t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`;
 }
 
 function setCellValue(sheetXml: string, cellReference: string, value: string | number): string {
-    const cellXml = createCellXml(cellReference, value);
-    const cellPattern = new RegExp(`<c\\s+[^>]*r="${cellReference}"[^>]*>[\\s\\S]*?<\\/c>`);
+    const cellPattern = new RegExp(`<c\\b(?=[^>]*\\br="${cellReference}")(.*?)>[\\s\\S]*?<\\/c>`);
+    const selfClosingCellPattern = new RegExp(`<c\\b(?=[^>]*\\br="${cellReference}")(.*?)\\/>`);
+    const selfClosingCellMatch = sheetXml.match(selfClosingCellPattern);
 
-    if (cellPattern.test(sheetXml)) {
-        return sheetXml.replace(cellPattern, cellXml);
+    if (selfClosingCellMatch) {
+        return sheetXml.replace(selfClosingCellPattern, createCellXml(cellReference, value, selfClosingCellMatch[1]));
     }
 
+    const existingCellMatch = sheetXml.match(cellPattern);
+
+    if (existingCellMatch) {
+        return sheetXml.replace(cellPattern, createCellXml(cellReference, value, existingCellMatch[1]));
+    }
+
+    const cellXml = createCellXml(cellReference, value);
     const { column, row } = splitCellReference(cellReference);
     const rowPattern = new RegExp(`(<row\\s+[^>]*r="${row}"[^>]*>)([\\s\\S]*?)(<\\/row>)`);
     const rowMatch = sheetXml.match(rowPattern);
 
     if (rowMatch) {
-        const existingCells = Array.from(rowMatch[2].matchAll(/<c\s+[^>]*r="([A-Z]+)\d+"[^>]*>[\s\S]*?<\/c>/g));
+        const existingCells = Array.from(rowMatch[2].matchAll(/<c\s+[^>]*r="([A-Z]+)\d+"[^>]*(?:>[\s\S]*?<\/c>|\/>)/g));
         let insertIndex = rowMatch[2].length;
 
         for (const match of existingCells) {
@@ -1328,7 +1355,7 @@ export async function createEuTemplateExportCopyResult(file: File, data: EuTempl
     if (!verification.isValid) {
         const firstMismatch = verification.mismatches[0];
         throw new Error(
-            `EU 템플릿 Export 검증에 실패했습니다. ${firstMismatch.sheetName}!${firstMismatch.cell} ${firstMismatch.label} 값이 예상과 다릅니다.`
+            `EU 템플릿 Export 검증에 실패했습니다. ${firstMismatch.sheetName}!${firstMismatch.cell} ${firstMismatch.label} 값이 예상과 다릅니다. expected=${firstMismatch.expected}, actual=${firstMismatch.actual}`
         );
     }
 

@@ -26,7 +26,7 @@ class SimpleElement {
 
   getElementsByTagName(tagName) {
     const elements = [];
-    const pairedPattern = new RegExp(`<${tagName}\\b([^>]*)>([\\s\\S]*?)<\\/${tagName}>`, 'g');
+    const pairedPattern = new RegExp(`<${tagName}\\b((?:(?!\\/>)[^>])*)>([\\s\\S]*?)<\\/${tagName}>`, 'g');
     const selfClosingPattern = new RegExp(`<${tagName}\\b([^>]*)\\/>`, 'g');
 
     for (const match of this.xml.matchAll(pairedPattern)) {
@@ -159,6 +159,17 @@ function emptySheetXml() {
   ].join('');
 }
 
+function installationSheetXml() {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<sheetData>',
+    '<row r="19"><c r="I19" s="1"/></row>',
+    '</sheetData>',
+    '</worksheet>',
+  ].join('');
+}
+
 function cnCodeSheetXml() {
   return [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -242,7 +253,7 @@ function createSyntheticWorkbook(sheetNames) {
 
   sheetNames.forEach((name, index) => {
     zip[`xl/worksheets/sheet${index + 1}.xml`] = fflate.strToU8(
-      name === 'Parameters_CNCodes' ? cnCodeSheetXml() : emptySheetXml()
+      name === 'Parameters_CNCodes' ? cnCodeSheetXml() : name === 'A_InstData' ? installationSheetXml() : emptySheetXml()
     );
   });
 

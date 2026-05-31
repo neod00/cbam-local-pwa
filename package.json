@@ -12,6 +12,7 @@
     "verify:calculation": "node scripts/verify-local-calculation.mjs",
     "verify:dashboard": "node scripts/verify-dashboard-summary.mjs",
     "verify:export": "node scripts/verify-eu-export.mjs",
+    "verify:local-eu-template": "node scripts/verify-local-eu-template.mjs",
     "verify:pwa": "node scripts/verify-pwa-release.mjs",
     "verify:scenarios": "node scripts/verify-scenario-risks.mjs",
     "verify:source-streams": "node scripts/verify-source-stream-calculation.mjs"

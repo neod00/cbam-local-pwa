@@ -10,6 +10,7 @@ The official workbook itself must stay outside the repository. The app should al
 - Preserve all official sheet names, formulas, protected labels, formatting, and English text.
 - Treat calculated totals and control cells as read-only.
 - Keep synthetic verification fixtures minimal; they validate workbook mechanics, not every official formula.
+- Use `npm run verify:local-eu-template -- "<path-to-official-template.xlsx>"` for a local read-only check against a user-supplied official workbook. The official workbook must remain outside Git.
 
 ## Current Export Targets
 
