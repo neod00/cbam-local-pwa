@@ -143,8 +143,10 @@ Pending product decisions:
 
 Next:
 
-- Review route-level visual consistency after the guided-workflow cards, especially spacing, mobile stacking, and dense table fallback behavior.
-- Prepare a lightweight admin/API implementation plan for license registration, notices, and update manifest publishing after the PWA UI stabilizes.
+- Complete the remaining manual browser walkthrough in `docs/mvp-rehearsal-plan.md` using a fictional company dataset.
+- Open an exported workbook copy in Microsoft Excel and compare recalculated `Summary_Products` formula outputs with the app's local SEE review values.
+- Review and finalize `docs/free-pwa-terms-draft.md` with legal wording before public distribution.
+- Prepare the first private-source PWA deployment run using `docs/pwa-deployment-guide.md`.
 
 ## Decision Log
 
