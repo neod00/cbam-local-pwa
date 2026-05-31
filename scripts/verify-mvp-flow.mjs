@@ -77,8 +77,11 @@ assert.ok(precursorsPage.includes('1. 전구물질 기본정보'), 'Precursor fo
 assert.ok(precursorsPage.includes('2. 자료 모드와 검증 상태'), 'Precursor form should group data mode and verification status');
 assert.ok(precursorsPage.includes('5. SEE와 증빙'), 'Precursor form should group SEE and evidence inputs');
 assert.ok(resultsPage.includes('제품별 SEE 산정 결과'), 'Results page should show product-level SEE results');
+assert.ok(resultsPage.includes('CBAM 기준 SEE') && resultsPage.includes('참고용 총 SEE'), 'Results page should separate CBAM-basis SEE from informational total SEE');
 assert.ok(scenariosPage.includes('SEFA 및 CBAM 인증서 시나리오'), 'Scenarios page should show SEFA/certificate review');
+assert.ok(scenariosPage.includes('CBAM 기준 SEE') && scenariosPage.includes('참고용 총 SEE'), 'Scenarios page should separate CBAM-basis SEE from informational total SEE');
 assert.ok(scenariosPage.includes('기본값 인증서 비용') && scenariosPage.includes('md:hidden'), 'Scenarios should keep a mobile card fallback for SEFA/certificate review');
+assert.ok(exportPage.includes('CBAM 기준 SEE') && exportPage.includes('참고용 총 SEE'), 'Export page should separate app review SEE values before Excel comparison');
 assert.ok(settingsPage.includes('법률 자문, 공식 검증, 최종 제출 책임을 대체하지 않습니다'), 'Settings should show the liability notice');
 assert.ok(settingsPage.includes('로컬 사용 안전 체크리스트'), 'Settings should show a local-use safety checklist');
 assert.ok(settingsPage.includes('브라우저 로컬 저장'), 'Settings should explain browser-local storage in the checklist');

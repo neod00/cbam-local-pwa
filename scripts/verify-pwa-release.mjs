@@ -73,6 +73,10 @@ assert.ok(
   exportPage.includes('EU 행') && exportPage.includes('Export 미리보기에 표시할 산정 결과가 없습니다.') && exportPage.includes('md:hidden'),
   'export page should keep mobile card fallbacks for submission review'
 );
+assert.ok(
+  exportPage.includes('CBAM 기준 SEE') && exportPage.includes('참고용 총 SEE'),
+  'export page should distinguish CBAM-basis and informational SEE review values'
+);
 
 for (const asset of ['file.svg', 'globe.svg', 'next.svg', 'vercel.svg', 'window.svg']) {
   assert.equal(existsSync(`public/${asset}`), false, `${asset} should not be kept in public assets`);
@@ -160,6 +164,8 @@ for (const required of [
   'K10',
   'Microsoft Excel',
   'localSummaryProductReview',
+  'CBAM basis SEE review',
+  'Informational total SEE review',
   '.cbam',
 ]) {
   assert.ok(excelReview.includes(required), `Excel recalculation review should include ${required}`);
