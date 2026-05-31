@@ -131,6 +131,7 @@ Completed:
 - Added a mobile card fallback for SEFA/certificate scenario review so users can compare actual/default SEE and certificate cost indicators without reading the full desktop table.
 - Detailed the free-license/admin rollout with client API contracts, forbidden server fields, phased implementation, and the rule that license/update controls must not block local `.cbam` backup access.
 - Split the installation form into required identification, optional address/location, and contact sections, and added a guided empty state for first-time setup.
+- Clarified the upload screen so official reference workbook imports are marked as available while internal activity-data templates and bulk upload are clearly labelled as post-MVP.
 
 Pending product decisions:
 

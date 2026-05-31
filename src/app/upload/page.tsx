@@ -13,9 +13,9 @@ import { Database, FileSpreadsheet, FileText, Upload as UploadIcon } from 'lucid
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 
 const uploadSteps = [
-    { name: '내부 활동자료 정리', status: '준비 중', tone: 'pending' as const },
-    { name: '파일 구조 확인', status: '미연결', tone: 'neutral' as const },
-    { name: '로컬 DB 반영', status: '향후 기능', tone: 'info' as const },
+    { name: '공식 기준값 업로드', status: '사용 가능', tone: 'success' as const },
+    { name: '내부 활동자료 템플릿', status: 'MVP 이후', tone: 'pending' as const },
+    { name: '활동자료 일괄 업로드', status: 'MVP 이후', tone: 'pending' as const },
 ];
 
 function formatDateTime(value?: string) {
@@ -237,27 +237,30 @@ export default function UploadPage() {
             </SectionCard>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-                <SectionCard title="1. 내부 템플릿 다운로드" description="사내 담당자에게 받을 생산량, 연료, 전력, 전구물질 자료를 정리하기 위한 내부 수집용 템플릿입니다.">
+                <SectionCard title="내부 템플릿 다운로드" description="사내 담당자에게 받을 생산량, 연료, 전력, 전구물질 자료를 정리하기 위한 내부 수집용 템플릿입니다.">
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                         <div className="flex items-start gap-3">
                             <div className="rounded-xl bg-white p-3 text-teal-700 ring-1 ring-slate-200">
                                 <FileText className="h-5 w-5" />
                             </div>
-                            <div>
-                                <h2 className="font-semibold text-slate-950">활동자료 수집 템플릿</h2>
+                            <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <h2 className="font-semibold text-slate-950">활동자료 수집 템플릿</h2>
+                                    <StatusBadge tone="pending">MVP 이후</StatusBadge>
+                                </div>
                                 <p className="mt-1 text-sm leading-6 text-slate-600">
-                                    현재는 화면 구조만 준비되어 있습니다. 실제 다운로드 파일 생성은 이후 단계에서 연결합니다.
+                                    현재 MVP에서는 화면 구조만 준비되어 있습니다. 실제 다운로드 파일 생성은 사용 시나리오 리허설 이후 연결합니다.
                                 </p>
-                                <Button type="button" variant="secondary" className="mt-4">
+                                <Button type="button" variant="secondary" className="mt-4" disabled>
                                     <FileText className="mr-2 h-4 w-4" />
-                                    엑셀 템플릿 다운로드
+                                    준비 중
                                 </Button>
                             </div>
                         </div>
                     </div>
                 </SectionCard>
 
-                <SectionCard title="업로드 상태" description="파일 업로드 기능은 로컬 파싱 방식으로 확장할 예정입니다.">
+                <SectionCard title="업로드 상태" description="현재 MVP에서 동작하는 업로드와 이후 단계로 미룬 업로드를 구분합니다.">
                     <div className="space-y-3">
                         {uploadSteps.map((step) => (
                             <div key={step.name} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
@@ -269,14 +272,20 @@ export default function UploadPage() {
                 </SectionCard>
             </div>
 
-            <SectionCard title="2. 활동자료 업로드" description="파일은 서버로 전송하지 않고 브라우저에서 읽어 로컬 데이터로 변환하는 방향으로 구현합니다.">
-                <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition hover:bg-teal-50">
-                    <UploadIcon className="h-12 w-12 text-teal-700" />
-                    <span className="mt-4 text-sm font-semibold text-teal-800">파일 선택</span>
-                    <span className="mt-1 text-sm text-slate-600">또는 이 영역으로 끌어다 놓기</span>
-                    <span className="mt-2 text-xs text-slate-500">XLSX, CSV 최대 10MB</span>
-                    <input id="file-upload" name="file-upload" type="file" className="sr-only" />
-                </label>
+            <SectionCard title="활동자료 업로드" description="생산량, 연료, 전력, 전구물질 자료의 일괄 업로드는 MVP 이후 로컬 파싱 방식으로 연결합니다.">
+                <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+                    <UploadIcon className="h-12 w-12 text-slate-400" />
+                    <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                        <span className="text-sm font-semibold text-slate-800">일괄 업로드 준비 중</span>
+                        <StatusBadge tone="pending">MVP 이후</StatusBadge>
+                    </div>
+                    <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
+                        현재 버전에서는 각 입력 화면에서 직접 입력하고, 공식 기준값 파일만 이 화면에서 가져옵니다. 활동자료 파일은 서버로 전송하지 않는 로컬 파싱 방식으로 후속 구현합니다.
+                    </p>
+                    <Button type="button" variant="secondary" className="mt-4" disabled>
+                        파일 선택 준비 중
+                    </Button>
+                </div>
             </SectionCard>
         </div>
     );
