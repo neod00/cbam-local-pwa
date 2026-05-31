@@ -6,6 +6,7 @@ const manifest = JSON.parse(readFileSync('public/manifest.webmanifest', 'utf8'))
 const serviceWorker = readFileSync('public/sw.js', 'utf8');
 const readme = readFileSync('README.md', 'utf8');
 const releaseChecklist = readFileSync('docs/mvp-release-checklist.md', 'utf8');
+const freeTermsDraft = readFileSync('docs/free-pwa-terms-draft.md', 'utf8');
 const securityPolicy = readFileSync('SECURITY.md', 'utf8');
 
 assert.equal(manifest.name, 'CBAM Local PWA');
@@ -49,12 +50,20 @@ assert.ok(readme.includes('소스 저장소는 비공개'), 'README should state
 assert.ok(readme.includes('JavaScript 번들'), 'README should explain the PWA bundle visibility limit');
 assert.ok(readme.includes('CBAM_documents/'), 'README should explain local reference document exclusion');
 assert.ok(readme.includes('docs/mvp-release-checklist.md'), 'README should link the release checklist');
+assert.ok(readme.includes('docs/free-pwa-terms-draft.md'), 'README should link the free PWA terms draft');
 assert.ok(readme.includes('SECURITY.md'), 'README should link the security policy');
 
 assert.ok(releaseChecklist.includes('CBAM_documents/'), 'release checklist should mention local reference document exclusion');
 assert.ok(releaseChecklist.includes('저장소는 Private'), 'release checklist should require the repository to remain private');
 assert.ok(releaseChecklist.includes('무료 사용 약관'), 'release checklist should include the free-use terms decision');
+assert.ok(releaseChecklist.includes('docs/free-pwa-terms-draft.md'), 'release checklist should link the free PWA terms draft');
 assert.ok(releaseChecklist.includes('Docker/on-premise'), 'release checklist should keep on-premise scope deferred');
+
+assert.ok(freeTermsDraft.includes('재배포'), 'free PWA terms draft should restrict redistribution');
+assert.ok(freeTermsDraft.includes('법률 자문'), 'free PWA terms draft should include liability limits');
+assert.ok(freeTermsDraft.includes('JavaScript 번들'), 'free PWA terms draft should explain PWA bundle visibility');
+assert.ok(freeTermsDraft.includes('브라우저 로컬 저장소'), 'free PWA terms draft should explain local browser storage');
+
 assert.ok(securityPolicy.includes('.cbam'), 'security policy should mention backup files');
 assert.ok(securityPolicy.includes('민감자료 공유 금지'), 'security policy should warn against sharing sensitive data');
 assert.ok(securityPolicy.includes('EU Communication template'), 'security policy should mention EU template files');

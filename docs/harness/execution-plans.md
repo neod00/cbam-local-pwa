@@ -86,11 +86,12 @@ Completed:
 - Added an in-app settings notice clarifying that CBAM Local supports calculation and submission preparation but does not replace legal advice, official verification, or final filing responsibility.
 - Added a security policy for public repository use, warning users not to share company CBAM data, `.cbam` backups, or EU template files in issues or pull requests.
 - Updated release documentation for the private-source distribution strategy: keep GitHub private, distribute the free PWA by URL, and defer protected logic to future server/API or Docker/on-premise editions.
+- Added a free PWA terms draft covering free-use scope, redistribution limits, local data handling, liability notice, and source-protection limits.
 
 Pending product decisions:
 
 - Choose the free PWA hosting channel: Vercel, Cloudflare Pages, Netlify, or self-hosted static hosting.
-- Draft the free-use terms covering redistribution restrictions, commercial use boundaries, and liability limits.
+- Review and finalize the free-use terms with legal wording before public distribution.
 
 Next:
 
