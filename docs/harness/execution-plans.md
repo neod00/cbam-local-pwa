@@ -89,6 +89,7 @@ Completed:
 - Added a free PWA terms draft covering free-use scope, redistribution limits, local data handling, liability notice, and source-protection limits.
 - Added a PWA deployment guide for private-source URL distribution, with Vercel as the lowest-friction MVP path and explicit exclusions for local reference documents, official EU templates, and company data.
 - Clarified the Export screen and checklist so users can see the current written sheets and understand that product-line allocation results are reviewed/calculated but not directly written into a separate EU product-line table before official cell confirmation.
+- Ran local Chrome-based route and screenshot checks for dashboard, Export, settings, and mobile dashboard; fixed stale dashboard copy that described Export as `D_Processes`/`E_PurchPrec` only.
 
 Pending product decisions:
 

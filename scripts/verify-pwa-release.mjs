@@ -5,6 +5,8 @@ import { existsSync, readFileSync } from 'node:fs';
 const manifest = JSON.parse(readFileSync('public/manifest.webmanifest', 'utf8'));
 const serviceWorker = readFileSync('public/sw.js', 'utf8');
 const readme = readFileSync('README.md', 'utf8');
+const dashboardPage = readFileSync('src/app/page.tsx', 'utf8');
+const exportPage = readFileSync('src/app/export/page.tsx', 'utf8');
 const releaseChecklist = readFileSync('docs/mvp-release-checklist.md', 'utf8');
 const freeTermsDraft = readFileSync('docs/free-pwa-terms-draft.md', 'utf8');
 const deploymentGuide = readFileSync('docs/pwa-deployment-guide.md', 'utf8');
@@ -41,6 +43,20 @@ for (const route of expectedShellRoutes) {
 
 assert.ok(serviceWorker.includes('cbam-local-v2'), 'service worker cache version should be current');
 assert.ok(serviceWorker.includes('caches.match("/")'), 'service worker should fall back to the app root');
+
+assert.ok(
+  dashboardPage.includes('확인된 입력 셀에만 데이터를 반영합니다'),
+  'dashboard should describe the current conservative export boundary'
+);
+assert.equal(
+  dashboardPage.includes('D_Processes`, `E_PurchPrec` 입력 영역에만'),
+  false,
+  'dashboard should not describe export as D_Processes/E_PurchPrec only'
+);
+assert.ok(
+  exportPage.includes('제품 생산라인 배분 결과는 계산·검토에 사용'),
+  'export page should explain product-line allocation is not directly written yet'
+);
 
 for (const asset of ['file.svg', 'globe.svg', 'next.svg', 'vercel.svg', 'window.svg']) {
   assert.equal(existsSync(`public/${asset}`), false, `${asset} should not be kept in public assets`);

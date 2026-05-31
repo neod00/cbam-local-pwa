@@ -243,7 +243,7 @@ export default function Home() {
             <div>
               <div className="font-semibold text-slate-950">원본 템플릿 유지</div>
               <p className="mt-1 text-sm leading-6 text-slate-600">
-                공식 시트명, 영문 라벨, 수식은 변경하지 않고 `D_Processes`, `E_PurchPrec` 입력 영역에만 데이터를 반영합니다.
+                공식 시트명, 영문 라벨, 수식은 변경하지 않고 확인된 입력 셀에만 데이터를 반영합니다.
               </p>
             </div>
           </div>
