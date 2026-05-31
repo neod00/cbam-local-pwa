@@ -1,7 +1,7 @@
 'use client';
 
 import Sidebar from '@/components/Sidebar';
-import { Bell, Building2, CircleHelp, CalendarDays } from 'lucide-react';
+import { Bell, Building2, CalendarDays, CircleHelp } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
@@ -13,7 +13,7 @@ const pageTitles: Record<string, string> = {
     '/source-streams': '배출원 자료',
     '/precursors': '구매 전구물질',
     '/upload': '자료 업로드',
-    '/results': '산정결과',
+    '/results': '산정 결과',
     '/scenarios': '시나리오',
     '/export': 'EU 템플릿 Export',
     '/installations': '사업장',

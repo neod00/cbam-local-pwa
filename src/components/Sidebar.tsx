@@ -1,12 +1,11 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import clsx from 'clsx';
 import {
     BarChart3,
     Boxes,
-    Calendar,
     Calculator,
+    Calendar,
     Database,
     FileSpreadsheet,
     Flame,
@@ -18,17 +17,18 @@ import {
     Upload,
     Workflow,
 } from 'lucide-react';
-import clsx from 'clsx';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 const navigation = [
     { name: '대시보드', href: '/', icon: Home },
-    { name: '제품 관리', href: '/products', icon: Package },
+    { name: '품목 관리', href: '/products', icon: Package },
     { name: '보고기간', href: '/periods', icon: Calendar },
     { name: '생산공정', href: '/processes', icon: Workflow },
     { name: '배출원 자료', href: '/source-streams', icon: Flame },
-    { name: '전구물질', href: '/precursors', icon: Boxes },
+    { name: '구매 전구물질', href: '/precursors', icon: Boxes },
     { name: '자료 업로드', href: '/upload', icon: Upload },
-    { name: '산정결과', href: '/results', icon: BarChart3 },
+    { name: '산정 결과', href: '/results', icon: BarChart3 },
     { name: '시나리오', href: '/scenarios', icon: Calculator },
     { name: 'EU Export', href: '/export', icon: FileSpreadsheet },
     { name: '사업장', href: '/installations', icon: Settings },
@@ -87,9 +87,9 @@ export default function Sidebar() {
 
                 <div className="border-t border-slate-200 p-4">
                     <div className="rounded-2xl bg-slate-50 p-4">
-                        <div className="text-sm font-semibold text-slate-950">로컬 사용자</div>
+                        <div className="text-sm font-semibold text-slate-950">로컬 사용 중</div>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
-                            기업 데이터는 현재 브라우저에 저장되며 서버로 전송되지 않습니다.
+                            기업 데이터는 현재 브라우저에 저장되며 서버로 전송하지 않습니다.
                         </p>
                     </div>
                 </div>
