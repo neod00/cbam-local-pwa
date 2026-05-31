@@ -377,6 +377,9 @@ export default function ProductsPage() {
                         </div>
 
                         <div className="md:col-span-2">
+                            <div className="mb-3 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm leading-6 text-teal-900">
+                                제품의 EU 제출 기준은 HS 4자리보다 CN 8자리가 우선입니다. 확신이 없으면 최신 EU 템플릿에서 CN 목록을 가져온 뒤 제품명이나 코드로 검색해 선택하세요.
+                            </div>
                             <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                                 {filteredCnOptions.map((option) => (
                                     <button
@@ -394,6 +397,11 @@ export default function ProductsPage() {
                                     </button>
                                 ))}
                             </div>
+                            {filteredCnOptions.length === 0 && (
+                                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-600">
+                                    검색 결과가 없습니다. CN 8자리 숫자 일부, 제품명, 품목군 키워드로 다시 검색하거나 EU 템플릿에서 최신 CN 목록을 가져오세요.
+                                </div>
+                            )}
                         </div>
 
                         <div>

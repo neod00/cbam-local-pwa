@@ -124,6 +124,7 @@ Completed:
 - Added `FormSection` as a design-system pattern and used it to split the production-process form into basic information, product-line allocation, and emissions/production sections.
 - Split the purchased-precursor form into guided sections for basic information, data mode/verification, process links, default-value quantity inputs, and SEE evidence.
 - Split the source-stream form into guided sections for process linkage, activity/emission factors, and evidence coefficients with a visible estimated-emissions panel.
+- Improved the product form with CN-code guidance and an empty search-result message so users understand that EU Export prioritizes CN 8-digit matching.
 
 Pending product decisions:
 
