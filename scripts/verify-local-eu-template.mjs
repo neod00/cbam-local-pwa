@@ -210,6 +210,11 @@ function readFormula(sheetXml, cell) {
   return formulaMatch ? unescapeXml(formulaMatch[1]) : '';
 }
 
+function roundNumber(value, decimals = 6) {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
 function makeSampleData() {
   const product = {
     id: 'product-1',
@@ -384,6 +389,26 @@ const checkedFormulas = {
   'Summary_Products!K10': readExportedFormula('Summary_Products', 'K10'),
 };
 
+const localSummaryProductReview = {
+  row: 10,
+  process: data.processes[0].name,
+  cnCode: data.products[0].cn_code,
+  productName: data.products[0].name,
+  outputMassT: data.productOutputLines[0].output_mass_t,
+  appDirectSee: roundNumber(data.processes[0].direct_attributable_emissions_tco2e / data.productOutputLines[0].output_mass_t),
+  appIndirectSee: 0,
+  appPrecursorSee: roundNumber(
+    data.precursors[0].consumed_mass_t *
+    (data.precursors[0].direct_see_tco2e_per_t + data.precursors[0].indirect_see_tco2e_per_t) /
+    data.productOutputLines[0].output_mass_t
+  ),
+};
+localSummaryProductReview.appTotalSee = roundNumber(
+  localSummaryProductReview.appDirectSee +
+  localSummaryProductReview.appIndirectSee +
+  localSummaryProductReview.appPrecursorSee
+);
+
 assert.equal(checkedCells['A_InstData!I9'], '45292');
 assert.equal(checkedCells['A_InstData!L9'], '45657');
 assert.equal(checkedCells['A_InstData!I20'], 'Main Factory A');
@@ -404,6 +429,10 @@ assert.equal(checkedCells['Summary_Products!H10'], 'Hot Rolled Coil');
 assert.ok(checkedFormulas['Summary_Products!I10'], 'Summary_Products!I10 should keep an official direct SEE formula');
 assert.ok(checkedFormulas['Summary_Products!J10'], 'Summary_Products!J10 should keep an official indirect SEE formula');
 assert.ok(checkedFormulas['Summary_Products!K10'], 'Summary_Products!K10 should keep an official total SEE formula');
+assert.equal(localSummaryProductReview.appDirectSee, 0.12);
+assert.equal(localSummaryProductReview.appIndirectSee, 0);
+assert.equal(localSummaryProductReview.appPrecursorSee, 1.45);
+assert.equal(localSummaryProductReview.appTotalSee, 1.57);
 
 await mkdir('artifacts', { recursive: true });
 const report = {
@@ -416,6 +445,9 @@ const report = {
   warningCount: readiness.warningCount,
   checkedCells,
   checkedFormulas,
+  localSummaryProductReview,
+  manualExcelReviewRequired:
+    'Open the exported workbook in Excel and compare recalculated Summary_Products I/J/K values against localSummaryProductReview before real submission.',
 };
 writeFileSync(join('artifacts', 'local-eu-template-verification.json'), `${JSON.stringify(report, null, 2)}\n`);
 

@@ -128,6 +128,14 @@ Rows start at row `10` and currently support up to 100 local product summary row
 
 The app does not overwrite `I:K` SEE cells in `Summary_Products`; those are official formula cells for direct, indirect, and total SEE. Local product-line SEE is used for app review and scenario analysis, while the workbook formula output should be reviewed after opening the generated copy in Excel.
 
+`npm run verify:local-eu-template -- "<path-to-official-template.xlsx>"` writes `artifacts/local-eu-template-verification.json`. That report now includes:
+
+- the product-identification cells written to `Summary_Products`;
+- the preserved official formulas in `Summary_Products!I10:J10:K10`;
+- the app-calculated local SEE review values for the sample product row.
+
+The script does not recalculate Excel formulas. For real submission checks, open the generated workbook copy in Excel and compare the recalculated `Summary_Products` SEE values with the app's local SEE review values before relying on the file.
+
 ## Known Gaps
 
 - Product-level allocation result values are still not written directly into official SEE cells; the app now writes the official product identification inputs and leaves formula SEE cells intact.
