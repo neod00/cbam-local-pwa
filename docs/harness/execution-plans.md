@@ -103,6 +103,7 @@ Completed:
 - Restored Korean-first SEFA/certificate scenario messages and review actions while keeping the current certificate indicator formula as a labelled review aid.
 - Added an MVP user-notices document covering legal/verification limits, local data and `.cbam` backup handling, latest EU template use, Excel formula review, and deferred free-license/admin scope.
 - Restored Korean-first global navigation/topbar labels and added `npm run verify:mvp-flow` to guard the MVP flow from dashboard through results, scenarios, Export, and backup notices.
+- Established the post-MVP productization plan with `DESIGN.md`, a guided CBAM workflow, free-license strategy, update policy, admin-console plan, and `npm run verify:design-system`.
 
 Pending product decisions:
 
@@ -111,8 +112,8 @@ Pending product decisions:
 
 Next:
 
-- Review generated workbook formula outputs from a user-supplied official template against local product-line SEE results before deciding whether any direct SEE-value writes are appropriate.
-- Refine certificate calculations after confirming the paid-carbon-price formula and current official factors.
+- Redesign the dashboard around the guided workflow: current status, next action, workflow stepper, fix cards, Export gate, and backup status.
+- Add a settings-page free-license placeholder that stores only local mock registration data and clearly states that CBAM calculation data is not sent to a server.
 
 ## Decision Log
 
