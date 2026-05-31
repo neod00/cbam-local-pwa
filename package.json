@@ -14,6 +14,7 @@
     "verify:design-system": "node scripts/verify-design-system.mjs",
     "verify:export": "node scripts/verify-eu-export.mjs",
     "verify:local-eu-template": "node scripts/verify-local-eu-template.mjs",
+    "verify:local-references": "node scripts/verify-local-reference-workbooks.mjs",
     "verify:pwa": "node scripts/verify-pwa-release.mjs",
     "verify:mvp-flow": "node scripts/verify-mvp-flow.mjs",
     "verify:scenarios": "node scripts/verify-scenario-risks.mjs",

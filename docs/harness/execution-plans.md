@@ -133,6 +133,7 @@ Completed:
 - Split the installation form into required identification, optional address/location, and contact sections, and added a guided empty state for first-time setup.
 - Clarified the upload screen so official reference workbook imports are marked as available while internal activity-data templates and bulk upload are clearly labelled as post-MVP.
 - Added an MVP rehearsal plan that walks a company user from Dashboard through installation, period, products, process allocation, source streams, precursors, reference uploads, results, scenarios, EU Export, Excel formula review, and `.cbam` backup.
+- Added `npm run verify:local-references` so local benchmark and country/CN default-value workbooks can be checked with the same parser used by the PWA without committing reference files to Git.
 
 Pending product decisions:
 

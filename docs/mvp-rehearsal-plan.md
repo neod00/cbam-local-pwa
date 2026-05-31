@@ -23,6 +23,19 @@
 - 최신 또는 테스트용 `DVsasadopted_*.xlsx`
 - 리허설용 가상 회사 입력값
 
+## Local File Verification Commands
+
+공식/기준자료 파일은 저장소에 커밋하지 않고, 로컬 파일 경로를 넘겨 검증한다.
+
+```bash
+npm run verify:local-eu-template -- "<path-to-CBAM-Communication-template.xlsx>"
+npm run verify:local-references -- "<path-to-CBAMBenchmarks.xlsx>" "<path-to-DVsasadopted.xlsx>"
+```
+
+`verify:local-eu-template`은 EU 원본 템플릿의 시트, CN 행, 계획된 쓰기 셀, 공식 수식 보존 여부를 확인한다.
+
+`verify:local-references`는 벤치마크와 국가/CN 기본값 파일을 앱의 로컬 파서로 읽고, 행 수, CN 코드 수, 국가 시트, 샘플 조회 가능 여부를 확인한다.
+
 ## Rehearsal Flow
 
 1. 앱 첫 화면 확인
@@ -94,4 +107,3 @@
 - 무료 라이선스는 현재 로컬 mock이며, 계산 기능을 막지 않는다.
 - 관리자 콘솔과 원격 라이선스 API는 MVP 이후 별도 구현이다.
 - PWA JavaScript 번들은 사용자가 열람할 수 있으므로 고급 보호 로직은 향후 서버/API 또는 Docker/on-prem 버전으로 분리한다.
-
