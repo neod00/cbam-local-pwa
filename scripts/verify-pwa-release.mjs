@@ -185,7 +185,7 @@ for (const required of [
   'Microsoft Excel',
   '공식 검증',
   'JavaScript 번들',
-  '[문의 이메일]',
+  '문의 채널',
 ]) {
   assert.ok(releaseAnnouncementDraft.includes(required), `release announcement draft should include ${required}`);
 }
