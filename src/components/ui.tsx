@@ -32,11 +32,11 @@ export function PageHeader({
     actions?: ReactNode;
 }) {
     return (
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-                {eyebrow && <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">{eyebrow}</p>}
-                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{title}</h1>
-                {description && <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{description}</p>}
+        <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+                {eyebrow && <p className="break-words text-xs font-semibold uppercase tracking-wide text-teal-700">{eyebrow}</p>}
+                <h1 className="mt-1 break-words text-2xl font-semibold tracking-tight text-slate-950">{title}</h1>
+                {description && <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-slate-600">{description}</p>}
             </div>
             {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </div>
@@ -57,12 +57,12 @@ export function SectionCard({
     actions?: ReactNode;
 }) {
     return (
-        <section className={clsx('rounded-2xl border border-slate-200 bg-white p-5 shadow-sm', className)}>
+        <section className={clsx('w-full min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm', className)}>
             {(title || description || actions) && (
-                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                        {title && <h2 className="text-base font-semibold text-slate-950">{title}</h2>}
-                        {description && <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>}
+                <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                        {title && <h2 className="break-words text-base font-semibold text-slate-950">{title}</h2>}
+                        {description && <p className="mt-1 break-words text-sm leading-6 text-slate-600">{description}</p>}
                     </div>
                     {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
                 </div>
@@ -95,19 +95,19 @@ export function StatCard({
     };
 
     return (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-                <div>
-                    <p className="text-sm font-medium text-slate-500">{label}</p>
-                    <div className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{value}</div>
+        <div className="w-full min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <p className="break-words text-sm font-medium text-slate-500">{label}</p>
+                    <div className="mt-2 break-words text-3xl font-semibold tracking-tight text-slate-950">{value}</div>
                 </div>
                 {Icon && (
-                    <div className={clsx('rounded-xl p-2.5', iconClass[tone])}>
+                    <div className={clsx('flex-none rounded-xl p-2.5', iconClass[tone])}>
                         <Icon className="h-5 w-5" />
                     </div>
                 )}
             </div>
-            {helper && <p className="mt-3 text-sm text-slate-500">{helper}</p>}
+            {helper && <p className="mt-3 break-words text-sm text-slate-500">{helper}</p>}
         </div>
     );
 }
@@ -116,11 +116,11 @@ export function StatusBadge({ children, tone = 'neutral' }: { children: ReactNod
     return (
         <span
             className={clsx(
-                'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset',
+                'inline-flex max-w-full items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset',
                 badgeToneClass[tone]
             )}
         >
-            {children}
+            <span className="min-w-0 break-words">{children}</span>
         </span>
     );
 }
@@ -136,7 +136,7 @@ export function Button({
         <button
             {...props}
             className={clsx(
-                'inline-flex min-h-10 items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed',
+                'inline-flex min-h-10 max-w-full items-center justify-center rounded-xl px-4 py-2 text-center text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed',
                 buttonVariantClass[variant],
                 className
             )}
@@ -152,7 +152,7 @@ export function DataTable({
     className?: string;
 }) {
     return (
-        <div className={clsx('overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm', className)}>
+        <div className={clsx('min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm', className)}>
             <div className="overflow-x-auto">{children}</div>
         </div>
     );

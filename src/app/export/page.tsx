@@ -374,12 +374,12 @@ export default function ExportPage() {
                 description="사용자가 보유한 EU 원본 Communication template을 브라우저에서만 검증하고, 원본 구조를 보존한 제출용 복사본을 생성합니다."
             />
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-                    <div>
+            <section className="w-full min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+                    <div className="min-w-0">
                         <StatusBadge tone={exportGate.tone}>{exportGate.badge}</StatusBadge>
-                        <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{exportGate.title}</h2>
-                        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{exportGate.description}</p>
+                        <h2 className="mt-3 break-words text-2xl font-semibold tracking-tight text-slate-950">{exportGate.title}</h2>
+                        <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-slate-600">{exportGate.description}</p>
                         <div className="mt-5 flex flex-wrap gap-2">
                             {firstBlockingIssueHref && firstBlockingIssue ? (
                                 <Link href={firstBlockingIssueHref}>
@@ -405,7 +405,7 @@ export default function ExportPage() {
                             </Link>
                         </div>
                     </div>
-                    <div className="rounded-2xl bg-slate-50 p-4">
+                    <div className="min-w-0 rounded-2xl bg-slate-50 p-4">
                         <p className="text-sm font-semibold text-slate-950">게이트 요약</p>
                         <dl className="mt-4 space-y-3 text-sm">
                             <div className="flex items-center justify-between gap-3">
@@ -416,13 +416,13 @@ export default function ExportPage() {
                                     </StatusBadge>
                                 </dd>
                             </div>
-                            <div className="flex items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center justify-between gap-3">
                                 <dt className="text-slate-500">오류</dt>
-                                <dd className="font-semibold text-slate-950">{readiness.errorCount}건</dd>
+                                <dd className="flex-none font-semibold text-slate-950">{readiness.errorCount}건</dd>
                             </div>
-                            <div className="flex items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center justify-between gap-3">
                                 <dt className="text-slate-500">경고</dt>
-                                <dd className="font-semibold text-slate-950">{readiness.warningCount}건</dd>
+                                <dd className="flex-none font-semibold text-slate-950">{readiness.warningCount}건</dd>
                             </div>
                             <div className="flex items-center justify-between gap-3">
                                 <dt className="text-slate-500">백업</dt>

@@ -27,9 +27,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
     const title = pageTitles[pathname] ?? 'CBAM Local';
 
     return (
-        <div className="min-h-screen bg-[#F6F8F7] text-slate-950">
+        <div className="min-h-screen min-w-0 overflow-x-hidden bg-[#F6F8F7] text-slate-950">
             <Sidebar />
-            <div className="lg:pl-72">
+            <div className="min-w-0 overflow-x-hidden lg:pl-72">
                 <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
                     <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
                         <div>
@@ -63,8 +63,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
                     </div>
                 </header>
                 <UpdateNotice />
-                <main className="px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-8">
-                    <div className="mx-auto max-w-7xl">{children}</div>
+                <main className="min-w-0 overflow-x-hidden px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-8">
+                    <div className="mx-auto w-full min-w-0 max-w-7xl overflow-x-hidden">{children}</div>
                 </main>
             </div>
         </div>

@@ -152,17 +152,17 @@ export default function Home() {
         description="사업장, 제품, 생산공정, 전구물질 데이터를 로컬에서 관리하고 EU 원본 템플릿으로 제출용 파일을 준비합니다."
       />
 
-      <section className="rounded-3xl border border-teal-100 bg-white p-6 shadow-sm">
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div>
+      <section className="w-full min-w-0 overflow-hidden rounded-3xl border border-teal-100 bg-white p-6 shadow-sm">
+        <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800">
               <ClipboardCheck className="h-4 w-4" />
               현재 준비율 {loading ? '-' : `${dashboard.readinessRate}%`}
             </div>
-            <h2 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
+            <h2 className="mt-4 break-words text-2xl font-semibold tracking-tight text-slate-950">
               {currentStatus}
             </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+            <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-slate-600">
               계산식보다 업무 순서를 먼저 따라가세요. 아래 단계에서 확인 필요 항목을 해결한 뒤 Export 화면에서 EU 원본 템플릿과 공식 수식 재계산 결과를 검토합니다.
             </p>
             {nextTask && (
@@ -184,16 +184,16 @@ export default function Home() {
             )}
           </div>
 
-          <div className="rounded-2xl bg-slate-50 p-4">
+          <div className="min-w-0 rounded-2xl bg-slate-50 p-4">
             <p className="text-sm font-semibold text-slate-950">제출 전 핵심 상태</p>
             <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center justify-between gap-3">
                 <dt className="text-slate-500">Export 오류</dt>
-                <dd className="font-semibold text-slate-950">{exportErrorCount}건</dd>
+                <dd className="flex-none font-semibold text-slate-950">{exportErrorCount}건</dd>
               </div>
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center justify-between gap-3">
                 <dt className="text-slate-500">확인 필요</dt>
-                <dd className="font-semibold text-slate-950">{dashboard.warningCount}건</dd>
+                <dd className="flex-none font-semibold text-slate-950">{dashboard.warningCount}건</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-slate-500">기준자료 연결</dt>
