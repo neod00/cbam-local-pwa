@@ -52,9 +52,17 @@ The next calculation-engine expansion should follow this sequence:
 3. Select allocation basis per source or process total.
 4. Automatically allocate direct and indirect emissions to product lines.
 5. Calculate product-level SEE.
-6. Feed product-level results into EU Export.
+6. Split product-level results into `see_informational_total` and `see_cbam_basis`.
+7. Feed product-level results into EU Export and scenario checks.
 
 This is not only a UI improvement. It is the core model expansion needed to handle final-period system-boundary and allocation rules without making the PWA too heavy.
+
+2026 definitive-period correction:
+
+- `see_informational_total` is the operational review total.
+- `see_cbam_basis` is the value used for CBAM certificate scenario calculations.
+- Annex II direct-only treatment excludes the final good's own indirect emissions from `see_cbam_basis`, while keeping those emissions visible for reporting/review.
+- Precursor contribution must remain separate because precursor indirect emissions can still matter depending on the precursor's own classification.
 
 ## Allocation Model
 
@@ -81,6 +89,7 @@ Then add:
 - CBAM factor and CSCF handling.
 - Certificate quantity and cost comparison.
 - A clear basis comparison that flags whether actual data or default values currently produce the lower certificate indicator.
+- Actual-data certificate indicators must use `see_cbam_basis`, not the legacy operational `total_see`.
 
 ## UX Direction
 

@@ -147,6 +147,7 @@ Completed:
 - Added `npm run release:status` to summarize remaining manual release blockers, required docs, and first-deployment operator actions without running a deployment.
 - Added an in-app release notes page and connected the update manifest/notice to it so update communications do not point to a missing route.
 - Added the 2026 definitive-period basis document and updated the domain map to split informational SEE from CBAM certificate-basis SEE, including Annex II direct-only and precursor-treatment implications.
+- Added the app impact plan for 2026 definitive-period changes, covering calculation fields, UI wording, Export comparison, scenario calculations, and verification updates.
 
 Pending product decisions:
 
