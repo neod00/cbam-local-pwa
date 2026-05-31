@@ -5,6 +5,7 @@ CBAM Local PWA를 무료 배포하기 전에 확인할 항목입니다. 소스 �
 ## 필수 확인
 
 - `npm run verify`가 통과한다.
+- `npm run verify:deployment`가 통과한다.
 - `CBAM_documents/`와 공식 EU 템플릿 원본 파일이 Git에 포함되지 않는다.
 - README의 실행 방법과 데이터 보안 안내가 최신 상태다.
 - [docs/pwa-deployment-guide.md](pwa-deployment-guide.md)의 배포 금지 항목을 확인했다.

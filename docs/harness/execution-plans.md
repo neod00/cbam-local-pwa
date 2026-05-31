@@ -136,6 +136,7 @@ Completed:
 - Added `npm run verify:local-references` so local benchmark and country/CN default-value workbooks can be checked with the same parser used by the PWA without committing reference files to Git.
 - Recorded the current MVP rehearsal report: full `npm.cmd run verify`, local EU template verification, local benchmark/default-value verification, and remaining manual Excel/browser walkthrough blockers.
 - Strengthened the free PWA terms draft with license-scope, official-material rights, support limits, warranty disclaimer, access restriction, and pre-release legal review placeholders.
+- Added `npm run verify:deployment` to guard private-source deployment readiness, including forbidden tracked local files, package privacy, deployment docs, release checklist, and rehearsal report coverage.
 
 Pending product decisions:
 

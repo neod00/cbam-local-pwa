@@ -47,6 +47,17 @@ Cloudflare Pages와 Netlify도 사용할 수 있지만, Next.js App Router 지�
 - `.env` 파일이나 서비스 토큰을 커밋하지 않습니다.
 - 유료 또는 보호 대상 계산 로직을 프론트엔드 번들에 넣기 전에 별도 보호 전략을 검토합니다.
 
+## 배포 전 자동 확인
+
+배포 직전에는 표준 검증과 배포 전용 검증을 모두 실행합니다.
+
+```bash
+npm run verify
+npm run verify:deployment
+```
+
+`verify:deployment`는 Git 추적 파일에 `CBAM_documents/`, `artifacts/`, `.env*`, `.vercel`, `.cbam`, Excel/PDF/ZIP 같은 로컬 자료가 포함되지 않았는지 확인합니다. 또한 저장소가 private-source 배포 전제에 맞게 `package.json`의 `private` 설정과 배포 문서 링크를 유지하는지 확인합니다.
+
 ## 배포 후 확인
 
 - 설치 가능한 PWA로 표시되는지 확인합니다.
