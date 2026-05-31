@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, DataTable, PageHeader, SectionCard, StatusBadge } from '@/components/ui';
+import { Button, DataTable, EmptyState, PageHeader, SectionCard, StatusBadge } from '@/components/ui';
 import { CN_CODE_OPTIONS, type CnCodeOption } from '@/lib/cn-code-options';
 import { parseEuTemplateCnCodeOptions } from '@/lib/eu-template-export';
 import {
@@ -438,7 +438,16 @@ export default function ProductsPage() {
                     </SectionCard>
                 ) : products.length === 0 ? (
                     <SectionCard>
-                        <p className="text-center text-sm text-slate-500">등록된 제품이 없습니다.</p>
+                        <EmptyState
+                            title="등록된 제품이 없습니다"
+                            description="CBAM 산정은 CN 8자리 기준의 대상 제품부터 시작합니다. 제품을 먼저 등록하면 생산공정, 전구물질, Export 매핑을 연결할 수 있습니다."
+                            action={
+                                <Button type="button" onClick={startNewProduct}>
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    제품 추가
+                                </Button>
+                            }
+                        />
                     </SectionCard>
                 ) : (
                     products.map((product) => (
@@ -512,8 +521,17 @@ export default function ProductsPage() {
                             </tr>
                         ) : products.length === 0 ? (
                             <tr>
-                                <td colSpan={7} className="p-6 text-center text-sm text-slate-500">
-                                    등록된 제품이 없습니다.
+                                <td colSpan={7} className="p-6">
+                                    <EmptyState
+                                        title="등록된 제품이 없습니다"
+                                        description="CBAM 대상 제품을 등록하면 공정, 전구물질, Export 준비 흐름을 이어갈 수 있습니다."
+                                        action={
+                                            <Button type="button" onClick={startNewProduct}>
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                제품 추가
+                                            </Button>
+                                        }
+                                    />
                                 </td>
                             </tr>
                         ) : (

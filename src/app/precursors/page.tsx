@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { ActionItemCard, Button, DataTable, EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import {
     createLocalItem,
     deleteLocalItem,
@@ -645,7 +645,24 @@ export default function PrecursorsPage() {
             )}
 
             <div className="grid grid-cols-1 gap-3 md:hidden">
-                {precursors.map((precursor) => {
+                {loading ? (
+                    <SectionCard>
+                        <p className="text-center text-sm text-slate-500">불러오는 중...</p>
+                    </SectionCard>
+                ) : precursors.length === 0 ? (
+                    <SectionCard>
+                        <EmptyState
+                            title="등록된 구매 전구물질이 없습니다"
+                            description="공급업체 회신, 기본값 사용 사유, 검증 상태를 함께 남기면 SEFA와 Export 검토가 쉬워집니다."
+                            action={
+                                <Button type="button" onClick={startNewPrecursor}>
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    전구물질 추가
+                                </Button>
+                            }
+                        />
+                    </SectionCard>
+                ) : precursors.map((precursor) => {
                     const totalSee = precursor.direct_see_tco2e_per_t + precursor.indirect_see_tco2e_per_t;
                     const evidenceIssues = getPrecursorEvidenceIssues(precursor);
                     return (
@@ -720,7 +737,20 @@ export default function PrecursorsPage() {
                         {loading ? (
                             <tr><td colSpan={11} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
                         ) : precursors.length === 0 ? (
-                            <tr><td colSpan={11} className="p-6 text-center text-sm text-slate-500">등록된 구매 전구물질이 없습니다.</td></tr>
+                            <tr>
+                                <td colSpan={11} className="p-6">
+                                    <EmptyState
+                                        title="등록된 구매 전구물질이 없습니다"
+                                        description="전구물질을 등록하면 공급사 SEE 자료, 기본값 시나리오, Export 경고를 함께 검토할 수 있습니다."
+                                        action={
+                                            <Button type="button" onClick={startNewPrecursor}>
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                전구물질 추가
+                                            </Button>
+                                        }
+                                    />
+                                </td>
+                            </tr>
                         ) : (
                             precursors.map((precursor) => {
                                 const totalSee = precursor.direct_see_tco2e_per_t + precursor.indirect_see_tco2e_per_t;

@@ -186,3 +186,23 @@ export function ActionItemCard({
         </div>
     );
 }
+
+export function EmptyState({
+    title,
+    description,
+    action,
+    className,
+}: {
+    title: string;
+    description: string;
+    action?: ReactNode;
+    className?: string;
+}) {
+    return (
+        <div className={clsx('flex min-w-0 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center', className)}>
+            <h2 className="break-words text-sm font-semibold text-slate-950">{title}</h2>
+            <p className="mt-2 max-w-xl break-words text-sm leading-6 text-slate-600">{description}</p>
+            {action && <div className="mt-4 flex flex-wrap justify-center gap-2">{action}</div>}
+        </div>
+    );
+}

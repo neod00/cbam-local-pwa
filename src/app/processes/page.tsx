@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { ActionItemCard, Button, DataTable, EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import {
     createLocalItem,
     deleteLocalItem,
@@ -723,7 +723,24 @@ export default function ProcessesPage() {
             )}
 
             <div className="grid grid-cols-1 gap-3 md:hidden">
-                {processes.map((process) => {
+                {loading ? (
+                    <SectionCard>
+                        <p className="text-center text-sm text-slate-500">불러오는 중...</p>
+                    </SectionCard>
+                ) : processes.length === 0 ? (
+                    <SectionCard>
+                        <EmptyState
+                            title="등록된 생산공정이 없습니다"
+                            description="제품을 등록한 뒤 생산공정을 추가하세요. 공정에는 생산량, 직접배출량, 전력 사용량, 제품 생산라인 배분이 연결됩니다."
+                            action={
+                                <Button type="button" onClick={startNewProcess}>
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    공정 추가
+                                </Button>
+                            }
+                        />
+                    </SectionCard>
+                ) : processes.map((process) => {
                     const see = getSee(process);
                     const sourceStreamSummary = getProcessSourceStreamSummary(process);
                     const outputLineSummary = getOutputLineSummary(process);
@@ -809,7 +826,20 @@ export default function ProcessesPage() {
                         {loading ? (
                             <tr><td colSpan={10} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
                         ) : processes.length === 0 ? (
-                            <tr><td colSpan={10} className="p-6 text-center text-sm text-slate-500">등록된 생산공정이 없습니다.</td></tr>
+                            <tr>
+                                <td colSpan={10} className="p-6">
+                                    <EmptyState
+                                        title="등록된 생산공정이 없습니다"
+                                        description="제품별 SEE를 계산하려면 생산공정을 추가하고 생산량과 배출량을 입력해야 합니다."
+                                        action={
+                                            <Button type="button" onClick={startNewProcess}>
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                공정 추가
+                                            </Button>
+                                        }
+                                    />
+                                </td>
+                            </tr>
                         ) : (
                             processes.map((process) => {
                                 const see = getSee(process);

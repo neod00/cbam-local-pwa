@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { ActionItemCard, Button, DataTable, EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import {
     createLocalItem,
     deleteLocalItem,
@@ -511,7 +511,24 @@ export default function SourceStreamsPage() {
             )}
 
             <div className="grid grid-cols-1 gap-3 md:hidden">
-                {sourceStreams.map((sourceStream) => (
+                {loading ? (
+                    <SectionCard>
+                        <p className="text-center text-sm text-slate-500">불러오는 중...</p>
+                    </SectionCard>
+                ) : sourceStreams.length === 0 ? (
+                    <SectionCard>
+                        <EmptyState
+                            title="등록된 배출원 자료가 없습니다"
+                            description="연료, 공정 원료, 배출계수 근거를 등록하면 직접배출량의 B_EmInst 증빙 흐름을 만들 수 있습니다."
+                            action={
+                                <Button type="button" onClick={startNewSourceStream}>
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    배출원 추가
+                                </Button>
+                            }
+                        />
+                    </SectionCard>
+                ) : sourceStreams.map((sourceStream) => (
                     <SectionCard key={sourceStream.id} className="p-4">
                         <h2 className="text-base font-semibold text-slate-950">{sourceStream.name}</h2>
                         <p className="mt-1 text-sm text-slate-500">{streamTypeLabel(sourceStream.stream_type)} / {sourceStream.method}</p>
@@ -570,7 +587,20 @@ export default function SourceStreamsPage() {
                         {loading ? (
                             <tr><td colSpan={9} className="p-6 text-center text-sm text-slate-500">불러오는 중...</td></tr>
                         ) : sourceStreams.length === 0 ? (
-                            <tr><td colSpan={9} className="p-6 text-center text-sm text-slate-500">등록된 배출원 자료가 없습니다.</td></tr>
+                            <tr>
+                                <td colSpan={9} className="p-6">
+                                    <EmptyState
+                                        title="등록된 배출원 자료가 없습니다"
+                                        description="직접배출량이 있는 공정은 연료 또는 공정 원료 자료와 연결되어야 Results와 Export에서 검토됩니다."
+                                        action={
+                                            <Button type="button" onClick={startNewSourceStream}>
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                배출원 추가
+                                            </Button>
+                                        }
+                                    />
+                                </td>
+                            </tr>
                         ) : (
                             sourceStreams.map((sourceStream) => (
                                 <tr key={sourceStream.id} className="transition hover:bg-slate-50">
