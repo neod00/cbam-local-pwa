@@ -56,6 +56,13 @@ function formatNumber(value: number) {
     }).format(value);
 }
 
+function formatPercent(value: number) {
+    return new Intl.NumberFormat('ko-KR', {
+        maximumFractionDigits: 1,
+        style: 'percent',
+    }).format(value);
+}
+
 export default function ExportPage() {
     const [templateFile, setTemplateFile] = useState<File | undefined>();
     const [validation, setValidation] = useState<EuTemplateValidationResult | undefined>();
@@ -221,6 +228,24 @@ export default function ExportPage() {
             return a.area.localeCompare(b.area, 'ko-KR');
         }),
         [readiness.issues]
+    );
+    const summaryProductPreviewRows = useMemo(
+        () => results.slice(0, 100).map((result, index) => ({
+            rowNumber: 10 + index,
+            processName: result.process_name,
+            productCode: result.cn_code || result.hs_code || '-',
+            productName: result.product_name,
+            allocationShare: result.allocation_share,
+            directSee: result.direct_see,
+            indirectSee: result.indirect_see,
+            totalSee: result.total_see,
+            isIndirectIncluded: result.indirect_emissions_applicable,
+        })),
+        [results]
+    );
+    const summaryProductsWriteCount = useMemo(
+        () => plannedCellWrites.filter((write) => write.sheetName === 'Summary_Products').length,
+        [plannedCellWrites]
     );
 
     async function handleTemplateFileChange(file: File | undefined) {
@@ -561,6 +586,80 @@ export default function ExportPage() {
                         })}
                     </ul>
                 )}
+            </SectionCard>
+
+            <SectionCard>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                        <h2 className="text-lg font-semibold text-slate-950">Summary_Products 반영 검토</h2>
+                        <p className="mt-1 text-sm text-slate-600">
+                            EU 템플릿에는 생산공정, CN 코드, 제품명을 입력하고 직접·간접·총 SEE는 공식 수식 셀이 계산하도록 둡니다.
+                            아래 값은 앱 내부 product-line 산정 결과와 비교하기 위한 사전 검토용입니다.
+                        </p>
+                    </div>
+                    <StatusBadge tone={summaryProductsWriteCount > 0 ? 'success' : 'pending'}>
+                        반영 셀 {summaryProductsWriteCount}개
+                    </StatusBadge>
+                </div>
+
+                <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-slate-200">
+                            <thead className="bg-slate-50">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">EU 행</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">생산공정</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">CN 코드</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">제품명</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">배분율</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">직접 SEE</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">간접 SEE</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">총 SEE</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 bg-white">
+                                {summaryProductPreviewRows.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={8} className="px-4 py-6 text-center text-sm text-slate-500">
+                                            Summary_Products에 반영할 제품 산정 결과가 없습니다.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    summaryProductPreviewRows.map((row) => (
+                                        <tr key={`${row.rowNumber}-${row.productCode}-${row.productName}`} className="hover:bg-slate-50">
+                                            <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-900">
+                                                {row.rowNumber}
+                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{row.processName}</td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{row.productCode}</td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{row.productName}</td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">
+                                                {formatPercent(row.allocationShare)}
+                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">
+                                                {formatNumber(row.directSee)}
+                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">
+                                                <div>{formatNumber(row.indirectSee)}</div>
+                                                <div className={row.isIndirectIncluded ? 'text-xs text-slate-400' : 'text-xs font-semibold text-amber-700'}>
+                                                    {row.isIndirectIncluded ? '포함' : '제외'}
+                                                </div>
+                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-950">
+                                                {formatNumber(row.totalSee)}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <p className="mt-3 text-xs leading-5 text-slate-500">
+                    Export 후 Excel에서 생성된 복사본을 열면 `Summary_Products`의 I:J:K 열 공식 수식 결과를 확인할 수 있습니다.
+                    이 화면의 SEE는 앱 계산값이며, 공식 제출 전에는 Excel 수식 결과와 차이를 검토해야 합니다.
+                </p>
             </SectionCard>
 
             <DataTable>

@@ -93,6 +93,7 @@ Completed:
 - Added a reusable local official-template verification script and fixed EU Export cell replacement for self-closing official workbook cells while preserving cell style IDs.
 - Extended EU Export writes into `A_InstData` aggregated-goods and production-process boundary tables so the official workbook receives product category, route, process boundary, and process name declarations before process-level totals.
 - Added first-pass `Summary_Products` export writes for production process, CN code, and product name while preserving official direct/indirect/total SEE formula cells.
+- Added an Export-page `Summary_Products` review table that shows the target EU row, process, CN code, product name, allocation share, and app-calculated SEE before workbook download.
 
 Pending product decisions:
 

@@ -57,6 +57,10 @@ assert.ok(
   exportPage.includes('A_InstData') && exportPage.includes('SEE'),
   'export page should explain A_InstData boundary writes and deferred product-line SEE writes'
 );
+assert.ok(
+  exportPage.includes('Summary_Products 반영 검토') && exportPage.includes('공식 수식 셀'),
+  'export page should show the Summary_Products review section'
+);
 
 for (const asset of ['file.svg', 'globe.svg', 'next.svg', 'vercel.svg', 'window.svg']) {
   assert.equal(existsSync(`public/${asset}`), false, `${asset} should not be kept in public assets`);
