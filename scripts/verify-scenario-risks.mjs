@@ -70,6 +70,8 @@ const baseResult = {
   hs_code: '7208',
   production_route: 'Flat steel processing',
   output_mass_t: 100,
+  see_cbam_basis: 1.6,
+  see_informational_total: 2.4,
   total_see: 2.4,
 };
 
@@ -111,35 +113,37 @@ const readyScenarios = calculateProductScenarios([baseResult], assumptions, refe
 assert.equal(readyScenarios.length, 1);
 assert.equal(readyScenarios[0].data_quality, 'READY');
 assert.equal(readyScenarios[0].default_see, 2);
-assertClose(readyScenarios[0].default_gap, 0.4);
+assertClose(readyScenarios[0].default_gap, -0.4);
+assert.equal(readyScenarios[0].actual_see, 1.6);
+assert.equal(readyScenarios[0].informational_total_see, 2.4);
 assert.equal(readyScenarios[0].benchmark_column_a, 1.5);
 assert.equal(readyScenarios[0].benchmark_column_b, 1.7);
 assert.equal(readyScenarios[0].sefa_indicator, 1.4625);
-assert.equal(readyScenarios[0].certificate_quantity_indicator, 93.75);
-assert.equal(readyScenarios[0].certificate_cost_indicator_eur, 7500);
+assertClose(readyScenarios[0].certificate_quantity_indicator, 13.75);
+assertClose(readyScenarios[0].certificate_cost_indicator_eur, 1100);
 assertClose(readyScenarios[0].default_sefa_indicator, 1.6575);
 assertClose(readyScenarios[0].default_certificate_quantity_indicator, 34.25);
 assertClose(readyScenarios[0].default_certificate_cost_indicator_eur, 2740);
-assertClose(readyScenarios[0].certificate_quantity_delta_indicator, 59.5);
-assertClose(readyScenarios[0].certificate_cost_delta_eur, 4760);
-assert.equal(readyScenarios[0].lower_certificate_basis, 'DEFAULT');
+assertClose(readyScenarios[0].certificate_quantity_delta_indicator, -20.5);
+assertClose(readyScenarios[0].certificate_cost_delta_eur, -1640);
+assert.equal(readyScenarios[0].lower_certificate_basis, 'ACTUAL');
 assert.equal(
   readyScenarios[0].review_message,
-  '실측 SEE가 기본값보다 높습니다. 실제자료와 기본값 시나리오의 인증서 지표를 비교하세요.'
+  '공식 기준값과 연결되었습니다. 실제자료/기본값 SEFA 및 인증서 지표를 검토하세요.'
 );
 
 const readySummary = summarizeScenarioRisks(readyScenarios);
 assert.equal(readySummary.missing_cn_count, 0);
 assert.equal(readySummary.missing_official_reference_count, 0);
 assert.equal(readySummary.missing_reference_count, 0);
-assert.equal(readySummary.above_default_count, 1);
+assert.equal(readySummary.above_default_count, 0);
 assert.equal(readySummary.certificate_exposure_count, 1);
 assert.equal(readySummary.default_certificate_exposure_count, 1);
-assert.equal(readySummary.actual_lower_certificate_count, 0);
-assert.equal(readySummary.default_lower_certificate_count, 1);
+assert.equal(readySummary.actual_lower_certificate_count, 1);
+assert.equal(readySummary.default_lower_certificate_count, 0);
 assert.equal(readySummary.equal_certificate_count, 0);
-assert.equal(readySummary.total_certificate_quantity_indicator, 93.75);
-assert.equal(readySummary.total_certificate_cost_indicator_eur, 7500);
+assertClose(readySummary.total_certificate_quantity_indicator, 13.75);
+assertClose(readySummary.total_certificate_cost_indicator_eur, 1100);
 assertClose(readySummary.total_default_certificate_quantity_indicator, 34.25);
 assertClose(readySummary.total_default_certificate_cost_indicator_eur, 2740);
 assert.equal(readySummary.is_ready_for_review, true);

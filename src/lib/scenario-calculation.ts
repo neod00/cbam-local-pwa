@@ -49,6 +49,7 @@ export interface ProductScenarioResult {
     cn_code?: string;
     output_mass_t: number;
     actual_see: number;
+    informational_total_see?: number;
     default_see?: number;
     default_gap?: number;
     benchmark_column_a?: number;
@@ -156,13 +157,16 @@ export function calculateProductScenarios(
 ): ProductScenarioResult[] {
     return results.map((result) => {
         const cnCode = result.cn_code || result.hs_code;
+        const actualSee = result.see_cbam_basis ?? result.total_see;
+        const informationalTotalSee = result.see_informational_total ?? result.total_see;
 
         if (!cnCode) {
             return {
                 result_id: result.id,
                 product_name: result.product_name,
                 output_mass_t: result.output_mass_t,
-                actual_see: result.total_see,
+                actual_see: actualSee,
+                informational_total_see: informationalTotalSee,
                 lower_certificate_basis: 'UNKNOWN',
                 data_quality: 'MISSING_CN',
                 review_message: 'CN 코드가 없어 공식 기준값과 비교할 수 없습니다.',
@@ -177,7 +181,7 @@ export function calculateProductScenarios(
             assumptions.default_value_year
         );
         const defaultSee = defaultValue ? getDefaultValueTotalForYear(defaultValue, assumptions.default_value_year) : undefined;
-        const defaultGap = defaultSee === undefined ? undefined : result.total_see - defaultSee;
+        const defaultGap = defaultSee === undefined ? undefined : actualSee - defaultSee;
         const benchmarkColumnA = benchmark?.column_a_benchmark;
         const benchmarkColumnB = benchmark?.column_b_benchmark;
         const sefaIndicator = benchmarkColumnA === undefined
@@ -188,7 +192,7 @@ export function calculateProductScenarios(
             : benchmarkColumnB * assumptions.cbam_factor * assumptions.cscf;
         const certificateQuantityIndicator = sefaIndicator === undefined
             ? undefined
-            : Math.max(0, (result.total_see - sefaIndicator) * result.output_mass_t);
+            : Math.max(0, (actualSee - sefaIndicator) * result.output_mass_t);
         const certificateCostIndicator = certificateQuantityIndicator === undefined
             ? undefined
             : certificateQuantityIndicator * assumptions.certificate_price_eur;
@@ -218,7 +222,8 @@ export function calculateProductScenarios(
             product_name: result.product_name,
             cn_code: cnCode,
             output_mass_t: result.output_mass_t,
-            actual_see: result.total_see,
+            actual_see: actualSee,
+            informational_total_see: informationalTotalSee,
             default_see: defaultSee,
             default_gap: defaultGap,
             benchmark_column_a: benchmarkColumnA,
