@@ -84,7 +84,11 @@ export default function ResultsPage() {
     const summary = useMemo(() => {
         const totalOutput = results.reduce((sum, result) => sum + result.output_mass_t, 0);
         const allocatedEmissions = results.reduce(
-            (sum, result) => sum + result.direct_emissions_tco2e + result.indirect_see * result.output_mass_t + result.precursor_see * result.output_mass_t,
+            (sum, result) =>
+                sum +
+                result.direct_emissions_tco2e +
+                result.indirect_see * result.output_mass_t +
+                result.precursor_see * result.output_mass_t,
             0
         );
         const productLineCount = results.filter((result) => result.product_output_line_id).length;
@@ -113,7 +117,7 @@ export default function ResultsPage() {
             <PageHeader
                 eyebrow="산정 결과"
                 title="제품별 SEE 산정 결과"
-                description="생산공정의 제품 생산라인과 배분기준을 기준으로 직접배출량, 간접배출량, 전구물질 배출량을 제품별로 배분합니다."
+                description="생산공정과 제품 생산라인, 배분 기준을 바탕으로 직접배출량, 간접배출량, 전구물질 배출량을 제품별로 배분합니다."
             />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

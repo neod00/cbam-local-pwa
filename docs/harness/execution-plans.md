@@ -95,6 +95,7 @@ Completed:
 - Added first-pass `Summary_Products` export writes for production process, CN code, and product name while preserving official direct/indirect/total SEE formula cells.
 - Added an Export-page `Summary_Products` review table that shows the target EU row, process, CN code, product name, allocation share, and app-calculated SEE before workbook download.
 - Restored Korean-first copy on the EU Export page, including template selection, validation status, checklist, Export principles, readiness issues, and SEE preview labels.
+- Restored Korean-first copy on the Results page, including allocation labels, SEE table headers, loading/empty states, and warning actions.
 
 Pending product decisions:
 
