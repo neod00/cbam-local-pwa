@@ -6,6 +6,7 @@ const appShell = readFileSync('src/components/AppShell.tsx', 'utf8');
 const layout = readFileSync('src/app/layout.tsx', 'utf8');
 const dashboard = readFileSync('src/app/page.tsx', 'utf8');
 const exportPage = readFileSync('src/app/export/page.tsx', 'utf8');
+const processesPage = readFileSync('src/app/processes/page.tsx', 'utf8');
 const resultsPage = readFileSync('src/app/results/page.tsx', 'utf8');
 const scenariosPage = readFileSync('src/app/scenarios/page.tsx', 'utf8');
 const settingsPage = readFileSync('src/app/settings/page.tsx', 'utf8');
@@ -44,6 +45,9 @@ assert.ok(exportPage.includes('첫 번째 항목 수정'), 'Export should guide 
 assert.ok(exportPage.includes('제출용 복사본 생성'), 'Export should expose a clear final copy generation action');
 assert.ok(exportPage.includes('공식 수식 셀이 계산하도록 직접 덮어쓰지 않습니다'), 'Export should preserve official formula cells');
 assert.ok(exportPage.includes('Excel에서 생성된 복사본을 열면'), 'Export should tell users to review Excel formula outputs');
+assert.ok(processesPage.includes('생산공정 다음 작업'), 'Processes should show next-action guidance');
+assert.ok(processesPage.includes('제품 생산라인 배분'), 'Processes should guide allocation review');
+assert.ok(processesPage.includes('배출원 자료부터 보완하세요'), 'Processes should guide missing source-stream evidence');
 assert.ok(resultsPage.includes('제품별 SEE 산정 결과'), 'Results page should show product-level SEE results');
 assert.ok(scenariosPage.includes('SEFA 및 CBAM 인증서 시나리오'), 'Scenarios page should show SEFA/certificate review');
 assert.ok(settingsPage.includes('법률 자문, 공식 검증, 최종 제출 책임을 대체하지 않습니다'), 'Settings should show the liability notice');

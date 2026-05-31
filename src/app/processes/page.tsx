@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, DataTable, PageHeader, SectionCard, StatCard } from '@/components/ui';
+import { Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import {
     createLocalItem,
     deleteLocalItem,
@@ -17,7 +17,8 @@ import {
 import { summarizeProductOutputLines } from '@/lib/calculation-engine';
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from '@/lib/source-stream-calculation';
 import { getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
-import { Factory, Gauge, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Factory, Gauge, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
+import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type ProcessDraft = Omit<ProductionProcess, 'id' | 'created_at' | 'updated_at'>;
@@ -458,6 +459,57 @@ export default function ProcessesPage() {
                 <StatCard label="전력 사용량" value={formatNumber(summary.totalElectricity)} helper="MWh" icon={Zap} tone="warning" />
                 <StatCard label="배출원 검토" value={summary.sourceStreamReviewCount} helper="자료 누락 또는 직접배출량 차이" icon={Gauge} tone="warning" />
             </div>
+
+            <SectionCard
+                title="생산공정 다음 작업"
+                description="생산공정은 SEE 계산의 중심입니다. 제품 생산라인 배분과 배출원 자료가 맞아야 Export 경고가 줄어듭니다."
+            >
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-slate-950">제품 생산라인 배분</p>
+                            <StatusBadge tone={summary.outputLineReviewCount > 0 ? 'warning' : 'success'}>
+                                {summary.outputLineReviewCount > 0 ? '확인 필요' : '정상'}
+                            </StatusBadge>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                            공정 총 생산량과 제품별 생산라인 합계가 맞아야 제품별 SEE 할당이 자연스럽게 이어집니다.
+                        </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-slate-950">직접배출 근거 자료</p>
+                            <StatusBadge tone={summary.sourceStreamReviewCount > 0 ? 'warning' : 'success'}>
+                                {summary.sourceStreamReviewCount > 0 ? `${summary.sourceStreamReviewCount}건 검토` : '연결 완료'}
+                            </StatusBadge>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                            직접배출량이 있는 공정은 B_EmInst 근거가 되는 배출원 자료와 연결되어야 합니다.
+                        </p>
+                    </div>
+                    <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
+                        <div className="flex gap-3">
+                            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
+                            <div>
+                                <p className="text-sm font-semibold text-teal-950">
+                                    {summary.sourceStreamReviewCount > 0 ? '배출원 자료부터 보완하세요' : '공정별 SEE 검토를 진행하세요'}
+                                </p>
+                                <p className="mt-2 text-sm leading-6 text-teal-900">
+                                    {summary.sourceStreamReviewCount > 0
+                                        ? '누락된 배출원 자료를 추가하면 Results와 Export 경고가 함께 줄어듭니다.'
+                                        : '제품 생산라인과 배출원 자료가 준비되었으면 산정 결과에서 제품별 SEE를 확인하세요.'}
+                                </p>
+                                <Link href={summary.sourceStreamReviewCount > 0 ? '/source-streams' : '/results'}>
+                                    <Button type="button" className="mt-3">
+                                        {summary.sourceStreamReviewCount > 0 ? '배출원 자료로 이동' : '산정 결과 확인'}
+                                        <ArrowRight className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </SectionCard>
 
             {showForm && (
                 <SectionCard
