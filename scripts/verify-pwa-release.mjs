@@ -10,6 +10,7 @@ const exportPage = readFileSync('src/app/export/page.tsx', 'utf8');
 const releaseChecklist = readFileSync('docs/mvp-release-checklist.md', 'utf8');
 const rehearsalPlan = readFileSync('docs/mvp-rehearsal-plan.md', 'utf8');
 const rehearsalReport = readFileSync('docs/mvp-rehearsal-report.md', 'utf8');
+const fictionalDataset = readFileSync('docs/mvp-fictional-dataset.md', 'utf8');
 const userNotices = readFileSync('docs/mvp-user-notices.md', 'utf8');
 const freeTermsDraft = readFileSync('docs/free-pwa-terms-draft.md', 'utf8');
 const deploymentGuide = readFileSync('docs/pwa-deployment-guide.md', 'utf8');
@@ -80,6 +81,7 @@ assert.ok(readme.includes('JavaScript 번들'), 'README should explain the PWA b
 assert.ok(readme.includes('CBAM_documents/'), 'README should explain local reference document exclusion');
 assert.ok(readme.includes('docs/mvp-release-checklist.md'), 'README should link the release checklist');
 assert.ok(readme.includes('docs/mvp-rehearsal-plan.md'), 'README should link the MVP rehearsal plan');
+assert.ok(readme.includes('docs/mvp-fictional-dataset.md'), 'README should link the MVP fictional dataset');
 assert.ok(readme.includes('docs/mvp-rehearsal-report.md'), 'README should link the MVP rehearsal report');
 assert.ok(readme.includes('docs/free-pwa-terms-draft.md'), 'README should link the free PWA terms draft');
 assert.ok(readme.includes('docs/pwa-deployment-guide.md'), 'README should link the PWA deployment guide');
@@ -91,6 +93,7 @@ assert.ok(releaseChecklist.includes('무료 사용 약관'), 'release checklist 
 assert.ok(releaseChecklist.includes('docs/free-pwa-terms-draft.md'), 'release checklist should link the free PWA terms draft');
 assert.ok(releaseChecklist.includes('docs/pwa-deployment-guide.md'), 'release checklist should link the PWA deployment guide');
 assert.ok(releaseChecklist.includes('docs/mvp-rehearsal-plan.md'), 'release checklist should link the MVP rehearsal plan');
+assert.ok(releaseChecklist.includes('docs/mvp-fictional-dataset.md'), 'release checklist should link the MVP fictional dataset');
 assert.ok(releaseChecklist.includes('docs/mvp-rehearsal-report.md'), 'release checklist should link the MVP rehearsal report');
 assert.ok(releaseChecklist.includes('Docker/on-premise'), 'release checklist should keep on-premise scope deferred');
 
@@ -105,6 +108,23 @@ for (const required of [
   '.cbam',
 ]) {
   assert.ok(rehearsalPlan.includes(required), `MVP rehearsal plan should include ${required}`);
+}
+
+assert.ok(
+  rehearsalPlan.includes('docs/mvp-fictional-dataset.md'),
+  'MVP rehearsal plan should link the fictional dataset'
+);
+
+for (const required of [
+  'Main Factory A',
+  'Hot Rolled Coil',
+  'Steel Pipe',
+  'Natural gas combustion',
+  'Purchased hot rolled coil',
+  '.cbam',
+  'Microsoft Excel',
+]) {
+  assert.ok(fictionalDataset.includes(required), `MVP fictional dataset should include ${required}`);
 }
 
 for (const required of [

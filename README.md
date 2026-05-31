@@ -106,6 +106,8 @@ MVP 배포 전 확인 항목은 [docs/mvp-release-checklist.md](docs/mvp-release
 
 기업 담당자 관점의 실제 사용 리허설은 [docs/mvp-rehearsal-plan.md](docs/mvp-rehearsal-plan.md)를 기준으로 진행합니다.
 
+리허설에는 실제 회사 자료 대신 [docs/mvp-fictional-dataset.md](docs/mvp-fictional-dataset.md)의 가상 입력값을 사용합니다.
+
 현재 리허설 실행 결과는 [docs/mvp-rehearsal-report.md](docs/mvp-rehearsal-report.md)에 기록합니다.
 
 배포 채널과 설정 기준은 [docs/pwa-deployment-guide.md](docs/pwa-deployment-guide.md)에 정리합니다.

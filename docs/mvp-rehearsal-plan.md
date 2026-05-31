@@ -21,7 +21,7 @@
 - 최신 EU `CBAM Communication template for installations` 원본 Excel
 - 최신 또는 테스트용 `CBAMBenchmarks_*.xlsx`
 - 최신 또는 테스트용 `DVsasadopted_*.xlsx`
-- 리허설용 가상 회사 입력값
+- 리허설용 가상 회사 입력값: [docs/mvp-fictional-dataset.md](mvp-fictional-dataset.md)
 
 ## Local File Verification Commands
 

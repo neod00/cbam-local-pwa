@@ -137,6 +137,7 @@ Completed:
 - Recorded the current MVP rehearsal report: full `npm.cmd run verify`, local EU template verification, local benchmark/default-value verification, and remaining manual Excel/browser walkthrough blockers.
 - Strengthened the free PWA terms draft with license-scope, official-material rights, support limits, warranty disclaimer, access restriction, and pre-release legal review placeholders.
 - Added `npm run verify:deployment` to guard private-source deployment readiness, including forbidden tracked local files, package privacy, deployment docs, release checklist, and rehearsal report coverage.
+- Added a fictional MVP rehearsal dataset so browser walkthroughs can use repeatable non-company inputs for installation, period, products, allocation, source streams, precursors, scenarios, Export, Excel review, and `.cbam` backup.
 
 Pending product decisions:
 
@@ -144,7 +145,7 @@ Pending product decisions:
 
 Next:
 
-- Complete the remaining manual browser walkthrough in `docs/mvp-rehearsal-plan.md` using a fictional company dataset.
+- Complete the remaining manual browser walkthrough in `docs/mvp-rehearsal-plan.md` using `docs/mvp-fictional-dataset.md`.
 - Open an exported workbook copy in Microsoft Excel and compare recalculated `Summary_Products` formula outputs with the app's local SEE review values.
 - Review and finalize `docs/free-pwa-terms-draft.md` with legal wording before public distribution.
 - Prepare the first private-source PWA deployment run using `docs/pwa-deployment-guide.md`.
