@@ -186,9 +186,14 @@ for (const required of [
   '공식 검증',
   'JavaScript 번들',
   '문의 채널',
+  'openbrain.main@gmail.com',
 ]) {
   assert.ok(releaseAnnouncementDraft.includes(required), `release announcement draft should include ${required}`);
 }
+
+assert.ok(securityPolicy.includes('openbrain.main@gmail.com'), 'security policy should include the public contact email');
+assert.ok(freeTermsDraft.includes('openbrain.main@gmail.com'), 'free terms draft should include the public contact email');
+assert.ok(firstDeploymentRunbook.includes('openbrain.main@gmail.com'), 'first deployment runbook should include the public contact email');
 
 assert.equal(packageJson.private, true, 'package.json should keep private true');
 assert.ok(deploymentGuide.includes('GitHub 저장소는 Private'), 'deployment guide should keep the source repository private');

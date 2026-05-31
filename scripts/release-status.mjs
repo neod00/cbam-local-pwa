@@ -60,7 +60,9 @@ const missingCommandReferences = requiredCommands.filter(
   (command) => !releaseDocsText.includes(command)
 );
 const unresolvedDraftSignals = [
-  termsDraft.includes('검토') ? 'Free-use terms still require legal review.' : undefined,
+  termsDraft.includes('법률 검토 전') || termsDraft.includes('최종 문구로 사용하기 전 검토')
+    ? 'Free-use terms still require legal review.'
+    : undefined,
   /\[[^\]]+\]/.test(announcementDraft) ? 'Release announcement still contains bracketed placeholder fields.' : undefined,
   report.includes('Complete manual Excel formula recalculation review')
     ? 'Manual Excel recalculation review is still recorded as incomplete.'

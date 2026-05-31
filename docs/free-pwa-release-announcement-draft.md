@@ -1,6 +1,6 @@
 # Free PWA Release Announcement Draft
 
-이 문서는 CBAM Local PWA를 무료로 배포할 때 사용할 공지문 초안이다. 실제 공개 전에는 서비스명, 운영자 정보, 문의 채널, 약관 링크, 개인정보 처리 안내를 최종 확정해야 한다.
+이 문서는 CBAM Local PWA를 무료로 배포할 때 사용할 공지문 초안이다. 실제 공개 전에는 서비스명, 운영자 정보, 약관 링크, 개인정보 처리 안내를 최종 확정해야 한다. 문의 채널은 `openbrain.main@gmail.com`으로 둔다.
 
 ## 짧은 공지문
 
@@ -65,10 +65,10 @@ SEFA와 CBAM 인증서 관련 화면은 현재 검토용 시나리오입니다. 
 
 - 서비스명
 - 운영자명 또는 회사명
-- 문의 채널: 배포 페이지에 고지된 연락처 또는 문의 양식
+- 문의 채널: `openbrain.main@gmail.com`
 - 약관 URL
 - 개인정보 처리 안내 URL
-- 보안 문의 채널
+- 보안 문의 채널: `openbrain.main@gmail.com`
 - 릴리스 노트 URL
 
 ## 첫 공지 전 보류 조건
