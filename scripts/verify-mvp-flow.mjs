@@ -43,5 +43,8 @@ assert.ok(resultsPage.includes('제품별 SEE 산정 결과'), 'Results page sho
 assert.ok(scenariosPage.includes('SEFA 및 CBAM 인증서 시나리오'), 'Scenarios page should show SEFA/certificate review');
 assert.ok(settingsPage.includes('법률 자문, 공식 검증, 최종 제출 책임을 대체하지 않습니다'), 'Settings should show the liability notice');
 assert.ok(settingsPage.includes('.cbam 백업'), 'Settings should guide backup handling');
+assert.ok(settingsPage.includes('무료 라이선스'), 'Settings should include the free license placeholder');
+assert.ok(settingsPage.includes('CBAM 산정 데이터, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다'), 'Settings should explain the license data boundary');
+assert.ok(settingsPage.includes('license:free-registration'), 'Settings should store free license mock registration in local settings');
 
 console.log('MVP flow verification passed.');

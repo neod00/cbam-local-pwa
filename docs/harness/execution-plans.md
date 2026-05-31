@@ -104,6 +104,7 @@ Completed:
 - Added an MVP user-notices document covering legal/verification limits, local data and `.cbam` backup handling, latest EU template use, Excel formula review, and deferred free-license/admin scope.
 - Restored Korean-first global navigation/topbar labels and added `npm run verify:mvp-flow` to guard the MVP flow from dashboard through results, scenarios, Export, and backup notices.
 - Established the post-MVP productization plan with `DESIGN.md`, a guided CBAM workflow, free-license strategy, update policy, admin-console plan, and `npm run verify:design-system`.
+- Added a settings-page free-license placeholder with local mock registration, explicit server non-transfer notice for CBAM data/templates/backups, and `.cbam` backup inclusion through the existing settings store.
 
 Pending product decisions:
 

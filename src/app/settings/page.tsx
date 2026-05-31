@@ -1,8 +1,7 @@
 'use client';
 
-import { Button, PageHeader, SectionCard, StatCard } from '@/components/ui';
 import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummary';
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { Button, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import {
     CbamBackupFile,
     CBAM_LAST_BACKUP_AT_KEY,
@@ -13,6 +12,7 @@ import {
     importLocalBackup,
     parseBackupFile,
     seedLocalData,
+    setLocalSetting,
 } from '@/lib/local-db';
 import {
     DEFAULT_SCENARIO_ASSUMPTIONS,
@@ -20,14 +20,28 @@ import {
     SCENARIO_ASSUMPTIONS_SETTING_KEY,
     type ScenarioAssumptions,
 } from '@/lib/scenario-calculation';
-import { AlertTriangle, Database, Download, FileUp, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertTriangle, Database, Download, FileUp, KeyRound, ShieldCheck, Trash2 } from 'lucide-react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+
+const FREE_LICENSE_SETTING_KEY = 'license:free-registration';
+
+type FreeLicenseStatus = 'UNREGISTERED' | 'FREE_ACTIVE' | 'OFFLINE_ALLOWED';
+
+interface FreeLicenseRegistration {
+    email: string;
+    company_name: string;
+    contact_name: string;
+    license_key: string;
+    status: FreeLicenseStatus;
+    last_checked_at?: string;
+}
 
 function formatDateTime(value?: string) {
     if (!value) {
-        return '아직 백업하지 않음';
+        return '아직 기록 없음';
     }
 
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat('ko-KR', {
         dateStyle: 'medium',
         timeStyle: 'short',
     }).format(new Date(value));
@@ -38,9 +52,25 @@ function createBackupFilename() {
     return `cbam-local-backup-${stamp}.cbam`;
 }
 
+function getLicenseStatus(registration?: FreeLicenseRegistration): { label: string; helper: string; tone: 'success' | 'warning' | 'pending' } {
+    if (!registration?.email || !registration.company_name || !registration.license_key) {
+        return {
+            label: '미등록',
+            helper: '무료 라이선스 서버 연동 전 준비 상태입니다.',
+            tone: 'warning',
+        };
+    }
+
+    return {
+        label: registration.status === 'OFFLINE_ALLOWED' ? '오프라인 사용 가능' : '무료 등록',
+        helper: registration.last_checked_at ? `마지막 확인 ${formatDateTime(registration.last_checked_at)}` : '로컬 mock 등록 상태입니다.',
+        tone: registration.status === 'OFFLINE_ALLOWED' ? 'pending' : 'success',
+    };
+}
+
 const storeLabels: Record<string, string> = {
     installations: '사업장',
-    products: '제품',
+    products: '품목',
     periods: '보고기간',
     processes: '생산공정',
     product_output_lines: '제품 생산라인',
@@ -52,16 +82,30 @@ const storeLabels: Record<string, string> = {
 export default function SettingsPage() {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [backupPreview, setBackupPreview] = useState<CbamBackupFile | null>(null);
-    const [importContent, setImportContent] = useState<string>('');
+    const [importContent, setImportContent] = useState('');
     const [message, setMessage] = useState('');
     const [lastBackupAt, setLastBackupAt] = useState<string | undefined>();
     const [scenarioAssumptions, setScenarioAssumptions] = useState<ScenarioAssumptions>();
+    const [licenseRegistration, setLicenseRegistration] = useState<FreeLicenseRegistration>({
+        email: '',
+        company_name: '',
+        contact_name: '',
+        license_key: '',
+        status: 'UNREGISTERED',
+    });
 
     useEffect(() => {
         setLastBackupAt(window.localStorage.getItem(CBAM_LAST_BACKUP_AT_KEY) ?? undefined);
         getLocalSetting<ScenarioAssumptions>(SCENARIO_ASSUMPTIONS_SETTING_KEY)
             .then((savedAssumptions) => setScenarioAssumptions(normalizeScenarioAssumptions(savedAssumptions)))
             .catch(() => setScenarioAssumptions(normalizeScenarioAssumptions(undefined)));
+        getLocalSetting<FreeLicenseRegistration>(FREE_LICENSE_SETTING_KEY)
+            .then((savedLicense) => {
+                if (savedLicense) {
+                    setLicenseRegistration(savedLicense);
+                }
+            })
+            .catch(() => undefined);
     }, []);
 
     const totalPreviewItems = useMemo(() => {
@@ -89,6 +133,8 @@ export default function SettingsPage() {
         return getBackupCompatibilityMessage(backupPreview.manifest);
     }, [backupPreview]);
 
+    const licenseStatus = useMemo(() => getLicenseStatus(licenseRegistration), [licenseRegistration]);
+
     async function handleExport() {
         const backup = await exportLocalBackup();
         const content = JSON.stringify(backup, null, 2);
@@ -106,6 +152,21 @@ export default function SettingsPage() {
         window.localStorage.setItem(CBAM_LAST_BACKUP_AT_KEY, backup.manifest.exported_at);
         setLastBackupAt(backup.manifest.exported_at);
         setMessage('백업 파일을 내보냈습니다. 회사의 안전한 폴더에 보관하세요.');
+    }
+
+    async function handleLicenseSubmit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        const nextRegistration: FreeLicenseRegistration = {
+            ...licenseRegistration,
+            status: licenseRegistration.email && licenseRegistration.company_name && licenseRegistration.license_key
+                ? 'FREE_ACTIVE'
+                : 'UNREGISTERED',
+            last_checked_at: new Date().toISOString(),
+        };
+
+        await setLocalSetting(FREE_LICENSE_SETTING_KEY, nextRegistration);
+        setLicenseRegistration(nextRegistration);
+        setMessage('무료 라이선스 정보를 로컬 설정에 저장했습니다. 현재 단계에서는 서버 검증을 수행하지 않습니다.');
     }
 
     async function handleFileSelected(event: ChangeEvent<HTMLInputElement>) {
@@ -145,8 +206,12 @@ export default function SettingsPage() {
         const parsed = parseBackupFile(importContent);
         await importLocalBackup(parsed);
         const restoredScenarioSetting = parsed.data.settings.find((item) => item.key === SCENARIO_ASSUMPTIONS_SETTING_KEY);
+        const restoredLicenseSetting = parsed.data.settings.find((item) => item.key === FREE_LICENSE_SETTING_KEY);
         setScenarioAssumptions(normalizeScenarioAssumptions(restoredScenarioSetting?.value as Partial<ScenarioAssumptions> | undefined));
-        setMessage('백업을 복원했습니다. 설정 화면의 시나리오 가정값도 복원된 백업 기준으로 갱신했습니다.');
+        if (restoredLicenseSetting?.value) {
+            setLicenseRegistration(restoredLicenseSetting.value as FreeLicenseRegistration);
+        }
+        setMessage('백업을 복원했습니다. 시나리오 가정값과 무료 라이선스 로컬 설정도 백업 기준으로 갱신했습니다.');
         setBackupPreview(null);
         setImportContent('');
     }
@@ -163,9 +228,16 @@ export default function SettingsPage() {
         await clearLocalData();
         await seedLocalData();
         setScenarioAssumptions(DEFAULT_SCENARIO_ASSUMPTIONS);
+        setLicenseRegistration({
+            email: '',
+            company_name: '',
+            contact_name: '',
+            license_key: '',
+            status: 'UNREGISTERED',
+        });
         setBackupPreview(null);
         setImportContent('');
-        setMessage('로컬 데이터를 삭제하고 시작용 예시 데이터를 다시 생성했습니다. 시나리오 가정값은 기본값으로 돌아갔습니다.');
+        setMessage('로컬 데이터를 삭제하고 시작용 예시 데이터를 다시 생성했습니다. 시나리오 가정값과 라이선스 정보는 기본 상태로 돌아갔습니다.');
     }
 
     return (
@@ -201,36 +273,87 @@ export default function SettingsPage() {
                 </div>
             </SectionCard>
 
+            <SectionCard
+                title="무료 라이선스"
+                description="무료 라이선스는 배포 관리, 공지, 업데이트 안내를 위한 준비 기능입니다. CBAM 산정 데이터, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다."
+                actions={<StatusBadge tone={licenseStatus.tone}>{licenseStatus.label}</StatusBadge>}
+            >
+                <form onSubmit={handleLicenseSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <label className="space-y-1 text-sm font-semibold text-slate-700">
+                            <span>이메일</span>
+                            <input
+                                value={licenseRegistration.email}
+                                onChange={(event) => setLicenseRegistration((current) => ({ ...current, email: event.target.value }))}
+                                type="email"
+                                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                                placeholder="name@company.com"
+                            />
+                        </label>
+                        <label className="space-y-1 text-sm font-semibold text-slate-700">
+                            <span>회사명</span>
+                            <input
+                                value={licenseRegistration.company_name}
+                                onChange={(event) => setLicenseRegistration((current) => ({ ...current, company_name: event.target.value }))}
+                                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                                placeholder="회사명"
+                            />
+                        </label>
+                        <label className="space-y-1 text-sm font-semibold text-slate-700">
+                            <span>담당자명</span>
+                            <input
+                                value={licenseRegistration.contact_name}
+                                onChange={(event) => setLicenseRegistration((current) => ({ ...current, contact_name: event.target.value }))}
+                                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                                placeholder="담당자명"
+                            />
+                        </label>
+                        <label className="space-y-1 text-sm font-semibold text-slate-700">
+                            <span>라이선스 키</span>
+                            <input
+                                value={licenseRegistration.license_key}
+                                onChange={(event) => setLicenseRegistration((current) => ({ ...current, license_key: event.target.value }))}
+                                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                                placeholder="FREE-..."
+                            />
+                        </label>
+                    </div>
+                    <div className="flex flex-col gap-3 rounded-2xl border border-teal-100 bg-teal-50 p-4 text-sm leading-6 text-teal-900 md:flex-row md:items-center md:justify-between">
+                        <div className="flex gap-3">
+                            <KeyRound className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
+                            <p>
+                                {licenseStatus.helper} 실제 서버 검증, 사용자 목록, 공지/강제 업데이트 관리는 관리자 콘솔 단계에서 구현합니다.
+                            </p>
+                        </div>
+                        <Button type="submit" className="md:flex-none">로컬 저장</Button>
+                    </div>
+                </form>
+            </SectionCard>
+
             <ScenarioAssumptionSummary
                 assumptions={scenarioAssumptions}
                 description="이 가정값은 로컬 설정에 저장되며 .cbam 백업 파일에 함께 포함됩니다."
             />
 
-            <SectionCard>
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        <h2 className="text-lg font-semibold text-slate-950">.cbam 백업 내보내기</h2>
-                        <p className="mt-1 text-sm text-slate-600">
-                            사업장, 제품, 보고기간, 생산공정, 전구물질, 설정과 향후 산정 데이터를 하나의 백업 파일로 내려받습니다.
-                        </p>
-                    </div>
-                    <Button
-                        onClick={handleExport}
-                    >
+            <SectionCard
+                title=".cbam 백업 내보내기"
+                description="사업장, 품목, 보고기간, 생산공정, 배출원 자료, 전구물질, 시나리오 가정값, 무료 라이선스 로컬 설정을 하나의 백업 파일로 내려받습니다."
+                actions={(
+                    <Button onClick={handleExport}>
                         <Download className="mr-2 h-4 w-4" />
                         백업 내보내기
                     </Button>
-                </div>
+                )}
+            >
+                <p className="text-sm leading-6 text-slate-600">
+                    백업 파일에는 업무 입력자료가 포함될 수 있으므로 회사 보안정책에 맞는 위치에 보관하세요.
+                </p>
             </SectionCard>
 
-            <SectionCard>
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                    <div>
-                        <h2 className="text-lg font-semibold text-slate-950">.cbam 백업 가져오기</h2>
-                        <p className="mt-1 text-sm text-slate-600">
-                            백업 파일을 불러와 내용을 확인한 뒤 이 브라우저에 복원합니다. 복원 전 백업 파일에 포함된 시나리오 가정값도 미리 볼 수 있습니다.
-                        </p>
-                    </div>
+            <SectionCard
+                title=".cbam 백업 가져오기"
+                description="백업 파일을 불러와 내용을 확인한 뒤 현재 브라우저에 복원합니다. 복원하면 현재 로컬 데이터가 백업 내용으로 교체됩니다."
+                actions={(
                     <div className="flex gap-3">
                         <input
                             ref={fileInputRef}
@@ -239,26 +362,18 @@ export default function SettingsPage() {
                             className="hidden"
                             onChange={handleFileSelected}
                         />
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => fileInputRef.current?.click()}
-                        >
+                        <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
                             <FileUp className="mr-2 h-4 w-4" />
                             백업 선택
                         </Button>
-                        <Button
-                            type="button"
-                            onClick={handleImport}
-                            disabled={!backupPreview}
-                        >
+                        <Button type="button" onClick={handleImport} disabled={!backupPreview}>
                             복원
                         </Button>
                     </div>
-                </div>
-
-                {backupPreview && (
-                    <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                )}
+            >
+                {backupPreview ? (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <h3 className="text-sm font-semibold text-gray-900">백업 미리보기</h3>
                         <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-4">
                             <div>
@@ -275,9 +390,7 @@ export default function SettingsPage() {
                             </div>
                             <div>
                                 <dt className="text-gray-500">형식</dt>
-                                <dd className="font-medium text-gray-900">
-                                    v{backupPreview.manifest.format_version}
-                                </dd>
+                                <dd className="font-medium text-gray-900">v{backupPreview.manifest.format_version}</dd>
                             </div>
                             <div>
                                 <dt className="text-gray-500">데이터 건수</dt>
@@ -306,6 +419,10 @@ export default function SettingsPage() {
                             />
                         </div>
                     </div>
+                ) : (
+                    <p className="text-sm leading-6 text-slate-600">
+                        복원할 백업 파일을 선택하면 포함된 데이터 건수와 시나리오 가정값을 먼저 확인할 수 있습니다.
+                    </p>
                 )}
             </SectionCard>
 
@@ -317,11 +434,7 @@ export default function SettingsPage() {
                             이 브라우저의 모든 CBAM Local 데이터를 삭제합니다. 보관이 필요하면 먼저 백업을 내보내세요.
                         </p>
                     </div>
-                    <Button
-                        type="button"
-                        variant="danger"
-                        onClick={handleClearData}
-                    >
+                    <Button type="button" variant="danger" onClick={handleClearData}>
                         <Trash2 className="mr-2 h-4 w-4" />
                         데이터 삭제
                     </Button>
