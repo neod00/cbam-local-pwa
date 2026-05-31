@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import {
     createLocalItem,
     deleteLocalItem,
@@ -433,49 +433,42 @@ export default function PrecursorsPage() {
                 description="전구물질은 공급업체 회신, 기본값 사용 사유, 검증 상태가 함께 남아야 SEFA와 Export 검토가 쉬워집니다."
             >
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-semibold text-slate-950">기본값 사용 사유</p>
+                    <ActionItemCard
+                        title="기본값 사용 사유"
+                        description="기본값을 쓰는 경우에는 왜 실제자료 대신 기본값을 적용했는지 근거를 남겨야 합니다."
+                        badge={
                             <StatusBadge tone={summary.missingDefaultJustificationCount > 0 ? 'warning' : 'success'}>
                                 {summary.missingDefaultJustificationCount > 0 ? `${summary.missingDefaultJustificationCount}건 필요` : '정리 완료'}
                             </StatusBadge>
-                        </div>
-                        <p className="mt-2 text-sm leading-6 text-slate-600">
-                            기본값을 쓰는 경우에는 왜 실제자료 대신 기본값을 적용했는지 근거를 남겨야 합니다.
-                        </p>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-semibold text-slate-950">실제자료 검증 상태</p>
+                        }
+                    />
+                    <ActionItemCard
+                        title="실제자료 검증 상태"
+                        description="Actual 또는 Semi-actual 자료는 공급업체 확인 또는 검증 상태를 함께 기록하세요."
+                        badge={
                             <StatusBadge tone={summary.unverifiedActualCount > 0 ? 'warning' : 'success'}>
                                 {summary.unverifiedActualCount > 0 ? `${summary.unverifiedActualCount}건 미검증` : '확인 완료'}
                             </StatusBadge>
-                        </div>
-                        <p className="mt-2 text-sm leading-6 text-slate-600">
-                            Actual 또는 Semi-actual 자료는 공급업체 확인 또는 검증 상태를 함께 기록하세요.
-                        </p>
-                    </div>
-                    <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
-                        <div className="flex gap-3">
-                            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
-                            <div>
-                                <p className="text-sm font-semibold text-teal-950">
-                                    {summary.evidenceReviewCount > 0 ? '증빙 누락 항목을 먼저 정리하세요' : '시나리오 검토로 이동하세요'}
-                                </p>
-                                <p className="mt-2 text-sm leading-6 text-teal-900">
-                                    {summary.evidenceReviewCount > 0
-                                        ? `출처 누락 ${summary.missingSourceCount}건을 포함해 전구물질 증빙 상태를 보완하면 Export 경고가 줄어듭니다.`
-                                        : '전구물질 자료가 준비되었으면 SEFA와 CBAM 인증서 시나리오를 비교하세요.'}
-                                </p>
-                                <Link href={summary.evidenceReviewCount > 0 ? '/precursors' : '/scenarios'}>
-                                    <Button type="button" className="mt-3" onClick={summary.evidenceReviewCount > 0 ? startNewPrecursor : undefined}>
-                                        {summary.evidenceReviewCount > 0 ? '전구물질 보완' : '시나리오 확인'}
-                                        <ArrowRight className="ml-2 h-4 w-4" />
-                                    </Button>
-                                </Link>
-                            </div>
-                        </div>
-                    </div>
+                        }
+                    />
+                    <ActionItemCard
+                        title={summary.evidenceReviewCount > 0 ? '증빙 누락 항목을 먼저 정리하세요' : '시나리오 검토로 이동하세요'}
+                        description={
+                            summary.evidenceReviewCount > 0
+                                ? `출처 누락 ${summary.missingSourceCount}건을 포함해 전구물질 증빙 상태를 보완하면 Export 경고가 줄어듭니다.`
+                                : '전구물질 자료가 준비되었으면 SEFA와 CBAM 인증서 시나리오를 비교하세요.'
+                        }
+                        className="border-teal-100 bg-teal-50"
+                        badge={<AlertTriangle className="h-5 w-5 text-teal-700" />}
+                        action={
+                            <Link href={summary.evidenceReviewCount > 0 ? '/precursors' : '/scenarios'}>
+                                <Button type="button" onClick={summary.evidenceReviewCount > 0 ? startNewPrecursor : undefined}>
+                                    {summary.evidenceReviewCount > 0 ? '전구물질 보완' : '시나리오 확인'}
+                                    <ArrowRight className="ml-2 h-4 w-4" />
+                                </Button>
+                            </Link>
+                        }
+                    />
                 </div>
             </SectionCard>
 
