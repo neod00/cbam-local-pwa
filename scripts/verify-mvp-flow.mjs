@@ -67,6 +67,7 @@ assert.ok(precursorsPage.includes('2. 자료 모드와 검증 상태'), 'Precurs
 assert.ok(precursorsPage.includes('5. SEE와 증빙'), 'Precursor form should group SEE and evidence inputs');
 assert.ok(resultsPage.includes('제품별 SEE 산정 결과'), 'Results page should show product-level SEE results');
 assert.ok(scenariosPage.includes('SEFA 및 CBAM 인증서 시나리오'), 'Scenarios page should show SEFA/certificate review');
+assert.ok(scenariosPage.includes('기본값 인증서 비용') && scenariosPage.includes('md:hidden'), 'Scenarios should keep a mobile card fallback for SEFA/certificate review');
 assert.ok(settingsPage.includes('법률 자문, 공식 검증, 최종 제출 책임을 대체하지 않습니다'), 'Settings should show the liability notice');
 assert.ok(settingsPage.includes('.cbam 백업'), 'Settings should guide backup handling');
 assert.ok(settingsPage.includes('무료 라이선스'), 'Settings should include the free license placeholder');

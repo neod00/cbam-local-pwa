@@ -438,7 +438,57 @@ export default function ScenariosPage() {
                 </div>
             </SectionCard>
 
-            <DataTable>
+            <div className="grid grid-cols-1 gap-3 md:hidden">
+                {scenarios.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm text-slate-500">
+                        시나리오를 만들 산정 결과가 없습니다.
+                    </div>
+                ) : (
+                    scenarios.map((scenario) => (
+                        <div key={`${scenario.result_id}-mobile`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <h3 className="break-words text-sm font-semibold text-slate-950">{scenario.product_name}</h3>
+                                    <p className="mt-1 break-words text-xs text-slate-600">
+                                        {scenario.cn_code ? `CN ${scenario.cn_code}` : 'CN 미입력'} / 생산량 {formatNumber(scenario.output_mass_t)} t
+                                    </p>
+                                </div>
+                                <div className="flex flex-col items-end gap-2">
+                                    {getBasisBadge(scenario)}
+                                    {getQualityBadge(scenario)}
+                                </div>
+                            </div>
+                            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                                <div>
+                                    <dt className="text-xs text-slate-500">실측 SEE</dt>
+                                    <dd className="mt-1 font-semibold text-slate-900">{formatNumber(scenario.actual_see)}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs text-slate-500">기본값 SEE</dt>
+                                    <dd className="mt-1 font-semibold text-slate-900">{formatNumber(scenario.default_see)}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs text-slate-500">실측 인증서 비용</dt>
+                                    <dd className="mt-1 text-slate-700">{formatCurrency(scenario.certificate_cost_indicator_eur)}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs text-slate-500">기본값 인증서 비용</dt>
+                                    <dd className="mt-1 text-slate-700">{formatCurrency(scenario.default_certificate_cost_indicator_eur)}</dd>
+                                </div>
+                                <div className="col-span-2">
+                                    <dt className="text-xs text-slate-500">비용 차이</dt>
+                                    <dd className={(scenario.certificate_cost_delta_eur ?? 0) > 0 ? 'mt-1 font-semibold text-amber-700' : 'mt-1 text-slate-700'}>
+                                        {formatCurrency(scenario.certificate_cost_delta_eur)}
+                                    </dd>
+                                </div>
+                            </dl>
+                            <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">{scenario.review_message}</p>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            <DataTable className="hidden md:block">
                 <table className="min-w-full divide-y divide-slate-200">
                     <thead className="bg-slate-50">
                         <tr>
