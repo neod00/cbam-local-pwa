@@ -74,6 +74,19 @@ Completed in this pass:
 - Installation empty state added for first-time setup.
 - Upload screen clarified so available reference workbook imports are separated from post-MVP activity-data bulk upload.
 - Mobile review cards already exist for results, scenarios, and EU Export review tables.
+- Local production route check passed for:
+  - `/`
+  - `/installations`
+  - `/periods`
+  - `/products`
+  - `/processes`
+  - `/source-streams`
+  - `/precursors`
+  - `/results`
+  - `/scenarios`
+  - `/upload`
+  - `/export`
+  - `/settings`
 
 Remaining manual UI rehearsal:
 
@@ -88,4 +101,3 @@ Not blocking code verification, but required before public distribution:
 - Complete manual Excel formula recalculation review.
 - Complete full browser walkthrough using a fictional company dataset.
 - Finalize free-use terms wording with legal review.
-
