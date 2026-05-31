@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionItemCard, Button, DataTable, EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { ActionItemCard, Button, DataTable, EmptyState, FormSection, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import {
     createLocalItem,
     deleteLocalItem,
@@ -406,7 +406,11 @@ export default function SourceStreamsPage() {
                         </Button>
                     }
                 >
-                    <form noValidate onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <form noValidate onSubmit={handleSubmit} className="space-y-5">
+                        <FormSection
+                            title="1. 배출원 기본정보"
+                            description="연료 또는 공정 원료 배출원을 만들고, 어떤 보고기간과 생산공정의 직접배출 근거인지 연결합니다."
+                        >
                         <div>
                             <label htmlFor="source-stream-name" className="text-sm font-semibold text-slate-700">배출원명</label>
                             <input id="source-stream-name" required className={fieldClass} value={newItem.name} onChange={(event) => setNewItem({ ...newItem, name: event.target.value })} />
@@ -444,6 +448,12 @@ export default function SourceStreamsPage() {
                             </select>
                             {errors.process_id && <p className="mt-1 text-xs font-medium text-red-600">{errors.process_id}</p>}
                         </div>
+                        </FormSection>
+
+                        <FormSection
+                            title="2. 활동자료와 배출계수"
+                            description="활동자료 단위와 배출계수 단위가 같은 기준인지 확인하세요. 연료 배출원은 순발열량도 필요합니다."
+                        >
                         <div>
                             <label htmlFor="source-stream-activity" className="text-sm font-semibold text-slate-700">활동자료</label>
                             <input id="source-stream-activity" type="number" min="0" step="0.0001" className={fieldClass} value={newItem.activity_data} onChange={(event) => setNewItem({ ...newItem, activity_data: toNumber(event.target.value) })} />
@@ -466,6 +476,12 @@ export default function SourceStreamsPage() {
                             <input id="source-stream-ef" type="number" min="0" step="0.0001" className={fieldClass} value={newItem.emission_factor_tco2e_per_unit} onChange={(event) => setNewItem({ ...newItem, emission_factor_tco2e_per_unit: toNumber(event.target.value) })} />
                             {errors.emission_factor_tco2e_per_unit && <p className="mt-1 text-xs font-medium text-red-600">{errors.emission_factor_tco2e_per_unit}</p>}
                         </div>
+                        </FormSection>
+
+                        <FormSection
+                            title="3. 계수와 근거"
+                            description="산화계수, 전환계수, 화석탄소/바이오매스 비율과 자료 출처를 남깁니다. 출처는 검증 대응의 핵심 증빙입니다."
+                        >
                         <div>
                             <label htmlFor="source-stream-oxidation" className="text-sm font-semibold text-slate-700">산화계수</label>
                             <input id="source-stream-oxidation" type="number" min="0" max="1" step="0.0001" className={fieldClass} value={newItem.oxidation_factor} onChange={(event) => setNewItem({ ...newItem, oxidation_factor: toNumber(event.target.value) })} />
@@ -503,7 +519,9 @@ export default function SourceStreamsPage() {
                                 </p>
                             </div>
                         </div>
-                        <div className="md:col-span-3">
+                        </FormSection>
+
+                        <div className="flex flex-wrap gap-2">
                             <Button type="submit">{editingSourceStreamId ? '수정 저장' : '배출원 저장'}</Button>
                         </div>
                     </form>
