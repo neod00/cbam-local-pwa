@@ -6,11 +6,24 @@ CBAM Local PWA를 무료 배포할 때의 기본 방향입니다. 저장소는 �
 
 MVP 단계에서는 Vercel 같은 Next.js 지원 호스팅을 우선 검토합니다.
 
+현재 MVP 기본 채널은 **Vercel + Private GitHub 저장소**로 둡니다. 이유는 Next.js App Router 배포 난이도가 가장 낮고, preview/production 배포 흐름이 단순하며, 무료 PWA 검증 단계에서 운영 부담이 작기 때문입니다.
+
 - GitHub 저장소는 Private 상태로 유지합니다.
 - 호스팅 서비스에는 Private 저장소 접근 권한만 연결합니다.
 - 배포 산출물에는 `CBAM_documents/`, 공식 EU 템플릿, 실제 기업자료, `.cbam` 백업 파일을 포함하지 않습니다.
 - 배포 전에는 반드시 `npm run verify`를 통과시킵니다.
 - 무료 PWA 약관/고지와 보안 안내를 README 또는 앱 내 안내에서 확인 가능하게 유지합니다.
+
+## 채널 전환 기준
+
+Vercel을 기본값으로 두되, 아래 조건이 생기면 다른 채널을 검토합니다.
+
+- Cloudflare Pages: 정적 자산 비용, CDN 정책, 국내외 접속 품질이 Vercel보다 중요해질 때 검토합니다.
+- Netlify: 운영자가 이미 Netlify 배포/도메인/폼 기능을 사용하고 있을 때 검토합니다.
+- 자체 정적 호스팅: 공공기관 또는 기업 보안 정책상 외부 빌드 서비스 연결이 제한될 때 검토합니다.
+- Docker/on-premise: 무료 PWA가 아니라 유료 고급판에서 다중 사용자, 내부망, 관리자 통제를 제공할 때 검토합니다.
+
+무료 MVP에서는 배포 채널이 바뀌어도 원칙은 같습니다. CBAM 입력자료, EU 템플릿, `.cbam` 백업, 실제 기업자료는 배포 서버로 업로드하지 않습니다.
 
 ## Vercel 기준 설정
 

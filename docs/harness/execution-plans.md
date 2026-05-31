@@ -120,7 +120,6 @@ Completed:
 
 Pending product decisions:
 
-- Choose the final free PWA hosting channel after comparing Vercel, Cloudflare Pages, Netlify, or self-hosted static hosting.
 - Review and finalize the free-use terms with legal wording before public distribution.
 
 Next:
@@ -133,3 +132,4 @@ Next:
 - 2026-05-29: PWA is the primary free distribution channel to avoid installer trust warnings and reduce SaaS data exposure concerns.
 - 2026-05-29: Docker/on-prem deployment is deferred as a future paid/supportable edition for multi-user company environments.
 - 2026-05-29: `revfactory/harness` is not installed because it is Claude Code native; this repository uses a Codex-native lightweight harness through versioned docs.
+- 2026-05-31: MVP free PWA hosting defaults to Vercel with a Private GitHub repository; Cloudflare Pages, Netlify, self-hosted static hosting, and Docker/on-premise remain fallback or paid-edition channels.
