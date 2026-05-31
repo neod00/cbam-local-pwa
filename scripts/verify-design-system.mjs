@@ -18,6 +18,7 @@ for (const required of [
   'ExportGate',
   'LocalDataNotice',
   'EmptyState',
+  'FormSection',
   '한국어',
   'EU 원본 템플릿',
   '무료 라이선스',

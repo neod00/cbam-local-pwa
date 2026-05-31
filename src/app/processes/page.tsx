@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionItemCard, Button, DataTable, EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { ActionItemCard, Button, DataTable, EmptyState, FormSection, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import {
     createLocalItem,
     deleteLocalItem,
@@ -515,7 +515,11 @@ export default function ProcessesPage() {
                         </Button>
                     }
                 >
-                    <form noValidate onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <form noValidate onSubmit={handleSubmit} className="space-y-5">
+                        <FormSection
+                            title="1. 공정 기본정보"
+                            description="어떤 제품을 어떤 공정에서 생산하는지 먼저 연결합니다. CN 코드가 있는 제품과 보고기간이 연결되어야 Export 검토가 쉬워집니다."
+                        >
                         <div>
                             <label htmlFor="process-name" className="text-sm font-semibold text-slate-700">공정명</label>
                             <input id="process-name" required className={fieldClass} value={newItem.name} onChange={(event) => setNewItem({ ...newItem, name: event.target.value })} />
@@ -547,6 +551,12 @@ export default function ProcessesPage() {
                             <input id="process-output-mass" required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.output_mass_t} onChange={(event) => setNewItem({ ...newItem, output_mass_t: toNumber(event.target.value) })} />
                             {errors.output_mass_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.output_mass_t}</p>}
                         </div>
+                        </FormSection>
+
+                        <FormSection
+                            title="2. 제품 생산라인 배분"
+                            description="한 공정에서 여러 제품이 나오면 제품별 생산량과 배분 기준을 입력합니다. 라인 합계가 공정 총 생산량과 맞는지 확인하세요."
+                        >
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-3">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                 <div>
@@ -644,6 +654,12 @@ export default function ProcessesPage() {
                                 )}
                             </div>
                         </div>
+                        </FormSection>
+
+                        <FormSection
+                            title="3. 생산량과 배출량"
+                            description="시장 출하량, 내부 소비량, 직접배출량, 전력 사용량을 입력합니다. 직접배출량은 가능하면 배출원 자료 합계와 대조하세요."
+                        >
                         <div>
                             <label className="text-sm font-semibold text-slate-700">시장 출하량(t)</label>
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.market_output_mass_t} onChange={(event) => setNewItem({ ...newItem, market_output_mass_t: toNumber(event.target.value) })} />
@@ -715,7 +731,9 @@ export default function ProcessesPage() {
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.electricity_ef_tco2e_per_mwh} onChange={(event) => setNewItem({ ...newItem, electricity_ef_tco2e_per_mwh: toNumber(event.target.value) })} />
                             {errors.electricity_ef_tco2e_per_mwh && <p className="mt-1 text-xs font-medium text-red-600">{errors.electricity_ef_tco2e_per_mwh}</p>}
                         </div>
-                        <div className="md:col-span-3">
+                        </FormSection>
+
+                        <div className="flex flex-wrap gap-2">
                             <Button type="submit">{editingProcessId ? '수정 저장' : '공정 저장'}</Button>
                         </div>
                     </form>

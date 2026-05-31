@@ -206,3 +206,23 @@ export function EmptyState({
         </div>
     );
 }
+
+export function FormSection({
+    title,
+    description,
+    children,
+    className,
+}: {
+    title: string;
+    description?: string;
+    children: ReactNode;
+    className?: string;
+}) {
+    return (
+        <fieldset className={clsx('min-w-0 rounded-2xl border border-slate-200 bg-white p-4', className)}>
+            <legend className="px-1 text-sm font-semibold text-slate-950">{title}</legend>
+            {description && <p className="mt-1 break-words text-xs leading-5 text-slate-600">{description}</p>}
+            <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 md:grid-cols-3">{children}</div>
+        </fieldset>
+    );
+}
