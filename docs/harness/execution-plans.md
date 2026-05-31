@@ -120,6 +120,7 @@ Completed:
 - Expanded the admin-console plan with minimal license/update/announcement tables, API routes, and required-update flow while preserving the no-CBAM-data server boundary.
 - Added an EU Export submission review procedure covering latest-template upload, readiness errors, Excel recalculation, formula preservation, SEE comparison, warning review, and `.cbam` backup.
 - Updated the free PWA terms draft to cover free-license registration data, update notices, and the rule that license/update checks do not collect CBAM calculation data or `.cbam` backups.
+- Documented `EmptyState` as a design-system pattern and added it to the design-system verification guard.
 
 Pending product decisions:
 

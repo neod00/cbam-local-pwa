@@ -17,6 +17,7 @@ for (const required of [
   'ActionItemCard',
   'ExportGate',
   'LocalDataNotice',
+  'EmptyState',
   '한국어',
   'EU 원본 템플릿',
   '무료 라이선스',
