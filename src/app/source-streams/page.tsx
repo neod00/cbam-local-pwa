@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, DataTable, PageHeader, SectionCard, StatCard } from '@/components/ui';
+import { Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import {
     createLocalItem,
     deleteLocalItem,
@@ -12,7 +12,8 @@ import {
     updateLocalItem,
 } from '@/lib/local-db';
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from '@/lib/source-stream-calculation';
-import { Flame, Gauge, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Flame, Gauge, Pencil, Plus, Trash2, X } from 'lucide-react';
+import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type SourceStreamDraft = Omit<SourceStream, 'id' | 'created_at' | 'updated_at'>;
@@ -212,7 +213,10 @@ export default function SourceStreamsPage() {
         const totalEmissions = sourceStreams.reduce((sum, sourceStream) => sum + calculateSourceStreamEmissions(sourceStream), 0);
         const totalEnergy = sourceStreams.reduce((sum, sourceStream) => sum + calculateSourceStreamEnergyBreakdown(sourceStream).total, 0);
         const fuelCount = sourceStreams.filter((sourceStream) => sourceStream.stream_type === 'FUEL').length;
-        return { totalEmissions, totalEnergy, fuelCount };
+        const unlinkedCount = sourceStreams.filter((sourceStream) => !sourceStream.process_id).length;
+        const missingSourceCount = sourceStreams.filter((sourceStream) => !sourceStream.source.trim()).length;
+        const unsupportedTypeCount = sourceStreams.filter((sourceStream) => sourceStream.stream_type === 'OTHER').length;
+        return { totalEmissions, totalEnergy, fuelCount, missingSourceCount, unlinkedCount, unsupportedTypeCount };
     }, [sourceStreams]);
 
     function createDefaultDraft(): SourceStreamDraft {
@@ -346,6 +350,57 @@ export default function SourceStreamsPage() {
                 <StatCard label="연료 에너지" value={formatNumber(summary.totalEnergy)} helper="TJ" icon={Gauge} tone="info" />
                 <StatCard label="추정 배출량" value={formatNumber(summary.totalEmissions)} helper="tCO2e" icon={Flame} tone="success" />
             </div>
+
+            <SectionCard
+                title="배출원 자료 다음 작업"
+                description="배출원 자료는 직접배출량의 근거입니다. 공정 연결, 출처, EU 템플릿 지원 유형을 먼저 확인하세요."
+            >
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-slate-950">생산공정 연결</p>
+                            <StatusBadge tone={summary.unlinkedCount > 0 ? 'warning' : 'success'}>
+                                {summary.unlinkedCount > 0 ? `${summary.unlinkedCount}건 필요` : '완료'}
+                            </StatusBadge>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                            배출원은 어떤 생산공정의 직접배출 근거인지 연결되어야 Results와 Export에서 함께 검토됩니다.
+                        </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-slate-950">증빙 출처</p>
+                            <StatusBadge tone={summary.missingSourceCount > 0 ? 'warning' : 'success'}>
+                                {summary.missingSourceCount > 0 ? `${summary.missingSourceCount}건 필요` : '입력 완료'}
+                            </StatusBadge>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                            연료 청구서, 계측기 검침표, 배출계수 출처처럼 검증자가 추적할 수 있는 근거를 남겨두세요.
+                        </p>
+                    </div>
+                    <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
+                        <div className="flex gap-3">
+                            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
+                            <div>
+                                <p className="text-sm font-semibold text-teal-950">
+                                    {summary.unsupportedTypeCount > 0 ? '기타 유형을 재분류하세요' : '공정 직접배출량과 비교하세요'}
+                                </p>
+                                <p className="mt-2 text-sm leading-6 text-teal-900">
+                                    {summary.unsupportedTypeCount > 0
+                                        ? '기타 배출원 유형은 현재 Export 대상이 아닙니다. 연료 또는 공정 원료로 재분류 가능한지 확인하세요.'
+                                        : '배출원 합계와 생산공정의 직접배출량 차이가 크면 Export 전에 조정이 필요합니다.'}
+                                </p>
+                                <Link href="/processes">
+                                    <Button type="button" className="mt-3">
+                                        생산공정과 비교
+                                        <ArrowRight className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </SectionCard>
 
             {showForm && (
                 <SectionCard

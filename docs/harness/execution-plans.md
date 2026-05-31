@@ -110,6 +110,7 @@ Completed:
 - Refined the settings free-license area with registration status, update status, a local-only data-boundary card, and a manual update status check backed by the static update manifest.
 - Reworked the EU Export page entry state into a submission gate with export-blocking status, first-issue navigation, template/readiness/backup summary, and clearer final copy generation CTA.
 - Added production-process next-action guidance that surfaces product-line allocation review and source-stream evidence gaps before users reach the dense process table.
+- Added source-stream next-action guidance for production-process linking, evidence-source completion, unsupported type review, and process comparison.
 
 Pending product decisions:
 
@@ -118,7 +119,7 @@ Pending product decisions:
 
 Next:
 
-- Review source-stream and precursor screens against the guided workflow and reduce dense table-first interactions where users need next-action guidance.
+- Review the precursor screen against the guided workflow and reduce dense table-first interactions where users need next-action guidance.
 - Prepare a lightweight admin/API implementation plan for license registration, notices, and update manifest publishing after the PWA UI stabilizes.
 
 ## Decision Log
