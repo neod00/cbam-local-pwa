@@ -127,6 +127,7 @@ Completed:
 - Improved the product form with CN-code guidance and an empty search-result message so users understand that EU Export prioritizes CN 8-digit matching.
 - Added MVP flow verification guards for the guided process, source-stream, and precursor form sections.
 - Added `필수`, `선택`, and `검토용` priority badges to guided form sections so first-time users can distinguish required calculation inputs from review/supporting fields.
+- Added mobile card fallbacks for EU Export `Summary_Products` and SEE preview rows so submission review is readable without horizontal table scrolling in the PWA.
 
 Pending product decisions:
 

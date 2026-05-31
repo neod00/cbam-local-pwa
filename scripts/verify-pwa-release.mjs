@@ -62,6 +62,10 @@ assert.ok(
   exportPage.includes('Summary_Products 반영 검토') && exportPage.includes('공식 수식 셀'),
   'export page should show the Summary_Products review section'
 );
+assert.ok(
+  exportPage.includes('EU 행') && exportPage.includes('Export 미리보기에 표시할 산정 결과가 없습니다.') && exportPage.includes('md:hidden'),
+  'export page should keep mobile card fallbacks for submission review'
+);
 
 for (const asset of ['file.svg', 'globe.svg', 'next.svg', 'vercel.svg', 'window.svg']) {
   assert.equal(existsSync(`public/${asset}`), false, `${asset} should not be kept in public assets`);
