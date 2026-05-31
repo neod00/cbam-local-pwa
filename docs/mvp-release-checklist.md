@@ -5,6 +5,7 @@ CBAM Local PWA를 무료 배포하기 전에 확인할 항목입니다. 소스 �
 ## 필수 확인
 
 - `npm run verify`가 통과한다.
+- `npm run release:status`로 남은 수동 확인 항목을 확인한다.
 - `npm run verify:deployment`가 통과한다.
 - `npm run verify:routes`가 production build 기준 주요 화면을 통과한다.
 - `CBAM_documents/`와 공식 EU 템플릿 원본 파일이 Git에 포함되지 않는다.

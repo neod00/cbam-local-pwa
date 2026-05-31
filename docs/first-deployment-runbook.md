@@ -16,6 +16,7 @@
 
 ```bash
 npm run verify
+npm run release:status
 ```
 
 `verify` 안에는 다음 검사가 포함된다.

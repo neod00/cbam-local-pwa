@@ -54,6 +54,12 @@ http://localhost:3000
 npm run verify
 ```
 
+공개 배포 전 남은 수동 확인 항목 요약:
+
+```bash
+npm run release:status
+```
+
 개별 검증:
 
 ```bash

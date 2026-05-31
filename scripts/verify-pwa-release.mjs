@@ -83,6 +83,7 @@ assert.ok(readme.includes('소스 저장소는 비공개'), 'README should state
 assert.ok(readme.includes('JavaScript 번들'), 'README should explain the PWA bundle visibility limit');
 assert.ok(readme.includes('CBAM_documents/'), 'README should explain local reference document exclusion');
 assert.ok(readme.includes('docs/mvp-release-checklist.md'), 'README should link the release checklist');
+assert.ok(readme.includes('npm run release:status'), 'README should document the release status command');
 assert.ok(readme.includes('docs/mvp-rehearsal-plan.md'), 'README should link the MVP rehearsal plan');
 assert.ok(readme.includes('docs/mvp-fictional-dataset.md'), 'README should link the MVP fictional dataset');
 assert.ok(readme.includes('docs/mvp-rehearsal-report.md'), 'README should link the MVP rehearsal report');
@@ -94,6 +95,7 @@ assert.ok(readme.includes('docs/first-deployment-runbook.md'), 'README should li
 assert.ok(readme.includes('SECURITY.md'), 'README should link the security policy');
 
 assert.ok(releaseChecklist.includes('CBAM_documents/'), 'release checklist should mention local reference document exclusion');
+assert.ok(releaseChecklist.includes('npm run release:status'), 'release checklist should include the release status command');
 assert.ok(releaseChecklist.includes('저장소는 Private'), 'release checklist should require the repository to remain private');
 assert.ok(releaseChecklist.includes('무료 사용 약관'), 'release checklist should include the free-use terms decision');
 assert.ok(releaseChecklist.includes('docs/free-pwa-terms-draft.md'), 'release checklist should link the free PWA terms draft');
@@ -194,6 +196,8 @@ assert.ok(deploymentGuide.includes('공식 EU 템플릿'), 'deployment guide sho
 assert.ok(deploymentGuide.includes('npm run verify'), 'deployment guide should require the standard verification command');
 assert.ok(deploymentGuide.includes('JavaScript 번들'), 'deployment guide should explain browser bundle visibility');
 assert.ok(deploymentGuide.includes('docs/first-deployment-runbook.md'), 'deployment guide should link the first deployment runbook');
+assert.ok(firstDeploymentRunbook.includes('npm run release:status'), 'first deployment runbook should include release status check');
+assert.equal(packageJson.scripts['release:status'], 'node scripts/release-status.mjs', 'package.json should expose release status command');
 
 for (const required of [
   'Private GitHub',

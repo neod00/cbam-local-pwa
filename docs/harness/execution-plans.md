@@ -144,6 +144,7 @@ Completed:
 - Added a free PWA release announcement draft covering local-first data handling, latest EU template upload, `.cbam` backups, Excel formula review, support limits, and source/bundle visibility.
 - Added an in-app EU Export final review card so users see latest-template, Excel recalculation, responsibility, and `.cbam` backup reminders before using the generated copy.
 - Added a settings-page local-use safety checklist covering no server upload, browser-local storage, `.cbam` backup timing, and official Excel review before submission.
+- Added `npm run release:status` to summarize remaining manual release blockers, required docs, and first-deployment operator actions without running a deployment.
 
 Pending product decisions:
 
