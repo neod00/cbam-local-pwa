@@ -112,6 +112,7 @@ Completed:
 - Added production-process next-action guidance that surfaces product-line allocation review and source-stream evidence gaps before users reach the dense process table.
 - Added source-stream next-action guidance for production-process linking, evidence-source completion, unsupported type review, and process comparison.
 - Added purchased-precursor next-action guidance for default-value justification, actual/semi-actual verification status, evidence source gaps, and scenario handoff.
+- Added a reusable action item card and applied it to the SEFA/certificate scenario priority-action area so guided-workflow cards can move toward one consistent design system.
 
 Pending product decisions:
 

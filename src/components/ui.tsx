@@ -157,3 +157,32 @@ export function DataTable({
         </div>
     );
 }
+
+export function ActionItemCard({
+    title,
+    description,
+    badge,
+    action,
+    className,
+}: {
+    title: string;
+    description: string;
+    badge?: ReactNode;
+    action?: ReactNode;
+    className?: string;
+}) {
+    return (
+        <div className={clsx('w-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4', className)}>
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <h3 className="min-w-0 break-words text-sm font-semibold text-slate-950">{title}</h3>
+                        {badge}
+                    </div>
+                    <p className="mt-2 break-words text-sm leading-6 text-slate-600">{description}</p>
+                </div>
+                {action && <div className="flex flex-none flex-wrap gap-2">{action}</div>}
+            </div>
+        </div>
+    );
+}
