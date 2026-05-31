@@ -46,6 +46,10 @@ const {
   summarizeProductOutputLines,
 } = loadLocalCalculationModule();
 
+function assertClose(actual, expected, delta = 0.0000001) {
+  assert.ok(Math.abs(actual - expected) < delta, `Expected ${actual} to be close to ${expected}`);
+}
+
 const product = {
   id: 'product-1',
   name: 'Hot Rolled Coil',
@@ -182,11 +186,16 @@ assert.equal(productLineResults[0].output_mass_t, 600);
 assert.equal(productLineResults[0].direct_emissions_tco2e, 72);
 assert.equal(productLineResults[0].direct_see, 0.12);
 assert.equal(productLineResults[0].indirect_emissions_applicable, false);
-assert.equal(productLineResults[0].indirect_emissions_rule, 'IRON_STEEL_EXCLUDED');
+assert.equal(productLineResults[0].indirect_emissions_rule, 'IRON_STEEL_CERTIFICATE_BASIS_EXCLUDED');
+assert.equal(productLineResults[0].indirect_emissions_gross_tco2e, 141);
 assert.equal(productLineResults[0].indirect_emissions_excluded_tco2e, 141);
+assert.equal(productLineResults[0].own_indirect_see, 0.235);
 assert.equal(productLineResults[0].indirect_see, 0);
+assert.equal(productLineResults[0].indirect_see_excluded, 0.235);
 assert.equal(productLineResults[0].precursor_see, 1.45);
-assert.equal(productLineResults[0].total_see, 1.57);
+assertClose(productLineResults[0].see_cbam_basis, 1.57);
+assertClose(productLineResults[0].see_informational_total, 1.805);
+assertClose(productLineResults[0].total_see, 1.805);
 assert.equal(productLineResults[1].allocation_share, 0.4);
 
 const mixedAllocationSummary = summarizeProductOutputLines(process.output_mass_t, [

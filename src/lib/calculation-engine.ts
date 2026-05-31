@@ -23,7 +23,11 @@ export interface CalcInput {
 export interface CalcResult {
     direct_see: number;
     indirect_see: number;
+    own_indirect_see: number;
+    indirect_see_excluded: number;
     precursor_see: number;
+    see_cbam_basis: number;
+    see_informational_total: number;
     total_see: number;
     yield_ratio?: number;
 }
@@ -47,13 +51,18 @@ export interface LocalCalculationResult {
     indirect_emissions_applicable: boolean;
     indirect_emissions_rule: string;
     indirect_emissions_excluded_tco2e: number;
+    indirect_emissions_gross_tco2e: number;
     source_stream_count: number;
     source_stream_emissions_tco2e: number;
     source_stream_energy_tj: number;
     source_stream_delta_tco2e: number;
     direct_see: number;
+    own_indirect_see: number;
     indirect_see: number;
+    indirect_see_excluded: number;
     precursor_see: number;
+    see_cbam_basis: number;
+    see_informational_total: number;
     total_see: number;
     warnings: string[];
     warningDetails: LocalCalculationWarning[];
@@ -156,12 +165,20 @@ export function calculateEmission(input: CalcInput): CalcResult {
         yield_ratio = output_mass_t / input_mass_t;
     }
 
-    const total_see = direct_see + indirect_see + precursor_see;
+    const own_indirect_see = indirect_see;
+    const indirect_see_excluded = 0;
+    const see_cbam_basis = direct_see + indirect_see + precursor_see;
+    const see_informational_total = direct_see + own_indirect_see + precursor_see;
+    const total_see = see_informational_total;
 
     return {
         direct_see,
         indirect_see,
+        own_indirect_see,
+        indirect_see_excluded,
         precursor_see,
+        see_cbam_basis,
+        see_informational_total,
         total_see,
         yield_ratio
     };
@@ -275,9 +292,13 @@ export function calculateLocalResults(input: {
         }
 
         const direct_see = output > 0 ? directEmissions / output : 0;
+        const own_indirect_see = output > 0 ? grossIndirectEmissions / output : 0;
         const indirect_see = output > 0 ? indirectEmissions / output : 0;
+        const indirect_see_excluded = output > 0 ? indirectEmissionsExcluded / output : 0;
         const precursor_see = output > 0 ? precursorEmissions / output : 0;
-        const total_see = direct_see + indirect_see + precursor_see;
+        const see_cbam_basis = direct_see + indirect_see + precursor_see;
+        const see_informational_total = direct_see + own_indirect_see + precursor_see;
+        const total_see = see_informational_total;
         const outputLines = outputLinesByProcess.get(process.id) ?? [];
         const outputLineSummary = summarizeProductOutputLines(process.output_mass_t, outputLines);
         const validOutputLines = outputLines.filter((line) => line.output_mass_t > 0);
@@ -314,13 +335,18 @@ export function calculateLocalResults(input: {
                 indirect_emissions_applicable: processIndirectApplicability.applicable,
                 indirect_emissions_rule: processIndirectApplicability.rule_code,
                 indirect_emissions_excluded_tco2e: indirectEmissionsExcluded,
+                indirect_emissions_gross_tco2e: grossIndirectEmissions,
                 source_stream_count: processSourceStreams.length,
                 source_stream_emissions_tco2e: sourceStreamEmissions,
                 source_stream_energy_tj: sourceStreamEnergy,
                 source_stream_delta_tco2e: sourceStreamDelta,
                 direct_see,
+                own_indirect_see,
                 indirect_see,
+                indirect_see_excluded,
                 precursor_see,
+                see_cbam_basis,
+                see_informational_total,
                 total_see,
                 warnings,
                 warningDetails,
@@ -338,6 +364,13 @@ export function calculateLocalResults(input: {
             const allocatedExcludedIndirectEmissions = lineIndirectApplicability.applicable ? 0 : lineGrossIndirectEmissions;
             const allocatedDirectEmissions = directEmissions * allocationShare;
             const allocatedPrecursorEmissions = precursorEmissions * allocationShare;
+            const lineDirectSee = line.output_mass_t > 0 ? allocatedDirectEmissions / line.output_mass_t : 0;
+            const lineOwnIndirectSee = line.output_mass_t > 0 ? lineGrossIndirectEmissions / line.output_mass_t : 0;
+            const lineIndirectSee = line.output_mass_t > 0 ? allocatedIndirectEmissions / line.output_mass_t : 0;
+            const lineIndirectSeeExcluded = line.output_mass_t > 0 ? allocatedExcludedIndirectEmissions / line.output_mass_t : 0;
+            const linePrecursorSee = line.output_mass_t > 0 ? allocatedPrecursorEmissions / line.output_mass_t : 0;
+            const lineSeeCbamBasis = lineDirectSee + lineIndirectSee + linePrecursorSee;
+            const lineSeeInformationalTotal = lineDirectSee + lineOwnIndirectSee + linePrecursorSee;
 
             return {
                 id: `result_${process.id}_${line.id}`,
@@ -358,16 +391,19 @@ export function calculateLocalResults(input: {
                 indirect_emissions_applicable: lineIndirectApplicability.applicable,
                 indirect_emissions_rule: lineIndirectApplicability.rule_code,
                 indirect_emissions_excluded_tco2e: allocatedExcludedIndirectEmissions,
+                indirect_emissions_gross_tco2e: lineGrossIndirectEmissions,
                 source_stream_count: processSourceStreams.length,
                 source_stream_emissions_tco2e: sourceStreamEmissions * allocationShare,
                 source_stream_energy_tj: sourceStreamEnergy * allocationShare,
                 source_stream_delta_tco2e: sourceStreamDelta * allocationShare,
-                direct_see: line.output_mass_t > 0 ? allocatedDirectEmissions / line.output_mass_t : 0,
-                indirect_see: line.output_mass_t > 0 ? allocatedIndirectEmissions / line.output_mass_t : 0,
-                precursor_see: line.output_mass_t > 0 ? allocatedPrecursorEmissions / line.output_mass_t : 0,
-                total_see: line.output_mass_t > 0
-                    ? (allocatedDirectEmissions + allocatedIndirectEmissions + allocatedPrecursorEmissions) / line.output_mass_t
-                    : 0,
+                direct_see: lineDirectSee,
+                own_indirect_see: lineOwnIndirectSee,
+                indirect_see: lineIndirectSee,
+                indirect_see_excluded: lineIndirectSeeExcluded,
+                precursor_see: linePrecursorSee,
+                see_cbam_basis: lineSeeCbamBasis,
+                see_informational_total: lineSeeInformationalTotal,
+                total_see: lineSeeInformationalTotal,
                 warnings,
                 warningDetails,
             };

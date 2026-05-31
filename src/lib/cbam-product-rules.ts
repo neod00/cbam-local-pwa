@@ -1,7 +1,7 @@
 import type { Product } from './local-db';
 
 export type IndirectEmissionsRuleCode =
-    | 'IRON_STEEL_EXCLUDED'
+    | 'IRON_STEEL_CERTIFICATE_BASIS_EXCLUDED'
     | 'IRON_ORE_AGGLOMERATE_INCLUDED'
     | 'DEFAULT_INCLUDED'
     | 'UNKNOWN_PRODUCT_INCLUDED';
@@ -28,8 +28,8 @@ export function getIndirectEmissionsApplicability(product?: Pick<Product, 'cn_co
         return {
             applicable: true,
             rule_code: 'UNKNOWN_PRODUCT_INCLUDED',
-            label: '간접 포함',
-            reason: '제품 CN 코드가 없어 간접배출을 임시 포함합니다. 제품 코드를 확인하세요.',
+            label: '간접 포함 검토',
+            reason: '제품 CN 코드가 없어 간접배출을 인증서 산정 기준에 임시 포함합니다. 제품 코드를 확인하세요.',
         };
     }
 
@@ -45,9 +45,9 @@ export function getIndirectEmissionsApplicability(product?: Pick<Product, 'cn_co
     if (code.startsWith('72') || code.startsWith('73')) {
         return {
             applicable: false,
-            rule_code: 'IRON_STEEL_EXCLUDED',
-            label: '간접 제외',
-            reason: '철강 HS 72/73 제품은 현 단계 규칙에서 전력 간접배출을 SEE에서 제외합니다.',
+            rule_code: 'IRON_STEEL_CERTIFICATE_BASIS_EXCLUDED',
+            label: '인증서 산정 제외',
+            reason: 'Annex II direct-only 철강 품목은 최종제품 자체 전력 간접배출을 CBAM 인증서 산정 기준 SEE에서 제외하고, 보고/검토용으로 별도 관리합니다.',
         };
     }
 
