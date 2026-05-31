@@ -8,6 +8,7 @@ const APP_SHELL = [
   "/precursors",
   "/processes",
   "/products",
+  "/release-notes",
   "/results",
   "/scenarios",
   "/settings",

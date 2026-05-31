@@ -3,7 +3,7 @@
 import { Button, StatusBadge } from '@/components/ui';
 import { CBAM_LOCAL_APP_VERSION } from '@/lib/local-db';
 import { evaluateUpdateStatus, fetchUpdateManifest, type UpdateStatus } from '@/lib/update-policy';
-import { RefreshCw, ShieldCheck, X } from 'lucide-react';
+import { ExternalLink, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 function getDismissKey(latestVersion: string) {
@@ -94,6 +94,15 @@ export default function UpdateNotice() {
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-2 lg:flex-none">
+                    {status.releaseNotesUrl && (
+                        <a
+                            href={status.releaseNotesUrl}
+                            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                        >
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            릴리스 노트
+                        </a>
+                    )}
                     <Button type="button" onClick={() => void refreshForUpdate()}>
                         <RefreshCw className="mr-2 h-4 w-4" />
                         업데이트 확인

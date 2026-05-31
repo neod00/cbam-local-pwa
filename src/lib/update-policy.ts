@@ -19,6 +19,7 @@ export interface UpdateStatus {
     currentVersion: string;
     title: string;
     body: string;
+    releaseNotesUrl?: string;
     tone: 'info' | 'warning' | 'danger';
     canDismiss: boolean;
     shouldShow: boolean;
@@ -81,6 +82,7 @@ export function evaluateUpdateStatus(
         body: mode === 'required'
             ? '현재 버전은 더 이상 지원되지 않습니다. 계산과 Export를 계속하기 전에 최신 버전으로 새로고침하세요.'
             : manifest.notice_body,
+        releaseNotesUrl: manifest.release_notes_url,
         tone: mode === 'required' ? 'danger' : mode === 'recommended' ? 'warning' : 'info',
         canDismiss: mode === 'optional' || mode === 'recommended',
         shouldShow: mode !== 'none',

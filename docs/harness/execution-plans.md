@@ -145,6 +145,7 @@ Completed:
 - Added an in-app EU Export final review card so users see latest-template, Excel recalculation, responsibility, and `.cbam` backup reminders before using the generated copy.
 - Added a settings-page local-use safety checklist covering no server upload, browser-local storage, `.cbam` backup timing, and official Excel review before submission.
 - Added `npm run release:status` to summarize remaining manual release blockers, required docs, and first-deployment operator actions without running a deployment.
+- Added an in-app release notes page and connected the update manifest/notice to it so update communications do not point to a missing route.
 
 Pending product decisions:
 

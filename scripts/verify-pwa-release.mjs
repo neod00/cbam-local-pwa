@@ -37,6 +37,7 @@ const expectedShellRoutes = [
   '/precursors',
   '/processes',
   '/products',
+  '/release-notes',
   '/results',
   '/scenarios',
   '/settings',

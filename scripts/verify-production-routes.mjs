@@ -14,6 +14,7 @@ const routes = [
   '/processes',
   '/source-streams',
   '/precursors',
+  '/release-notes',
   '/results',
   '/scenarios',
   '/upload',
