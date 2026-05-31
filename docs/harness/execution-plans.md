@@ -115,6 +115,7 @@ Completed:
 - Added a reusable action item card and applied it to production-process, source-stream, precursor, and SEFA/certificate priority-action areas so guided-workflow cards can move toward one consistent design system.
 - Applied the shared action item card to dashboard tasks, Results calculation warnings, and EU Export checklist/readiness issues for a more consistent guided workflow.
 - Documented `ActionItemCard` as a core design-system pattern and added it to the design-system verification guard.
+- Added a mobile card fallback for Results SEE rows so users do not have to read the dense calculation table on small PWA screens.
 
 Pending product decisions:
 
