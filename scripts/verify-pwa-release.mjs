@@ -8,6 +8,7 @@ const readme = readFileSync('README.md', 'utf8');
 const dashboardPage = readFileSync('src/app/page.tsx', 'utf8');
 const exportPage = readFileSync('src/app/export/page.tsx', 'utf8');
 const releaseChecklist = readFileSync('docs/mvp-release-checklist.md', 'utf8');
+const userNotices = readFileSync('docs/mvp-user-notices.md', 'utf8');
 const freeTermsDraft = readFileSync('docs/free-pwa-terms-draft.md', 'utf8');
 const deploymentGuide = readFileSync('docs/pwa-deployment-guide.md', 'utf8');
 const securityPolicy = readFileSync('SECURITY.md', 'utf8');
@@ -82,6 +83,14 @@ assert.ok(releaseChecklist.includes('무료 사용 약관'), 'release checklist 
 assert.ok(releaseChecklist.includes('docs/free-pwa-terms-draft.md'), 'release checklist should link the free PWA terms draft');
 assert.ok(releaseChecklist.includes('docs/pwa-deployment-guide.md'), 'release checklist should link the PWA deployment guide');
 assert.ok(releaseChecklist.includes('Docker/on-premise'), 'release checklist should keep on-premise scope deferred');
+
+assert.ok(userNotices.includes('법률 자문'), 'user notices should state that the app does not replace legal advice');
+assert.ok(userNotices.includes('브라우저 로컬 저장소'), 'user notices should explain local browser storage');
+assert.ok(userNotices.includes('.cbam'), 'user notices should require local backup handling');
+assert.ok(userNotices.includes('최신 공식 원본 템플릿'), 'user notices should require latest official EU template upload');
+assert.ok(userNotices.includes('공식 수식 재계산 결과'), 'user notices should require Excel formula result review after Export');
+assert.ok(userNotices.includes('무료 라이선스'), 'user notices should defer free license management beyond MVP');
+assert.ok(userNotices.includes('Docker/on-premise'), 'user notices should defer on-premise scope beyond MVP');
 
 assert.ok(freeTermsDraft.includes('재배포'), 'free PWA terms draft should restrict redistribution');
 assert.ok(freeTermsDraft.includes('법률 자문'), 'free PWA terms draft should include liability limits');

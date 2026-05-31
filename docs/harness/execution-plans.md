@@ -101,6 +101,7 @@ Completed:
 - Verified the local official EU installation communication template dated 2024-12-13: 19 sheets, 569 CN rows, 42 planned/written/checked cells, and preserved `Summary_Products` I/J/K formulas.
 - Added local SEE review values to the official-template verification report so Export copies can be manually compared against Excel-recalculated `Summary_Products` formulas before submission.
 - Restored Korean-first SEFA/certificate scenario messages and review actions while keeping the current certificate indicator formula as a labelled review aid.
+- Added an MVP user-notices document covering legal/verification limits, local data and `.cbam` backup handling, latest EU template use, Excel formula review, and deferred free-license/admin scope.
 
 Pending product decisions:
 
