@@ -128,11 +128,19 @@ Rows start at row `10` and currently support up to 100 local product summary row
 
 The app does not overwrite `I:K` SEE cells in `Summary_Products`; those are official formula cells for direct, indirect, and total SEE. Local product-line SEE is used for app review and scenario analysis, while the workbook formula output should be reviewed after opening the generated copy in Excel.
 
+For 2026 definitive-period review, the app separates these local values:
+
+| App review value | Meaning | Export treatment |
+| --- | --- | --- |
+| `appCbamBasisSee` / `see_cbam_basis` | SEE basis used by the app's CBAM certificate scenario indicators. | Not written into `Summary_Products!I:K`; shown on the Export page and verification report for comparison. |
+| `appInformationalTotalSee` / `see_informational_total` | Operational review total including final-good own indirect emissions where available. | Not written into `Summary_Products!I:K`; shown separately so users do not confuse it with certificate-basis SEE. |
+| `Summary_Products!I:J:K` | Official workbook formulas for direct, indirect, and total SEE. | Preserved and recalculated in Microsoft Excel after download. |
+
 `npm run verify:local-eu-template -- "<path-to-official-template.xlsx>"` writes `artifacts/local-eu-template-verification.json`. That report now includes:
 
 - the product-identification cells written to `Summary_Products`;
 - the preserved official formulas in `Summary_Products!I10:J10:K10`;
-- the app-calculated local SEE review values for the sample product row.
+- the app-calculated local SEE review values for the sample product row, split into `appCbamBasisSee` and `appInformationalTotalSee`.
 
 The script does not recalculate Excel formulas. For real submission checks, open the generated workbook copy in Excel and compare the recalculated `Summary_Products` SEE values with the app's local SEE review values before relying on the file.
 
@@ -144,7 +152,7 @@ Before a company uses an exported workbook for official communication, the user 
 2. Generate the Export copy from the app only after the Export readiness gate has no blocking errors.
 3. Open the generated copy in Microsoft Excel and allow workbook formulas to recalculate. Use [docs/excel-recalculation-review.md](../excel-recalculation-review.md) as the manual review checklist.
 4. Confirm that official sheet names, English labels, styles, and formula cells are still intact.
-5. Compare `Summary_Products` formula outputs in `I:K` with the app's local SEE review values shown on the Export page.
+5. Compare `Summary_Products` formula outputs in `I:K` with the app's local SEE review values shown on the Export page. Treat `CBAM 기준 SEE` and `참고용 총 SEE` as different review concepts.
 6. Review warnings about source-stream evidence, precursor evidence, default-value justification, and product-line allocation before submission.
 7. Save a `.cbam` backup separately from the Excel workbook so the local calculation inputs can be restored later.
 

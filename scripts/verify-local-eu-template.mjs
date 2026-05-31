@@ -396,16 +396,31 @@ const localSummaryProductReview = {
   productName: data.products[0].name,
   outputMassT: data.productOutputLines[0].output_mass_t,
   appDirectSee: roundNumber(data.processes[0].direct_attributable_emissions_tco2e / data.productOutputLines[0].output_mass_t),
-  appIndirectSee: 0,
+  appOwnIndirectSee: roundNumber(
+    data.processes[0].electricity_mwh *
+    data.processes[0].electricity_ef_tco2e_per_mwh /
+    data.productOutputLines[0].output_mass_t
+  ),
+  appIndirectSeeIncludedInCbamBasis: 0,
+  appIndirectSeeExcludedFromCbamBasis: roundNumber(
+    data.processes[0].electricity_mwh *
+    data.processes[0].electricity_ef_tco2e_per_mwh /
+    data.productOutputLines[0].output_mass_t
+  ),
   appPrecursorSee: roundNumber(
     data.precursors[0].consumed_mass_t *
     (data.precursors[0].direct_see_tco2e_per_t + data.precursors[0].indirect_see_tco2e_per_t) /
     data.productOutputLines[0].output_mass_t
   ),
 };
-localSummaryProductReview.appTotalSee = roundNumber(
+localSummaryProductReview.appCbamBasisSee = roundNumber(
   localSummaryProductReview.appDirectSee +
-  localSummaryProductReview.appIndirectSee +
+  localSummaryProductReview.appIndirectSeeIncludedInCbamBasis +
+  localSummaryProductReview.appPrecursorSee
+);
+localSummaryProductReview.appInformationalTotalSee = roundNumber(
+  localSummaryProductReview.appDirectSee +
+  localSummaryProductReview.appOwnIndirectSee +
   localSummaryProductReview.appPrecursorSee
 );
 
@@ -430,9 +445,12 @@ assert.ok(checkedFormulas['Summary_Products!I10'], 'Summary_Products!I10 should 
 assert.ok(checkedFormulas['Summary_Products!J10'], 'Summary_Products!J10 should keep an official indirect SEE formula');
 assert.ok(checkedFormulas['Summary_Products!K10'], 'Summary_Products!K10 should keep an official total SEE formula');
 assert.equal(localSummaryProductReview.appDirectSee, 0.12);
-assert.equal(localSummaryProductReview.appIndirectSee, 0);
+assert.equal(localSummaryProductReview.appOwnIndirectSee, 0.235);
+assert.equal(localSummaryProductReview.appIndirectSeeIncludedInCbamBasis, 0);
+assert.equal(localSummaryProductReview.appIndirectSeeExcludedFromCbamBasis, 0.235);
 assert.equal(localSummaryProductReview.appPrecursorSee, 1.45);
-assert.equal(localSummaryProductReview.appTotalSee, 1.57);
+assert.equal(localSummaryProductReview.appCbamBasisSee, 1.57);
+assert.equal(localSummaryProductReview.appInformationalTotalSee, 1.805);
 
 await mkdir('artifacts', { recursive: true });
 const report = {
@@ -447,7 +465,7 @@ const report = {
   checkedFormulas,
   localSummaryProductReview,
   manualExcelReviewRequired:
-    'Open the exported workbook in Excel and compare recalculated Summary_Products I/J/K values against localSummaryProductReview before real submission.',
+    'Open the exported workbook in Excel and compare recalculated Summary_Products I/J/K values against localSummaryProductReview. Treat appCbamBasisSee and appInformationalTotalSee as separate review values before real submission.',
 };
 writeFileSync(join('artifacts', 'local-eu-template-verification.json'), `${JSON.stringify(report, null, 2)}\n`);
 

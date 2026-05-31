@@ -50,9 +50,11 @@
 | 항목 | 앱 검토값 |
 | --- | ---: |
 | Direct SEE | 0.12 tCO2e/t |
-| Indirect SEE | 0 tCO2e/t |
+| Own indirect SEE kept for review | 0.235 tCO2e/t |
+| Indirect SEE included in CBAM basis | 0 tCO2e/t |
 | Precursor SEE | 1.45 tCO2e/t |
-| Total local SEE review | 1.57 tCO2e/t |
+| CBAM basis SEE review | 1.57 tCO2e/t |
+| Informational total SEE review | 1.805 tCO2e/t |
 
 이 값은 앱의 로컬 검토 기준이다. 공식 Excel의 `Summary_Products!I10:K10` 결과와 다르면 앱이 틀렸다고 즉시 결론내리지 말고, 공식 템플릿 수식이 참조하는 입력 셀과 앱이 현재 쓰는 MVP Export 범위를 함께 검토한다.
 
