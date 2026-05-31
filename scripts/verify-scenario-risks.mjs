@@ -123,6 +123,10 @@ assertClose(readyScenarios[0].default_certificate_cost_indicator_eur, 2740);
 assertClose(readyScenarios[0].certificate_quantity_delta_indicator, 59.5);
 assertClose(readyScenarios[0].certificate_cost_delta_eur, 4760);
 assert.equal(readyScenarios[0].lower_certificate_basis, 'DEFAULT');
+assert.equal(
+  readyScenarios[0].review_message,
+  '실측 SEE가 기본값보다 높습니다. 실제자료와 기본값 시나리오의 인증서 지표를 비교하세요.'
+);
 
 const readySummary = summarizeScenarioRisks(readyScenarios);
 assert.equal(readySummary.missing_cn_count, 0);
@@ -145,12 +149,14 @@ assertAction(getScenarioReviewAction(readySummary, false, true), { href: '/uploa
 const missingCnScenarios = calculateProductScenarios([{ ...baseResult, id: 'result-2', cn_code: '', hs_code: '' }], assumptions, references);
 assert.equal(missingCnScenarios[0].data_quality, 'MISSING_CN');
 assert.equal(missingCnScenarios[0].lower_certificate_basis, 'UNKNOWN');
+assert.equal(missingCnScenarios[0].review_message, 'CN 코드가 없어 공식 기준값과 비교할 수 없습니다.');
 assert.equal(summarizeScenarioRisks(missingCnScenarios).missing_cn_count, 1);
 assert.equal(summarizeScenarioRisks(missingCnScenarios).is_ready_for_review, false);
 assertAction(getScenarioReviewAction(summarizeScenarioRisks(missingCnScenarios), true, true), { href: '/products', label: '품목 관리' });
 
 const missingReferenceScenarios = calculateProductScenarios([baseResult], assumptions, {});
 assert.equal(missingReferenceScenarios[0].data_quality, 'MISSING_REFERENCE');
+assert.equal(missingReferenceScenarios[0].review_message, '벤치마크 또는 국가/CN 기본값 연결이 필요합니다.');
 assert.equal(summarizeScenarioRisks(missingReferenceScenarios).missing_official_reference_count, 1);
 assert.equal(summarizeScenarioRisks(missingReferenceScenarios).is_ready_for_review, false);
 assertAction(getScenarioReviewAction(summarizeScenarioRisks(missingReferenceScenarios), true, true), { href: '/upload', label: '기준자료 가져오기' });
