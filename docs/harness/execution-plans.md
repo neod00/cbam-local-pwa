@@ -85,6 +85,12 @@ Completed:
 - Added `npm run verify:pwa` to assert PWA manifest metadata, service-worker app-shell routes, README release guidance, and absence of unused default assets.
 - Added an in-app settings notice clarifying that CBAM Local supports calculation and submission preparation but does not replace legal advice, official verification, or final filing responsibility.
 - Added a security policy for public repository use, warning users not to share company CBAM data, `.cbam` backups, or EU template files in issues or pull requests.
+- Updated release documentation for the private-source distribution strategy: keep GitHub private, distribute the free PWA by URL, and defer protected logic to future server/API or Docker/on-premise editions.
+
+Pending product decisions:
+
+- Choose the free PWA hosting channel: Vercel, Cloudflare Pages, Netlify, or self-hosted static hosting.
+- Draft the free-use terms covering redistribution restrictions, commercial use boundaries, and liability limits.
 
 Next:
 

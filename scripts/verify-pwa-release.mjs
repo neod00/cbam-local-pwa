@@ -45,16 +45,20 @@ for (const asset of ['file.svg', 'globe.svg', 'next.svg', 'vercel.svg', 'window.
 
 assert.ok(readme.includes('로컬 우선'), 'README should explain local-first direction');
 assert.ok(readme.includes('서버 전송 없음'), 'README should state the no-server-upload posture');
+assert.ok(readme.includes('소스 저장소는 비공개'), 'README should state the private-source distribution posture');
+assert.ok(readme.includes('JavaScript 번들'), 'README should explain the PWA bundle visibility limit');
 assert.ok(readme.includes('CBAM_documents/'), 'README should explain local reference document exclusion');
 assert.ok(readme.includes('docs/mvp-release-checklist.md'), 'README should link the release checklist');
 assert.ok(readme.includes('SECURITY.md'), 'README should link the security policy');
 
 assert.ok(releaseChecklist.includes('CBAM_documents/'), 'release checklist should mention local reference document exclusion');
-assert.ok(releaseChecklist.includes('라이선스'), 'release checklist should include the license decision');
+assert.ok(releaseChecklist.includes('저장소는 Private'), 'release checklist should require the repository to remain private');
+assert.ok(releaseChecklist.includes('무료 사용 약관'), 'release checklist should include the free-use terms decision');
 assert.ok(releaseChecklist.includes('Docker/on-premise'), 'release checklist should keep on-premise scope deferred');
 assert.ok(securityPolicy.includes('.cbam'), 'security policy should mention backup files');
 assert.ok(securityPolicy.includes('민감자료 공유 금지'), 'security policy should warn against sharing sensitive data');
 assert.ok(securityPolicy.includes('EU Communication template'), 'security policy should mention EU template files');
+assert.ok(securityPolicy.includes('소스 보호 한계'), 'security policy should explain source protection limits');
 
 const trackedFiles = execFileSync('git', ['ls-files'], { encoding: 'utf8' })
   .split(/\r?\n/)
