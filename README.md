@@ -104,6 +104,8 @@ npm run verify:pwa
 
 MVP 배포 전 확인 항목은 [docs/mvp-release-checklist.md](docs/mvp-release-checklist.md)를 기준으로 관리합니다.
 
+기업 담당자 관점의 실제 사용 리허설은 [docs/mvp-rehearsal-plan.md](docs/mvp-rehearsal-plan.md)를 기준으로 진행합니다.
+
 배포 채널과 설정 기준은 [docs/pwa-deployment-guide.md](docs/pwa-deployment-guide.md)에 정리합니다.
 
 ## 사용권

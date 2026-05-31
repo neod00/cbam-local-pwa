@@ -8,6 +8,7 @@ const readme = readFileSync('README.md', 'utf8');
 const dashboardPage = readFileSync('src/app/page.tsx', 'utf8');
 const exportPage = readFileSync('src/app/export/page.tsx', 'utf8');
 const releaseChecklist = readFileSync('docs/mvp-release-checklist.md', 'utf8');
+const rehearsalPlan = readFileSync('docs/mvp-rehearsal-plan.md', 'utf8');
 const userNotices = readFileSync('docs/mvp-user-notices.md', 'utf8');
 const freeTermsDraft = readFileSync('docs/free-pwa-terms-draft.md', 'utf8');
 const deploymentGuide = readFileSync('docs/pwa-deployment-guide.md', 'utf8');
@@ -77,6 +78,7 @@ assert.ok(readme.includes('소스 저장소는 비공개'), 'README should state
 assert.ok(readme.includes('JavaScript 번들'), 'README should explain the PWA bundle visibility limit');
 assert.ok(readme.includes('CBAM_documents/'), 'README should explain local reference document exclusion');
 assert.ok(readme.includes('docs/mvp-release-checklist.md'), 'README should link the release checklist');
+assert.ok(readme.includes('docs/mvp-rehearsal-plan.md'), 'README should link the MVP rehearsal plan');
 assert.ok(readme.includes('docs/free-pwa-terms-draft.md'), 'README should link the free PWA terms draft');
 assert.ok(readme.includes('docs/pwa-deployment-guide.md'), 'README should link the PWA deployment guide');
 assert.ok(readme.includes('SECURITY.md'), 'README should link the security policy');
@@ -86,7 +88,21 @@ assert.ok(releaseChecklist.includes('저장소는 Private'), 'release checklist 
 assert.ok(releaseChecklist.includes('무료 사용 약관'), 'release checklist should include the free-use terms decision');
 assert.ok(releaseChecklist.includes('docs/free-pwa-terms-draft.md'), 'release checklist should link the free PWA terms draft');
 assert.ok(releaseChecklist.includes('docs/pwa-deployment-guide.md'), 'release checklist should link the PWA deployment guide');
+assert.ok(releaseChecklist.includes('docs/mvp-rehearsal-plan.md'), 'release checklist should link the MVP rehearsal plan');
 assert.ok(releaseChecklist.includes('Docker/on-premise'), 'release checklist should keep on-premise scope deferred');
+
+for (const required of [
+  '사업장 등록',
+  '품목 등록',
+  '생산공정 등록',
+  '배출원 자료 등록',
+  '전구물질 등록',
+  '기준자료 업로드',
+  'EU Export 준비',
+  '.cbam',
+]) {
+  assert.ok(rehearsalPlan.includes(required), `MVP rehearsal plan should include ${required}`);
+}
 
 assert.ok(userNotices.includes('법률 자문'), 'user notices should state that the app does not replace legal advice');
 assert.ok(userNotices.includes('브라우저 로컬 저장소'), 'user notices should explain local browser storage');
