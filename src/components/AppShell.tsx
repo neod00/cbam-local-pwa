@@ -22,7 +22,6 @@ const pageTitles: Record<string, string> = {
     '/installations': '사업장',
     '/settings': '데이터 안전',
     '/terms': '무료 약관 및 고지',
-    '/design-preview': '완성 디자인',
 };
 
 export default function AppShell({ children }: { children: ReactNode }) {

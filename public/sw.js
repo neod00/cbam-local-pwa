@@ -2,7 +2,6 @@ const CACHE_NAME = "cbam-local-v2";
 const APP_SHELL = [
   "/",
   "/announcement",
-  "/design-preview",
   "/export",
   "/installations",
   "/periods",

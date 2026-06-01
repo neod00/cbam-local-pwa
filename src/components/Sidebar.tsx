@@ -12,7 +12,6 @@ import {
     Flame,
     Home,
     Megaphone,
-    Monitor,
     Package,
     ServerOff,
     Settings,
@@ -39,7 +38,6 @@ const navigation = [
     { name: '데이터 안전', href: '/settings', icon: ShieldCheck },
     { name: '약관/고지', href: '/terms', icon: FileText },
     { name: '개인정보 안내', href: '/privacy', icon: ServerOff },
-    { name: '디자인 미리보기', href: '/design-preview', icon: Monitor },
 ];
 
 const mobileNavigation = [

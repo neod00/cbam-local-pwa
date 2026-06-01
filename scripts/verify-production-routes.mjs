@@ -23,7 +23,6 @@ const routes = [
   '/export',
   '/settings',
   '/terms',
-  '/design-preview',
 ];
 
 function sleep(ms) {

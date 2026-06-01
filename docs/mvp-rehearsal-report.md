@@ -96,7 +96,6 @@ Completed in this pass:
   - `/upload`
   - `/export`
   - `/settings`
-  - `/design-preview`
 
 ## Beta Browser Rehearsal
 
