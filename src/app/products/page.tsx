@@ -16,7 +16,7 @@ import {
     setLocalSetting,
     updateLocalItem,
 } from '@/lib/local-db';
-import { FileSpreadsheet, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Boxes, CheckCircle2, FileSpreadsheet, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 type HsGroup = Product['hs_group'];
@@ -54,6 +54,16 @@ function GoodsRuleBadges({ product }: { product: Product }) {
                 <StatusBadge tone="pending">전구물질 검토</StatusBadge>
             )}
         </div>
+    );
+}
+
+function GoodsRuleNote({ product }: { product: Product }) {
+    const metadata = getCbamGoodsMetadata(product);
+
+    return (
+        <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">
+            {metadata.sector_label} · {metadata.note}
+        </p>
     );
 }
 
@@ -128,6 +138,21 @@ export default function ProductsPage() {
             })
             .slice(0, 12);
     }, [cnOptions, cnSearch]);
+
+    const productSummary = useMemo(() => {
+        const cnReadyCount = products.filter((product) => product.cn_code?.length === 8).length;
+        const annexCandidateCount = products.filter((product) => getCbamGoodsMetadata(product).annex_i_candidate).length;
+        const directOnlyCount = products.filter((product) => getCbamGoodsMetadata(product).annex_ii_direct_only).length;
+        const precursorReviewCount = products.filter((product) => getCbamGoodsMetadata(product).precursor_review_recommended).length;
+
+        return {
+            annexCandidateCount,
+            cnReadyCount,
+            directOnlyCount,
+            precursorReviewCount,
+            totalCount: products.length,
+        };
+    }, [products]);
 
     function resetForm() {
         setDraft(EMPTY_PRODUCT_DRAFT);
@@ -331,6 +356,43 @@ export default function ProductsPage() {
                 )}
             </SectionCard>
 
+            <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                        <CheckCircle2 className="h-4 w-4 text-teal-700" />
+                        CN 준비
+                    </div>
+                    <div className="mt-3 text-2xl font-semibold text-slate-950">
+                        {productSummary.cnReadyCount}/{productSummary.totalCount}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">CN 8자리 입력 완료</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                        <FileSpreadsheet className="h-4 w-4 text-blue-700" />
+                        Annex I 후보
+                    </div>
+                    <div className="mt-3 text-2xl font-semibold text-slate-950">{productSummary.annexCandidateCount}개</div>
+                    <p className="mt-1 text-xs text-slate-500">대표 규칙 기준 대상 가능 품목</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                        <AlertTriangle className="h-4 w-4 text-amber-700" />
+                        Direct-only
+                    </div>
+                    <div className="mt-3 text-2xl font-semibold text-slate-950">{productSummary.directOnlyCount}개</div>
+                    <p className="mt-1 text-xs text-slate-500">인증서 산정 간접 제외 검토</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                        <Boxes className="h-4 w-4 text-slate-600" />
+                        전구물질 검토
+                    </div>
+                    <div className="mt-3 text-2xl font-semibold text-slate-950">{productSummary.precursorReviewCount}개</div>
+                    <p className="mt-1 text-xs text-slate-500">공급망 SEE 자료 확인 필요</p>
+                </div>
+            </section>
+
             {showForm && (
                 <SectionCard
                     title={editingProductId ? '제품 정보 수정' : '신규 제품 등록'}
@@ -382,7 +444,7 @@ export default function ProductsPage() {
                                 }
                                 placeholder="예: 72083900"
                             />
-                            <p className="mt-1 text-xs text-slate-500">EU 템플릿 제출 검증은 CN 8자리 기준으로 수행합니다.</p>
+                            <p className="mt-1 text-xs text-slate-500">EU Communication Template 검증은 CN 8자리 기준으로 수행합니다.</p>
                             {errors.cn_code && <p className="mt-1 text-xs font-medium text-red-600">{errors.cn_code}</p>}
                         </div>
                         <div>
@@ -493,6 +555,7 @@ export default function ProductsPage() {
                                         {product.cn_code ? `CN ${product.cn_code}` : 'CN 미입력'} · HS {product.hs_code}
                                     </p>
                                     <GoodsRuleBadges product={product} />
+                                    <GoodsRuleNote product={product} />
                                 </div>
                                 <div className="flex gap-2">
                                     <Button
@@ -580,6 +643,7 @@ export default function ProductsPage() {
                                     <td className="px-4 py-4 text-sm text-slate-700">
                                         <div className="font-medium text-slate-900">{product.name}</div>
                                         <GoodsRuleBadges product={product} />
+                                        <GoodsRuleNote product={product} />
                                     </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{product.product_type_enum}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{product.hs_code}</td>
