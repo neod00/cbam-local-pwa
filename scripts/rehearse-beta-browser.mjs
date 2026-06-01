@@ -28,6 +28,7 @@ const stores = [
 
 const routes = [
   { path: '/', label: 'Dashboard', snippets: ['CBAM Local', '대시보드'] },
+  { path: '/announcement', label: 'Announcement', snippets: ['CBAM Local PWA 무료 베타', 'openbrain.main@gmail.com'] },
   { path: '/installations', label: 'Installations', snippets: ['사업장', 'Main Factory A'] },
   { path: '/periods', label: 'Periods', snippets: ['보고기간', '2024 Annual'] },
   { path: '/products', label: 'Products', snippets: ['품목', 'Hot Rolled Coil'] },

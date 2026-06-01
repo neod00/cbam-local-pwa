@@ -8,6 +8,7 @@ const nextCliPath = join(process.cwd(), 'node_modules', 'next', 'dist', 'bin', '
 
 const routes = [
   '/',
+  '/announcement',
   '/installations',
   '/periods',
   '/products',
@@ -60,6 +61,9 @@ async function verifyRoutes() {
 
   assert.ok(renderedHtmlByRoute.get('/')?.includes('다음 작업'), 'dashboard should render guided next-action copy');
   assert.ok(renderedHtmlByRoute.get('/')?.includes('.cbam'), 'dashboard should render local backup guidance');
+
+  assert.ok(renderedHtmlByRoute.get('/announcement')?.includes('CBAM Local PWA 무료 베타'), 'announcement should render beta announcement');
+  assert.ok(renderedHtmlByRoute.get('/announcement')?.includes('openbrain.main@gmail.com'), 'announcement should render public support email');
 
   assert.ok(renderedHtmlByRoute.get('/results')?.includes('CBAM 기준 SEE'), 'results should render CBAM-basis SEE labels');
   assert.ok(renderedHtmlByRoute.get('/results')?.includes('참고용 총 SEE'), 'results should render informational SEE labels');

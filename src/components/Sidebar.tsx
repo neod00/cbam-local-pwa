@@ -11,6 +11,7 @@ import {
     FileText,
     Flame,
     Home,
+    Megaphone,
     Monitor,
     Package,
     Settings,
@@ -23,6 +24,7 @@ import { usePathname } from 'next/navigation';
 
 const navigation = [
     { name: '대시보드', href: '/', icon: Home },
+    { name: '배포 안내', href: '/announcement', icon: Megaphone },
     { name: '품목 관리', href: '/products', icon: Package },
     { name: '보고기간', href: '/periods', icon: Calendar },
     { name: '생산공정', href: '/processes', icon: Workflow },

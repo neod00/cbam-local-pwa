@@ -4,7 +4,7 @@ Status: OPERATOR_REVIEW_REQUIRED
 
 이 문서는 CBAM Local PWA 무료 베타 배포 시 사용할 공지문 초안이다. 실제 공개 전에는 서비스명, 운영자 정보, 약관 링크, 개인정보 처리 안내, 배포 URL을 최종 확정해야 한다. 문의 채널은 `openbrain.main@gmail.com`으로 둔다.
 
-현재 검토용 배포 URL은 `https://cbam-local-pwa.vercel.app/`이고, 약관/고지 초안 URL은 `https://cbam-local-pwa.vercel.app/terms`이다.
+현재 검토용 배포 URL은 `https://cbam-local-pwa.vercel.app/`이고, 공개 배포 안내 URL은 `https://cbam-local-pwa.vercel.app/announcement`, 약관/고지 초안 URL은 `https://cbam-local-pwa.vercel.app/terms`이다.
 
 ## 짧은 공지문
 
@@ -78,6 +78,7 @@ PWA 특성상 브라우저로 전달되는 JavaScript 번들은 사용자가 확
 - 서비스명
 - 운영자명 또는 회사명
 - 배포 URL: `https://cbam-local-pwa.vercel.app/`
+- 배포 안내 URL: `https://cbam-local-pwa.vercel.app/announcement`
 - 약관 URL: `https://cbam-local-pwa.vercel.app/terms`
 - 개인정보 처리 안내 URL
 - 문의 채널: `openbrain.main@gmail.com`

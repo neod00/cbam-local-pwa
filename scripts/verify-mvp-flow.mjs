@@ -16,6 +16,7 @@ const scenariosPage = readFileSync('src/app/scenarios/page.tsx', 'utf8');
 const settingsPage = readFileSync('src/app/settings/page.tsx', 'utf8');
 
 const workflowRoutes = [
+  ['배포 안내', '/announcement'],
   ['품목 관리', '/products'],
   ['생산공정', '/processes'],
   ['배출원 자료', '/source-streams'],
@@ -36,7 +37,7 @@ for (const label of ['홈', '품목', '결과', '설정']) {
   assert.ok(sidebar.includes(label), `mobile navigation should include ${label}`);
 }
 
-for (const label of ['대시보드', '품목 관리', '생산공정', '시나리오', 'EU 템플릿 Export', '데이터 안전']) {
+for (const label of ['대시보드', '베타 배포 안내', '품목 관리', '생산공정', '시나리오', 'EU 템플릿 Export', '데이터 안전']) {
   assert.ok(appShell.includes(label), `topbar route title should include ${label}`);
 }
 

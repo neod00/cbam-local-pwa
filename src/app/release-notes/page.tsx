@@ -82,6 +82,12 @@ export default function ReleaseNotesPage() {
                         >
                             무료 약관 및 책임 고지 보기
                         </Link>
+                        <Link
+                            href="/announcement"
+                            className="ml-0 mt-2 inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 sm:ml-2"
+                        >
+                            베타 배포 안내 보기
+                        </Link>
                     </div>
                 </div>
             </SectionCard>

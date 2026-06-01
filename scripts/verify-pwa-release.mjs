@@ -45,6 +45,7 @@ const expectedShellRoutes = [
   '/settings',
   '/source-streams',
   '/terms',
+  '/announcement',
   '/upload',
 ];
 
@@ -206,6 +207,7 @@ assert.ok(freeTermsDraft.includes('openbrain.main@gmail.com'), 'free terms draft
 assert.ok(freeTermsDraft.includes('https://cbam-local-pwa.vercel.app/terms'), 'free terms draft should include the public terms URL');
 assert.ok(firstDeploymentRunbook.includes('openbrain.main@gmail.com'), 'first deployment runbook should include the public contact email');
 assert.ok(operatorReview.includes('https://cbam-local-pwa.vercel.app/'), 'operator review should include the deployed beta URL');
+assert.ok(operatorReview.includes('https://cbam-local-pwa.vercel.app/announcement'), 'operator review should include the public announcement URL');
 assert.ok(operatorReview.includes('https://cbam-local-pwa.vercel.app/terms'), 'operator review should include the public terms URL');
 assert.ok(operatorReview.includes('LEGAL_REVIEW_REQUIRED'), 'operator review should keep legal review status visible before approval');
 assert.ok(operatorReview.includes('OPERATOR_REVIEW_REQUIRED'), 'operator review should keep operator review status visible before approval');
