@@ -31,6 +31,7 @@ const routes = [
   { path: '/announcement', label: 'Announcement', snippets: ['CBAM Local PWA 무료 베타', 'openbrain.main@gmail.com'] },
   { path: '/installations', label: 'Installations', snippets: ['사업장', 'Main Factory A'] },
   { path: '/periods', label: 'Periods', snippets: ['보고기간', '2024 Annual'] },
+  { path: '/privacy', label: 'Privacy', snippets: ['개인정보 및 로컬 데이터 처리 안내', 'openbrain.main@gmail.com'] },
   { path: '/products', label: 'Products', snippets: ['품목', 'Hot Rolled Coil'] },
   { path: '/processes', label: 'Processes', snippets: ['생산공정', 'Rolling and finishing'] },
   { path: '/source-streams', label: 'Source streams', snippets: ['배출원', 'Natural gas combustion'] },

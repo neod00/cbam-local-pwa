@@ -11,6 +11,7 @@ const pageTitles: Record<string, string> = {
     '/announcement': '베타 배포 안내',
     '/products': '품목 관리',
     '/periods': '보고기간',
+    '/privacy': '개인정보 및 데이터 처리',
     '/processes': '생산공정',
     '/source-streams': '배출원 자료',
     '/precursors': '구매 전구물질',

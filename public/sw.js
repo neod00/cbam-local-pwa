@@ -6,6 +6,7 @@ const APP_SHELL = [
   "/export",
   "/installations",
   "/periods",
+  "/privacy",
   "/precursors",
   "/processes",
   "/products",

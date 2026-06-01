@@ -11,6 +11,7 @@ const routes = [
   '/announcement',
   '/installations',
   '/periods',
+  '/privacy',
   '/products',
   '/processes',
   '/source-streams',
@@ -64,6 +65,9 @@ async function verifyRoutes() {
 
   assert.ok(renderedHtmlByRoute.get('/announcement')?.includes('CBAM Local PWA 무료 베타'), 'announcement should render beta announcement');
   assert.ok(renderedHtmlByRoute.get('/announcement')?.includes('openbrain.main@gmail.com'), 'announcement should render public support email');
+
+  assert.ok(renderedHtmlByRoute.get('/privacy')?.includes('개인정보 및 로컬 데이터 처리 안내'), 'privacy should render data handling notice');
+  assert.ok(renderedHtmlByRoute.get('/privacy')?.includes('운영 서버로 업로드하지 않는 것을 원칙'), 'privacy should render local-first data boundary');
 
   assert.ok(renderedHtmlByRoute.get('/results')?.includes('CBAM 기준 SEE'), 'results should render CBAM-basis SEE labels');
   assert.ok(renderedHtmlByRoute.get('/results')?.includes('참고용 총 SEE'), 'results should render informational SEE labels');

@@ -36,6 +36,7 @@ const expectedShellRoutes = [
   '/export',
   '/installations',
   '/periods',
+  '/privacy',
   '/precursors',
   '/processes',
   '/products',

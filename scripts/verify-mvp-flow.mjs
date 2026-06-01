@@ -26,6 +26,7 @@ const workflowRoutes = [
   ['EU Export', '/export'],
   ['데이터 안전', '/settings'],
   ['약관/고지', '/terms'],
+  ['개인정보 안내', '/privacy'],
 ];
 
 for (const [label, href] of workflowRoutes) {
@@ -37,7 +38,7 @@ for (const label of ['홈', '품목', '결과', '설정']) {
   assert.ok(sidebar.includes(label), `mobile navigation should include ${label}`);
 }
 
-for (const label of ['대시보드', '베타 배포 안내', '품목 관리', '생산공정', '시나리오', 'EU 템플릿 Export', '데이터 안전']) {
+for (const label of ['대시보드', '베타 배포 안내', '품목 관리', '개인정보 및 데이터 처리', '생산공정', '시나리오', 'EU 템플릿 Export', '데이터 안전']) {
   assert.ok(appShell.includes(label), `topbar route title should include ${label}`);
 }
 

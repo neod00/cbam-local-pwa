@@ -1,5 +1,6 @@
 import { PageHeader, SectionCard, StatusBadge } from '@/components/ui';
 import { AlertTriangle, Database, FileSpreadsheet, Mail, ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
 
 const termsSections = [
     {
@@ -65,6 +66,12 @@ export default function TermsPage() {
                                 다만 PWA 특성상 브라우저로 전달되는 JavaScript 번들은 사용자가 확인할 수 있으므로,
                                 고급 보호가 필요한 기능은 향후 Docker/on-premise 또는 별도 서버형 버전으로 분리할 수 있습니다.
                             </p>
+                            <Link
+                                href="/privacy"
+                                className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                            >
+                                개인정보/데이터 처리 안내
+                            </Link>
                         </div>
                     </div>
                 </SectionCard>
