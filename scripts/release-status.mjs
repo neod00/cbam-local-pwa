@@ -144,3 +144,4 @@ if (hasDeploymentRehearsal) {
 } else {
   console.log('- Execute docs/first-deployment-runbook.md for the first private-source deployment.');
 }
+console.log('- After approval, run npm.cmd run release:approval.');

@@ -227,6 +227,8 @@ assert.ok(deploymentGuide.includes('JavaScript 번들'), 'deployment guide shoul
 assert.ok(deploymentGuide.includes('docs/first-deployment-runbook.md'), 'deployment guide should link the first deployment runbook');
 assert.ok(firstDeploymentRunbook.includes('npm run release:status'), 'first deployment runbook should include release status check');
 assert.equal(packageJson.scripts['release:status'], 'node scripts/release-status.mjs', 'package.json should expose release status command');
+assert.equal(packageJson.scripts['release:approval'], 'node scripts/verify-release-approval.mjs', 'package.json should expose release approval command');
+assert.ok(goNoGoRecord.includes('npm.cmd run release:approval'), 'Go/No-Go record should include the approval gate command');
 
 for (const required of [
   'Private GitHub',
