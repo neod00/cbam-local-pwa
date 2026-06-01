@@ -22,22 +22,47 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const navigation = [
-    { name: '대시보드', href: '/', icon: Home },
-    { name: '배포 안내', href: '/announcement', icon: Megaphone },
-    { name: '품목 관리', href: '/products', icon: Package },
-    { name: '보고기간', href: '/periods', icon: Calendar },
-    { name: '생산공정', href: '/processes', icon: Workflow },
-    { name: '배출원 자료', href: '/source-streams', icon: Flame },
-    { name: '구매 전구물질', href: '/precursors', icon: Boxes },
-    { name: '자료 업로드', href: '/upload', icon: Upload },
-    { name: '산정 결과', href: '/results', icon: BarChart3 },
-    { name: '시나리오', href: '/scenarios', icon: Calculator },
-    { name: 'EU Communication', href: '/export', icon: FileSpreadsheet },
-    { name: '사업장', href: '/installations', icon: Settings },
-    { name: '데이터 안전', href: '/settings', icon: ShieldCheck },
-    { name: '약관/고지', href: '/terms', icon: FileText },
-    { name: '개인정보 안내', href: '/privacy', icon: ServerOff },
+const navigationGroups = [
+    {
+        label: '시작',
+        items: [
+            { name: '대시보드', href: '/', icon: Home },
+            { name: '사업장', href: '/installations', icon: Settings },
+            { name: '보고기간', href: '/periods', icon: Calendar },
+        ],
+    },
+    {
+        label: '입력자료',
+        items: [
+            { name: '품목 관리', href: '/products', icon: Package },
+            { name: '생산공정', href: '/processes', icon: Workflow },
+            { name: '배출원 자료', href: '/source-streams', icon: Flame },
+            { name: '구매 전구물질', href: '/precursors', icon: Boxes },
+            { name: '자료 업로드', href: '/upload', icon: Upload },
+        ],
+    },
+    {
+        label: '산정·검토',
+        items: [
+            { name: '산정 결과', href: '/results', icon: BarChart3 },
+            { name: 'SEFA·인증서 시나리오', href: '/scenarios', icon: Calculator },
+        ],
+    },
+    {
+        label: '내보내기',
+        items: [
+            { name: 'EU Communication', href: '/export', icon: FileSpreadsheet },
+        ],
+    },
+    {
+        label: '보안·관리',
+        items: [
+            { name: '데이터 안전', href: '/settings', icon: ShieldCheck },
+            { name: '배포 안내', href: '/announcement', icon: Megaphone },
+            { name: '약관/고지', href: '/terms', icon: FileText },
+            { name: '개인정보 안내', href: '/privacy', icon: ServerOff },
+        ],
+    },
 ];
 
 const mobileNavigation = [
@@ -63,30 +88,39 @@ export default function Sidebar() {
                     </div>
                 </div>
 
-                <nav className="flex-1 space-y-1 px-3 py-5">
-                    {navigation.map((item) => {
-                        const isActive = pathname === item.href;
-                        return (
-                            <Link
-                                key={item.name}
-                                href={item.href}
-                                className={clsx(
-                                    'group flex items-center rounded-2xl px-3 py-2.5 text-sm font-semibold transition',
-                                    isActive
-                                        ? 'bg-teal-50 text-teal-800'
-                                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
-                                )}
-                            >
-                                <item.icon
-                                    className={clsx(
-                                        'mr-3 h-5 w-5 flex-shrink-0',
-                                        isActive ? 'text-teal-700' : 'text-slate-400 group-hover:text-slate-600'
-                                    )}
-                                />
-                                {item.name}
-                            </Link>
-                        );
-                    })}
+                <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-5">
+                    {navigationGroups.map((group) => (
+                        <div key={group.label}>
+                            <div className="px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                {group.label}
+                            </div>
+                            <div className="mt-2 space-y-1">
+                                {group.items.map((item) => {
+                                    const isActive = pathname === item.href;
+                                    return (
+                                        <Link
+                                            key={item.name}
+                                            href={item.href}
+                                            className={clsx(
+                                                'group flex items-center rounded-2xl px-3 py-2.5 text-sm font-semibold transition',
+                                                isActive
+                                                    ? 'bg-teal-50 text-teal-800'
+                                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
+                                            )}
+                                        >
+                                            <item.icon
+                                                className={clsx(
+                                                    'mr-3 h-5 w-5 flex-shrink-0',
+                                                    isActive ? 'text-teal-700' : 'text-slate-400 group-hover:text-slate-600'
+                                                )}
+                                            />
+                                            <span className="min-w-0 break-words">{item.name}</span>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ))}
                 </nav>
 
                 <div className="border-t border-slate-200 p-4">

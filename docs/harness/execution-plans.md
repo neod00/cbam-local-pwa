@@ -158,6 +158,8 @@ Completed:
 - Started P0 design-review remediation by switching the app shell and dashboard to `2026 Definitive Period`, `Reporting year: 2026`, and `Declaration due: 2027-09-30`.
 - Reworded app-facing Export/submission copy toward `EU Communication Template`, `수입자 전달용`, and `신고 지원자료` so users do not mistake the PWA for an annual declaration filing system.
 - Added product-level Annex I/Annex II/direct-only badges and an Export verification log that explicitly records protected `Summary_Products` formula cells and written sheets.
+- Reworked the desktop sidebar into workflow groups: 시작, 입력자료, 산정·검토, 내보내기, 보안·관리.
+- Refined the dashboard into a clearer workbench with separate next-action, readiness, reference-status, product-summary, and CBAM-basis SEE review areas.
 
 Pending product decisions:
 

@@ -16,7 +16,7 @@ import {
   type ScenarioAssumptions,
   type ScenarioRiskSummary,
 } from '@/lib/scenario-calculation';
-import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, Factory, FileSpreadsheet, Package, ShieldCheck, TrendingUp } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, Database, Factory, FileSpreadsheet, Package, ShieldCheck, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -55,6 +55,7 @@ const EMPTY_SCENARIO_RISK_SUMMARY: ScenarioRiskSummary = {
 export default function Home() {
   const [results, setResults] = useState<LocalCalculationResult[]>([]);
   const [productCount, setProductCount] = useState(0);
+  const [installationCount, setInstallationCount] = useState(0);
   const [processCount, setProcessCount] = useState(0);
   const [precursorCount, setPrecursorCount] = useState(0);
   const [scenarioRiskSummary, setScenarioRiskSummary] = useState<ScenarioRiskSummary>(EMPTY_SCENARIO_RISK_SUMMARY);
@@ -78,6 +79,7 @@ export default function Home() {
         periods,
         sourceStreams,
         productOutputLines,
+        installations,
         benchmarks,
         defaultValues,
         savedScenarioAssumptions,
@@ -88,6 +90,7 @@ export default function Home() {
         listLocalItems('periods'),
         listLocalItems('source_streams'),
         listLocalItems('product_output_lines'),
+        listLocalItems('installations'),
         getLocalSetting<ImportedBenchmarkReference>('reference:benchmarks'),
         getLocalSetting<ImportedDefaultValueReference>('reference:default-values'),
         getLocalSetting<ScenarioAssumptions>(SCENARIO_ASSUMPTIONS_SETTING_KEY),
@@ -101,6 +104,7 @@ export default function Home() {
       const exportReadiness = evaluateEuExportReadiness({ processes, sourceStreams, precursors, products });
 
       setProductCount(products.length);
+      setInstallationCount(installations.length);
       setProcessCount(processes.length);
       setPrecursorCount(precursors.length);
       setResults(localResults);
@@ -144,6 +148,10 @@ export default function Home() {
     : dashboard.warningCount > 0
       ? `${dashboard.warningCount}개 항목을 확인하면 신고 지원자료 준비율이 올라갑니다.`
       : '수입자 전달용 Communication Template 복사본 생성 전 최종 검토 단계입니다.';
+  const weightedCbamBasisSee = dashboard.totalOutput > 0
+    ? results.reduce((sum, result) => sum + result.see_cbam_basis * result.output_mass_t, 0) / dashboard.totalOutput
+    : 0;
+  const primaryProduct = results[0];
 
   return (
     <div className="space-y-6">
@@ -153,86 +161,167 @@ export default function Home() {
         description="사업장, 제품, 생산공정, 전구물질 데이터를 로컬에서 관리하고 EU Communication Template 기반 수입자 전달용 파일을 준비합니다."
       />
 
-      <section className="grid grid-cols-1 gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Regime</p>
-          <p className="mt-1 text-sm font-semibold text-slate-950">{CURRENT_CBAM_PERIOD.label}</p>
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Reporting year</p>
-          <p className="mt-1 text-sm font-semibold text-slate-950">{CURRENT_CBAM_PERIOD.reportingYear}</p>
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Declaration due</p>
-          <p className="mt-1 text-sm font-semibold text-slate-950">{CURRENT_CBAM_PERIOD.declarationDue}</p>
-        </div>
-      </section>
-
-      <section className="w-full min-w-0 overflow-hidden rounded-3xl border border-teal-100 bg-white p-6 shadow-sm">
-        <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="min-w-0">
-            <div className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800">
-              <ClipboardCheck className="h-4 w-4" />
-              현재 준비율 {loading ? '-' : `${dashboard.readinessRate}%`}
-            </div>
-            <h2 className="mt-4 break-words text-2xl font-semibold tracking-tight text-slate-950">
-              {currentStatus}
-            </h2>
-            <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-slate-600">
-              계산식보다 업무 순서를 먼저 따라가세요. 아래 단계에서 확인 필요 항목을 해결한 뒤 Export 화면에서 EU Communication Template과 공식 수식 재계산 결과를 검토합니다.
-            </p>
-            {nextTask && (
-              <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex gap-3">
-                  <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-700" />
-                  <div>
-                    <p className="text-xs font-semibold text-amber-700">다음 작업</p>
-                    <p className="mt-1 text-sm font-semibold text-amber-950">{nextTask.label}</p>
-                  </div>
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)_minmax(320px,0.9fr)]">
+        <div className="rounded-3xl border border-teal-100 bg-white p-5 shadow-sm">
+          <div className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800">
+            <ClipboardCheck className="h-4 w-4" />
+            현재 준비율 {loading ? '-' : `${dashboard.readinessRate}%`}
+          </div>
+          <h2 className="mt-4 break-words text-2xl font-semibold tracking-tight text-slate-950">
+            {currentStatus}
+          </h2>
+          <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-slate-600">
+            계산식보다 업무 순서를 먼저 따라가세요. 확인 필요 항목을 해결한 뒤 Export 화면에서 EU Communication Template과 공식 수식 재계산 결과를 검토합니다.
+          </p>
+          {nextTask && (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-700" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-amber-700">다음 작업</p>
+                  <p className="mt-1 break-words text-sm font-semibold text-amber-950">{nextTask.label}</p>
                 </div>
-                <Link href={nextTask.href}>
-                  <Button className="w-full md:w-auto">
-                    다음 작업 계속하기
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
               </div>
-            )}
-          </div>
+              <Link href={nextTask.href}>
+                <Button className="mt-4 w-full md:w-auto">
+                  다음 작업 계속하기
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          )}
+        </div>
 
-          <div className="min-w-0 rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-slate-950">전달 전 핵심 상태</p>
-            <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex min-w-0 items-center justify-between gap-3">
-                <dt className="text-slate-500">Export 오류</dt>
-                <dd className="flex-none font-semibold text-slate-950">{exportErrorCount}건</dd>
-              </div>
-              <div className="flex min-w-0 items-center justify-between gap-3">
-                <dt className="text-slate-500">확인 필요</dt>
-                <dd className="flex-none font-semibold text-slate-950">{dashboard.warningCount}건</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-slate-500">기준자료 연결</dt>
-                <dd>
-                  <StatusBadge tone={hasBenchmarkReference && hasDefaultValueReference ? 'success' : 'warning'}>
-                    {hasBenchmarkReference && hasDefaultValueReference ? '완료' : '필요'}
-                  </StatusBadge>
-                </dd>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-slate-500">백업</dt>
-                <dd><StatusBadge tone={backupStatus.tone}>{backupStatus.label}</StatusBadge></dd>
-              </div>
-            </dl>
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl bg-blue-50 p-2 text-blue-700">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-950">준비 상태</p>
+              <p className="text-xs text-slate-500">전달 전 핵심 점검</p>
+            </div>
           </div>
+          <dl className="mt-4 divide-y divide-slate-100 text-sm">
+            {[
+              ['사업장 등록', installationCount > 0 ? '확인' : '시작 필요', installationCount > 0 ? 'success' : 'warning'],
+              ['CN 코드 품목', productCount > 0 ? `${productCount}개` : '입력 필요', productCount > 0 ? 'success' : 'warning'],
+              ['전구물질', precursorCount > 0 ? `${precursorCount}개` : '해당 없거나 입력 전', precursorCount > 0 ? 'success' : 'pending'],
+              ['Export 오류', `${exportErrorCount}건`, exportErrorCount > 0 ? 'danger' : 'success'],
+            ].map(([label, value, tone]) => (
+              <div key={label} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                <dt className="text-slate-500">{label}</dt>
+                <dd><StatusBadge tone={tone as 'success' | 'warning' | 'pending' | 'danger'}>{value}</StatusBadge></dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl bg-emerald-50 p-2 text-emerald-700">
+              <Database className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-950">기준자료 상태</p>
+              <p className="text-xs text-slate-500">2026 확정기간 기준</p>
+            </div>
+          </div>
+          <dl className="mt-4 space-y-3 text-sm">
+            <div className="flex items-start justify-between gap-3">
+              <dt className="text-slate-500">Regime</dt>
+              <dd className="text-right font-semibold text-slate-950">{CURRENT_CBAM_PERIOD.label}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt className="text-slate-500">신고연도</dt>
+              <dd className="text-right font-semibold text-slate-950">{CURRENT_CBAM_PERIOD.reportingYear}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt className="text-slate-500">기한</dt>
+              <dd className="text-right font-semibold text-slate-950">{CURRENT_CBAM_PERIOD.declarationDue}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt className="text-slate-500">기준값 연결</dt>
+              <dd>
+                <StatusBadge tone={hasBenchmarkReference && hasDefaultValueReference ? 'success' : 'warning'}>
+                  {hasBenchmarkReference && hasDefaultValueReference ? '완료' : '확인 필요'}
+                </StatusBadge>
+              </dd>
+            </div>
+          </dl>
         </div>
       </section>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="CBAM 대상 품목" value={loading ? '-' : `${productCount}개`} helper="CN 8자리 기준 관리" icon={Package} tone="pending" />
         <StatCard label="총 생산량" value={loading ? '-' : `${formatNumber(dashboard.totalOutput)}t`} helper={`${processCount}개 공정 기준`} icon={Factory} tone="info" />
-        <StatCard label="보고 준비율" value={loading ? '-' : `${dashboard.readinessRate}%`} helper="산정·기준자료·Export 기준" icon={TrendingUp} tone="success" />
+        <StatCard label="CBAM 산정 기준 SEE" value={loading ? '-' : `${formatNumber(weightedCbamBasisSee)}`} helper="생산량 가중 평균 tCO₂e/t" icon={TrendingUp} tone="success" />
         <StatCard label="확인 필요 항목" value={loading ? '-' : `${dashboard.warningCount}건`} helper="시나리오와 Export 경고 포함" icon={AlertTriangle} tone="warning" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <SectionCard title="품목 관리 요약" description="대표 품목과 CN 코드 기준 처리 상태를 먼저 확인합니다.">
+          {primaryProduct ? (
+            <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                    CN {primaryProduct.cn_code || primaryProduct.hs_code || '미입력'}
+                  </div>
+                  <h3 className="mt-1 break-words text-xl font-semibold text-slate-950">{primaryProduct.product_name}</h3>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <StatusBadge tone="info">Annex I 대상 검토</StatusBadge>
+                    <StatusBadge tone={primaryProduct.indirect_emissions_applicable ? 'success' : 'warning'}>
+                      {primaryProduct.indirect_emissions_applicable ? '간접배출 포함' : 'Annex II direct-only'}
+                    </StatusBadge>
+                    <StatusBadge tone="pending">공급망 자료 확인</StatusBadge>
+                  </div>
+                </div>
+                <Link href="/products">
+                  <Button type="button" variant="secondary" className="w-full md:w-auto">
+                    품목 관리 보기
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
+              아직 대표 품목이 없습니다. 품목을 등록하면 CN 코드와 Annex 처리 상태를 여기에서 확인할 수 있습니다.
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard title="CBAM 산정 기준 SEE" description="인증서 산정 기준 값과 내부 검토용 값을 구분해 봅니다.">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)]">
+            <div className="rounded-2xl bg-teal-50 p-4">
+              <p className="text-xs font-semibold text-teal-800">생산량 가중 평균</p>
+              <div className="mt-2 text-3xl font-semibold tracking-tight text-teal-800">
+                {loading ? '-' : formatNumber(weightedCbamBasisSee)}
+                <span className="ml-1 text-base font-medium">tCO₂e/t</span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-teal-900">
+                Annex II direct-only 품목은 최종제품 자체 간접배출을 인증서 산정 기준에서 제외하고, 내부 검토용 total SEE로 별도 비교합니다.
+              </p>
+            </div>
+            <dl className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-4 text-sm">
+              <div className="flex justify-between gap-3 py-3">
+                <dt className="text-slate-500">직접 SEE 합계</dt>
+                <dd className="font-semibold text-slate-950">{formatNumber(results.reduce((sum, result) => sum + result.direct_see * result.output_mass_t, 0))}</dd>
+              </div>
+              <div className="flex justify-between gap-3 py-3">
+                <dt className="text-slate-500">전구물질 SEE 기여분</dt>
+                <dd className="font-semibold text-slate-950">{formatNumber(results.reduce((sum, result) => sum + result.precursor_see * result.output_mass_t, 0))}</dd>
+              </div>
+              <div className="flex justify-between gap-3 py-3">
+                <dt className="text-slate-500">간접배출 검토</dt>
+                <dd><StatusBadge tone={results.some((result) => !result.indirect_emissions_applicable) ? 'warning' : 'success'}>
+                  {results.some((result) => !result.indirect_emissions_applicable) ? '제외 항목 있음' : '포함 기준'}
+                </StatusBadge></dd>
+              </div>
+            </dl>
+          </div>
+        </SectionCard>
       </div>
 
       <SectionCard
