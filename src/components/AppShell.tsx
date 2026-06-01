@@ -33,11 +33,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <div className="min-h-screen min-w-0 overflow-x-hidden bg-[#F6F8F7] text-slate-950">
             <Sidebar />
             <div className="min-w-0 overflow-x-hidden lg:pl-72">
-                <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+                <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/85 shadow-[0_1px_0_rgba(15,23,42,0.02)] backdrop-blur">
                     <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-                        <div>
+                        <div className="min-w-0">
                             <p className="text-xs font-medium text-slate-500">CBAM Local</p>
-                            <h1 className="text-base font-semibold text-slate-950">{title}</h1>
+                            <h1 className="truncate text-base font-semibold text-slate-950">{title}</h1>
                         </div>
                         <div className="flex items-center gap-2">
                             <PeriodBadge />
@@ -48,14 +48,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
                             <button
                                 type="button"
                                 aria-label="도움말"
-                                className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100"
+                                className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 ring-1 ring-transparent transition hover:bg-slate-100 hover:ring-slate-200"
                             >
                                 <CircleHelp className="h-5 w-5" />
                             </button>
                             <button
                                 type="button"
                                 aria-label="알림"
-                                className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100"
+                                className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 ring-1 ring-transparent transition hover:bg-slate-100 hover:ring-slate-200"
                             >
                                 <Bell className="h-5 w-5" />
                             </button>
@@ -63,7 +63,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                     </div>
                 </header>
                 <UpdateNotice />
-                <main className="min-w-0 overflow-x-hidden px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-8">
+                <main className="min-w-0 overflow-x-hidden px-4 py-7 pb-24 sm:px-6 lg:px-8 lg:pb-8">
                     <div className="mx-auto w-full min-w-0 max-w-7xl overflow-x-hidden">{children}</div>
                 </main>
             </div>

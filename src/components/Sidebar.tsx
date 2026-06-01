@@ -79,7 +79,7 @@ export default function Sidebar() {
         <>
             <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-slate-200 bg-white lg:flex lg:flex-col">
                 <div className="flex h-16 items-center gap-3 border-b border-slate-200 px-5">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-teal-700 text-white">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-teal-700 text-white shadow-sm shadow-teal-900/20">
                         <Database className="h-5 w-5" />
                     </div>
                     <div>
@@ -102,9 +102,9 @@ export default function Sidebar() {
                                             key={item.name}
                                             href={item.href}
                                             className={clsx(
-                                                'group flex items-center rounded-2xl px-3 py-2.5 text-sm font-semibold transition',
+                                                'group flex items-center rounded-xl px-3 py-2.5 text-sm font-semibold transition',
                                                 isActive
-                                                    ? 'bg-teal-50 text-teal-800'
+                                                    ? 'bg-teal-50 text-teal-900 ring-1 ring-inset ring-teal-100'
                                                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
                                             )}
                                         >
@@ -124,8 +124,11 @@ export default function Sidebar() {
                 </nav>
 
                 <div className="border-t border-slate-200 p-4">
-                    <div className="rounded-2xl bg-slate-50 p-4">
-                        <div className="text-sm font-semibold text-slate-950">로컬 사용 중</div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                            <ShieldCheck className="h-4 w-4 text-teal-700" />
+                            로컬 사용 중
+                        </div>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
                             기업 데이터는 현재 브라우저에 저장되며 서버로 전송하지 않습니다.
                         </p>
@@ -133,7 +136,7 @@ export default function Sidebar() {
                 </div>
             </aside>
 
-            <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-slate-200 bg-white/95 px-2 py-2 backdrop-blur lg:hidden">
+            <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-slate-200 bg-white/95 px-2 py-2 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden">
                 {mobileNavigation.map((item) => {
                     const isActive = pathname === item.href;
                     return (

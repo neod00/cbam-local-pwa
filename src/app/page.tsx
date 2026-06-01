@@ -162,7 +162,7 @@ export default function Home() {
       />
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)_minmax(320px,0.9fr)]">
-        <div className="rounded-3xl border border-teal-100 bg-white p-5 shadow-sm">
+        <div className="rounded-3xl border border-teal-100 bg-white p-5 shadow-[var(--shadow-card)]">
           <div className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800">
             <ClipboardCheck className="h-4 w-4" />
             현재 준비율 {loading ? '-' : `${dashboard.readinessRate}%`}
@@ -173,6 +173,18 @@ export default function Home() {
           <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-slate-600">
             계산식보다 업무 순서를 먼저 따라가세요. 확인 필요 항목을 해결한 뒤 Export 화면에서 EU Communication Template과 공식 수식 재계산 결과를 검토합니다.
           </p>
+          <div className="mt-5">
+            <div className="flex items-center justify-between gap-3 text-xs font-semibold text-slate-500">
+              <span>준비율</span>
+              <span>{loading ? '-' : `${dashboard.readinessRate}%`}</span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-teal-700 transition-all"
+                style={{ width: `${loading ? 0 : dashboard.readinessRate}%` }}
+              />
+            </div>
+          </div>
           {nextTask && (
             <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
               <div className="flex gap-3">
@@ -192,7 +204,7 @@ export default function Home() {
           )}
         </div>
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
           <div className="flex items-center gap-3">
             <div className="rounded-2xl bg-blue-50 p-2 text-blue-700">
               <CheckCircle2 className="h-5 w-5" />
@@ -217,7 +229,7 @@ export default function Home() {
           </dl>
         </div>
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
           <div className="flex items-center gap-3">
             <div className="rounded-2xl bg-emerald-50 p-2 text-emerald-700">
               <Database className="h-5 w-5" />
@@ -330,7 +342,7 @@ export default function Home() {
       >
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           {dashboard.steps.map((step, index) => (
-            <div key={step.name} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div key={step.name} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 transition hover:border-slate-300 hover:bg-white">
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
                   {index + 1}
