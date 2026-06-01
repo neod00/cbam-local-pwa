@@ -148,6 +148,7 @@ Completed:
 - Added a settings-page local-use safety checklist covering no server upload, browser-local storage, `.cbam` backup timing, and official Excel review before submission.
 - Added `npm run release:status` to summarize remaining manual release blockers, required docs, and first-deployment operator actions without running a deployment.
 - Added an in-app release notes page and connected the update manifest/notice to it so update communications do not point to a missing route.
+- Added `npm run verify:excel-recalc-cases` to generate multiple EU Export workbooks and verify Microsoft Excel recalculation for no-precursor, precursor-direct-only, and precursor-direct-plus-indirect cases.
 - Added the 2026 definitive-period basis document and updated the domain map to split informational SEE from CBAM certificate-basis SEE, including Annex II direct-only and precursor-treatment implications.
 - Added the app impact plan for 2026 definitive-period changes, covering calculation fields, UI wording, Export comparison, scenario calculations, and verification updates.
 - Split local calculation and scenario outputs into `see_cbam_basis` and `see_informational_total` while keeping legacy `total_see` as an informational alias.

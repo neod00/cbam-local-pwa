@@ -142,6 +142,32 @@ Microsoft Excel recalculation result:
 - `Summary_Products!K10`: 1.805
 - Result: `K10` matches the app's informational total SEE for the fictional product after purchased precursor mapping.
 
+## Additional Excel Recalculation Cases
+
+Command:
+
+```bash
+npm run verify:excel-recalc-cases -- "CBAM Communication template for installations_en_20241213.xlsx"
+```
+
+Result:
+
+- Status: passed
+- Case count: 3
+- Report artifact: `artifacts/excel-recalculation-cases/report.json`
+
+| Case | Written cells | `I10` direct | `J10` indirect | `K10` total | App CBAM basis SEE | App informational total SEE |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| no-precursor | 36 | 0.12 | 0.235 | 0.355 | 0.12 | 0.355 |
+| precursor-direct-only | 47 | 1.32 | 0.235 | 1.555 | 1.32 | 1.555 |
+| precursor-direct-indirect | 47 | 1.32 | 0.485 | 1.805 | 1.57 | 1.805 |
+
+Review conclusion:
+
+- In all three cases, Excel `Summary_Products!K10` matches the app's informational total SEE.
+- For steel/iron sample goods, the app's `CBAM 기준 SEE` remains the certificate-scenario basis and may intentionally differ from Excel `K10` when final-good own indirect emissions are shown only as informational review values.
+- The purchased-precursor indirect SEE bridge in `E_PurchPrec!L50:L51` is covered by the `precursor-direct-indirect` case.
+
 Finding fixed during rehearsal:
 
 - The previous fictional `Steel Pipe` CN code `73063000` is not present in the official EU template CN list.

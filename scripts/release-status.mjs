@@ -18,6 +18,7 @@ const requiredCommands = [
   'npm run verify',
   'npm run verify:local-eu-template',
   'npm run verify:local-references',
+  'npm run verify:excel-recalc-cases',
 ];
 
 function read(path) {
@@ -110,7 +111,13 @@ if (unresolvedDraftSignals.length > 0) {
 }
 
 console.log('\nNext operator actions:');
-console.log('- Run the browser rehearsal with docs/mvp-fictional-dataset.md.');
-console.log('- Open the generated EU workbook copy in Microsoft Excel and record formula review results.');
-console.log('- Finalize legal/operational wording in the terms and announcement draft.');
+if (report.includes('Complete full browser walkthrough using a fictional company dataset')) {
+  console.log('- Run the browser rehearsal with docs/mvp-fictional-dataset.md.');
+}
+if (report.includes('Complete manual Excel formula recalculation review')) {
+  console.log('- Open the generated EU workbook copy in Microsoft Excel and record formula review results.');
+}
+if (unresolvedDraftSignals.some((signal) => signal.includes('legal review'))) {
+  console.log('- Finalize legal/operational wording in the terms and announcement draft.');
+}
 console.log('- Execute docs/first-deployment-runbook.md for the first private-source deployment.');
