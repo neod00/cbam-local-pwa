@@ -62,8 +62,11 @@ const missingCommandReferences = requiredCommands.filter(
   (command) => !releaseDocsText.includes(command)
 );
 const unresolvedDraftSignals = [
-  termsDraft.includes('법률 검토 전') || termsDraft.includes('최종 문구로 사용하기 전 검토')
+  termsDraft.includes('LEGAL_REVIEW_REQUIRED')
     ? 'Free-use terms still require legal review.'
+    : undefined,
+  announcementDraft.includes('OPERATOR_REVIEW_REQUIRED')
+    ? 'Release announcement still requires operator review.'
     : undefined,
   /\[[^\]]+\]/.test(announcementDraft) ? 'Release announcement still contains bracketed placeholder fields.' : undefined,
   report.includes('Complete manual Excel formula recalculation review')
@@ -117,7 +120,8 @@ if (report.includes('Complete full browser walkthrough using a fictional company
 if (report.includes('Complete manual Excel formula recalculation review')) {
   console.log('- Open the generated EU workbook copy in Microsoft Excel and record formula review results.');
 }
-if (unresolvedDraftSignals.some((signal) => signal.includes('legal review'))) {
+if (unresolvedDraftSignals.some((signal) => signal.includes('legal review') || signal.includes('operator review'))) {
   console.log('- Finalize legal/operational wording in the terms and announcement draft.');
 }
 console.log('- Execute docs/first-deployment-runbook.md for the first private-source deployment.');
+
