@@ -154,6 +154,7 @@ Completed:
 - Split local calculation and scenario outputs into `see_cbam_basis` and `see_informational_total` while keeping legacy `total_see` as an informational alias.
 - Updated Results, Scenarios, and EU Export UI labels so users see `CBAM 기준 SEE` separately from `참고용 총 SEE`.
 - Updated the local EU template verification report and Export map so `Summary_Products` formulas remain read-only while app review values are compared as separate CBAM-basis and informational totals.
+- Added a public `/terms` page for the free beta terms and responsibility notice, linked it from release notes, and added an operator review packet for the limited beta Go/No-Go decision.
 
 Pending product decisions:
 
@@ -161,7 +162,7 @@ Pending product decisions:
 
 Next:
 
-- Review the deployed beta rehearsal artifacts in `artifacts/beta-browser-rehearsal/20260601T113436` if a release reviewer needs screenshots or downloaded files.
+- Review the deployed beta rehearsal artifacts in `artifacts/beta-browser-rehearsal/20260601T115159` if a release reviewer needs screenshots or downloaded files.
 - Review and finalize `docs/free-pwa-terms-draft.md` and `docs/free-pwa-release-announcement-draft.md` with legal/operational wording before public distribution.
 - Make the limited beta Go/No-Go decision after legal/operator wording review.
 
