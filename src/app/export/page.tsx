@@ -84,6 +84,37 @@ function getCellColumn(cell: string) {
     return cell.match(/^[A-Z]+/)?.[0] ?? '';
 }
 
+function ExportStepCard({
+    description,
+    index,
+    status,
+    tone,
+    title,
+}: {
+    description: string;
+    index: number;
+    status: string;
+    tone: 'success' | 'warning' | 'danger' | 'pending' | 'info';
+    title: string;
+}) {
+    return (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-slate-50 text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
+                        {index}
+                    </div>
+                    <div className="min-w-0">
+                        <h3 className="break-words text-sm font-semibold text-slate-950">{title}</h3>
+                        <p className="mt-1 break-words text-xs leading-5 text-slate-500">{description}</p>
+                    </div>
+                </div>
+                <StatusBadge tone={tone}>{status}</StatusBadge>
+            </div>
+        </div>
+    );
+}
+
 export default function ExportPage() {
     const [templateFile, setTemplateFile] = useState<File | undefined>();
     const [validation, setValidation] = useState<EuTemplateValidationResult | undefined>();
@@ -331,6 +362,42 @@ export default function ExportPage() {
         [plannedCellWrites]
     );
 
+    const exportWorkflowSteps = useMemo(
+        () => [
+            {
+                title: '원본 템플릿 선택',
+                description: templateFile
+                    ? `${templateFile.name} 파일을 브라우저에서 검증합니다.`
+                    : 'EU에서 받은 최신 Communication Template을 선택합니다.',
+                status: validation?.isValid ? '확인 완료' : templateFile ? '검증 중' : '선택 필요',
+                tone: validation?.isValid ? 'success' as const : templateFile ? 'warning' as const : 'pending' as const,
+            },
+            {
+                title: '입력 데이터 정리',
+                description: readiness.errorCount > 0
+                    ? '오류 항목을 먼저 수정해야 복사본을 만들 수 있습니다.'
+                    : '오류 없이 Export 가능한 로컬 데이터 상태입니다.',
+                status: readiness.errorCount > 0 ? `오류 ${readiness.errorCount}건` : '통과',
+                tone: readiness.errorCount > 0 ? 'danger' as const : 'success' as const,
+            },
+            {
+                title: '공식 수식 보호',
+                description: 'Summary_Products I:J:K는 공식 수식 셀로 두고 앱이 직접 덮어쓰지 않습니다.',
+                status: protectedSummaryProductFormulaOverwriteCount > 0 ? '확인 필요' : '보호',
+                tone: protectedSummaryProductFormulaOverwriteCount > 0 ? 'danger' as const : 'success' as const,
+            },
+            {
+                title: '전달용 복사본 생성',
+                description: lastExportResult
+                    ? `${lastExportResult.writtenCellCount}개 셀 반영 후 검증했습니다.`
+                    : '다운로드 후 Excel에서 공식 수식 재계산 결과를 확인합니다.',
+                status: lastExportResult ? '생성 완료' : readiness.canExportDraft && validation?.isValid ? '생성 가능' : '대기',
+                tone: lastExportResult ? 'success' as const : readiness.canExportDraft && validation?.isValid ? 'info' as const : 'pending' as const,
+            },
+        ],
+        [lastExportResult, protectedSummaryProductFormulaOverwriteCount, readiness.canExportDraft, readiness.errorCount, templateFile, validation?.isValid]
+    );
+
     async function handleTemplateFileChange(file: File | undefined) {
         setTemplateFile(file);
         setValidation(undefined);
@@ -459,7 +526,20 @@ export default function ExportPage() {
                 <StatCard label="검토 경고" value={summary.warningCount + readiness.warningCount} helper="산정 + Export" icon={AlertTriangle} tone="warning" />
             </div>
 
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {exportWorkflowSteps.map((step, index) => (
+                    <ExportStepCard
+                        key={step.title}
+                        index={index + 1}
+                        title={step.title}
+                        description={step.description}
+                        status={step.status}
+                        tone={step.tone}
+                    />
+                ))}
+            </section>
+
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
                 <SectionCard>
                     <div className="flex items-start gap-3">
                         <FileSpreadsheet className="mt-1 h-5 w-5 text-teal-700" />
@@ -541,24 +621,49 @@ export default function ExportPage() {
                         </div>
                     )}
 
-                    <Button
-                        type="button"
-                        onClick={handleDownloadCopy}
-                        disabled={!validation?.isValid || !readiness.canExportDraft}
-                        className="mt-5"
-                    >
-                        <Download className="mr-2 h-4 w-4" />
-                        수입자 전달용 복사본 다운로드
-                    </Button>
-                    <p className="mt-2 text-xs text-slate-500">{downloadStatusMessage}</p>
+                    <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-950">복사본 생성</h3>
+                                <p className="mt-1 text-xs leading-5 text-slate-600">{downloadStatusMessage}</p>
+                            </div>
+                            <Button
+                                type="button"
+                                onClick={handleDownloadCopy}
+                                disabled={!validation?.isValid || !readiness.canExportDraft}
+                                className="w-full lg:w-auto"
+                            >
+                                <Download className="mr-2 h-4 w-4" />
+                                수입자 전달용 복사본 다운로드
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                            <p className="text-xs font-semibold text-slate-500">공식 수식 보호</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-950">
+                                I:J:K 덮어쓰기 {protectedSummaryProductFormulaOverwriteCount}개
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                            <p className="text-xs font-semibold text-slate-500">반영 예정 셀</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-950">{plannedCellWrites.length}개</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                            <p className="text-xs font-semibold text-slate-500">반영 예정 시트</p>
+                            <p className="mt-1 break-words text-sm font-semibold text-slate-950">
+                                {writtenSheetNames.length > 0 ? `${writtenSheetNames.length}개` : '아직 없음'}
+                            </p>
+                        </div>
+                    </div>
 
                     <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                        <h3 className="text-sm font-semibold text-slate-950">Export 검증 로그</h3>
+                        <h3 className="text-sm font-semibold text-slate-950">검증 로그 기준</h3>
                         <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-600">
                             <li>공식 시트명과 영문 라벨은 원본 구조를 기준으로 검증합니다.</li>
-                            <li>Summary_Products I:J:K 공식 수식 셀 덮어쓰기 예정: {protectedSummaryProductFormulaOverwriteCount}개</li>
                             <li>반영 예정 시트: {writtenSheetNames.length > 0 ? writtenSheetNames.join(', ') : '아직 없음'}</li>
-                            <li>검증 완료 후 생성 파일명, 검증 셀 수, 반영 셀 수를 이 화면에 남깁니다.</li>
+                            <li>생성 후 파일명, 검증 셀 수, 반영 셀 수를 이 화면에 남깁니다.</li>
                         </ul>
                     </div>
 
@@ -627,38 +732,38 @@ export default function ExportPage() {
                                 <ScenarioAssumptionSummary assumptions={scenarioAssumptions} mode="panel" />
                             </div>
 
-                            <ul className="mt-4 space-y-3">
+                            <ul className="mt-4 space-y-2">
                                 {exportChecklist.items.map((item) => {
                                     const Icon = item.complete ? CheckCircle2 : Circle;
 
                                     return (
-                                        <li key={item.label}>
-                                            <ActionItemCard
-                                                title={item.label}
-                                                description={item.description}
-                                                badge={
-                                                    <>
-                                                        <Icon
-                                                            className={
-                                                                item.complete
-                                                                    ? 'h-4 w-4 text-emerald-600'
-                                                                    : item.tone === 'danger'
-                                                                      ? 'h-4 w-4 text-red-600'
-                                                                      : 'h-4 w-4 text-amber-600'
-                                                            }
-                                                        />
-                                                        <StatusBadge tone={item.tone}>{item.status}</StatusBadge>
-                                                    </>
-                                                }
-                                                action={item.actionHref && item.actionLabel ? (
-                                                    <Link
-                                                        href={item.actionHref}
-                                                        className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100"
-                                                    >
-                                                        {item.actionLabel}
-                                                    </Link>
-                                                ) : undefined}
-                                            />
+                                        <li key={item.label} className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="flex min-w-0 gap-2">
+                                                    <Icon
+                                                        className={
+                                                            item.complete
+                                                                ? 'mt-0.5 h-4 w-4 flex-none text-emerald-600'
+                                                                : item.tone === 'danger'
+                                                                  ? 'mt-0.5 h-4 w-4 flex-none text-red-600'
+                                                                  : 'mt-0.5 h-4 w-4 flex-none text-amber-600'
+                                                        }
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <p className="break-words text-sm font-semibold text-slate-950">{item.label}</p>
+                                                        <p className="mt-1 break-words text-xs leading-5 text-slate-500">{item.description}</p>
+                                                    </div>
+                                                </div>
+                                                <StatusBadge tone={item.tone}>{item.status}</StatusBadge>
+                                            </div>
+                                            {item.actionHref && item.actionLabel && (
+                                                <Link
+                                                    href={item.actionHref}
+                                                    className="mt-3 inline-flex min-h-9 items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100"
+                                                >
+                                                    {item.actionLabel}
+                                                </Link>
+                                            )}
                                         </li>
                                     );
                                 })}
