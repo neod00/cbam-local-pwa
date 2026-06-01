@@ -5,19 +5,19 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 type StatusTone = 'success' | 'info' | 'warning' | 'danger' | 'neutral' | 'pending';
 
 const badgeToneClass: Record<StatusTone, string> = {
-    success: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
-    info: 'bg-blue-50 text-blue-700 ring-blue-600/20',
-    warning: 'bg-amber-50 text-amber-700 ring-amber-600/20',
-    danger: 'bg-red-50 text-red-700 ring-red-600/20',
+    success: 'bg-emerald-50 text-emerald-800 ring-emerald-600/20',
+    info: 'bg-blue-50 text-blue-800 ring-blue-600/20',
+    warning: 'bg-amber-50 text-amber-800 ring-amber-600/25',
+    danger: 'bg-red-50 text-red-800 ring-red-600/20',
     neutral: 'bg-slate-50 text-slate-700 ring-slate-600/20',
-    pending: 'bg-teal-50 text-teal-700 ring-teal-600/20',
+    pending: 'bg-teal-50 text-teal-800 ring-teal-600/20',
 };
 
 const buttonVariantClass = {
-    primary: 'bg-teal-700 text-white hover:bg-teal-600 disabled:bg-slate-300',
-    secondary: 'border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 disabled:text-slate-400',
+    primary: 'bg-teal-700 text-white hover:bg-teal-600 active:bg-teal-800 disabled:bg-slate-300',
+    secondary: 'border border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50 disabled:text-slate-400',
     ghost: 'bg-transparent text-slate-700 hover:bg-slate-100 disabled:text-slate-400',
-    danger: 'border border-red-200 bg-white text-red-700 hover:bg-red-50 disabled:text-red-300',
+    danger: 'border border-red-200 bg-white text-red-700 hover:border-red-300 hover:bg-red-50 disabled:text-red-300',
 };
 
 export function PageHeader({
@@ -35,7 +35,7 @@ export function PageHeader({
         <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
                 {eyebrow && <p className="break-words text-xs font-semibold uppercase tracking-wide text-teal-700">{eyebrow}</p>}
-                <h1 className="mt-1 break-words text-2xl font-semibold tracking-tight text-slate-950">{title}</h1>
+                <h1 className="mt-1 break-words text-[1.7rem] font-semibold leading-tight text-slate-950">{title}</h1>
                 {description && <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-slate-600">{description}</p>}
             </div>
             {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -57,7 +57,7 @@ export function SectionCard({
     actions?: ReactNode;
 }) {
     return (
-        <section className={clsx('w-full min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm', className)}>
+        <section className={clsx('w-full min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]', className)}>
             {(title || description || actions) && (
                 <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
@@ -95,14 +95,14 @@ export function StatCard({
     };
 
     return (
-        <div className="w-full min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="w-full min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-card-hover)]">
             <div className="flex min-w-0 items-start justify-between gap-3">
                 <div className="min-w-0">
                     <p className="break-words text-sm font-medium text-slate-500">{label}</p>
                     <div className="mt-2 break-words text-3xl font-semibold tracking-tight text-slate-950">{value}</div>
                 </div>
                 {Icon && (
-                    <div className={clsx('flex-none rounded-xl p-2.5', iconClass[tone])}>
+                    <div className={clsx('flex-none rounded-xl p-2.5 ring-1 ring-inset ring-black/5', iconClass[tone])}>
                         <Icon className="h-5 w-5" />
                     </div>
                 )}
@@ -136,7 +136,7 @@ export function Button({
         <button
             {...props}
             className={clsx(
-                'inline-flex min-h-10 max-w-full items-center justify-center rounded-xl px-4 py-2 text-center text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed',
+                'inline-flex min-h-10 max-w-full items-center justify-center rounded-xl px-4 py-2 text-center text-sm font-semibold shadow-sm transition active:scale-[0.99] disabled:cursor-not-allowed disabled:active:scale-100',
                 buttonVariantClass[variant],
                 className
             )}
@@ -152,7 +152,7 @@ export function DataTable({
     className?: string;
 }) {
     return (
-        <div className={clsx('min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm', className)}>
+        <div className={clsx('min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[var(--shadow-card)]', className)}>
             <div className="overflow-x-auto">{children}</div>
         </div>
     );
@@ -172,7 +172,7 @@ export function ActionItemCard({
     className?: string;
 }) {
     return (
-        <div className={clsx('w-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4', className)}>
+        <div className={clsx('w-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 transition hover:border-slate-300 hover:bg-white', className)}>
             <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -221,7 +221,7 @@ export function FormSection({
     badge?: ReactNode;
 }) {
     return (
-        <fieldset className={clsx('min-w-0 rounded-2xl border border-slate-200 bg-white p-4', className)}>
+        <fieldset className={clsx('min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-[var(--shadow-card)]', className)}>
             <legend className="px-1">
                 <span className="inline-flex max-w-full flex-wrap items-center gap-2">
                     <span className="break-words text-sm font-semibold text-slate-950">{title}</span>
