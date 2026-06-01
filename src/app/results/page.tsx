@@ -4,7 +4,7 @@ import { ActionItemCard, DataTable, PageHeader, SectionCard, StatCard, StatusBad
 import { calculateLocalResults, getLocalCalculationWarningHref } from '@/lib/calculation-engine';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
 import { listLocalItems, seedLocalData } from '@/lib/local-db';
-import { AlertTriangle, ArrowRight, Factory, Gauge, Percent, Scale } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Factory, Gauge, Percent, Scale, Split, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -104,6 +104,11 @@ export default function ResultsPage() {
             allocatedEmissions,
             averageCbamBasisSee: average(results.map((result) => result.see_cbam_basis)),
             averageInformationalTotalSee: average(results.map((result) => result.see_informational_total)),
+            weightedCbamBasisSee: totalOutput > 0 ? allocatedEmissions / totalOutput : 0,
+            weightedInformationalTotalSee: totalOutput > 0
+                ? results.reduce((sum, result) => sum + result.see_informational_total * result.output_mass_t, 0) / totalOutput
+                : 0,
+            indirectExcludedCount: results.filter((result) => !result.indirect_emissions_applicable).length,
             warningCount: allWarnings.length,
             warnings: allWarnings,
         };
@@ -122,6 +127,59 @@ export default function ResultsPage() {
                 <StatCard label="총 생산량" value={formatNumber(summary.totalOutput)} helper="tonne" icon={Scale} tone="pending" />
                 <StatCard label="CBAM 기준 배출량" value={formatNumber(summary.allocatedEmissions)} helper="tCO2e" icon={Gauge} tone="success" />
                 <StatCard label="확인 필요" value={summary.warningCount} helper="경고 항목" icon={AlertTriangle} tone="warning" />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                <SectionCard title="SEE 해석 기준" description="공식 신고 지원자료에 사용할 값과 내부 검토용 값을 분리해서 확인합니다.">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
+                            <div className="flex items-center gap-2 text-sm font-semibold text-teal-900">
+                                <TrendingUp className="h-4 w-4" />
+                                CBAM 산정 기준 SEE
+                            </div>
+                            <div className="mt-2 text-3xl font-semibold tracking-tight text-teal-800">
+                                {formatNumber(summary.weightedCbamBasisSee)}
+                                <span className="ml-1 text-base font-medium">tCO₂e/t</span>
+                            </div>
+                            <p className="mt-2 text-xs leading-5 text-teal-900">
+                                인증서 산정 시나리오 판단에 쓰는 기준값입니다. Annex II direct-only 품목의 최종제품 자체 간접배출은 여기에서 제외될 수 있습니다.
+                            </p>
+                        </div>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                                <Split className="h-4 w-4" />
+                                내부 검토용 total SEE
+                            </div>
+                            <div className="mt-2 text-3xl font-semibold tracking-tight text-slate-800">
+                                {formatNumber(summary.weightedInformationalTotalSee)}
+                                <span className="ml-1 text-base font-medium">tCO₂e/t</span>
+                            </div>
+                            <p className="mt-2 text-xs leading-5 text-slate-600">
+                                최종제품 자체 간접배출까지 포함해 내부 비교와 Excel 공식 수식 재계산 차이를 검토할 때 참고합니다.
+                            </p>
+                        </div>
+                    </div>
+                </SectionCard>
+
+                <SectionCard title="검토 포인트" description="산정 결과를 Export 전에 확인해야 할 항목입니다.">
+                    <dl className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                            <dt className="text-xs font-semibold text-slate-500">간접배출 제외 라인</dt>
+                            <dd className="mt-2 text-2xl font-semibold text-slate-950">{summary.indirectExcludedCount}개</dd>
+                            <p className="mt-1 text-xs text-slate-500">Annex II direct-only 등</p>
+                        </div>
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                            <dt className="text-xs font-semibold text-slate-500">평균 CBAM 기준 SEE</dt>
+                            <dd className="mt-2 text-2xl font-semibold text-slate-950">{formatNumber(summary.averageCbamBasisSee)}</dd>
+                            <p className="mt-1 text-xs text-slate-500">단순 평균</p>
+                        </div>
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                            <dt className="text-xs font-semibold text-slate-500">평균 내부 total SEE</dt>
+                            <dd className="mt-2 text-2xl font-semibold text-slate-950">{formatNumber(summary.averageInformationalTotalSee)}</dd>
+                            <p className="mt-1 text-xs text-slate-500">단순 평균</p>
+                        </div>
+                    </dl>
+                </SectionCard>
             </div>
 
             <div className="hidden md:block">
