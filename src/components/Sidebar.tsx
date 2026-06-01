@@ -8,6 +8,7 @@ import {
     Calendar,
     Database,
     FileSpreadsheet,
+    FileText,
     Flame,
     Home,
     Monitor,
@@ -33,6 +34,7 @@ const navigation = [
     { name: 'EU Export', href: '/export', icon: FileSpreadsheet },
     { name: '사업장', href: '/installations', icon: Settings },
     { name: '데이터 안전', href: '/settings', icon: ShieldCheck },
+    { name: '약관/고지', href: '/terms', icon: FileText },
     { name: '디자인 미리보기', href: '/design-preview', icon: Monitor },
 ];
 

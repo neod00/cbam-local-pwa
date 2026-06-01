@@ -24,6 +24,7 @@ const workflowRoutes = [
   ['시나리오', '/scenarios'],
   ['EU Export', '/export'],
   ['데이터 안전', '/settings'],
+  ['약관/고지', '/terms'],
 ];
 
 for (const [label, href] of workflowRoutes) {
@@ -91,6 +92,7 @@ assert.ok(settingsPage.includes('.cbam 백업'), 'Settings should guide backup h
 assert.ok(settingsPage.includes('무료 라이선스'), 'Settings should include the free license placeholder');
 assert.ok(settingsPage.includes('CBAM 산정 데이터, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다'), 'Settings should explain the license data boundary');
 assert.ok(settingsPage.includes('업데이트 상태'), 'Settings should include update status in the free license area');
+assert.ok(settingsPage.includes('약관/고지 보기'), 'Settings should link to free terms and responsibility notice');
 assert.ok(settingsPage.includes('업데이트 상태 확인'), 'Settings should expose a manual update status check');
 assert.ok(settingsPage.includes('CBAM 입력자료와 백업 파일은 로컬에 남습니다'), 'Settings should keep license/update data boundaries clear');
 assert.ok(settingsPage.includes('license:free-registration'), 'Settings should store free license mock registration in local settings');

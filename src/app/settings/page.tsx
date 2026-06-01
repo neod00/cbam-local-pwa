@@ -21,7 +21,8 @@ import {
     type ScenarioAssumptions,
 } from '@/lib/scenario-calculation';
 import { evaluateUpdateStatus, fetchUpdateManifest, type UpdateStatus } from '@/lib/update-policy';
-import { AlertTriangle, Database, Download, FileUp, KeyRound, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertTriangle, Database, Download, ExternalLink, FileUp, KeyRound, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import Link from 'next/link';
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 const FREE_LICENSE_SETTING_KEY = 'license:free-registration';
@@ -277,15 +278,24 @@ export default function SettingsPage() {
             </section>
 
             <SectionCard>
-                <div className="flex gap-3 text-sm leading-6 text-slate-700">
-                    <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-600" />
-                    <div>
-                        <h2 className="font-semibold text-slate-950">사용 전 확인</h2>
-                        <p className="mt-1">
-                            이 앱은 CBAM 산정과 제출 준비를 돕는 로컬 도구입니다. 법률 자문, 공식 검증, 최종 제출 책임을 대체하지 않습니다.
-                            제출 전에는 회사 내부 검토와 필요한 경우 전문기관 검증을 함께 진행하세요.
-                        </p>
+                <div className="flex flex-col gap-4 text-sm leading-6 text-slate-700 md:flex-row md:items-start md:justify-between">
+                    <div className="flex gap-3">
+                        <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-600" />
+                        <div>
+                            <h2 className="font-semibold text-slate-950">사용 전 확인</h2>
+                            <p className="mt-1">
+                                이 앱은 CBAM 산정과 제출 준비를 돕는 로컬 도구입니다. 법률 자문, 공식 검증, 최종 제출 책임을 대체하지 않습니다.
+                                제출 전에는 회사 내부 검토와 필요한 경우 전문기관 검증을 함께 진행하세요.
+                            </p>
+                        </div>
                     </div>
+                    <Link
+                        href="/terms"
+                        className="inline-flex min-h-10 flex-none items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                    >
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        약관/고지 보기
+                    </Link>
                 </div>
             </SectionCard>
 
