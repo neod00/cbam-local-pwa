@@ -189,8 +189,8 @@ CBAM_REHEARSAL_URL="https://cbam-local-pwa.vercel.app" CBAM_EU_TEMPLATE_PATH="CB
 Result:
 
 - Status: passed
-- Latest run artifact: `artifacts/beta-browser-rehearsal/20260601T115159`
-- Checked routes: 14/14 passed, including `/terms`
+- Latest run artifact: `artifacts/beta-browser-rehearsal/20260601T130842`
+- Checked routes: 15/15 passed, including `/announcement` and `/terms`
 - IndexedDB seeded local data:
   - installations: 1
   - products: 2
@@ -203,8 +203,8 @@ Result:
 - Export copy download: passed
 - `.cbam` backup download: passed
 - External network requests while entering/reviewing data: 0
-- Downloaded Export workbook: `artifacts/beta-browser-rehearsal/20260601T115159/downloads/CBAM Communication template for installations_en_20241213_cbam-local-copy_20260601.xlsx`
-- Downloaded backup: `artifacts/beta-browser-rehearsal/20260601T115159/downloads/cbam-local-backup-20260601115231.cbam`
+- Downloaded Export workbook: `artifacts/beta-browser-rehearsal/20260601T130842/downloads/CBAM Communication template for installations_en_20241213_cbam-local-copy_20260601.xlsx`
+- Downloaded backup: `artifacts/beta-browser-rehearsal/20260601T130842/downloads/cbam-local-backup-20260601130918.cbam`
 
 Deployment note:
 
