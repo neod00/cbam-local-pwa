@@ -34,6 +34,7 @@ assert.ok(manifest.icons.some((icon) => icon.src === '/icon.svg'), 'manifest sho
 const expectedShellRoutes = [
   '/',
   '/export',
+  '/guide',
   '/installations',
   '/periods',
   '/privacy',

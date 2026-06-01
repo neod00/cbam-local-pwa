@@ -4,12 +4,14 @@ import Sidebar from '@/components/Sidebar';
 import PeriodBadge from '@/components/PeriodBadge';
 import UpdateNotice from '@/components/UpdateNotice';
 import { Bell, Building2, CircleHelp } from 'lucide-react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 const pageTitles: Record<string, string> = {
     '/': '대시보드',
     '/announcement': '베타 배포 안내',
+    '/guide': '처음 따라하기',
     '/products': '품목 관리',
     '/periods': '보고기간',
     '/privacy': '개인정보 및 데이터 처리',
@@ -45,13 +47,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
                                 <Building2 className="h-4 w-4 text-teal-700" />
                                 로컬 사업장
                             </div>
-                            <button
-                                type="button"
+                            <Link
+                                href="/guide"
                                 aria-label="도움말"
                                 className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 ring-1 ring-transparent transition hover:bg-slate-100 hover:ring-slate-200"
                             >
                                 <CircleHelp className="h-5 w-5" />
-                            </button>
+                            </Link>
                             <button
                                 type="button"
                                 aria-label="알림"

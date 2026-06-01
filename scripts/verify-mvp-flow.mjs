@@ -5,6 +5,7 @@ const sidebar = readFileSync('src/components/Sidebar.tsx', 'utf8');
 const appShell = readFileSync('src/components/AppShell.tsx', 'utf8');
 const layout = readFileSync('src/app/layout.tsx', 'utf8');
 const dashboard = readFileSync('src/app/page.tsx', 'utf8');
+const guidePage = readFileSync('src/app/guide/page.tsx', 'utf8');
 const exportPage = readFileSync('src/app/export/page.tsx', 'utf8');
 const installationsPage = readFileSync('src/app/installations/page.tsx', 'utf8');
 const uploadPage = readFileSync('src/app/upload/page.tsx', 'utf8');
@@ -14,8 +15,10 @@ const precursorsPage = readFileSync('src/app/precursors/page.tsx', 'utf8');
 const resultsPage = readFileSync('src/app/results/page.tsx', 'utf8');
 const scenariosPage = readFileSync('src/app/scenarios/page.tsx', 'utf8');
 const settingsPage = readFileSync('src/app/settings/page.tsx', 'utf8');
+const workflowGuide = readFileSync('src/lib/workflow-guide.ts', 'utf8');
 
 const workflowRoutes = [
+  ['처음 따라하기', '/guide'],
   ['배포 안내', '/announcement'],
   ['품목 관리', '/products'],
   ['생산공정', '/processes'],
@@ -38,7 +41,7 @@ for (const label of ['홈', '품목', '결과', '설정']) {
   assert.ok(sidebar.includes(label), `mobile navigation should include ${label}`);
 }
 
-for (const label of ['대시보드', '베타 배포 안내', '품목 관리', '개인정보 및 데이터 처리', '생산공정', '시나리오', 'EU Communication Template Export', '데이터 안전']) {
+for (const label of ['대시보드', '처음 따라하기', '베타 배포 안내', '품목 관리', '개인정보 및 데이터 처리', '생산공정', '시나리오', 'EU Communication Template Export', '데이터 안전']) {
   assert.ok(appShell.includes(label), `topbar route title should include ${label}`);
 }
 
@@ -47,6 +50,11 @@ assert.ok(dashboard.includes('사업장, 제품, 생산공정, 전구물질'), '
 assert.ok(dashboard.includes('CBAM 신고 지원자료 작업실'), 'dashboard should present the guided workspace');
 assert.ok(dashboard.includes('다음 작업 계속하기'), 'dashboard should expose a next action CTA');
 assert.ok(dashboard.includes('자료 준비 체크리스트'), 'dashboard should show evidence preparation guidance');
+assert.ok(dashboard.includes('WorkflowGuideCard'), 'dashboard should include a compact first-run workflow guide');
+assert.ok(guidePage.includes('처음 따라하기'), 'guide page should introduce the first-run workflow');
+assert.ok(guidePage.includes('Hot Rolled Coil 리허설 기준'), 'guide page should expose the fictional HRC rehearsal path');
+assert.ok(workflowGuide.includes('Excel 공식 수식 재계산'), 'guide workflow should include the manual Excel recalculation step');
+assert.ok(workflowGuide.includes('.cbam 백업 보관'), 'guide workflow should include the local backup step');
 assert.ok(exportPage.includes('게이트 요약'), 'Export should show a submission gate summary');
 assert.ok(exportPage.includes('첫 번째 항목 수정'), 'Export should guide users to the first blocking issue');
 assert.ok(exportPage.includes('수입자 전달용 복사본 생성'), 'Export should expose a clear final copy generation action');

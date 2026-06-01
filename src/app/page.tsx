@@ -1,6 +1,7 @@
 'use client';
 
 import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummary';
+import { WorkflowGuideCard } from '@/components/WorkflowGuideCard';
 import { ActionItemCard, Button, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import { CURRENT_CBAM_PERIOD } from '@/lib/cbam-period';
@@ -354,6 +355,8 @@ export default function Home() {
           ))}
         </div>
       </SectionCard>
+
+      <WorkflowGuideCard currentRoute="/" compact />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,1fr)]">
         <SectionCard title="해결할 작업" description="위에서부터 처리하면 Communication Template 전달 준비 흐름이 가장 빨리 정리됩니다.">

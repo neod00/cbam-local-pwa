@@ -9,6 +9,7 @@ const nextCliPath = join(process.cwd(), 'node_modules', 'next', 'dist', 'bin', '
 const routes = [
   '/',
   '/announcement',
+  '/guide',
   '/installations',
   '/periods',
   '/privacy',
@@ -64,6 +65,10 @@ async function verifyRoutes() {
 
   assert.ok(renderedHtmlByRoute.get('/announcement')?.includes('CBAM Local PWA 무료 베타'), 'announcement should render beta announcement');
   assert.ok(renderedHtmlByRoute.get('/announcement')?.includes('openbrain.main@gmail.com'), 'announcement should render public support email');
+
+  assert.ok(renderedHtmlByRoute.get('/guide')?.includes('처음 따라하기'), 'guide should render the first-run workflow');
+  assert.ok(renderedHtmlByRoute.get('/guide')?.includes('Hot Rolled Coil'), 'guide should render the fictional HRC rehearsal path');
+  assert.ok(renderedHtmlByRoute.get('/guide')?.includes('Excel 공식 수식 재계산'), 'guide should render Excel recalculation guidance');
 
   assert.ok(renderedHtmlByRoute.get('/privacy')?.includes('개인정보 및 로컬 데이터 처리 안내'), 'privacy should render data handling notice');
   assert.ok(renderedHtmlByRoute.get('/privacy')?.includes('운영 서버로 업로드하지 않는 것을 원칙'), 'privacy should render local-first data boundary');
