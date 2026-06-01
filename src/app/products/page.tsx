@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, DataTable, EmptyState, PageHeader, SectionCard, StatusBadge } from '@/components/ui';
+import { getCbamGoodsMetadata, getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
 import { CN_CODE_OPTIONS, type CnCodeOption } from '@/lib/cn-code-options';
 import { parseEuTemplateCnCodeOptions } from '@/lib/eu-template-export';
 import {
@@ -33,6 +34,28 @@ const EMPTY_PRODUCT_DRAFT: ProductDraft = {
 
 const fieldClass =
     'mt-1 block h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-4 focus:ring-teal-100';
+
+function GoodsRuleBadges({ product }: { product: Product }) {
+    const metadata = getCbamGoodsMetadata(product);
+    const indirectRule = getIndirectEmissionsApplicability(product);
+
+    return (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+            <StatusBadge tone={metadata.annex_i_candidate ? 'info' : 'warning'}>
+                {metadata.annex_i_candidate ? 'Annex I 후보' : 'Annex I 확인 필요'}
+            </StatusBadge>
+            <StatusBadge tone={metadata.annex_ii_direct_only ? 'warning' : 'neutral'}>
+                {metadata.direct_only_label}
+            </StatusBadge>
+            <StatusBadge tone={indirectRule.applicable ? 'success' : 'warning'}>
+                {indirectRule.applicable ? '간접 포함' : '인증서 산정 제외'}
+            </StatusBadge>
+            {metadata.precursor_review_recommended && (
+                <StatusBadge tone="pending">전구물질 검토</StatusBadge>
+            )}
+        </div>
+    );
+}
 
 export default function ProductsPage() {
     const [products, setProducts] = useState<Product[]>([]);
@@ -378,7 +401,7 @@ export default function ProductsPage() {
 
                         <div className="md:col-span-2">
                             <div className="mb-3 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm leading-6 text-teal-900">
-                                제품의 EU 제출 기준은 HS 4자리보다 CN 8자리가 우선입니다. 확신이 없으면 최신 EU 템플릿에서 CN 목록을 가져온 뒤 제품명이나 코드로 검색해 선택하세요.
+                                제품의 EU Communication Template 기준은 HS 4자리보다 CN 8자리가 우선입니다. 확신이 없으면 최신 EU 템플릿에서 CN 목록을 가져온 뒤 제품명이나 코드로 검색해 선택하세요.
                             </div>
                             <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                                 {filteredCnOptions.map((option) => (
@@ -469,6 +492,7 @@ export default function ProductsPage() {
                                     <p className="mt-1 text-sm text-slate-500">
                                         {product.cn_code ? `CN ${product.cn_code}` : 'CN 미입력'} · HS {product.hs_code}
                                     </p>
+                                    <GoodsRuleBadges product={product} />
                                 </div>
                                 <div className="flex gap-2">
                                     <Button
@@ -553,7 +577,10 @@ export default function ProductsPage() {
                                     <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-slate-950">
                                         {product.cn_code || '미입력'}
                                     </td>
-                                    <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-700">{product.name}</td>
+                                    <td className="px-4 py-4 text-sm text-slate-700">
+                                        <div className="font-medium text-slate-900">{product.name}</div>
+                                        <GoodsRuleBadges product={product} />
+                                    </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{product.product_type_enum}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{product.hs_code}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{product.unit}</td>

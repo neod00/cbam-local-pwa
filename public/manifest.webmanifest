@@ -1,7 +1,7 @@
 {
   "name": "CBAM Local PWA",
   "short_name": "CBAM Local",
-  "description": "브라우저 로컬에서 CBAM 산정, 증빙 검토, EU 템플릿 Export를 지원하는 PWA입니다.",
+  "description": "브라우저 로컬에서 CBAM 산정, 증빙 검토, EU Communication Template Export를 지원하는 PWA입니다.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

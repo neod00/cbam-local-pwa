@@ -284,8 +284,8 @@ export default function SettingsPage() {
                         <div>
                             <h2 className="font-semibold text-slate-950">사용 전 확인</h2>
                             <p className="mt-1">
-                                이 앱은 CBAM 산정과 제출 준비를 돕는 로컬 도구입니다. 법률 자문, 공식 검증, 최종 제출 책임을 대체하지 않습니다.
-                                제출 전에는 회사 내부 검토와 필요한 경우 전문기관 검증을 함께 진행하세요.
+                                이 앱은 CBAM 산정과 신고 지원자료 준비를 돕는 로컬 도구입니다. 법률 자문, 공식 검증, 최종 신고 책임을 대체하지 않습니다.
+                                전달 또는 신고 전에는 회사 내부 검토와 필요한 경우 전문기관 검증을 함께 진행하세요.
                             </p>
                         </div>
                     </div>
@@ -301,7 +301,7 @@ export default function SettingsPage() {
 
             <SectionCard
                 title="로컬 사용 안전 체크리스트"
-                description="무료 PWA를 실제 업무에 쓰기 전에 데이터 보관 위치와 제출 전 확인 책임을 먼저 점검하세요."
+                description="무료 PWA를 실제 업무에 쓰기 전에 데이터 보관 위치와 전달 전 확인 책임을 먼저 점검하세요."
             >
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -341,7 +341,7 @@ export default function SettingsPage() {
                         <div className="flex gap-3">
                             <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-700" />
                             <div>
-                                <h3 className="text-sm font-semibold text-slate-950">제출 전 공식 확인</h3>
+                                <h3 className="text-sm font-semibold text-slate-950">전달 전 공식 확인</h3>
                                 <p className="mt-1 text-sm leading-6 text-slate-600">
                                     최신 EU 원본 템플릿을 사용하고, Export 후 Microsoft Excel에서 공식 수식 재계산 결과를 확인하세요.
                                 </p>

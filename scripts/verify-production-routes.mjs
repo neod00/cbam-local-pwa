@@ -68,16 +68,16 @@ async function verifyRoutes() {
   assert.ok(renderedHtmlByRoute.get('/privacy')?.includes('개인정보 및 로컬 데이터 처리 안내'), 'privacy should render data handling notice');
   assert.ok(renderedHtmlByRoute.get('/privacy')?.includes('운영 서버로 업로드하지 않는 것을 원칙'), 'privacy should render local-first data boundary');
 
-  assert.ok(renderedHtmlByRoute.get('/results')?.includes('CBAM 기준 SEE'), 'results should render CBAM-basis SEE labels');
-  assert.ok(renderedHtmlByRoute.get('/results')?.includes('참고용 총 SEE'), 'results should render informational SEE labels');
+  assert.ok(renderedHtmlByRoute.get('/results')?.includes('CBAM 산정 기준 SEE'), 'results should render CBAM-basis SEE labels');
+  assert.ok(renderedHtmlByRoute.get('/results')?.includes('내부 검토용 total SEE'), 'results should render informational SEE labels');
 
-  assert.ok(renderedHtmlByRoute.get('/scenarios')?.includes('CBAM 기준 SEE'), 'scenarios should render CBAM-basis SEE labels');
-  assert.ok(renderedHtmlByRoute.get('/scenarios')?.includes('참고용 총 SEE'), 'scenarios should render informational SEE labels');
+  assert.ok(renderedHtmlByRoute.get('/scenarios')?.includes('CBAM 산정 기준 SEE'), 'scenarios should render CBAM-basis SEE labels');
+  assert.ok(renderedHtmlByRoute.get('/scenarios')?.includes('내부 검토용 total SEE'), 'scenarios should render informational SEE labels');
 
   assert.ok(renderedHtmlByRoute.get('/export')?.includes('Summary_Products 반영 검토'), 'export should render Summary_Products review');
   assert.ok(renderedHtmlByRoute.get('/export')?.includes('공식 수식'), 'export should render official formula guidance');
-  assert.ok(renderedHtmlByRoute.get('/export')?.includes('CBAM 기준 SEE'), 'export should render CBAM-basis SEE labels');
-  assert.ok(renderedHtmlByRoute.get('/export')?.includes('참고용 총 SEE'), 'export should render informational SEE labels');
+  assert.ok(renderedHtmlByRoute.get('/export')?.includes('CBAM 산정 기준 SEE'), 'export should render CBAM-basis SEE labels');
+  assert.ok(renderedHtmlByRoute.get('/export')?.includes('내부 검토용 total SEE'), 'export should render informational SEE labels');
 
   assert.ok(renderedHtmlByRoute.get('/settings')?.includes('로컬 사용 안전 체크리스트'), 'settings should render local-use safety checklist');
   assert.ok(renderedHtmlByRoute.get('/settings')?.includes('.cbam'), 'settings should render backup guidance');

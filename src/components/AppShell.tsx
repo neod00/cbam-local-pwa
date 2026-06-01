@@ -1,8 +1,9 @@
 'use client';
 
 import Sidebar from '@/components/Sidebar';
+import PeriodBadge from '@/components/PeriodBadge';
 import UpdateNotice from '@/components/UpdateNotice';
-import { Bell, Building2, CalendarDays, CircleHelp } from 'lucide-react';
+import { Bell, Building2, CircleHelp } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
@@ -18,7 +19,7 @@ const pageTitles: Record<string, string> = {
     '/upload': '자료 업로드',
     '/results': '산정 결과',
     '/scenarios': '시나리오',
-    '/export': 'EU 템플릿 Export',
+    '/export': 'EU Communication Template Export',
     '/installations': '사업장',
     '/settings': '데이터 안전',
     '/terms': '무료 약관 및 고지',
@@ -39,10 +40,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                             <h1 className="text-base font-semibold text-slate-950">{title}</h1>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 md:flex">
-                                <CalendarDays className="h-4 w-4 text-teal-700" />
-                                2025 Q4
-                            </div>
+                            <PeriodBadge />
                             <div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 md:flex">
                                 <Building2 className="h-4 w-4 text-teal-700" />
                                 로컬 사업장

@@ -544,7 +544,7 @@ export function evaluateEuExportReadiness(
             issues.push({
                 severity: 'warning',
                 area: '구매 전구물질',
-                message: `${precursor.name}: 기본값을 사용하는 사유가 비어 있습니다. 제출 전 기본값 사용 근거를 남기세요.`,
+                message: `${precursor.name}: 기본값을 사용하는 사유가 비어 있습니다. 전달 전 기본값 사용 근거를 남기세요.`,
                 target: { type: 'precursor', id: precursor.id },
             });
         }
@@ -661,7 +661,7 @@ export function createExportChecklist(input: ExportChecklistInput): ExportCheckl
             description:
                 readiness.warningCount === 0
                     ? '추가 검토 경고가 없습니다.'
-                    : `${readiness.warningCount}개 경고가 있습니다. 제출 전 검토가 필요합니다.`,
+                    : `${readiness.warningCount}개 경고가 있습니다. 전달 전 검토가 필요합니다.`,
             status: readiness.warningCount === 0 ? '완료' : '확인 필요',
             tone: readiness.warningCount === 0 ? 'success' : 'warning',
             complete: readiness.warningCount === 0,
@@ -705,14 +705,14 @@ export function getEuExportDownloadStatusMessage(input: EuExportDownloadStatusIn
     }
 
     if (!readiness.isSubmissionReady) {
-        return '다운로드는 가능하지만 경고 항목은 제출 전 검토하세요.';
+        return '다운로드는 가능하지만 경고 항목은 전달 전 검토하세요.';
     }
 
     if (backupStatus.tone !== 'success') {
-        return '다운로드는 가능하지만 제출용 복사본 생성 전 .cbam 백업을 권장합니다.';
+        return '다운로드는 가능하지만 Communication Template 복사본 생성 전 .cbam 백업을 권장합니다.';
     }
 
-    return '제출용 복사본을 생성할 수 있습니다.';
+    return '수입자 전달용 복사본을 생성할 수 있습니다.';
 }
 
 function parseWorkbookSheetNames(workbookXml: string): string[] {
@@ -1594,7 +1594,7 @@ export async function createEuTemplateExportCopyResult(file: File, data: EuTempl
     const readiness = evaluateEuExportReadiness(data, cnCodeMap);
 
     if (!readiness.canExportDraft) {
-        throw new Error('EU 템플릿 Export 전에 오류 항목을 먼저 해결해야 합니다.');
+        throw new Error('EU Communication Template Export 전에 오류 항목을 먼저 해결해야 합니다.');
     }
 
     const sheetTargetByName = parseWorkbookSheetTargets(zip);
@@ -1642,7 +1642,7 @@ export async function createEuTemplateExportCopyResult(file: File, data: EuTempl
     if (!verification.isValid) {
         const firstMismatch = verification.mismatches[0];
         throw new Error(
-            `EU 템플릿 Export 검증에 실패했습니다. ${firstMismatch.sheetName}!${firstMismatch.cell} ${firstMismatch.label} 값이 예상과 다릅니다. expected=${firstMismatch.expected}, actual=${firstMismatch.actual}`
+            `EU Communication Template Export 검증에 실패했습니다. ${firstMismatch.sheetName}!${firstMismatch.cell} ${firstMismatch.label} 값이 예상과 다릅니다. expected=${firstMismatch.expected}, actual=${firstMismatch.actual}`
         );
     }
 

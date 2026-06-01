@@ -654,7 +654,7 @@ assertEqual(
     readiness: { ...readiness, isSubmissionReady: true, warningCount: 0 },
     validation,
   }),
-  '제출용 복사본을 생성할 수 있습니다.',
+  '수입자 전달용 복사본을 생성할 수 있습니다.',
   'download status ready'
 );
 assertEqual(
@@ -664,7 +664,7 @@ assertEqual(
     readiness: { ...readiness, isSubmissionReady: true, warningCount: 0 },
     validation,
   }),
-  '다운로드는 가능하지만 제출용 복사본 생성 전 .cbam 백업을 권장합니다.',
+  '다운로드는 가능하지만 Communication Template 복사본 생성 전 .cbam 백업을 권장합니다.',
   'download status backup warning'
 );
 

@@ -59,6 +59,8 @@ type LastExportResult = {
     generatedAt: string;
     checkedCellCount: number;
     writtenCellCount: number;
+    writtenSheets: string[];
+    protectedFormulaCellsOverwritten: boolean;
 };
 
 function formatNumber(value: number) {
@@ -76,6 +78,10 @@ function formatPercent(value: number) {
 
 function getIssueSeverityLabel(severity: 'error' | 'warning') {
     return severity === 'error' ? '오류' : '경고';
+}
+
+function getCellColumn(cell: string) {
+    return cell.match(/^[A-Z]+/)?.[0] ?? '';
 }
 
 export default function ExportPage() {
@@ -262,7 +268,7 @@ export default function ExportPage() {
         if (readiness.errorCount > 0) {
             return {
                 title: '오류 항목을 먼저 해결해야 합니다',
-                description: `EU 제출용 복사본을 만들기 전에 오류 ${readiness.errorCount}건을 수정해야 합니다. 첫 번째 항목부터 정리하면 Export 가능 상태로 이동합니다.`,
+                description: `수입자 전달용 Communication Template 복사본을 만들기 전에 오류 ${readiness.errorCount}건을 수정해야 합니다. 첫 번째 항목부터 정리하면 Export 가능 상태로 이동합니다.`,
                 badge: 'Export 차단',
                 tone: 'danger' as const,
             };
@@ -279,7 +285,7 @@ export default function ExportPage() {
 
         if (readiness.warningCount > 0 || !exportChecklist.isComplete) {
             return {
-                title: '복사본 생성은 가능하지만 제출 전 검토가 필요합니다',
+                title: '복사본 생성은 가능하지만 전달 전 검토가 필요합니다',
                 description: `경고 ${readiness.warningCount}건과 체크리스트 검토 항목을 확인하세요. 다운로드 후 Excel에서 공식 수식 결과도 반드시 확인해야 합니다.`,
                 badge: '검토 필요',
                 tone: 'warning' as const,
@@ -287,7 +293,7 @@ export default function ExportPage() {
         }
 
         return {
-            title: 'EU 제출용 복사본을 생성할 수 있습니다',
+            title: '수입자 전달용 복사본을 생성할 수 있습니다',
             description: '현재 로컬 데이터, 공식 템플릿 구조, Export 쓰기 계획이 모두 준비되었습니다. 다운로드 후 Excel 수식 결과를 최종 검토하세요.',
             badge: '생성 가능',
             tone: 'success' as const,
@@ -312,6 +318,16 @@ export default function ExportPage() {
 
     const summaryProductsWriteCount = useMemo(
         () => plannedCellWrites.filter((write) => write.sheetName === 'Summary_Products').length,
+        [plannedCellWrites]
+    );
+
+    const writtenSheetNames = useMemo(
+        () => Array.from(new Set(plannedCellWrites.map((write) => write.sheetName))),
+        [plannedCellWrites]
+    );
+
+    const protectedSummaryProductFormulaOverwriteCount = useMemo(
+        () => plannedCellWrites.filter((write) => write.sheetName === 'Summary_Products' && ['I', 'J', 'K'].includes(getCellColumn(write.cell))).length,
         [plannedCellWrites]
     );
 
@@ -361,18 +377,20 @@ export default function ExportPage() {
                 generatedAt: new Date().toLocaleString('ko-KR'),
                 checkedCellCount: exportResult.verification.checkedCellCount,
                 writtenCellCount: exportResult.writtenCellCount,
+                writtenSheets: writtenSheetNames,
+                protectedFormulaCellsOverwritten: protectedSummaryProductFormulaOverwriteCount > 0,
             });
         } catch (error) {
-            setExportError(error instanceof Error ? error.message : 'EU 템플릿 Export 중 오류가 발생했습니다.');
+            setExportError(error instanceof Error ? error.message : 'EU Communication Template Export 중 오류가 발생했습니다.');
         }
     }
 
     return (
         <div className="space-y-6">
             <PageHeader
-                eyebrow="제출 파일 준비"
-                title="EU 템플릿 Export"
-                description="사용자가 보유한 EU 원본 Communication template을 브라우저에서만 검증하고, 원본 구조를 보존한 제출용 복사본을 생성합니다."
+                eyebrow="전달 파일 준비"
+                title="EU Communication Template Export"
+                description="사용자가 보유한 EU 원본 Communication Template을 브라우저에서만 검증하고, 원본 구조를 보존한 수입자 전달용 복사본을 생성합니다. 이 파일은 연간 CBAM 신고서 자체가 아니라 신고 지원자료입니다."
             />
 
             <section className="w-full min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -396,7 +414,7 @@ export default function ExportPage() {
                                     disabled={!validation?.isValid || !readiness.canExportDraft}
                                 >
                                     <Download className="mr-2 h-4 w-4" />
-                                    제출용 복사본 생성
+                                    수입자 전달용 복사본 생성
                                 </Button>
                             )}
                             <Link href="/settings">
@@ -530,9 +548,19 @@ export default function ExportPage() {
                         className="mt-5"
                     >
                         <Download className="mr-2 h-4 w-4" />
-                        산정 데이터가 반영된 복사본 다운로드
+                        수입자 전달용 복사본 다운로드
                     </Button>
                     <p className="mt-2 text-xs text-slate-500">{downloadStatusMessage}</p>
+
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <h3 className="text-sm font-semibold text-slate-950">Export 검증 로그</h3>
+                        <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-600">
+                            <li>공식 시트명과 영문 라벨은 원본 구조를 기준으로 검증합니다.</li>
+                            <li>Summary_Products I:J:K 공식 수식 셀 덮어쓰기 예정: {protectedSummaryProductFormulaOverwriteCount}개</li>
+                            <li>반영 예정 시트: {writtenSheetNames.length > 0 ? writtenSheetNames.join(', ') : '아직 없음'}</li>
+                            <li>검증 완료 후 생성 파일명, 검증 셀 수, 반영 셀 수를 이 화면에 남깁니다.</li>
+                        </ul>
+                    </div>
 
                     {exportError && (
                         <div className="mt-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -546,7 +574,7 @@ export default function ExportPage() {
                             <div className="flex items-start gap-2">
                                 <FileCheck2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-700" />
                                 <div>
-                                    <p className="text-sm font-semibold text-emerald-900">복사본 생성 및 셀 검증 완료</p>
+                                    <p className="text-sm font-semibold text-emerald-900">Communication Template 복사본 생성 및 셀 검증 완료</p>
                                     <dl className="mt-2 grid gap-1 text-xs leading-5 text-emerald-900/80">
                                         <div>
                                             <dt className="inline font-medium">파일명: </dt>
@@ -562,6 +590,16 @@ export default function ExportPage() {
                                                 {lastExportResult.checkedCellCount}개 확인, {lastExportResult.writtenCellCount}개 반영
                                             </dd>
                                         </div>
+                                        <div>
+                                            <dt className="inline font-medium">반영 시트: </dt>
+                                            <dd className="inline break-words">{lastExportResult.writtenSheets.join(', ')}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="inline font-medium">보호 수식 셀: </dt>
+                                            <dd className="inline">
+                                                Summary_Products I:J:K 덮어쓰기 {lastExportResult.protectedFormulaCellsOverwritten ? '발견' : '없음'}
+                                            </dd>
+                                        </div>
                                     </dl>
                                 </div>
                             </div>
@@ -575,9 +613,9 @@ export default function ExportPage() {
                         <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
-                                    <h2 className="text-lg font-semibold text-slate-950">제출 전 체크리스트</h2>
+                                    <h2 className="text-lg font-semibold text-slate-950">전달 전 체크리스트</h2>
                                     <p className="mt-1 text-sm text-slate-600">
-                                        EU 템플릿 복사본을 만들기 전에 필요한 준비 상태를 확인합니다.
+                                        EU Communication Template 복사본을 만들기 전에 필요한 준비 상태를 확인합니다.
                                     </p>
                                 </div>
                                 <StatusBadge tone={exportChecklist.isComplete ? 'success' : 'warning'}>
@@ -646,7 +684,7 @@ export default function ExportPage() {
                     <div>
                         <h2 className="text-lg font-semibold text-slate-950">Export 데이터 검토</h2>
                         <p className="mt-1 text-sm text-slate-600">
-                            다운로드를 막는 오류와 제출 전 확인이 필요한 경고를 구분해서 확인합니다.
+                            다운로드를 막는 오류와 전달 전 확인이 필요한 경고를 구분해서 확인합니다.
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -712,9 +750,9 @@ export default function ExportPage() {
             <SectionCard>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <h2 className="text-lg font-semibold text-slate-950">제출 전 최종 확인</h2>
+                        <h2 className="text-lg font-semibold text-slate-950">전달 전 최종 확인</h2>
                         <p className="mt-1 text-sm text-slate-600">
-                            Export 복사본은 제출 준비 파일입니다. 실제 제출 전에는 최신 원본 템플릿, 공식 수식 재계산, 내부 승인, 백업 보관을 한 번 더 확인하세요.
+                            Export 복사본은 수입자 전달용 신고 지원자료입니다. 전달 또는 신고 전에는 최신 원본 템플릿, 공식 수식 재계산, 내부 승인, 백업 보관을 한 번 더 확인하세요.
                         </p>
                     </div>
                     <StatusBadge tone={validation?.isValid && readiness.canExportDraft ? 'warning' : 'pending'}>
@@ -729,7 +767,7 @@ export default function ExportPage() {
                             <div>
                                 <h3 className="text-sm font-semibold text-slate-950">최신 EU 원본 템플릿</h3>
                                 <p className="mt-1 text-sm leading-6 text-slate-600">
-                                    앱에 템플릿을 내장하지 않습니다. 사용자가 보유한 최신 공식 Communication template을 업로드한 경우에만 제출용 복사본을 생성하세요.
+                                    앱에 템플릿을 내장하지 않습니다. 사용자가 보유한 최신 공식 Communication Template을 업로드한 경우에만 수입자 전달용 복사본을 생성하세요.
                                 </p>
                             </div>
                         </div>
@@ -751,7 +789,7 @@ export default function ExportPage() {
                             <div>
                                 <h3 className="text-sm font-semibold text-slate-950">최종 책임과 검증</h3>
                                 <p className="mt-1 text-sm leading-6 text-slate-600">
-                                    이 앱은 산정과 제출 준비를 돕는 도구입니다. 법률 자문, 공식 검증, 회사 내부 승인, 최종 제출 책임을 대체하지 않습니다.
+                                    이 앱은 산정과 신고 지원자료 준비를 돕는 도구입니다. 법률 자문, 공식 검증, 회사 내부 승인, 최종 신고 책임을 대체하지 않습니다.
                                 </p>
                             </div>
                         </div>
@@ -762,7 +800,7 @@ export default function ExportPage() {
                             <div>
                                 <h3 className="text-sm font-semibold text-slate-950">.cbam 백업 보관</h3>
                                 <p className="mt-1 text-sm leading-6 text-slate-600">
-                                    제출용 Excel과 별도로 같은 시점의 `.cbam` 백업을 내려받아 회사 보안정책에 맞는 위치에 보관하세요.
+                                    전달용 Excel과 별도로 같은 시점의 `.cbam` 백업을 내려받아 회사 보안정책에 맞는 위치에 보관하세요.
                                 </p>
                             </div>
                         </div>
@@ -806,7 +844,7 @@ export default function ExportPage() {
                                         <dd className="mt-1 font-semibold text-slate-900">{formatPercent(row.allocationShare)}</dd>
                                     </div>
                                     <div>
-                                        <dt className="text-xs text-slate-500">CBAM 기준 SEE</dt>
+                                        <dt className="text-xs text-slate-500">CBAM 산정 기준 SEE</dt>
                                         <dd className="mt-1 font-semibold text-slate-900">{formatNumber(row.cbamBasisSee)}</dd>
                                     </div>
                                     <div>
@@ -823,7 +861,7 @@ export default function ExportPage() {
                                         </dd>
                                     </div>
                                     <div>
-                                        <dt className="text-xs text-slate-500">참고용 총 SEE</dt>
+                                        <dt className="text-xs text-slate-500">내부 검토용 total SEE</dt>
                                         <dd className="mt-1 text-slate-700">{formatNumber(row.informationalTotalSee)}</dd>
                                     </div>
                                 </dl>
@@ -844,8 +882,8 @@ export default function ExportPage() {
                                     <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">배분율</th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">직접 SEE</th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">간접 SEE</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">CBAM 기준 SEE</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">참고용 총 SEE</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">CBAM 산정 기준 SEE</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">내부 검토용 total SEE</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 bg-white">
@@ -882,7 +920,7 @@ export default function ExportPage() {
 
                 <p className="mt-3 text-xs leading-5 text-slate-500">
                     Export 후 Excel에서 생성된 복사본을 열면 `Summary_Products`의 I:J:K 열 공식 수식 결과를 확인할 수 있습니다.
-                    이 화면의 SEE는 앱 계산값이며, 공식 제출 전에는 Excel 수식 결과와 차이를 검토해야 합니다.
+                    이 화면의 SEE는 앱 계산값이며, 전달 또는 신고 전에는 Excel 수식 결과와 차이를 검토해야 합니다.
                 </p>
             </SectionCard>
 
@@ -909,7 +947,7 @@ export default function ExportPage() {
                                     <dd className="mt-1 font-semibold text-slate-900">{formatNumber(result.output_mass_t)} t</dd>
                                 </div>
                                 <div>
-                                    <dt className="text-xs text-slate-500">CBAM 기준 SEE</dt>
+                                    <dt className="text-xs text-slate-500">CBAM 산정 기준 SEE</dt>
                                     <dd className="mt-1 font-semibold text-slate-900">{formatNumber(result.see_cbam_basis)}</dd>
                                 </div>
                                 <div>
@@ -921,7 +959,7 @@ export default function ExportPage() {
                                     <dd className="mt-1 text-slate-700">{formatNumber(result.indirect_see)}</dd>
                                 </div>
                                 <div>
-                                    <dt className="text-xs text-slate-500">참고용 총 SEE</dt>
+                                    <dt className="text-xs text-slate-500">내부 검토용 total SEE</dt>
                                     <dd className="mt-1 text-slate-700">{formatNumber(result.see_informational_total)}</dd>
                                 </div>
                             </dl>
@@ -939,8 +977,8 @@ export default function ExportPage() {
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">생산량(t)</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">간접 SEE</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 기준 SEE</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">참고용 총 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 산정 기준 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">내부 검토용 total SEE</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white">

@@ -6,7 +6,7 @@ const termsSections = [
     {
         title: '1. 무료 사용 범위',
         items: [
-            'CBAM Local PWA 무료 베타는 기업 담당자가 브라우저 로컬 환경에서 CBAM 산정 자료를 정리하고 제출용 Excel 복사본을 준비하기 위한 업무 보조 도구입니다.',
+            'CBAM Local PWA 무료 베타는 기업 담당자가 브라우저 로컬 환경에서 CBAM 산정 자료를 정리하고 수입자 전달용 EU Communication Template 복사본을 준비하기 위한 업무 보조 도구입니다.',
             '무료 버전은 소스코드 공개, 재배포 허가, 상업적 전용 허가, 계산 로직 권리 이전을 의미하지 않습니다.',
             '기능, 화면, 배포 방식은 사전 공지 후 변경, 중단, 분리될 수 있습니다.',
         ],
@@ -30,9 +30,9 @@ const termsSections = [
     {
         title: '4. 책임 제한',
         items: [
-            'CBAM Local은 법률 자문, 관세 또는 세무 자문, 공식 검증기관 검증, 회사 내부 승인, 최종 EU 제출 책임을 대체하지 않습니다.',
+            'CBAM Local은 법률 자문, 관세 또는 세무 자문, 공식 검증기관 검증, 회사 내부 승인, 최종 EU 신고 책임을 대체하지 않습니다.',
             '산정 결과, Export 파일, 제출 자료의 정확성과 제출 책임은 사용자에게 있습니다.',
-            '제출 전 최신 EU 규정, 공식 양식, 회사 내부 검토, 필요 시 전문기관 검증을 별도로 확인해야 합니다.',
+            '전달 또는 신고 전 최신 EU 규정, 공식 양식, 회사 내부 검토, 필요 시 전문기관 검증을 별도로 확인해야 합니다.',
         ],
     },
     {
@@ -82,7 +82,7 @@ export default function TermsPage() {
                         <div>
                             <h2 className="text-lg font-semibold text-slate-950">문의</h2>
                             <p className="mt-2 text-sm leading-6 text-slate-600">
-                                기능 문의, 오류 제보, 보안 제보는 아래 이메일로 보내주세요. 실제 회사 자료, EU 제출 파일,
+                                기능 문의, 오류 제보, 보안 제보는 아래 이메일로 보내주세요. 실제 회사 자료, EU Communication Template 작성본,
                                 .cbam 백업 파일은 첨부하지 않는 것을 원칙으로 합니다.
                             </p>
                             <p className="mt-3 break-words text-sm font-semibold text-slate-950">openbrain.main@gmail.com</p>

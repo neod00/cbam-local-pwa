@@ -3,6 +3,7 @@
 import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummary';
 import { ActionItemCard, Button, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
+import { CURRENT_CBAM_PERIOD } from '@/lib/cbam-period';
 import { createDashboardSummary } from '@/lib/dashboard-summary';
 import { evaluateEuExportReadiness } from '@/lib/eu-template-export';
 import { CBAM_LAST_BACKUP_AT_KEY, getBackupStatus, getLocalSetting, listLocalItems, seedLocalData } from '@/lib/local-db';
@@ -141,16 +142,31 @@ export default function Home() {
   const currentStatus = exportErrorCount > 0
     ? 'Export 오류를 먼저 해결해야 합니다.'
     : dashboard.warningCount > 0
-      ? `${dashboard.warningCount}개 항목을 확인하면 제출 준비율이 올라갑니다.`
-      : '제출용 복사본 생성 전 최종 검토 단계입니다.';
+      ? `${dashboard.warningCount}개 항목을 확인하면 신고 지원자료 준비율이 올라갑니다.`
+      : '수입자 전달용 Communication Template 복사본 생성 전 최종 검토 단계입니다.';
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Guided Compliance Workspace"
-        title="CBAM 제출 준비 작업실"
-        description="사업장, 제품, 생산공정, 전구물질 데이터를 로컬에서 관리하고 EU 원본 템플릿으로 제출용 파일을 준비합니다."
+        title="CBAM 신고 지원자료 작업실"
+        description="사업장, 제품, 생산공정, 전구물질 데이터를 로컬에서 관리하고 EU Communication Template 기반 수입자 전달용 파일을 준비합니다."
       />
+
+      <section className="grid grid-cols-1 gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Regime</p>
+          <p className="mt-1 text-sm font-semibold text-slate-950">{CURRENT_CBAM_PERIOD.label}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Reporting year</p>
+          <p className="mt-1 text-sm font-semibold text-slate-950">{CURRENT_CBAM_PERIOD.reportingYear}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Declaration due</p>
+          <p className="mt-1 text-sm font-semibold text-slate-950">{CURRENT_CBAM_PERIOD.declarationDue}</p>
+        </div>
+      </section>
 
       <section className="w-full min-w-0 overflow-hidden rounded-3xl border border-teal-100 bg-white p-6 shadow-sm">
         <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -163,7 +179,7 @@ export default function Home() {
               {currentStatus}
             </h2>
             <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-slate-600">
-              계산식보다 업무 순서를 먼저 따라가세요. 아래 단계에서 확인 필요 항목을 해결한 뒤 Export 화면에서 EU 원본 템플릿과 공식 수식 재계산 결과를 검토합니다.
+              계산식보다 업무 순서를 먼저 따라가세요. 아래 단계에서 확인 필요 항목을 해결한 뒤 Export 화면에서 EU Communication Template과 공식 수식 재계산 결과를 검토합니다.
             </p>
             {nextTask && (
               <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 md:flex-row md:items-center md:justify-between">
@@ -185,7 +201,7 @@ export default function Home() {
           </div>
 
           <div className="min-w-0 rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-slate-950">제출 전 핵심 상태</p>
+            <p className="text-sm font-semibold text-slate-950">전달 전 핵심 상태</p>
             <dl className="mt-4 space-y-3 text-sm">
               <div className="flex min-w-0 items-center justify-between gap-3">
                 <dt className="text-slate-500">Export 오류</dt>
@@ -220,8 +236,8 @@ export default function Home() {
       </div>
 
       <SectionCard
-        title="제출 준비 단계"
-        description="EU 제출용 파일을 만들기 전에 필요한 업무 흐름을 단계별로 확인합니다."
+        title="신고 지원자료 준비 단계"
+        description="수입자 전달용 Communication Template 복사본을 만들기 전에 필요한 업무 흐름을 단계별로 확인합니다."
       >
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           {dashboard.steps.map((step, index) => (
@@ -239,13 +255,13 @@ export default function Home() {
       </SectionCard>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,1fr)]">
-        <SectionCard title="해결할 작업" description="위에서부터 처리하면 제출 준비 흐름이 가장 빨리 정리됩니다.">
+        <SectionCard title="해결할 작업" description="위에서부터 처리하면 Communication Template 전달 준비 흐름이 가장 빨리 정리됩니다.">
           <ul className="space-y-3">
             {dashboard.recentTasks.map((task) => (
               <li key={`${task.href}-${task.label}`}>
                 <ActionItemCard
                   title={task.label}
-                  description={task.tone === 'success' ? '현재 단계는 제출 준비 흐름상 완료된 상태입니다.' : '해당 화면으로 이동해 누락되거나 확인이 필요한 입력을 정리하세요.'}
+                  description={task.tone === 'success' ? '현재 단계는 신고 지원자료 준비 흐름상 완료된 상태입니다.' : '해당 화면으로 이동해 누락되거나 확인이 필요한 입력을 정리하세요.'}
                   badge={
                     task.tone === 'warning' || task.tone === 'danger' ? (
                       <AlertTriangle className="h-5 w-5 text-amber-600" />
@@ -300,7 +316,7 @@ export default function Home() {
 
         <ScenarioAssumptionSummary assumptions={scenarioAssumptions} />
 
-        <SectionCard title="EU 제출 준비" description="원본 EU 템플릿을 업로드한 뒤 앱의 산정 데이터를 복사본에 반영합니다.">
+        <SectionCard title="EU Communication 준비" description="원본 EU Communication Template을 업로드한 뒤 앱의 산정 데이터를 복사본에 반영합니다.">
           <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4">
             <FileSpreadsheet className="mt-1 h-5 w-5 text-teal-700" />
             <div>
@@ -312,11 +328,11 @@ export default function Home() {
           </div>
         </SectionCard>
 
-        <SectionCard title="제출 책임 안내" description="앱은 제출 준비를 돕지만 최종 제출 판단을 대신하지 않습니다.">
+        <SectionCard title="전달 및 신고 책임 안내" description="앱은 신고 지원자료 준비를 돕지만 최종 신고 판단을 대신하지 않습니다.">
           <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
             <ShieldCheck className="mt-0.5 h-5 w-5 flex-none" />
             <p>
-              제출 전에는 회사 내부 검토와 필요한 경우 전문기관 검증을 진행하세요. SEFA 및 인증서 지표는 현재 검토용 시나리오입니다.
+              수입자 또는 authorised CBAM declarant에게 전달하기 전에는 회사 내부 검토와 필요한 경우 전문기관 검증을 진행하세요. SEFA 및 인증서 지표는 현재 검토용 시나리오입니다.
             </p>
           </div>
         </SectionCard>

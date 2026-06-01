@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults } from '@/lib/calculation-engine';
@@ -186,7 +186,7 @@ export default function ScenariosPage() {
             items.push({
                 key: 'missing-cn',
                 title: 'CN 코드 확인',
-                description: 'CN 코드가 없는 품목은 기본값, 벤치마크, EU 제출용 매핑을 연결할 수 없습니다.',
+                description: 'CN 코드가 없는 품목은 기본값, 벤치마크, EU Communication Template 매핑을 연결할 수 없습니다.',
                 count: summary.missingCnCount,
                 unit: '건',
                 tone: 'danger',
@@ -211,7 +211,7 @@ export default function ScenariosPage() {
         if (summary.aboveDefaultCount > 0) {
             items.push({
                 key: 'above-default',
-                title: '기본값 대비 CBAM 기준 SEE 초과',
+                title: '기본값 대비 CBAM 산정 기준 SEE 초과',
                 description: 'CBAM 산정 기준 SEE가 기본값보다 높은 품목은 기본값 사용, 공급망 자료 보완, 배출 저감 시나리오를 비교해야 합니다.',
                 count: summary.aboveDefaultCount,
                 unit: '건',
@@ -428,7 +428,7 @@ export default function ScenariosPage() {
                         <p className="mt-1 text-2xl font-semibold text-slate-950">{summary.missingReferenceCount}건</p>
                     </div>
                     <div className="rounded-xl bg-slate-50 px-4 py-3">
-                        <p className="text-xs font-semibold text-slate-500">CBAM 기준 SEE가 기본값 초과</p>
+                        <p className="text-xs font-semibold text-slate-500">CBAM 산정 기준 SEE가 기본값 초과</p>
                         <p className="mt-1 text-2xl font-semibold text-slate-950">{summary.aboveDefaultCount}건</p>
                     </div>
                     <div className="rounded-xl bg-slate-50 px-4 py-3">
@@ -460,11 +460,11 @@ export default function ScenariosPage() {
                             </div>
                             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                                 <div>
-                                    <dt className="text-xs text-slate-500">CBAM 기준 SEE</dt>
+                                    <dt className="text-xs text-slate-500">CBAM 산정 기준 SEE</dt>
                                     <dd className="mt-1 font-semibold text-slate-900">{formatNumber(scenario.actual_see)}</dd>
                                 </div>
                                 <div>
-                                    <dt className="text-xs text-slate-500">참고용 총 SEE</dt>
+                                    <dt className="text-xs text-slate-500">내부 검토용 total SEE</dt>
                                     <dd className="mt-1 text-slate-700">{formatNumber(scenario.informational_total_see)}</dd>
                                 </div>
                                 <div>
@@ -498,8 +498,8 @@ export default function ScenariosPage() {
                         <tr>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">제품</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">생산량(t)</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 기준 SEE</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">참고용 총 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 산정 기준 SEE</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">내부 검토용 total SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 차이</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">Benchmark A</th>

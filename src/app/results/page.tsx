@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { ActionItemCard, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, getLocalCalculationWarningHref } from '@/lib/calculation-engine';
@@ -138,8 +138,8 @@ export default function ResultsPage() {
                                 <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 SEE</th>
                                 <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">간접 SEE</th>
                                 <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">전구물질 SEE</th>
-                                <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 기준 SEE</th>
-                                <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">참고용 총 SEE</th>
+                                <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 산정 기준 SEE</th>
+                                <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">내부 검토용 total SEE</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
@@ -242,7 +242,7 @@ export default function ResultsPage() {
                             </div>
                             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                                 <div>
-                                    <dt className="text-xs text-slate-500">CBAM 기준 SEE</dt>
+                                    <dt className="text-xs text-slate-500">CBAM 산정 기준 SEE</dt>
                                     <dd className="mt-1 font-semibold text-slate-950">{formatNumber(result.see_cbam_basis)}</dd>
                                 </div>
                                 <div>
@@ -264,7 +264,7 @@ export default function ResultsPage() {
                                     <dd className="mt-1 font-medium text-slate-900">{formatNumber(result.precursor_see)}</dd>
                                 </div>
                                 <div>
-                                    <dt className="text-xs text-slate-500">참고용 총 SEE</dt>
+                                    <dt className="text-xs text-slate-500">내부 검토용 total SEE</dt>
                                     <dd className="mt-1 font-medium text-slate-900">{formatNumber(result.see_informational_total)}</dd>
                                 </div>
                                 <div>

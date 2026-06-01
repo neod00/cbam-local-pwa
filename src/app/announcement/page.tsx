@@ -8,7 +8,7 @@ const scopeItems = [
     '생산공정과 제품 생산라인 배분 검토',
     '직접배출량, 간접배출량, 전구물질 SEE 검토',
     'SEFA 및 CBAM 인증서 비용 시나리오 검토',
-    '최신 EU 원본 템플릿 기반 제출용 Excel 복사본 생성 준비',
+    '최신 EU Communication Template 기반 수입자 전달용 Excel 복사본 생성 준비',
     '.cbam 프로젝트 백업 내보내기와 가져오기',
 ];
 
@@ -17,7 +17,7 @@ const cautions = [
     '.cbam 백업 파일은 회사 보안정책에 맞게 보관하세요.',
     '최신 EU 원본 템플릿과 기준자료는 사용자가 직접 확인해 업로드하세요.',
     'Export 후 Microsoft Excel에서 공식 수식 재계산 결과를 확인하세요.',
-    '앱의 산정값과 공식 Excel 결과가 다르면 제출 전 원인을 검토하세요.',
+    '앱의 산정값과 공식 Excel 결과가 다르면 전달 전 원인을 검토하세요.',
     '무료 PWA는 공식 검증과 최종 제출 책임을 대체하지 않습니다.',
 ];
 
@@ -27,7 +27,7 @@ export default function AnnouncementPage() {
             <PageHeader
                 eyebrow="베타 배포 안내"
                 title="CBAM Local PWA 무료 베타"
-                description="CBAM 대상 기업 담당자가 로컬 브라우저에서 산정 자료를 정리하고 EU 제출용 Excel 복사본 생성을 준비할 수 있도록 만든 업무 보조 도구입니다."
+                description="CBAM 대상 기업 담당자가 로컬 브라우저에서 산정 자료를 정리하고 수입자 전달용 EU Communication Template 복사본 생성을 준비할 수 있도록 만든 업무 보조 도구입니다."
                 actions={<StatusBadge tone="warning">운영 검토 중</StatusBadge>}
             />
 
@@ -98,7 +98,7 @@ export default function AnnouncementPage() {
 
                 <SectionCard>
                     <AlertTriangle className="h-5 w-5 text-amber-700" />
-                    <h2 className="mt-3 text-base font-semibold text-slate-950">공식 제출 전 확인</h2>
+                    <h2 className="mt-3 text-base font-semibold text-slate-950">전달 전 공식 확인</h2>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
                         Export 후 Microsoft Excel에서 공식 수식 재계산 결과를 확인하고, 필요 시 전문기관 검증을 별도로 진행해야 합니다.
                     </p>

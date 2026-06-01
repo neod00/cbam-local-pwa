@@ -163,7 +163,7 @@ export default function UploadPage() {
             <PageHeader
                 eyebrow="자료 수집"
                 title="자료 업로드"
-                description="활동자료와 공식 기준값 파일을 서버 전송 없이 브라우저에서 읽어 로컬 데이터로 저장합니다. EU 제출용 원본 템플릿은 Export 단계에서 별도로 업로드합니다."
+                description="활동자료와 공식 기준값 파일을 서버 전송 없이 브라우저에서 읽어 로컬 데이터로 저장합니다. EU Communication Template 원본은 Export 단계에서 별도로 업로드합니다."
             />
 
             <section className="grid grid-cols-1 gap-4 md:grid-cols-3">

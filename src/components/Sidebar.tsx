@@ -33,7 +33,7 @@ const navigation = [
     { name: '자료 업로드', href: '/upload', icon: Upload },
     { name: '산정 결과', href: '/results', icon: BarChart3 },
     { name: '시나리오', href: '/scenarios', icon: Calculator },
-    { name: 'EU Export', href: '/export', icon: FileSpreadsheet },
+    { name: 'EU Communication', href: '/export', icon: FileSpreadsheet },
     { name: '사업장', href: '/installations', icon: Settings },
     { name: '데이터 안전', href: '/settings', icon: ShieldCheck },
     { name: '약관/고지', href: '/terms', icon: FileText },

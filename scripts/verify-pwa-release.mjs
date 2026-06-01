@@ -79,7 +79,7 @@ assert.ok(
   'export page should keep mobile card fallbacks for submission review'
 );
 assert.ok(
-  exportPage.includes('CBAM 기준 SEE') && exportPage.includes('참고용 총 SEE'),
+  exportPage.includes('CBAM 산정 기준 SEE') && exportPage.includes('내부 검토용 total SEE'),
   'export page should distinguish CBAM-basis and informational SEE review values'
 );
 

@@ -197,7 +197,7 @@ export default function InstallationsPage() {
             <PageHeader
                 eyebrow="조직 기준"
                 title="사업장"
-                description="EU 제출 템플릿의 A_InstData에 들어갈 사업장 식별 정보와 담당자 정보를 관리합니다."
+                description="EU Communication Template의 A_InstData에 들어갈 사업장 식별 정보와 담당자 정보를 관리합니다."
                 actions={
                     <Button type="button" onClick={startNewInstallation}>
                         <Plus className="mr-2 h-4 w-4" />
@@ -253,7 +253,7 @@ export default function InstallationsPage() {
 
                         <FormSection
                             title="2. 주소와 위치"
-                            description="주소, UN/LOCODE, 좌표는 제출용 템플릿 보조 정보로 사용합니다. 알 수 있는 항목부터 입력하세요."
+                            description="주소, UN/LOCODE, 좌표는 Communication Template 보조 정보로 사용합니다. 알 수 있는 항목부터 입력하세요."
                             badge={<StatusBadge tone="neutral">선택</StatusBadge>}
                         >
                             <FormInput
@@ -316,7 +316,7 @@ export default function InstallationsPage() {
 
                         <FormSection
                             title="3. 담당자 정보"
-                            description="회사 내부 검토와 EU 제출 준비 과정에서 연락 가능한 담당자 정보를 남깁니다."
+                            description="회사 내부 검토와 수입자 전달 준비 과정에서 연락 가능한 담당자 정보를 남깁니다."
                             badge={<StatusBadge tone="neutral">선택</StatusBadge>}
                         >
                             <FormInput
@@ -353,7 +353,7 @@ export default function InstallationsPage() {
                     <div className="lg:col-span-3">
                         <EmptyState
                             title="등록된 사업장이 없습니다"
-                            description="CBAM 제출 준비는 사업장 식별정보에서 시작합니다. 사업장명과 국가 코드를 먼저 등록하면 품목, 공정, Export 흐름을 이어갈 수 있습니다."
+                            description="CBAM 신고 지원자료 준비는 사업장 식별정보에서 시작합니다. 사업장명과 국가 코드를 먼저 등록하면 품목, 공정, Export 흐름을 이어갈 수 있습니다."
                             action={(
                                 <Button type="button" onClick={startNewInstallation}>
                                     <Plus className="mr-2 h-4 w-4" />

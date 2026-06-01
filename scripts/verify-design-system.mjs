@@ -28,7 +28,7 @@ for (const required of [
 }
 
 for (const required of [
-  '제출 준비 작업실',
+  '신고 지원자료 작업실',
   '다음 작업 계속하기',
   '사업장/보고기간',
   '품목 등록',

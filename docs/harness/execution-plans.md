@@ -155,6 +155,9 @@ Completed:
 - Updated Results, Scenarios, and EU Export UI labels so users see `CBAM 기준 SEE` separately from `참고용 총 SEE`.
 - Updated the local EU template verification report and Export map so `Summary_Products` formulas remain read-only while app review values are compared as separate CBAM-basis and informational totals.
 - Added a public `/terms` page for the free beta terms and responsibility notice, linked it from release notes, and added an operator review packet for the limited beta Go/No-Go decision.
+- Started P0 design-review remediation by switching the app shell and dashboard to `2026 Definitive Period`, `Reporting year: 2026`, and `Declaration due: 2027-09-30`.
+- Reworded app-facing Export/submission copy toward `EU Communication Template`, `수입자 전달용`, and `신고 지원자료` so users do not mistake the PWA for an annual declaration filing system.
+- Added product-level Annex I/Annex II/direct-only badges and an Export verification log that explicitly records protected `Summary_Products` formula cells and written sheets.
 
 Pending product decisions:
 
