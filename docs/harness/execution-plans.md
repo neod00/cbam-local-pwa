@@ -160,6 +160,9 @@ Completed:
 - Added product-level Annex I/Annex II/direct-only badges and an Export verification log that explicitly records protected `Summary_Products` formula cells and written sheets.
 - Reworked the desktop sidebar into workflow groups: 시작, 입력자료, 산정·검토, 내보내기, 보안·관리.
 - Refined the dashboard into a clearer workbench with separate next-action, readiness, reference-status, product-summary, and CBAM-basis SEE review areas.
+- Refined the EU Communication Export screen with four workflow cards, clearer copy-generation controls, formula-protection counters, and a denser checklist layout.
+- Added Results-page SEE interpretation cards that separate weighted CBAM-basis SEE from internal-review total SEE and surface indirect-exclusion review counts.
+- Added Products-page rule overview cards and product-level notes for CN readiness, Annex I candidate status, Annex II direct-only handling, and precursor review.
 
 Pending product decisions:
 
