@@ -59,7 +59,7 @@ for (const required of [
 }
 
 const rehearsalReport = readFileSync('docs/mvp-rehearsal-report.md', 'utf8');
-for (const required of ['Status: passed', 'Release Blockers', 'Manual follow-up']) {
+for (const required of ['Status: passed', 'Release Blockers', 'Beta Browser Rehearsal', 'Microsoft Excel recalculation result']) {
   assert.ok(rehearsalReport.includes(required), `rehearsal report should include ${required}`);
 }
 

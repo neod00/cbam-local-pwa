@@ -1,6 +1,6 @@
 # MVP Rehearsal Report
 
-Date: 2026-05-31
+Date: 2026-06-01
 
 This report records the current MVP rehearsal status before public free PWA distribution.
 
@@ -42,12 +42,10 @@ Result:
   - `Summary_Products!K10`: 1.805
   - Result: `K10` matches the app's informational total SEE for the sample product after purchased precursor mapping.
 
-Manual follow-up:
+Review note:
 
-- Open the generated workbook copy in Microsoft Excel.
-- Let Excel recalculate workbook formulas.
-- Compare recalculated `Summary_Products` SEE values with the app's local SEE review values before relying on the file.
-- Use `docs/excel-recalculation-review.md` to record the manual review result.
+- Excel formula recalculation has been checked with Microsoft Excel COM for the sample Export copy.
+- Continue requiring the same Excel review whenever a real company creates a submission workbook.
 
 ## Local Reference Workbook Check
 
@@ -100,20 +98,57 @@ Completed in this pass:
   - `/settings`
   - `/design-preview`
 
-Remaining manual UI rehearsal:
+## Beta Browser Rehearsal
 
-- Run the app in a browser.
-- Follow `docs/mvp-rehearsal-plan.md` from Dashboard through `.cbam` backup.
-- Confirm Korean copy, button labels, empty states, and mobile layout are understandable without developer context.
+Command:
 
-Automation note:
+```bash
+CBAM_EU_TEMPLATE_PATH="CBAM Communication template for installations_en_20241213.xlsx" npm.cmd run rehearse:beta-browser
+```
 
-- In-app browser automation was attempted on 2026-05-31 but the local browser bridge failed with the known Windows sandbox startup issue. Until that is resolved, the manual browser walkthrough remains open even though rendered route-content checks pass.
+Result:
+
+- Status: passed
+- Run artifact: `artifacts/beta-browser-rehearsal/20260601T105614`
+- Checked routes: 13/13 passed
+- IndexedDB seeded local data:
+  - installations: 1
+  - products: 2
+  - periods: 1
+  - processes: 1
+  - product output lines: 1
+  - source streams: 1
+  - purchased precursors: 1
+- EU template upload: passed
+- Export copy download: passed
+- `.cbam` backup download: passed
+- External network requests while entering/reviewing data: 0
+- Screenshot artifacts:
+  - `dashboard.png`
+  - `results.png`
+  - `scenarios.png`
+  - `export-after-upload.png`
+  - `export-after-download.png`
+  - `settings.png`
+
+Downloaded Export workbook:
+
+- `artifacts/beta-browser-rehearsal/20260601T105614/downloads/CBAM Communication template for installations_en_20241213_cbam-local-copy_20260601.xlsx`
+
+Microsoft Excel recalculation result:
+
+- `Summary_Products!I10`: 1.32
+- `Summary_Products!J10`: 0.485
+- `Summary_Products!K10`: 1.805
+- Result: `K10` matches the app's informational total SEE for the fictional product after purchased precursor mapping.
+
+Finding fixed during rehearsal:
+
+- The previous fictional `Steel Pipe` CN code `73063000` is not present in the official EU template CN list.
+- The seed data and fictional dataset now use `73063080`, which exists in the EU template and keeps the beta rehearsal Export path unblocked.
 
 ## Release Blockers
 
 Not blocking code verification, but required before public distribution:
 
-- Complete manual Excel formula recalculation review.
-- Complete full browser walkthrough using a fictional company dataset.
 - Finalize free-use terms wording with legal review.

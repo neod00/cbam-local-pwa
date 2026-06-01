@@ -38,7 +38,7 @@
 | 제품명 | HS | CN 8자리 | 품목군 | 단위 |
 | --- | --- | --- | --- | --- |
 | Hot Rolled Coil | 7208 | 72083900 | HS72_PLATE_SHEET | tonne |
-| Steel Pipe | 7306 | 73063000 | HS73_PIPE_TUBE | tonne |
+| Steel Pipe | 7306 | 73063080 | HS73_PIPE_TUBE | tonne |
 
 ## 생산공정과 배분
 

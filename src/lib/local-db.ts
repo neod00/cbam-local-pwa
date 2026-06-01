@@ -494,7 +494,7 @@ export async function seedLocalData(): Promise<void> {
         installation_id: installation.id,
         name: "Steel Pipe",
         hs_code: "7306",
-        cn_code: "73063000",
+        cn_code: "73063080",
         hs_group: "73",
         product_type_enum: "HS73_PIPE_TUBE",
         unit: "tonne",
