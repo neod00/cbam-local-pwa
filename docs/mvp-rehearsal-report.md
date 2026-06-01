@@ -173,6 +173,42 @@ Finding fixed during rehearsal:
 - The previous fictional `Steel Pipe` CN code `73063000` is not present in the official EU template CN list.
 - The seed data and fictional dataset now use `73063080`, which exists in the EU template and keeps the beta rehearsal Export path unblocked.
 
+## Vercel Deployment Browser Rehearsal
+
+Deployment URL:
+
+- `https://cbam-local-pwa.vercel.app/`
+
+Command:
+
+```bash
+CBAM_REHEARSAL_URL="https://cbam-local-pwa.vercel.app" CBAM_EU_TEMPLATE_PATH="CBAM Communication template for installations_en_20241213.xlsx" npm.cmd run rehearse:beta-browser
+```
+
+Result:
+
+- Status: passed
+- Run artifact: `artifacts/beta-browser-rehearsal/20260601T113436`
+- Checked routes: 13/13 passed
+- IndexedDB seeded local data:
+  - installations: 1
+  - products: 2
+  - periods: 1
+  - processes: 1
+  - product output lines: 1
+  - source streams: 1
+  - purchased precursors: 1
+- EU template upload: passed
+- Export copy download: passed
+- `.cbam` backup download: passed
+- External network requests while entering/reviewing data: 0
+- Downloaded Export workbook: `artifacts/beta-browser-rehearsal/20260601T113436/downloads/CBAM Communication template for installations_en_20241213_cbam-local-copy_20260601.xlsx`
+- Downloaded backup: `artifacts/beta-browser-rehearsal/20260601T113436/downloads/cbam-local-backup-20260601113501.cbam`
+
+Deployment note:
+
+- The first deployed rehearsal attempt used an older Vercel deployment because GitHub `main` had not yet received the latest local MVP commits. After pushing `main` from `7f4f247` to `b8af5ce`, the deployment HTML contained the latest `CBAM 기준 SEE`, `참고용 총 SEE`, and `반영 셀 검증` copy, and the browser rehearsal passed.
+
 ## Release Blockers
 
 Not blocking code verification, but required before public distribution:

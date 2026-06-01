@@ -161,10 +161,9 @@ Pending product decisions:
 
 Next:
 
-- Complete the remaining manual browser walkthrough in `docs/mvp-rehearsal-plan.md` using `docs/mvp-fictional-dataset.md`.
-- Open an exported workbook copy in Microsoft Excel and compare recalculated `Summary_Products` formula outputs with the app's local SEE review values using `docs/excel-recalculation-review.md`.
+- Review the deployed beta rehearsal artifacts in `artifacts/beta-browser-rehearsal/20260601T113436` if a release reviewer needs screenshots or downloaded files.
 - Review and finalize `docs/free-pwa-terms-draft.md` and `docs/free-pwa-release-announcement-draft.md` with legal/operational wording before public distribution.
-- Prepare the first private-source PWA deployment run using `docs/pwa-deployment-guide.md` and `docs/first-deployment-runbook.md`.
+- Make the limited beta Go/No-Go decision after legal/operator wording review.
 
 ## Decision Log
 
@@ -172,3 +171,4 @@ Next:
 - 2026-05-29: Docker/on-prem deployment is deferred as a future paid/supportable edition for multi-user company environments.
 - 2026-05-29: `revfactory/harness` is not installed because it is Claude Code native; this repository uses a Codex-native lightweight harness through versioned docs.
 - 2026-05-31: MVP free PWA hosting defaults to Vercel with a Private GitHub repository; Cloudflare Pages, Netlify, self-hosted static hosting, and Docker/on-premise remain fallback or paid-edition channels.
+- 2026-06-01: Pushed the latest local MVP commits to GitHub `main` and verified the Vercel deployment at `https://cbam-local-pwa.vercel.app/` with the beta browser rehearsal. Route checks, local IndexedDB seed data, EU template Export download, `.cbam` backup download, and external request review all passed.
