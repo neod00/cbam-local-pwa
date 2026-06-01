@@ -163,6 +163,7 @@ Completed:
 - Refined the EU Communication Export screen with four workflow cards, clearer copy-generation controls, formula-protection counters, and a denser checklist layout.
 - Added Results-page SEE interpretation cards that separate weighted CBAM-basis SEE from internal-review total SEE and surface indirect-exclusion review counts.
 - Added Products-page rule overview cards and product-level notes for CN readiness, Annex I candidate status, Annex II direct-only handling, and precursor review.
+- Completed P2 visual polish by adding shared card shadows, stronger focus states, refined shell/sidebar navigation styling, dashboard readiness progress, and clearer table section headings.
 
 Pending product decisions:
 
