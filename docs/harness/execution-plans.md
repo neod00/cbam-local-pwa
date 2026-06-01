@@ -164,6 +164,7 @@ Completed:
 - Added Results-page SEE interpretation cards that separate weighted CBAM-basis SEE from internal-review total SEE and surface indirect-exclusion review counts.
 - Added Products-page rule overview cards and product-level notes for CN readiness, Annex I candidate status, Annex II direct-only handling, and precursor review.
 - Completed P2 visual polish by adding shared card shadows, stronger focus states, refined shell/sidebar navigation styling, dashboard readiness progress, and clearer table section headings.
+- Completed P3 first-run workflow guidance by adding an in-app `/guide` page, a compact dashboard workflow guide, a topbar help link, and a route-level current/next-step banner across the guided CBAM workflow.
 
 Pending product decisions:
 
