@@ -9,6 +9,7 @@ const requiredDocs = [
   'docs/excel-recalculation-review.md',
   'docs/free-pwa-terms-draft.md',
   'docs/free-pwa-release-announcement-draft.md',
+  'docs/v0.1.0-beta-operator-review.md',
   'docs/pwa-deployment-guide.md',
   'docs/first-deployment-runbook.md',
   'SECURITY.md',
@@ -49,15 +50,20 @@ const deploymentGuide = existsSync('docs/pwa-deployment-guide.md') ? read('docs/
 const firstDeploymentRunbook = existsSync('docs/first-deployment-runbook.md') ? read('docs/first-deployment-runbook.md') : '';
 const termsDraft = existsSync('docs/free-pwa-terms-draft.md') ? read('docs/free-pwa-terms-draft.md') : '';
 const announcementDraft = existsSync('docs/free-pwa-release-announcement-draft.md') ? read('docs/free-pwa-release-announcement-draft.md') : '';
+const operatorReview = existsSync('docs/v0.1.0-beta-operator-review.md') ? read('docs/v0.1.0-beta-operator-review.md') : '';
 const releaseDocsText = [
   report,
   releaseChecklist,
   rehearsalPlan,
   deploymentGuide,
   firstDeploymentRunbook,
+  operatorReview,
 ].join('\n');
 
 const blockers = extractReleaseBlockers(report);
+const hasDeploymentRehearsal = report.includes('## Vercel Deployment Browser Rehearsal') &&
+  report.includes('https://cbam-local-pwa.vercel.app/') &&
+  report.includes('Status: passed');
 const missingCommandReferences = requiredCommands.filter(
   (command) => !releaseDocsText.includes(command)
 );
@@ -123,5 +129,8 @@ if (report.includes('Complete manual Excel formula recalculation review')) {
 if (unresolvedDraftSignals.some((signal) => signal.includes('legal review') || signal.includes('operator review'))) {
   console.log('- Finalize legal/operational wording in the terms and announcement draft.');
 }
-console.log('- Execute docs/first-deployment-runbook.md for the first private-source deployment.');
-
+if (hasDeploymentRehearsal) {
+  console.log('- Use docs/v0.1.0-beta-operator-review.md for the limited beta Go/No-Go review.');
+} else {
+  console.log('- Execute docs/first-deployment-runbook.md for the first private-source deployment.');
+}

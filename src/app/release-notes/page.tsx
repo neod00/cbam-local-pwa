@@ -1,5 +1,6 @@
 import { PageHeader, SectionCard, StatusBadge } from '@/components/ui';
 import { CheckCircle2, Database, FileSpreadsheet, ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
 
 const releaseHighlights = [
     '브라우저 로컬 저장 기반의 CBAM 산정 흐름',
@@ -75,6 +76,12 @@ export default function ReleaseNotesPage() {
                                 </li>
                             ))}
                         </ul>
+                        <Link
+                            href="/terms"
+                            className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                        >
+                            무료 약관 및 책임 고지 보기
+                        </Link>
                     </div>
                 </div>
             </SectionCard>

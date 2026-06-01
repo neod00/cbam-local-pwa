@@ -20,6 +20,7 @@ const routes = [
   '/upload',
   '/export',
   '/settings',
+  '/terms',
   '/design-preview',
 ];
 
@@ -73,6 +74,9 @@ async function verifyRoutes() {
 
   assert.ok(renderedHtmlByRoute.get('/settings')?.includes('로컬 사용 안전 체크리스트'), 'settings should render local-use safety checklist');
   assert.ok(renderedHtmlByRoute.get('/settings')?.includes('.cbam'), 'settings should render backup guidance');
+
+  assert.ok(renderedHtmlByRoute.get('/terms')?.includes('CBAM Local 무료 사용 약관'), 'terms should render free-use terms');
+  assert.ok(renderedHtmlByRoute.get('/terms')?.includes('openbrain.main@gmail.com'), 'terms should render the public support email');
 }
 
 function stopServer(child) {

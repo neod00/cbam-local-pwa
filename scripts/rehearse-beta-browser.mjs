@@ -40,6 +40,7 @@ const routes = [
   { path: '/export', label: 'EU Export', snippets: ['EU 템플릿 Export', 'Summary_Products'] },
   { path: '/settings', label: 'Settings', snippets: ['설정', '백업'] },
   { path: '/release-notes', label: 'Release notes', snippets: ['릴리스 노트', 'v0.1.0'] },
+  { path: '/terms', label: 'Terms', snippets: ['무료 사용 약관', 'openbrain.main@gmail.com'] },
 ];
 
 function sleep(ms) {

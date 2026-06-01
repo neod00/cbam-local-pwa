@@ -4,6 +4,8 @@ Status: LEGAL_REVIEW_REQUIRED
 
 이 문서는 CBAM Local PWA 무료 베타 배포에 사용할 수 있는 약관/고지 초안이다. 운영 문구 정리는 완료했지만, 최종 약관으로 공개하기 전에는 법무 또는 운영 책임자의 검토가 필요하다.
 
+Public draft URL: `https://cbam-local-pwa.vercel.app/terms`
+
 ## 1. 무료 사용 범위
 
 - 사용자는 배포된 CBAM Local PWA를 통해 자사 CBAM 산정 자료를 브라우저 로컬 환경에서 입력, 검토, 백업, Export할 수 있다.
@@ -81,4 +83,3 @@ Status: LEGAL_REVIEW_REQUIRED
 - 책임 제한 문구의 적용 법령과 관할
 - 재배포 금지 위반 시 조치 기준
 - 사용자 고지 화면 또는 릴리즈 공지에 표시할 약관 링크
-

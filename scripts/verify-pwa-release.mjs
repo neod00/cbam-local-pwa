@@ -15,6 +15,7 @@ const excelReview = readFileSync('docs/excel-recalculation-review.md', 'utf8');
 const userNotices = readFileSync('docs/mvp-user-notices.md', 'utf8');
 const freeTermsDraft = readFileSync('docs/free-pwa-terms-draft.md', 'utf8');
 const releaseAnnouncementDraft = readFileSync('docs/free-pwa-release-announcement-draft.md', 'utf8');
+const operatorReview = readFileSync('docs/v0.1.0-beta-operator-review.md', 'utf8');
 const deploymentGuide = readFileSync('docs/pwa-deployment-guide.md', 'utf8');
 const firstDeploymentRunbook = readFileSync('docs/first-deployment-runbook.md', 'utf8');
 const securityPolicy = readFileSync('SECURITY.md', 'utf8');
@@ -42,6 +43,7 @@ const expectedShellRoutes = [
   '/scenarios',
   '/settings',
   '/source-streams',
+  '/terms',
   '/upload',
 ];
 
@@ -150,7 +152,8 @@ for (const required of [
 for (const required of [
   'Local EU Template Check',
   'Local Reference Workbook Check',
-  'Manual follow-up',
+  'Beta Browser Rehearsal',
+  'Vercel Deployment Browser Rehearsal',
   'Release Blockers',
   'docs/excel-recalculation-review.md',
 ]) {
@@ -199,7 +202,12 @@ for (const required of [
 
 assert.ok(securityPolicy.includes('openbrain.main@gmail.com'), 'security policy should include the public contact email');
 assert.ok(freeTermsDraft.includes('openbrain.main@gmail.com'), 'free terms draft should include the public contact email');
+assert.ok(freeTermsDraft.includes('https://cbam-local-pwa.vercel.app/terms'), 'free terms draft should include the public terms URL');
 assert.ok(firstDeploymentRunbook.includes('openbrain.main@gmail.com'), 'first deployment runbook should include the public contact email');
+assert.ok(operatorReview.includes('https://cbam-local-pwa.vercel.app/'), 'operator review should include the deployed beta URL');
+assert.ok(operatorReview.includes('https://cbam-local-pwa.vercel.app/terms'), 'operator review should include the public terms URL');
+assert.ok(operatorReview.includes('LEGAL_REVIEW_REQUIRED'), 'operator review should keep legal review status visible before approval');
+assert.ok(operatorReview.includes('OPERATOR_REVIEW_REQUIRED'), 'operator review should keep operator review status visible before approval');
 
 assert.equal(packageJson.private, true, 'package.json should keep private true');
 assert.ok(deploymentGuide.includes('GitHub 저장소는 Private'), 'deployment guide should keep the source repository private');

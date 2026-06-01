@@ -167,6 +167,7 @@ Review conclusion:
 - In all three cases, Excel `Summary_Products!K10` matches the app's informational total SEE.
 - For steel/iron sample goods, the app's `CBAM 기준 SEE` remains the certificate-scenario basis and may intentionally differ from Excel `K10` when final-good own indirect emissions are shown only as informational review values.
 - The purchased-precursor indirect SEE bridge in `E_PurchPrec!L50:L51` is covered by the `precursor-direct-indirect` case.
+- Operator Excel review procedure: `docs/excel-recalculation-review.md`
 
 Finding fixed during rehearsal:
 

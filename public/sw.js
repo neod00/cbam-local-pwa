@@ -13,6 +13,7 @@ const APP_SHELL = [
   "/scenarios",
   "/settings",
   "/source-streams",
+  "/terms",
   "/upload",
   "/manifest.webmanifest",
   "/update-manifest.json",
