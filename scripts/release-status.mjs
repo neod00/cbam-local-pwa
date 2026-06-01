@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 
 const requiredDocs = [
   'docs/mvp-release-checklist.md',
+  'docs/v0.1.0-beta-release-checklist.md',
   'docs/mvp-rehearsal-plan.md',
   'docs/mvp-fictional-dataset.md',
   'docs/mvp-rehearsal-report.md',

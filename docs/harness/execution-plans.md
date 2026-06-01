@@ -143,6 +143,7 @@ Completed:
 - Added an Excel recalculation review checklist so generated EU workbook copies can be compared against app SEE review values before public MVP distribution.
 - Added a first private PWA deployment runbook covering local verification, Git hygiene, Vercel settings, post-deploy checks, network data-boundary review, fictional-data rehearsal, and rollback criteria.
 - Added a free PWA release announcement draft covering local-first data handling, latest EU template upload, `.cbam` backups, Excel formula review, support limits, and source/bundle visibility.
+- Added a `v0.1.0-beta` release checklist for limited beta Go/No-Go decisions, including required evidence, browser rehearsal scope, deployment smoke tests, and release-note requirements.
 - Added an in-app EU Export final review card so users see latest-template, Excel recalculation, responsibility, and `.cbam` backup reminders before using the generated copy.
 - Added a settings-page local-use safety checklist covering no server upload, browser-local storage, `.cbam` backup timing, and official Excel review before submission.
 - Added `npm run release:status` to summarize remaining manual release blockers, required docs, and first-deployment operator actions without running a deployment.

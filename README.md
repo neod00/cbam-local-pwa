@@ -122,6 +122,8 @@ EU 제출용 Excel 복사본의 공식 수식 재계산 확인은 [docs/excel-re
 
 첫 private-source PWA 배포 실행 순서는 [docs/first-deployment-runbook.md](docs/first-deployment-runbook.md)를 따릅니다.
 
+`v0.1.0-beta` 제한 배포의 Go/No-Go 판단은 [docs/v0.1.0-beta-release-checklist.md](docs/v0.1.0-beta-release-checklist.md)를 기준으로 확인합니다.
+
 ## 사용권
 
 현재 이 프로젝트는 오픈소스 라이선스를 부여하지 않습니다. 무료 PWA 사용 조건, 재배포 제한, 책임 제한은 배포 전 별도 약관 또는 고지로 확정합니다.
