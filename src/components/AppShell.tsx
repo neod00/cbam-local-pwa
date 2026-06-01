@@ -3,6 +3,7 @@
 import Sidebar from '@/components/Sidebar';
 import PeriodBadge from '@/components/PeriodBadge';
 import UpdateNotice from '@/components/UpdateNotice';
+import { WorkflowRouteBanner } from '@/components/WorkflowRouteBanner';
 import { Bell, Building2, CircleHelp } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -65,6 +66,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                     </div>
                 </header>
                 <UpdateNotice />
+                <WorkflowRouteBanner />
                 <main className="min-w-0 overflow-x-hidden px-4 py-7 pb-24 sm:px-6 lg:px-8 lg:pb-8">
                     <div className="mx-auto w-full min-w-0 max-w-7xl overflow-x-hidden">{children}</div>
                 </main>

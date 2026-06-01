@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const sidebar = readFileSync('src/components/Sidebar.tsx', 'utf8');
 const appShell = readFileSync('src/components/AppShell.tsx', 'utf8');
+const workflowRouteBanner = readFileSync('src/components/WorkflowRouteBanner.tsx', 'utf8');
 const layout = readFileSync('src/app/layout.tsx', 'utf8');
 const dashboard = readFileSync('src/app/page.tsx', 'utf8');
 const guidePage = readFileSync('src/app/guide/page.tsx', 'utf8');
@@ -46,6 +47,10 @@ for (const label of ['대시보드', '처음 따라하기', '베타 배포 안�
 }
 
 assert.ok(layout.includes('로컬 우선 CBAM 내재배출량 산정 도구'), 'metadata should describe the local-first CBAM tool');
+assert.ok(appShell.includes('WorkflowRouteBanner'), 'app shell should render the current-route workflow banner');
+assert.ok(workflowRouteBanner.includes('현재 흐름'), 'workflow route banner should show the current workflow step');
+assert.ok(workflowRouteBanner.includes('다음:'), 'workflow route banner should link the next workflow step');
+assert.ok(workflowRouteBanner.includes('전체 흐름'), 'workflow route banner should link the guide page');
 assert.ok(dashboard.includes('사업장, 제품, 생산공정, 전구물질'), 'dashboard should describe the core local workflow');
 assert.ok(dashboard.includes('CBAM 신고 지원자료 작업실'), 'dashboard should present the guided workspace');
 assert.ok(dashboard.includes('다음 작업 계속하기'), 'dashboard should expose a next action CTA');
