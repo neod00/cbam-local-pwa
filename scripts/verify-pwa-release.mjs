@@ -16,6 +16,7 @@ const userNotices = readFileSync('docs/mvp-user-notices.md', 'utf8');
 const freeTermsDraft = readFileSync('docs/free-pwa-terms-draft.md', 'utf8');
 const releaseAnnouncementDraft = readFileSync('docs/free-pwa-release-announcement-draft.md', 'utf8');
 const operatorReview = readFileSync('docs/v0.1.0-beta-operator-review.md', 'utf8');
+const goNoGoRecord = readFileSync('docs/v0.1.0-beta-go-no-go-record.md', 'utf8');
 const deploymentGuide = readFileSync('docs/pwa-deployment-guide.md', 'utf8');
 const firstDeploymentRunbook = readFileSync('docs/first-deployment-runbook.md', 'utf8');
 const securityPolicy = readFileSync('SECURITY.md', 'utf8');
@@ -208,6 +209,11 @@ assert.ok(operatorReview.includes('https://cbam-local-pwa.vercel.app/'), 'operat
 assert.ok(operatorReview.includes('https://cbam-local-pwa.vercel.app/terms'), 'operator review should include the public terms URL');
 assert.ok(operatorReview.includes('LEGAL_REVIEW_REQUIRED'), 'operator review should keep legal review status visible before approval');
 assert.ok(operatorReview.includes('OPERATOR_REVIEW_REQUIRED'), 'operator review should keep operator review status visible before approval');
+assert.ok(goNoGoRecord.includes('DECISION_REQUIRED'), 'Go/No-Go record should remain decision-required before approval');
+assert.ok(goNoGoRecord.includes('https://cbam-local-pwa.vercel.app/'), 'Go/No-Go record should include the deployed beta URL');
+assert.ok(goNoGoRecord.includes('https://cbam-local-pwa.vercel.app/terms'), 'Go/No-Go record should include the public terms URL');
+assert.ok(goNoGoRecord.includes('LEGAL_REVIEW_APPROVED'), 'Go/No-Go record should document the legal approval status value');
+assert.ok(goNoGoRecord.includes('OPERATOR_REVIEW_APPROVED'), 'Go/No-Go record should document the operator approval status value');
 
 assert.equal(packageJson.private, true, 'package.json should keep private true');
 assert.ok(deploymentGuide.includes('GitHub 저장소는 Private'), 'deployment guide should keep the source repository private');

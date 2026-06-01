@@ -10,6 +10,7 @@ const requiredDocs = [
   'docs/free-pwa-terms-draft.md',
   'docs/free-pwa-release-announcement-draft.md',
   'docs/v0.1.0-beta-operator-review.md',
+  'docs/v0.1.0-beta-go-no-go-record.md',
   'docs/pwa-deployment-guide.md',
   'docs/first-deployment-runbook.md',
   'SECURITY.md',
@@ -51,6 +52,7 @@ const firstDeploymentRunbook = existsSync('docs/first-deployment-runbook.md') ? 
 const termsDraft = existsSync('docs/free-pwa-terms-draft.md') ? read('docs/free-pwa-terms-draft.md') : '';
 const announcementDraft = existsSync('docs/free-pwa-release-announcement-draft.md') ? read('docs/free-pwa-release-announcement-draft.md') : '';
 const operatorReview = existsSync('docs/v0.1.0-beta-operator-review.md') ? read('docs/v0.1.0-beta-operator-review.md') : '';
+const goNoGoRecord = existsSync('docs/v0.1.0-beta-go-no-go-record.md') ? read('docs/v0.1.0-beta-go-no-go-record.md') : '';
 const releaseDocsText = [
   report,
   releaseChecklist,
@@ -58,6 +60,7 @@ const releaseDocsText = [
   deploymentGuide,
   firstDeploymentRunbook,
   operatorReview,
+  goNoGoRecord,
 ].join('\n');
 
 const blockers = extractReleaseBlockers(report);
@@ -73,6 +76,9 @@ const unresolvedDraftSignals = [
     : undefined,
   announcementDraft.includes('OPERATOR_REVIEW_REQUIRED')
     ? 'Release announcement still requires operator review.'
+    : undefined,
+  goNoGoRecord.includes('DECISION_REQUIRED')
+    ? 'Go/No-Go decision record is not finalized.'
     : undefined,
   /\[[^\]]+\]/.test(announcementDraft) ? 'Release announcement still contains bracketed placeholder fields.' : undefined,
   report.includes('Complete manual Excel formula recalculation review')
@@ -128,6 +134,10 @@ if (report.includes('Complete manual Excel formula recalculation review')) {
 }
 if (unresolvedDraftSignals.some((signal) => signal.includes('legal review') || signal.includes('operator review'))) {
   console.log('- Finalize legal/operational wording in the terms and announcement draft.');
+  console.log('- After approval, change statuses to LEGAL_REVIEW_APPROVED and OPERATOR_REVIEW_APPROVED.');
+}
+if (goNoGoRecord.includes('DECISION_REQUIRED')) {
+  console.log('- Complete docs/v0.1.0-beta-go-no-go-record.md with the final GO/NO-GO decision.');
 }
 if (hasDeploymentRehearsal) {
   console.log('- Use docs/v0.1.0-beta-operator-review.md for the limited beta Go/No-Go review.');
