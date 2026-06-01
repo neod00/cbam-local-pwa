@@ -594,7 +594,14 @@ export default function ProductsPage() {
                 )}
             </div>
 
-            <DataTable className="hidden md:block">
+            <div className="hidden space-y-3 md:block">
+                <div>
+                    <h2 className="text-base font-semibold text-slate-950">등록 품목 목록</h2>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                        CN 코드와 Annex 처리 기준을 확인하고, 연결된 공정이나 전구물질을 만들기 전에 품목 정보를 정리하세요.
+                    </p>
+                </div>
+            <DataTable>
                 <table className="min-w-full divide-y divide-slate-200">
                     <thead className="bg-slate-50">
                         <tr>
@@ -666,6 +673,7 @@ export default function ProductsPage() {
                     </tbody>
                 </table>
             </DataTable>
+            </div>
         </div>
     );
 }

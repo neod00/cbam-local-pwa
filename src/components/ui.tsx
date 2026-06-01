@@ -152,7 +152,13 @@ export function DataTable({
     className?: string;
 }) {
     return (
-        <div className={clsx('min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[var(--shadow-card)]', className)}>
+        <div
+            className={clsx(
+                'min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[var(--shadow-card)]',
+                '[&_td]:align-top [&_tbody_tr]:transition [&_tbody_tr:hover]:bg-slate-50/80 [&_th]:border-b [&_th]:border-slate-200',
+                className
+            )}
+        >
             <div className="overflow-x-auto">{children}</div>
         </div>
     );

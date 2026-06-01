@@ -182,7 +182,13 @@ export default function ResultsPage() {
                 </SectionCard>
             </div>
 
-            <div className="hidden md:block">
+            <div className="hidden space-y-3 md:block">
+                <div>
+                    <h2 className="text-base font-semibold text-slate-950">제품별 상세 산정표</h2>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                        품목별 배분율과 SEE 구성요소를 확인합니다. 값이 이상하면 해당 공정 또는 원자료 화면에서 수정하세요.
+                    </p>
+                </div>
                 <DataTable>
                     <table className="min-w-full divide-y divide-gray-300">
                         <thead className="bg-slate-50">

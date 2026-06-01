@@ -918,13 +918,27 @@ export default function ExportPage() {
                     <div>
                         <h2 className="text-lg font-semibold text-slate-950">Summary_Products 반영 검토</h2>
                         <p className="mt-1 text-sm text-slate-600">
-                            EU 템플릿에는 생산공정, CN 코드, 제품명을 입력하고 직접, 간접, 총 SEE는 공식 수식 셀이 계산하도록 둡니다. 아래 SEE는 앱의 사전 검토값입니다.
-                            아래 값은 앱 내부 product-line 산정 결과와 비교하기 위한 사전 검토용입니다.
+                            EU 템플릿에는 생산공정, CN 코드, 제품명만 입력하고 직접, 간접, 총 SEE는 공식 수식 셀이 계산하도록 둡니다. 아래 값은 Excel 재계산 전 앱 내부 검토값입니다.
                         </p>
                     </div>
                     <StatusBadge tone={summaryProductsWriteCount > 0 ? 'success' : 'pending'}>
                         반영 셀 {summaryProductsWriteCount}개
                     </StatusBadge>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <p className="text-xs font-semibold text-slate-500">제품 식별 입력</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-950">D/F/H 열 중심</p>
+                    </div>
+                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                        <p className="text-xs font-semibold text-emerald-700">공식 수식 보존</p>
+                        <p className="mt-1 text-sm font-semibold text-emerald-900">I:J:K 열 덮어쓰기 없음</p>
+                    </div>
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                        <p className="text-xs font-semibold text-blue-700">사용자 확인</p>
+                        <p className="mt-1 text-sm font-semibold text-blue-900">Excel 재계산 결과 비교</p>
+                    </div>
                 </div>
 
                 <div className="mt-4 grid grid-cols-1 gap-3 md:hidden">
