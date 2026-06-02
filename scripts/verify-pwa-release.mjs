@@ -55,8 +55,11 @@ for (const route of expectedShellRoutes) {
   assert.ok(serviceWorker.includes(`"${route}"`), `service worker should cache ${route}`);
 }
 
-assert.ok(serviceWorker.includes('cbam-local-v2'), 'service worker cache version should be current');
-assert.ok(serviceWorker.includes('caches.match("/")'), 'service worker should fall back to the app root');
+assert.ok(serviceWorker.includes('cbam-local-v3'), 'service worker cache version should be current');
+assert.ok(serviceWorker.includes('networkFirst(request)'), 'service worker should use network-first route handling to avoid stale pages');
+assert.ok(serviceWorker.includes('request.mode === "navigate"'), 'service worker should detect navigation requests');
+assert.ok(serviceWorker.includes('fetch(request, { cache: "no-store" })'), 'service worker should bypass stale HTTP cache for network-first requests');
+assert.ok(serviceWorker.includes('caches.match(fallbackUrl)'), 'service worker should fall back to cached app routes only when network fails');
 
 assert.ok(
   dashboardPage.includes('확인된 입력 셀에만 데이터를 반영합니다'),

@@ -167,6 +167,7 @@ Completed:
 - Completed P3 first-run workflow guidance by adding an in-app `/guide` page, a compact dashboard workflow guide, a topbar help link, and a route-level current/next-step banner across the guided CBAM workflow.
 - Refined the beginner UX after deployment review by renaming the guide to `시작 가이드`, moving a three-step `무엇부터 하면 되나요?` CTA to the dashboard top, replacing outdated scenario caveat copy, and adding plain Korean guidance for Annex II direct-only goods.
 - Followed up on deployed-app expert review by confirming the live Vercel routes use the new AppShell and 2026 period badge, demoting official-reference upload below basic beginner tasks, converting the guide to a three-step summary plus expandable 12-step detail, and cleaning remaining user-facing legacy submission/formula-not-final wording in release docs.
+- Fixed the F5 versus Ctrl+F5 PWA mismatch by changing the service worker from cache-first route handling to network-first navigation/update handling, bumping the app cache version, and making the client registration bypass stale service-worker HTTP cache during update checks.
 
 Pending product decisions:
 

@@ -43,6 +43,8 @@ assert.ok(updateNotice.includes('releaseNotesUrl'), 'update notice should use th
 assert.ok(updateNotice.includes('CBAM 입력자료, EU 템플릿, .cbam 백업 파일은 전송하지 않습니다'), 'update notice should state the data boundary');
 assert.ok(updateNotice.includes('localStorage'), 'dismissed optional/recommended updates should stay local');
 assert.ok(updateNotice.includes('navigator.serviceWorker'), 'update action should check the service worker');
+assert.ok(readFileSync('src/components/ServiceWorkerRegistration.tsx', 'utf8').includes('updateViaCache: "none"'), 'service worker registration should bypass stale HTTP cache when checking for updates');
+assert.ok(readFileSync('src/components/ServiceWorkerRegistration.tsx', 'utf8').includes('controllerchange'), 'service worker registration should reload when a new worker takes control');
 assert.ok(settingsPage.includes('업데이트 상태 확인'), 'settings should expose manual update status checks');
 assert.ok(settingsPage.includes('정적 update manifest'), 'settings should make the current static manifest phase explicit');
 assert.ok(releaseNotesPage.includes('CBAM Local v0.1.0'), 'release notes page should document the current release');
