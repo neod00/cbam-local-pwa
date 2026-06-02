@@ -56,9 +56,12 @@ assert.ok(dashboard.includes('사업장, 제품, 생산공정, 전구물질'), '
 assert.ok(dashboard.includes('CBAM 신고 지원자료 작업실'), 'dashboard should present the guided workspace');
 assert.ok(dashboard.includes('무엇부터 하면 되나요?'), 'dashboard should expose beginner-first start guidance');
 assert.ok(dashboard.includes('사업장 등록') && dashboard.includes('품목 추가') && dashboard.includes('배출량 입력'), 'dashboard should show the first three beginner actions');
+assert.equal(dashboard.includes('벤치마크와 국가/CN 기본값 기준자료를 가져오세요.'), false, 'dashboard should not put official reference upload as the first beginner CTA copy');
 assert.ok(dashboard.includes('자료 준비 체크리스트'), 'dashboard should show evidence preparation guidance');
 assert.ok(dashboard.includes('WorkflowGuideCard'), 'dashboard should include a compact first-run workflow guide');
 assert.ok(guidePage.includes('시작 가이드'), 'guide page should introduce the first-run workflow');
+assert.ok(guidePage.includes('먼저 이것만 하세요'), 'guide page should summarize the workflow into three beginner groups');
+assert.ok(guidePage.includes('전체 12단계 상세 보기'), 'guide page should keep detailed steps behind an expandable section');
 assert.ok(guidePage.includes('Hot Rolled Coil 리허설 기준'), 'guide page should expose the fictional HRC rehearsal path');
 assert.ok(workflowGuide.includes('Excel 공식 수식 재계산'), 'guide workflow should include the manual Excel recalculation step');
 assert.ok(workflowGuide.includes('.cbam 백업 보관'), 'guide workflow should include the local backup step');
@@ -100,6 +103,7 @@ assert.ok(resultsPage.includes('CBAM 산정 기준 SEE') && resultsPage.includes
 assert.ok(scenariosPage.includes('SEFA 및 CBAM 인증서 시나리오'), 'Scenarios page should show SEFA/certificate review');
 assert.ok(scenariosPage.includes('CBAM 산정 기준 SEE') && scenariosPage.includes('내부 검토용 total SEE'), 'Scenarios page should separate CBAM-basis SEE from informational total SEE');
 assert.ok(scenariosPage.includes('사전 검토용 시나리오') && scenariosPage.includes('carbon price paid evidence'), 'Scenarios page should avoid outdated formula-not-final copy');
+assert.equal(scenariosPage.includes('공식 산식 확인 전까지'), false, 'Scenarios page should not imply 2026 formulas are not final');
 assert.ok(scenariosPage.includes('기본값 인증서 비용') && scenariosPage.includes('md:hidden'), 'Scenarios should keep a mobile card fallback for SEFA/certificate review');
 assert.ok(exportPage.includes('CBAM 산정 기준 SEE') && exportPage.includes('내부 검토용 total SEE'), 'Export page should separate app review SEE values before Excel comparison');
 assert.ok(settingsPage.includes('법률 자문, 공식 검증, 최종 신고 책임을 대체하지 않습니다'), 'Settings should show the liability notice');

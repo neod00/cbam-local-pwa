@@ -66,7 +66,7 @@ function getScenarioActionTasks(input: DashboardSummaryInput): DashboardTask[] {
 
     if (scenarioRiskSummary.missing_official_reference_count > 0 || !hasBenchmarkReference || !hasDefaultValueReference) {
         tasks.push({
-            label: '벤치마크와 국가/CN 기본값 기준자료를 가져오세요.',
+            label: '공식 기준자료를 가져오세요. SEFA·인증서 시나리오 검토에 필요한 파일입니다.',
             href: scenarioAction.href === '/upload' ? scenarioAction.href : '/upload',
             tone: 'warning',
         });
@@ -101,6 +101,46 @@ function getScenarioActionTasks(input: DashboardSummaryInput): DashboardTask[] {
             label: `EU Export를 막는 오류 ${exportErrorCount}건을 해결하세요.`,
             href: '/export',
             tone: 'danger',
+        });
+    }
+
+    return tasks;
+}
+
+function getBeginnerActionTasks(input: DashboardSummaryInput): DashboardTask[] {
+    const tasks: DashboardTask[] = [];
+    const { precursorCount, processCount, productCount, results } = input;
+    const hasSourceStreamEvidence = results.some((result) => result.source_stream_count > 0);
+
+    if (productCount === 0) {
+        tasks.push({
+            label: '품목을 먼저 추가하세요. EU에 수출하는 제품명과 CN 8자리 코드부터 입력합니다.',
+            href: '/products',
+            tone: 'warning',
+        });
+    }
+
+    if (processCount === 0) {
+        tasks.push({
+            label: '생산공정을 등록하세요. 제품 생산량과 공정 경계를 연결해야 배출량을 계산할 수 있습니다.',
+            href: '/processes',
+            tone: productCount === 0 ? 'neutral' : 'warning',
+        });
+    }
+
+    if (processCount > 0 && !hasSourceStreamEvidence) {
+        tasks.push({
+            label: '배출원 자료를 입력하세요. 연료, 전력, 생산량 근거를 생산공정에 연결합니다.',
+            href: '/source-streams',
+            tone: 'warning',
+        });
+    }
+
+    if (processCount > 0 && precursorCount === 0) {
+        tasks.push({
+            label: '전구물질이 있다면 구매 전구물질 자료를 연결하세요. 해당 없으면 산정 결과에서 제외 상태를 확인합니다.',
+            href: '/precursors',
+            tone: 'neutral',
         });
     }
 
@@ -183,7 +223,8 @@ export function createDashboardSummary(input: DashboardSummaryInput): DashboardS
         },
     ];
 
-    const priorityTasks = [...scenarioActionTasks, ...warningTasks];
+    const beginnerActionTasks = getBeginnerActionTasks(input);
+    const priorityTasks = [...beginnerActionTasks, ...scenarioActionTasks, ...warningTasks];
     const recentTasks: DashboardTask[] = priorityTasks.length > 0
         ? priorityTasks.slice(0, 4)
         : [

@@ -110,6 +110,28 @@ assert.equal(readyDashboard.steps.at(-1).name, 'EU Export');
 assert.equal(readyDashboard.steps.at(-1).status, '대기');
 assert.equal(readyDashboard.recentTasks[0].href, '/products');
 
+const emptyBeginnerDashboard = createDashboardSummary({
+  results: [],
+  productCount: 0,
+  processCount: 0,
+  precursorCount: 0,
+  scenarioRiskSummary: {
+    ...baseRiskSummary,
+    missing_official_reference_count: 1,
+    missing_reference_count: 1,
+    is_ready_for_review: false,
+  },
+  exportIssueCount: 0,
+  exportErrorCount: 0,
+  hasBenchmarkReference: false,
+  hasDefaultValueReference: false,
+});
+
+assert.equal(emptyBeginnerDashboard.recentTasks[0].href, '/products');
+assert.match(emptyBeginnerDashboard.recentTasks[0].label, /품목을 먼저 추가/);
+assert.equal(emptyBeginnerDashboard.recentTasks[1].href, '/processes');
+assert.equal(emptyBeginnerDashboard.recentTasks[2].href, '/upload');
+
 const riskDashboard = createDashboardSummary({
   results: [{
     ...result,

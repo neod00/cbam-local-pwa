@@ -13,28 +13,60 @@ export default function GuidePage() {
                 description="CBAM Local을 처음 여는 기업 담당자가 사업장 등록부터 EU Communication Template 복사본과 .cbam 백업까지 순서대로 진행할 수 있도록 만든 작업 흐름입니다."
             />
 
+            <SectionCard title="먼저 이것만 하세요" description="처음부터 12단계를 모두 이해할 필요는 없습니다. 아래 3개 묶음만 따라가면 전체 흐름이 자연스럽게 이어집니다.">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-semibold text-blue-800 ring-1 ring-blue-100">1</div>
+                        <h2 className="mt-4 text-base font-semibold text-slate-950">기본정보 입력</h2>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">사업장, 보고기간, 품목을 먼저 등록합니다.</p>
+                        <StatusBadge tone="info">회사와 제품 기준</StatusBadge>
+                    </div>
+                    <div className="rounded-2xl border border-teal-100 bg-teal-50 p-5">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-semibold text-teal-800 ring-1 ring-teal-100">2</div>
+                        <h2 className="mt-4 text-base font-semibold text-slate-950">배출자료 입력</h2>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">생산공정, 배출원, 전구물질 자료를 연결합니다.</p>
+                        <StatusBadge tone="pending">계산 근거</StatusBadge>
+                    </div>
+                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-semibold text-emerald-800 ring-1 ring-emerald-100">3</div>
+                        <h2 className="mt-4 text-base font-semibold text-slate-950">검토·전달</h2>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">산정 결과를 확인하고 수입자 전달용 파일과 .cbam 백업을 만듭니다.</p>
+                        <StatusBadge tone="success">Export와 백업</StatusBadge>
+                    </div>
+                </div>
+            </SectionCard>
+
+            <details className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-base font-semibold text-slate-950">
+                    <span>전체 12단계 상세 보기</span>
+                    <span className="text-sm font-semibold text-teal-800 group-open:hidden">펼치기</span>
+                    <span className="hidden text-sm font-semibold text-teal-800 group-open:inline">접기</span>
+                </summary>
+                <div className="mt-5">
+                    <WorkflowGuideCard currentRoute="/guide" />
+                </div>
+            </details>
+
             <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <SectionCard title="1. 입력자료 준비" description="사업장, 기간, 품목, 공정, 배출원, 전구물질을 순서대로 채웁니다.">
+                <SectionCard title="입력자료 준비" description="사업장, 기간, 품목, 공정, 배출원, 전구물질을 순서대로 채웁니다.">
                     <div className="space-y-3 text-sm leading-6 text-slate-600">
                         <p>필수 입력과 선택/검토 항목을 구분해 입력하세요. 모르는 항목은 비워두되, 확인 필요 경고가 어떤 화면으로 이어지는지 먼저 확인합니다.</p>
                         <StatusBadge tone="info">입력 근거 우선</StatusBadge>
                     </div>
                 </SectionCard>
-                <SectionCard title="2. 산정·시나리오 검토" description="CBAM 기준 SEE와 내부 검토용 total SEE를 구분합니다.">
+                <SectionCard title="산정·시나리오 검토" description="CBAM 기준 SEE와 내부 검토용 total SEE를 구분합니다.">
                     <div className="space-y-3 text-sm leading-6 text-slate-600">
                         <p>Annex II direct-only 처리, 전구물질 포함 여부, SEFA·인증서 비용 지표를 한 번에 확정하지 말고 검토 근거로 사용합니다.</p>
                         <StatusBadge tone="warning">검토용 지표</StatusBadge>
                     </div>
                 </SectionCard>
-                <SectionCard title="3. Export와 백업" description="최신 EU 원본 템플릿과 회사 내부 검토 기록을 함께 관리합니다.">
+                <SectionCard title="Export와 백업" description="최신 EU 원본 템플릿과 회사 내부 검토 기록을 함께 관리합니다.">
                     <div className="space-y-3 text-sm leading-6 text-slate-600">
                         <p>복사본 다운로드 후 Microsoft Excel에서 공식 수식 재계산을 확인하고, 같은 시점의 .cbam 백업을 보관합니다.</p>
                         <StatusBadge tone="success">로컬 보관</StatusBadge>
                     </div>
                 </SectionCard>
             </section>
-
-            <WorkflowGuideCard currentRoute="/guide" />
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <SectionCard title="Hot Rolled Coil 리허설 기준" description="MVP 테스트는 가상 컨설턴트가 아래 흐름으로 반복 검증합니다. 실제 회사 자료는 사용하지 않습니다.">

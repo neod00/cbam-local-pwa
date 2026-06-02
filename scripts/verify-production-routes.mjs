@@ -62,12 +62,15 @@ async function verifyRoutes() {
 
   assert.ok(renderedHtmlByRoute.get('/')?.includes('무엇부터 하면 되나요?'), 'dashboard should render beginner-first start guidance');
   assert.ok(renderedHtmlByRoute.get('/')?.includes('사업장 등록'), 'dashboard should render the first beginner action');
+  assert.equal(renderedHtmlByRoute.get('/')?.includes('벤치마크와 국가/CN 기본값 기준자료를 가져오세요.'), false, 'dashboard should not show official reference upload as the first beginner task');
   assert.ok(renderedHtmlByRoute.get('/')?.includes('.cbam'), 'dashboard should render local backup guidance');
 
   assert.ok(renderedHtmlByRoute.get('/announcement')?.includes('CBAM Local PWA 무료 베타'), 'announcement should render beta announcement');
   assert.ok(renderedHtmlByRoute.get('/announcement')?.includes('openbrain.main@gmail.com'), 'announcement should render public support email');
 
   assert.ok(renderedHtmlByRoute.get('/guide')?.includes('시작 가이드'), 'guide should render the first-run workflow');
+  assert.ok(renderedHtmlByRoute.get('/guide')?.includes('먼저 이것만 하세요'), 'guide should render the three-step beginner summary');
+  assert.ok(renderedHtmlByRoute.get('/guide')?.includes('전체 12단계 상세 보기'), 'guide should keep the detailed workflow available');
   assert.ok(renderedHtmlByRoute.get('/guide')?.includes('Hot Rolled Coil'), 'guide should render the fictional HRC rehearsal path');
   assert.ok(renderedHtmlByRoute.get('/guide')?.includes('Excel 공식 수식 재계산'), 'guide should render Excel recalculation guidance');
 

@@ -10,7 +10,7 @@ Status: OPERATOR_REVIEW_REQUIRED
 
 CBAM Local PWA 무료 베타 버전을 공개합니다.
 
-CBAM Local은 CBAM 대상 기업 담당자가 브라우저에서 로컬로 품목, 생산공정, 배출원, 전구물질 자료를 정리하고 EU 제출용 Excel 복사본 생성을 준비할 수 있도록 만든 업무 보조 도구입니다.
+CBAM Local은 CBAM 대상 기업 담당자가 브라우저에서 로컬로 품목, 생산공정, 배출원, 전구물질 자료를 정리하고 수입자 전달용 EU Communication Template 복사본 생성을 준비할 수 있도록 만든 업무 보조 도구입니다.
 
 입력 데이터는 기본적으로 사용자의 브라우저 로컬 저장소에 보관되며, 운영 서버로 업로드하지 않는 구조를 원칙으로 합니다. 사용자는 최신 EU 원본 Communication template과 기준자료를 직접 업로드해 검토해야 하며, Export 후 Microsoft Excel에서 공식 수식 재계산 결과를 반드시 확인해야 합니다.
 
@@ -29,7 +29,7 @@ CBAM Local PWA 무료 베타 버전을 공개합니다.
 - 생산공정과 제품 생산라인 배분 검토
 - 직접배출량, 간접배출량, 전구물질 SEE 검토
 - SEFA 및 CBAM 인증서 비용 시나리오 검토
-- 최신 EU 원본 템플릿 기반 제출용 Excel 복사본 생성 준비
+- 최신 EU 원본 Communication Template 기반 수입자 전달용 복사본 생성 준비
 - `.cbam` 프로젝트 백업 내보내기와 가져오기
 
 ### 데이터 보관 방식

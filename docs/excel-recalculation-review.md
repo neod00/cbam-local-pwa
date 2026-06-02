@@ -1,6 +1,6 @@
 # Excel Recalculation Review
 
-이 문서는 EU 제출용 Excel 복사본을 생성한 뒤 Microsoft Excel에서 공식 수식 재계산 결과를 확인하는 절차다. 앱은 공식 템플릿의 입력 셀에 값을 넣고 수식 셀은 보존하지만, 최종 제출 전에는 Excel에서 열린 결과를 사람이 확인해야 한다.
+이 문서는 수입자 전달용 EU Communication Template 복사본을 생성한 뒤 Microsoft Excel에서 공식 수식 재계산 결과를 확인하는 절차다. 앱은 공식 템플릿의 입력 셀에 값을 넣고 수식 셀은 보존하지만, 수입자 또는 authorised CBAM declarant에게 전달하기 전에는 Excel에서 열린 결과를 사람이 확인해야 한다.
 
 ## 언제 수행하나
 
@@ -10,7 +10,7 @@
 
 ## 준비물
 
-- 앱에서 생성한 EU 제출용 Excel 복사본
+- 앱에서 생성한 수입자 전달용 Communication Template 복사본
 - 앱 Export 화면의 `Summary_Products 반영 검토` 표
 - `artifacts/local-eu-template-verification.json` 파일이 있다면 그 안의 `localSummaryProductReview` 값
 - Microsoft Excel 데스크톱 앱
