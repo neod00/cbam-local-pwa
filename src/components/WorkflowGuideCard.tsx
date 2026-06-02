@@ -27,7 +27,7 @@ export function WorkflowGuideCard({
 
     return (
         <SectionCard
-            title="처음 따라하기"
+            title="시작 가이드"
             description="CBAM 업무가 익숙하지 않다면 아래 순서대로 진행하세요. 계산 화면보다 입력 근거와 Export 검토 순서를 먼저 잡는 흐름입니다."
             actions={compact ? (
                 <Link href="/guide">

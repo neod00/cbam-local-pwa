@@ -61,9 +61,14 @@ function GoodsRuleNote({ product }: { product: Product }) {
     const metadata = getCbamGoodsMetadata(product);
 
     return (
-        <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">
-            {metadata.sector_label} · {metadata.note}
-        </p>
+        <div className="mt-2 max-w-2xl space-y-1 text-xs leading-5 text-slate-500">
+            <p>{metadata.sector_label} · {metadata.note}</p>
+            {metadata.annex_ii_direct_only && (
+                <p className="rounded-xl bg-amber-50 px-3 py-2 text-amber-900">
+                    쉽게 말해 이 품목은 CBAM 인증서 산정 시 직접배출 중심으로 계산합니다. 최종제품 자체 간접배출은 참고용으로 별도 관리합니다.
+                </p>
+            )}
+        </div>
     );
 }
 
@@ -381,7 +386,7 @@ export default function ProductsPage() {
                         Direct-only
                     </div>
                     <div className="mt-3 text-2xl font-semibold text-slate-950">{productSummary.directOnlyCount}개</div>
-                    <p className="mt-1 text-xs text-slate-500">인증서 산정 간접 제외 검토</p>
+                    <p className="mt-1 text-xs text-slate-500">인증서 계산은 직접배출 중심</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">

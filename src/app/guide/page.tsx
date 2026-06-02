@@ -9,7 +9,7 @@ export default function GuidePage() {
         <div className="space-y-6">
             <PageHeader
                 eyebrow="Guided Workflow"
-                title="처음 따라하기"
+                title="시작 가이드"
                 description="CBAM Local을 처음 여는 기업 담당자가 사업장 등록부터 EU Communication Template 복사본과 .cbam 백업까지 순서대로 진행할 수 있도록 만든 작업 흐름입니다."
             />
 

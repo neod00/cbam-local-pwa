@@ -9,6 +9,7 @@ const dashboard = readFileSync('src/app/page.tsx', 'utf8');
 const guidePage = readFileSync('src/app/guide/page.tsx', 'utf8');
 const exportPage = readFileSync('src/app/export/page.tsx', 'utf8');
 const installationsPage = readFileSync('src/app/installations/page.tsx', 'utf8');
+const productsPage = readFileSync('src/app/products/page.tsx', 'utf8');
 const uploadPage = readFileSync('src/app/upload/page.tsx', 'utf8');
 const processesPage = readFileSync('src/app/processes/page.tsx', 'utf8');
 const sourceStreamsPage = readFileSync('src/app/source-streams/page.tsx', 'utf8');
@@ -19,7 +20,7 @@ const settingsPage = readFileSync('src/app/settings/page.tsx', 'utf8');
 const workflowGuide = readFileSync('src/lib/workflow-guide.ts', 'utf8');
 
 const workflowRoutes = [
-  ['처음 따라하기', '/guide'],
+  ['시작 가이드', '/guide'],
   ['배포 안내', '/announcement'],
   ['품목 관리', '/products'],
   ['생산공정', '/processes'],
@@ -42,7 +43,7 @@ for (const label of ['홈', '품목', '결과', '설정']) {
   assert.ok(sidebar.includes(label), `mobile navigation should include ${label}`);
 }
 
-for (const label of ['대시보드', '처음 따라하기', '베타 배포 안내', '품목 관리', '개인정보 및 데이터 처리', '생산공정', '시나리오', 'EU Communication Template Export', '데이터 안전']) {
+for (const label of ['대시보드', '시작 가이드', '베타 배포 안내', '품목 관리', '개인정보 및 데이터 처리', '생산공정', '시나리오', 'EU Communication Template Export', '데이터 안전']) {
   assert.ok(appShell.includes(label), `topbar route title should include ${label}`);
 }
 
@@ -53,10 +54,11 @@ assert.ok(workflowRouteBanner.includes('다음:'), 'workflow route banner should
 assert.ok(workflowRouteBanner.includes('전체 흐름'), 'workflow route banner should link the guide page');
 assert.ok(dashboard.includes('사업장, 제품, 생산공정, 전구물질'), 'dashboard should describe the core local workflow');
 assert.ok(dashboard.includes('CBAM 신고 지원자료 작업실'), 'dashboard should present the guided workspace');
-assert.ok(dashboard.includes('다음 작업 계속하기'), 'dashboard should expose a next action CTA');
+assert.ok(dashboard.includes('무엇부터 하면 되나요?'), 'dashboard should expose beginner-first start guidance');
+assert.ok(dashboard.includes('사업장 등록') && dashboard.includes('품목 추가') && dashboard.includes('배출량 입력'), 'dashboard should show the first three beginner actions');
 assert.ok(dashboard.includes('자료 준비 체크리스트'), 'dashboard should show evidence preparation guidance');
 assert.ok(dashboard.includes('WorkflowGuideCard'), 'dashboard should include a compact first-run workflow guide');
-assert.ok(guidePage.includes('처음 따라하기'), 'guide page should introduce the first-run workflow');
+assert.ok(guidePage.includes('시작 가이드'), 'guide page should introduce the first-run workflow');
 assert.ok(guidePage.includes('Hot Rolled Coil 리허설 기준'), 'guide page should expose the fictional HRC rehearsal path');
 assert.ok(workflowGuide.includes('Excel 공식 수식 재계산'), 'guide workflow should include the manual Excel recalculation step');
 assert.ok(workflowGuide.includes('.cbam 백업 보관'), 'guide workflow should include the local backup step');
@@ -72,6 +74,7 @@ assert.ok(exportPage.includes('.cbam 백업 보관'), 'Export should remind user
 assert.ok(installationsPage.includes('1. 사업장 식별정보'), 'Installations form should group required installation identification inputs');
 assert.ok(installationsPage.includes('2. 주소와 위치'), 'Installations form should group address and location inputs');
 assert.ok(installationsPage.includes('등록된 사업장이 없습니다'), 'Installations should show a guided empty state');
+assert.ok(productsPage.includes('쉽게 말해 이 품목은 CBAM 인증서 산정 시 직접배출 중심'), 'Products should explain Annex II direct-only treatment in beginner-friendly Korean');
 assert.ok(uploadPage.includes('공식 기준값 업로드') && uploadPage.includes('사용 가능'), 'Upload should identify official reference uploads as currently available');
 assert.ok(uploadPage.includes('일괄 업로드 준비 중') && uploadPage.includes('MVP 이후'), 'Upload should mark activity-data bulk upload as post-MVP');
 assert.ok(processesPage.includes('생산공정 다음 작업'), 'Processes should show next-action guidance');
@@ -96,6 +99,7 @@ assert.ok(resultsPage.includes('제품별 SEE 산정 결과'), 'Results page sho
 assert.ok(resultsPage.includes('CBAM 산정 기준 SEE') && resultsPage.includes('내부 검토용 total SEE'), 'Results page should separate CBAM-basis SEE from informational total SEE');
 assert.ok(scenariosPage.includes('SEFA 및 CBAM 인증서 시나리오'), 'Scenarios page should show SEFA/certificate review');
 assert.ok(scenariosPage.includes('CBAM 산정 기준 SEE') && scenariosPage.includes('내부 검토용 total SEE'), 'Scenarios page should separate CBAM-basis SEE from informational total SEE');
+assert.ok(scenariosPage.includes('사전 검토용 시나리오') && scenariosPage.includes('carbon price paid evidence'), 'Scenarios page should avoid outdated formula-not-final copy');
 assert.ok(scenariosPage.includes('기본값 인증서 비용') && scenariosPage.includes('md:hidden'), 'Scenarios should keep a mobile card fallback for SEFA/certificate review');
 assert.ok(exportPage.includes('CBAM 산정 기준 SEE') && exportPage.includes('내부 검토용 total SEE'), 'Export page should separate app review SEE values before Excel comparison');
 assert.ok(settingsPage.includes('법률 자문, 공식 검증, 최종 신고 책임을 대체하지 않습니다'), 'Settings should show the liability notice');

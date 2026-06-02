@@ -335,7 +335,7 @@ export default function ScenariosPage() {
 
             <SectionCard
                 title="시나리오 가정"
-                description="공식 산식 확정 전까지는 비용 판단용 보조 지표입니다. 실제 제출·정산 전 공식 산식과 가격 기준을 반드시 확인해야 합니다."
+                description="이 화면은 입력자료와 기준자료를 바탕으로 한 사전 검토용 시나리오입니다. 최종 CBAM declaration에는 검증자료, CBAM Registry 입력값, carbon price paid evidence 등이 추가로 반영될 수 있습니다."
                 actions={
                     <div className="flex items-center gap-2">
                         <StatusBadge tone={assumptionSaveState === 'saving' ? 'pending' : assumptionSaveState === 'saved' ? 'success' : 'neutral'}>

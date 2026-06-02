@@ -28,7 +28,7 @@ const navigationGroups = [
         label: '시작',
         items: [
             { name: '대시보드', href: '/', icon: Home },
-            { name: '처음 따라하기', href: '/guide', icon: ListChecks },
+            { name: '시작 가이드', href: '/guide', icon: ListChecks },
             { name: '사업장', href: '/installations', icon: Settings },
             { name: '보고기간', href: '/periods', icon: Calendar },
         ],
