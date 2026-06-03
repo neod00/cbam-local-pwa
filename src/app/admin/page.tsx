@@ -1,7 +1,8 @@
 import { auth, signOut } from '@/auth';
 import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
-import { updateLicenseUserStatus } from '@/lib/admin-actions';
+import { createUpdateManifest, updateLicenseUserStatus } from '@/lib/admin-actions';
 import { ADMIN_LICENSE_STATUSES } from '@/lib/admin-license-status';
+import { ADMIN_UPDATE_POLICIES } from '@/lib/admin-update-policy';
 import { isAllowedAdminEmail } from '@/lib/admin-auth';
 import { getAdminConsoleData } from '@/lib/admin-console-data';
 import {
@@ -268,10 +269,88 @@ export default async function AdminPage() {
                     <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
                         강제 업데이트 정책을 게시하더라도 사용자가 먼저 .cbam 백업 안내를 확인할 수 있어야 합니다.
                     </div>
-                    <Button type="button" variant="secondary" className="mt-4 w-full" disabled>
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        업데이트 정책 수정
-                    </Button>
+                    <form action={createUpdateManifest} className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>최신 버전</span>
+                                <input
+                                    name="latest_version"
+                                    defaultValue={data.updatePolicy.latestVersion}
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>최소 지원 버전</span>
+                                <input
+                                    name="minimum_supported_version"
+                                    defaultValue={data.updatePolicy.minimumSupportedVersion}
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                        </div>
+                        <label className="space-y-1 text-sm font-semibold text-slate-700">
+                            <span>업데이트 정책</span>
+                            <select
+                                name="update_policy"
+                                defaultValue={data.updatePolicy.updatePolicy}
+                                disabled={!isLive}
+                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                            >
+                                {ADMIN_UPDATE_POLICIES.map((policy) => (
+                                    <option key={policy} value={policy}>
+                                        {updatePolicyLabel(policy)}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="space-y-1 text-sm font-semibold text-slate-700">
+                            <span>공지 제목</span>
+                            <input
+                                name="notice_title"
+                                defaultValue={data.updatePolicy.noticeTitle}
+                                disabled={!isLive}
+                                className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                            />
+                        </label>
+                        <label className="space-y-1 text-sm font-semibold text-slate-700">
+                            <span>공지 본문</span>
+                            <textarea
+                                name="notice_body"
+                                defaultValue={data.updatePolicy.noticeBody}
+                                disabled={!isLive}
+                                rows={3}
+                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                            />
+                        </label>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>릴리스 노트 링크</span>
+                                <input
+                                    name="release_notes_url"
+                                    defaultValue={data.updatePolicy.releaseNotesUrl}
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>적용 시작일</span>
+                                <input
+                                    name="effective_from"
+                                    defaultValue={data.updatePolicy.effectiveFrom}
+                                    disabled={!isLive}
+                                    type="date"
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                        </div>
+                        <input type="hidden" name="target_audience" value={data.updatePolicy.targetAudience} />
+                        <Button type="submit" variant="secondary" className="w-full" disabled={!isLive}>
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            새 업데이트 정책 저장
+                        </Button>
+                    </form>
                 </SectionCard>
             </div>
 

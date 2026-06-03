@@ -22,6 +22,8 @@ const authConfig = readFileSync('src/auth.ts', 'utf8');
 const adminAuth = readFileSync('src/lib/admin-auth.ts', 'utf8');
 const adminConsoleData = readFileSync('src/lib/admin-console-data.ts', 'utf8');
 const adminActions = readFileSync('src/lib/admin-actions.ts', 'utf8');
+const adminLicenseStatus = readFileSync('src/lib/admin-license-status.ts', 'utf8');
+const adminUpdatePolicy = readFileSync('src/lib/admin-update-policy.ts', 'utf8');
 const proxy = readFileSync('proxy.ts', 'utf8');
 
 for (const required of [
@@ -38,8 +40,11 @@ for (const required of [
   'Neon 연결 상태',
   'getAdminConsoleData',
   'updateLicenseUserStatus',
+  'createUpdateManifest',
   'ADMIN_LICENSE_STATUSES',
+  'ADMIN_UPDATE_POLICIES',
   '상태 변경 가능',
+  '새 업데이트 정책 저장',
 ]) {
   assert.ok(adminPage.includes(required), `admin page should include ${required}`);
 }
@@ -71,6 +76,9 @@ for (const required of [
   "source: 'sample'",
   'id',
   'contact_phone',
+  'notice_title',
+  'notice_body',
+  'release_notes_url',
 ]) {
   assert.ok(adminConsoleData.includes(required), `admin console data loader should include ${required}`);
 }
@@ -83,9 +91,12 @@ for (const required of [
   'license_status',
   'updated_at = now()',
   'revalidatePath',
+  'update_manifests',
 ]) {
   assert.ok(adminActions.includes(required), `admin actions should include ${required}`);
 }
+assert.ok(adminLicenseStatus.includes('ADMIN_LICENSE_STATUSES'), 'admin license status helper should define allowed statuses');
+assert.ok(adminUpdatePolicy.includes('ADMIN_UPDATE_POLICIES'), 'admin update policy helper should define allowed policies');
 
 assert.ok(appShell.includes("pathname.startsWith('/admin')"), 'app shell should route admin paths to the dedicated admin shell');
 assert.ok(appShell.includes('<AdminShell>{children}</AdminShell>'), 'app shell should render AdminShell for admin paths');
@@ -129,6 +140,8 @@ const adminSource = [
     : []),
   adminConsoleData,
   adminActions,
+  adminLicenseStatus,
+  adminUpdatePolicy,
   adminAuth,
   authConfig,
   proxy,

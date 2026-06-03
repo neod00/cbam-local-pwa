@@ -25,6 +25,9 @@ export type AdminUpdatePolicy = {
     latestVersion: string;
     minimumSupportedVersion: string;
     updatePolicy: string;
+    noticeTitle: string;
+    noticeBody: string;
+    releaseNotesUrl: string;
     effectiveFrom: string;
     targetAudience: string;
 };
@@ -115,6 +118,9 @@ const sampleData: AdminConsoleData = {
         latestVersion: '0.1.0-beta',
         minimumSupportedVersion: '0.1.0-beta',
         updatePolicy: 'recommended',
+        noticeTitle: 'CBAM Local 업데이트 안내',
+        noticeBody: '현재 배포된 무료 PWA 버전은 계속 사용할 수 있습니다.',
+        releaseNotesUrl: '/release-notes',
         effectiveFrom: '2026-06-03',
         targetAudience: 'all',
     },
@@ -215,7 +221,7 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
         }>;
 
         const updateRows = (await sql`
-            select latest_version, minimum_supported_version, update_policy, effective_from, target_audience
+            select latest_version, minimum_supported_version, update_policy, notice_title, notice_body, release_notes_url, effective_from, target_audience
             from update_manifests
             order by effective_from desc nulls last, created_at desc
             limit 1
@@ -223,6 +229,9 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
             latest_version: string;
             minimum_supported_version: string;
             update_policy: string;
+            notice_title: string | null;
+            notice_body: string | null;
+            release_notes_url: string | null;
             effective_from: string | null;
             target_audience: string;
         }>;
@@ -276,6 +285,9 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
                     latestVersion: updateRows[0].latest_version,
                     minimumSupportedVersion: updateRows[0].minimum_supported_version,
                     updatePolicy: updateRows[0].update_policy,
+                    noticeTitle: updateRows[0].notice_title ?? sampleData.updatePolicy.noticeTitle,
+                    noticeBody: updateRows[0].notice_body ?? sampleData.updatePolicy.noticeBody,
+                    releaseNotesUrl: updateRows[0].release_notes_url ?? sampleData.updatePolicy.releaseNotesUrl,
                     effectiveFrom: formatDate(updateRows[0].effective_from),
                     targetAudience: updateRows[0].target_audience,
                 }
