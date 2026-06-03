@@ -81,7 +81,87 @@ export function verificationCodeExpiresAt(minutes = LICENSE_CODE_TTL_MINUTES) {
     return date.toISOString();
 }
 
-export async function sendLicenseVerificationEmail(email: string, code: string) {
+function createLicenseVerificationEmailText(code: string) {
+    return [
+        'CBAM Local 무료 라이선스 복구 인증코드입니다.',
+        '',
+        `인증코드: ${code}`,
+        '',
+        `이 코드는 ${LICENSE_CODE_TTL_MINUTES}분 동안만 사용할 수 있습니다.`,
+        '생산량, 배출량, EU 템플릿, .cbam 백업 파일은 서버로 전송되지 않습니다.',
+    ].join('\n');
+}
+
+function encodeBase64Url(value: string) {
+    return Buffer.from(value, 'utf8')
+        .toString('base64')
+        .replaceAll('+', '-')
+        .replaceAll('/', '_')
+        .replaceAll('=', '');
+}
+
+function encodeEmailHeader(value: string) {
+    return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;
+}
+
+async function sendLicenseVerificationEmailWithGmail(email: string, code: string) {
+    const clientId = process.env.GMAIL_CLIENT_ID;
+    const clientSecret = process.env.GMAIL_CLIENT_SECRET;
+    const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
+    const fromEmail = process.env.GMAIL_FROM_EMAIL ?? process.env.SMTP_FROM ?? process.env.SMTP_USER;
+    const fromName = process.env.GMAIL_FROM_NAME ?? 'CBAM Local';
+
+    if (!clientId || !clientSecret || !refreshToken || !fromEmail) {
+        throw new Error('Gmail API email settings are not configured');
+    }
+
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token',
+        }),
+    });
+    const tokenData = await tokenResponse.json().catch(() => ({}));
+
+    if (!tokenResponse.ok || typeof tokenData.access_token !== 'string') {
+        throw new Error(`Gmail OAuth token request failed: ${tokenResponse.status}`);
+    }
+
+    const subject = '[CBAM Local] 무료 라이선스 인증코드';
+    const rawMessage = [
+        `From: ${encodeEmailHeader(fromName)} <${fromEmail}>`,
+        `To: ${email}`,
+        `Subject: ${encodeEmailHeader(subject)}`,
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=UTF-8',
+        'Content-Transfer-Encoding: 8bit',
+        '',
+        createLicenseVerificationEmailText(code),
+    ].join('\r\n');
+
+    const sendResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST',
+        headers: {
+            authorization: `Bearer ${tokenData.access_token}`,
+            'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+            raw: encodeBase64Url(rawMessage),
+        }),
+    });
+
+    if (!sendResponse.ok) {
+        throw new Error(`Gmail send request failed: ${sendResponse.status}`);
+    }
+}
+
+async function sendLicenseVerificationEmailWithResend(email: string, code: string) {
     const apiKey = process.env.RESEND_API_KEY;
     const from = process.env.RESEND_FROM_EMAIL ?? 'CBAM Local <onboarding@resend.dev>';
 
@@ -99,20 +179,22 @@ export async function sendLicenseVerificationEmail(email: string, code: string) 
             from,
             to: email,
             subject: '[CBAM Local] 무료 라이선스 인증코드',
-            text: [
-                'CBAM Local 무료 라이선스 복구 인증코드입니다.',
-                '',
-                `인증코드: ${code}`,
-                '',
-                `이 코드는 ${LICENSE_CODE_TTL_MINUTES}분 동안만 사용할 수 있습니다.`,
-                '생산량, 배출량, EU 템플릿, .cbam 백업 파일은 서버로 전송되지 않습니다.',
-            ].join('\n'),
+            text: createLicenseVerificationEmailText(code),
         }),
     });
 
     if (!response.ok) {
         throw new Error(`Resend email request failed: ${response.status}`);
     }
+}
+
+export async function sendLicenseVerificationEmail(email: string, code: string) {
+    if (process.env.GMAIL_REFRESH_TOKEN) {
+        await sendLicenseVerificationEmailWithGmail(email, code);
+        return;
+    }
+
+    await sendLicenseVerificationEmailWithResend(email, code);
 }
 
 export function defaultUpdateManifest() {

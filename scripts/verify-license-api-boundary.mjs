@@ -139,6 +139,18 @@ for (const required of [
   assert.ok(freeLicenseClient.includes(required), `free license client should include ${required}`);
 }
 
+const licenseApi = readFileSync('src/lib/license-api.ts', 'utf8');
+for (const required of [
+  'GMAIL_CLIENT_ID',
+  'GMAIL_CLIENT_SECRET',
+  'GMAIL_REFRESH_TOKEN',
+  'GMAIL_FROM_EMAIL',
+  'gmail.googleapis.com/gmail/v1/users/me/messages/send',
+  'RESEND_API_KEY',
+]) {
+  assert.ok(licenseApi.includes(required), `license API helper should include ${required}`);
+}
+
 const apiSource = requiredFiles
   .filter((file) => file.endsWith('.ts') || file.endsWith('.sql'))
   .map((file) => readFileSync(file, 'utf8'))

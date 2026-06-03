@@ -196,7 +196,7 @@ Next:
 - Review and finalize `docs/free-pwa-terms-draft.md` and `docs/free-pwa-release-announcement-draft.md` with legal/operational wording before public distribution.
 - Make the limited beta Go/No-Go decision after legal/operator wording review.
 - Run post-deploy smoke checks for the live `/license` registration gate and Neon admin forms after pushing these updates.
-- Configure `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in Vercel before relying on email-code license recovery in production.
+- Configure Gmail API mail-sending environment variables in Vercel before relying on email-code license recovery in production: `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, and `GMAIL_FROM_EMAIL`. Resend remains available as a fallback through `RESEND_API_KEY`.
 
 ## Decision Log
 
