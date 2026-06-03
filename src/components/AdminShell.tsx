@@ -36,7 +36,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
                         <div className="flex items-center gap-2">
                             <span className="hidden rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800 ring-1 ring-inset ring-teal-100 sm:inline-flex">
-                                운영자 전용
+                                Google OAuth 보호
                             </span>
                             <Link
                                 href="/"

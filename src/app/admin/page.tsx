@@ -1,10 +1,13 @@
+import { auth, signOut } from '@/auth';
 import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { isAllowedAdminEmail } from '@/lib/admin-auth';
 import {
     Bell,
     CheckCircle2,
     Clock3,
     FileText,
     KeyRound,
+    LogOut,
     Megaphone,
     RefreshCw,
     ShieldAlert,
@@ -12,6 +15,9 @@ import {
     UserCheck,
     Users,
 } from 'lucide-react';
+import { redirect } from 'next/navigation';
+
+export const dynamic = 'force-dynamic';
 
 const licenseUsers = [
     {
@@ -19,6 +25,7 @@ const licenseUsers = [
         email: 'manager@example.co.kr',
         company: '대한철강 주식회사',
         contact: '김지연',
+        phone: '010-0000-1001',
         country: 'South Korea',
         industry: 'Iron and steel',
         appVersion: '0.1.0-beta',
@@ -30,6 +37,7 @@ const licenseUsers = [
         email: 'esg-team@example.com',
         company: '한빛소재',
         contact: '박민수',
+        phone: '010-0000-1002',
         country: 'South Korea',
         industry: 'Aluminium',
         appVersion: '0.1.0-beta',
@@ -41,6 +49,7 @@ const licenseUsers = [
         email: 'cbam@example.net',
         company: '동아케미칼',
         contact: '이서현',
+        phone: '010-0000-1003',
         country: 'South Korea',
         industry: 'Fertiliser',
         appVersion: '0.1.0-beta',
@@ -81,13 +90,13 @@ const announcementItems = [
 const quickActions = [
     {
         title: '재확인 필요 사용자 처리',
-        description: '장기간 라이선스 확인이 없는 사용자 9명을 검토하고 안내 메일 발송 대상을 정리합니다.',
+        description: '장기간 라이선스 확인이 없는 사용자를 검토하고 안내 메일 발송 대상을 정리합니다.',
         status: '9건',
         tone: 'warning' as const,
     },
     {
         title: '업데이트 정책 확인',
-        description: '현재 정책은 권장 업데이트입니다. 강제 업데이트로 바꾸기 전 .cbam 백업 안내 문구를 확인하세요.',
+        description: '현재 정책은 권장 업데이트입니다. 강제 업데이트로 전환할 경우 .cbam 백업 안내 문구를 함께 확인하세요.',
         status: '권장',
         tone: 'pending' as const,
     },
@@ -102,11 +111,21 @@ const quickActions = [
 const safetyChecks = [
     '관리자 콘솔은 사용자 등록, 무료 라이선스, 공지, 업데이트 정책만 관리합니다.',
     '생산량, 배출량, EU 템플릿, .cbam 백업 파일은 저장하거나 조회하지 않습니다.',
-    '강제 업데이트가 필요해도 사용자의 기존 .cbam 백업 경로는 막지 않습니다.',
+    '강제 업데이트가 필요해도 기존 .cbam 백업 경로는 막지 않습니다.',
     '라이선스 확인 실패 또는 오프라인 상태에서는 마지막 확인 결과를 기준으로 계속 사용할 수 있게 합니다.',
 ];
 
-export default function AdminPage() {
+export default async function AdminPage() {
+    const session = await auth();
+    if (!isAllowedAdminEmail(session?.user?.email)) {
+        redirect('/admin/login');
+    }
+
+    async function signOutAdmin() {
+        'use server';
+        await signOut({ redirectTo: '/admin/login' });
+    }
+
     return (
         <div className="space-y-6">
             <PageHeader
@@ -114,9 +133,15 @@ export default function AdminPage() {
                 title="CBAM Local 관리자 콘솔"
                 description="무료 PWA 배포, 라이선스, 공지, 업데이트 정책만 관리하는 운영자용 콘솔입니다. CBAM 산정 데이터 저장소가 아닙니다."
                 actions={
-                    <Button type="button" variant="secondary" disabled>
-                        인증 연동 전
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge tone="success">{session?.user?.email ?? '관리자 로그인'}</StatusBadge>
+                        <form action={signOutAdmin}>
+                            <Button type="submit" variant="secondary">
+                                <LogOut className="mr-2 h-4 w-4" />
+                                로그아웃
+                            </Button>
+                        </form>
+                    </div>
                 }
             />
 
@@ -126,8 +151,9 @@ export default function AdminPage() {
                     <div>
                         <h2 className="font-semibold text-teal-950">데이터 경계</h2>
                         <p className="mt-1">
-                            관리자 콘솔은 사용자 등록, 무료 라이선스, 공지, 업데이트 정책만 관리합니다. 생산량, 배출량, EU 템플릿,
-                            .cbam 백업 파일은 저장하거나 조회하지 않습니다.
+                            무료 라이선스와 업데이트 확인에는 이메일, 회사명, 담당자명, 연락처, 앱 버전 같은 배포 관리
+                            정보만 사용됩니다. 생산량, 배출량, 전구물질, EU 템플릿, .cbam 백업 파일은 서버로 전송하지
+                            않습니다.
                         </p>
                     </div>
                 </div>
@@ -137,7 +163,7 @@ export default function AdminPage() {
                 <StatCard label="등록 사용자" value="128" helper="배포 관리용 연락처 기준" icon={Users} tone="info" />
                 <StatCard label="활성 무료 라이선스" value="112" helper="FREE_ACTIVE" icon={UserCheck} tone="success" />
                 <StatCard label="재확인 필요" value="9" helper="장기 미확인 사용자" icon={Clock3} tone="warning" />
-                <StatCard label="차단 상태" value="2" helper="약관 위반 또는 악용 대응" icon={ShieldAlert} tone="danger" />
+                <StatCard label="차단 상태" value="2" helper="약관 위반 또는 운영 대응" icon={ShieldAlert} tone="danger" />
             </div>
 
             <SectionCard title="오늘 확인할 운영 작업" description="노트북과 휴대폰에서 빠르게 확인할 수 있는 관리자 우선 작업입니다.">
@@ -162,7 +188,7 @@ export default function AdminPage() {
                 <SectionCard
                     id="licenses"
                     title="사용자/라이선스"
-                    description="관리자는 배포 관리용 사용자 정보와 라이선스 상태만 확인합니다."
+                    description="무료 배포 관리에 필요한 사용자 정보와 라이선스 상태만 확인합니다."
                     actions={
                         <Button type="button" disabled>
                             무료 라이선스 발급
@@ -188,8 +214,8 @@ export default function AdminPage() {
                                         <dd className="mt-1 font-medium text-slate-900">{user.contact}</dd>
                                     </div>
                                     <div className="rounded-xl bg-slate-50 p-3">
-                                        <dt className="text-xs text-slate-500">업종</dt>
-                                        <dd className="mt-1 font-medium text-slate-900">{user.industry}</dd>
+                                        <dt className="text-xs text-slate-500">연락처</dt>
+                                        <dd className="mt-1 font-medium text-slate-900">{user.phone}</dd>
                                     </div>
                                     <div className="rounded-xl bg-slate-50 p-3">
                                         <dt className="text-xs text-slate-500">앱 버전</dt>
@@ -208,16 +234,11 @@ export default function AdminPage() {
                         <table className="min-w-full divide-y divide-slate-200">
                             <thead className="bg-slate-50">
                                 <tr>
-                                    <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">상태</th>
-                                    <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">이메일</th>
-                                    <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">회사명</th>
-                                    <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">담당자</th>
-                                    <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">국가</th>
-                                    <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">업종</th>
-                                    <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">앱 버전</th>
-                                    <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">마지막 확인</th>
-                                    <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">약관</th>
-                                    <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">작업</th>
+                                    {['상태', '이메일', '회사명', '담당자', '연락처', '국가', '업종', '앱 버전', '마지막 확인', '약관', '작업'].map((heading) => (
+                                        <th key={heading} className="px-4 py-4 text-left text-sm font-semibold text-slate-900">
+                                            {heading}
+                                        </th>
+                                    ))}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 bg-white">
@@ -229,6 +250,7 @@ export default function AdminPage() {
                                         <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-slate-950">{user.email}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-700">{user.company}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.contact}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.phone}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.country}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.industry}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.appVersion}</td>
@@ -280,7 +302,7 @@ export default function AdminPage() {
                 <SectionCard
                     id="announcements"
                     title="공지"
-                    description="공지에는 앱 버전, 템플릿 확인 요청, 약관 변경 같은 운영 안내만 게시합니다."
+                    description="새 버전, 템플릿 확인 요청, 약관 변경 같은 운영 안내만 게시합니다."
                     actions={
                         <Button type="button" variant="secondary" disabled>
                             공지 등록
@@ -332,12 +354,12 @@ export default function AdminPage() {
                     </ul>
                 </SectionCard>
 
-                <SectionCard title="다음 구현 단계" description="실제 운영 전 인증과 API 연결이 필요합니다. 화면 구조는 운영 콘솔 기준으로 유지합니다.">
+                <SectionCard title="다음 구현 단계" description="실제 운영에는 인증, API, DB 연결이 순차적으로 필요합니다.">
                     <ol className="space-y-3 text-sm text-slate-700">
                         {[
-                            '관리자 인증: Magic link 또는 Google OAuth 연결',
-                            'license-api: 등록, 상태 확인, 업데이트 manifest, 공지 API 구현',
-                            '관리자 DB: license_users, update_manifests, announcements, terms_versions 생성',
+                            'Google OAuth 관리자 로그인 적용',
+                            'Neon Postgres에 license_users, update_manifests, announcements, terms_versions 생성',
+                            'license-api: 등록, 상태 확인, update manifest, 공지 API 구현',
                             'PWA 연동: NEXT_PUBLIC_LICENSE_API_URL이 있을 때만 원격 확인 활성화',
                         ].map((item, index) => (
                             <li key={item} className="flex gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
@@ -351,10 +373,10 @@ export default function AdminPage() {
                 </SectionCard>
             </div>
 
-            <SectionCard title="라이선스/업데이트 서버에 보낼 수 있는 정보" description="운영 데이터 범위를 좁게 유지합니다.">
+            <SectionCard title="라이선스/업데이트 서버로 보낼 수 있는 정보" description="운영 데이터 범위를 좁게 유지합니다.">
                 <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
                     {[
-                        { icon: KeyRound, title: '라이선스', body: '이메일, 회사명, 담당자명, 국가, 업종, 약관 버전, 라이선스 상태' },
+                        { icon: KeyRound, title: '라이선스', body: '이메일, 회사명, 담당자명, 연락처, 국가, 업종, 약관 버전, 라이선스 상태' },
                         { icon: Bell, title: '공지', body: '공지 제목, 본문, 심각도, 대상 그룹, 게시 기간' },
                         { icon: ShieldCheck, title: '업데이트', body: '최신 버전, 최소 지원 버전, 선택/권장/강제 업데이트 정책' },
                     ].map((item) => (

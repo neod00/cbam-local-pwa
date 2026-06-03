@@ -75,8 +75,10 @@ for (const required of [
   'cbam-local',
   'cbam-admin',
   'license-api',
-  '무료 라이선스 발급',
-  '강제 업데이트',
+  '무료 라이선스',
+  'Google OAuth',
+  'AUTH_TRUST_HOST=true',
+  'required',
   'Data Boundary',
   '.cbam',
 ]) {

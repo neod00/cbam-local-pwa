@@ -3,22 +3,30 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const adminDir = 'src/app/admin';
+const adminApiDir = 'src/app/api/admin';
 const adminPagePath = `${adminDir}/page.tsx`;
+const adminLoginPath = `${adminDir}/login/page.tsx`;
 const appShell = readFileSync('src/components/AppShell.tsx', 'utf8');
 const adminShell = readFileSync('src/components/AdminShell.tsx', 'utf8');
 const serviceWorker = readFileSync('public/sw.js', 'utf8');
 const adminPlan = readFileSync('docs/harness/admin-console-plan.md', 'utf8');
+const authConfig = readFileSync('src/auth.ts', 'utf8');
+const adminAuth = readFileSync('src/lib/admin-auth.ts', 'utf8');
+const proxy = readFileSync('proxy.ts', 'utf8');
 const skillPath = 'C:/Users/NT940XHA/.codex/skills/cbam-admin-panel/SKILL.md';
 
 assert.ok(existsSync(adminPagePath), 'admin page should exist');
+assert.ok(existsSync(adminLoginPath), 'admin login page should exist');
+assert.ok(existsSync('src/app/api/auth/[...nextauth]/route.ts'), 'Auth.js route handler should exist');
 
 const adminPage = readFileSync(adminPagePath, 'utf8');
+const adminLogin = readFileSync(adminLoginPath, 'utf8');
 
 for (const required of [
   'CBAM Local 관리자 콘솔',
-  '무료 PWA 배포, 라이선스, 공지, 업데이트 정책',
-  '생산량, 배출량, EU 템플릿',
-  '.cbam 백업 파일은 저장하거나 조회하지 않습니다',
+  '무료 PWA 배포, 라이선스, 공지, 업데이트 정책만 관리',
+  '생산량, 배출량, 전구물질, EU 템플릿',
+  '.cbam 백업 파일은 서버로 전송하지',
   '사용자/라이선스',
   '현재 업데이트 정책',
   '공지',
@@ -26,12 +34,24 @@ for (const required of [
   '감사/보안 체크',
   'NEXT_PUBLIC_LICENSE_API_URL',
   '오늘 확인할 운영 작업',
+  '연락처',
 ]) {
   assert.ok(adminPage.includes(required), `admin page should include ${required}`);
 }
 
 for (const required of [
-  '관리자 콘솔은 무료 PWA의 배포, 라이선스, 공지, 업데이트 정책',
+  'CBAM Local 관리자 로그인',
+  'Google 계정으로 로그인',
+  'ADMIN_ALLOWED_EMAILS',
+  'AUTH_GOOGLE_ID / SECRET',
+  'AUTH_TRUST_HOST=true',
+  '생산량, 배출량, 전구물질, EU 템플릿',
+  '.cbam 백업 파일은 서버로 전송하지',
+]) {
+  assert.ok(adminLogin.includes(required), `admin login page should include ${required}`);
+}
+
+for (const required of [
   'license_users',
   'update_manifests',
   'announcements',
@@ -40,12 +60,21 @@ for (const required of [
   assert.ok(adminPlan.includes(required), `admin plan should include ${required}`);
 }
 
-assert.ok(appShell.includes("'/admin': '관리자 콘솔'"), 'app shell should include admin route title');
 assert.ok(appShell.includes("pathname.startsWith('/admin')"), 'app shell should route admin paths to the dedicated admin shell');
 assert.ok(appShell.includes('<AdminShell>{children}</AdminShell>'), 'app shell should render AdminShell for admin paths');
 assert.ok(adminShell.includes('CBAM Local Admin'), 'admin shell should render a dedicated admin header');
 assert.ok(adminShell.includes('사용자 앱'), 'admin shell should link back to the user app without showing the user sidebar');
-assert.ok(serviceWorker.includes('"/admin"'), 'service worker should include admin route in the app shell');
+assert.equal(serviceWorker.includes('"/admin"'), false, 'protected admin route should not be pre-cached by the service worker');
+assert.equal(serviceWorker.includes('"/admin/login"'), false, 'admin login should not be pre-cached by the service worker');
+
+assert.ok(authConfig.includes('next-auth/providers/google'), 'auth config should use Google OAuth');
+assert.ok(authConfig.includes("signIn({ profile, user })"), 'auth config should restrict sign-ins');
+assert.ok(authConfig.includes("signIn: '/admin/login'"), 'auth config should use the custom admin login page');
+assert.ok(adminAuth.includes('ADMIN_ALLOWED_EMAILS'), 'admin auth should support an email allowlist');
+assert.ok(adminAuth.includes('openbrain.main@gmail.com'), 'admin auth should default to the provided operator email');
+assert.ok(proxy.includes("pathname.startsWith('/admin')"), 'proxy should protect admin pages');
+assert.ok(proxy.includes("pathname.startsWith('/api/admin')"), 'proxy should protect admin APIs');
+assert.ok(proxy.includes("'/admin/login'"), 'proxy should keep admin login public');
 
 if (existsSync(skillPath)) {
   const skill = readFileSync(skillPath, 'utf8');
@@ -62,10 +91,19 @@ function listFiles(dir) {
   });
 }
 
-const adminSource = listFiles(adminDir)
-  .filter((file) => /\.(tsx|ts|js|mjs)$/.test(file))
-  .map((file) => readFileSync(file, 'utf8'))
-  .join('\n');
+const adminSource = [
+  ...listFiles(adminDir)
+    .filter((file) => /\.(tsx|ts|js|mjs)$/.test(file))
+    .map((file) => readFileSync(file, 'utf8')),
+  ...(existsSync(adminApiDir)
+    ? listFiles(adminApiDir)
+      .filter((file) => /\.(tsx|ts|js|mjs)$/.test(file))
+      .map((file) => readFileSync(file, 'utf8'))
+    : []),
+  adminAuth,
+  authConfig,
+  proxy,
+].join('\n');
 
 for (const forbiddenImport of [
   '@/lib/local-db',

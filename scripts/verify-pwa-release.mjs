@@ -33,7 +33,6 @@ assert.ok(manifest.icons.some((icon) => icon.src === '/icon.svg'), 'manifest sho
 
 const expectedShellRoutes = [
   '/',
-  '/admin',
   '/export',
   '/guide',
   '/installations',
@@ -56,7 +55,9 @@ for (const route of expectedShellRoutes) {
   assert.ok(serviceWorker.includes(`"${route}"`), `service worker should cache ${route}`);
 }
 
-assert.ok(serviceWorker.includes('cbam-local-v3'), 'service worker cache version should be current');
+assert.equal(serviceWorker.includes('"/admin"'), false, 'protected admin route should not be cached by the service worker');
+assert.equal(serviceWorker.includes('"/admin/login"'), false, 'admin login should not be cached by the service worker');
+assert.ok(serviceWorker.includes('cbam-local-v4'), 'service worker cache version should be current');
 assert.ok(serviceWorker.includes('networkFirst(request)'), 'service worker should use network-first route handling to avoid stale pages');
 assert.ok(serviceWorker.includes('request.mode === "navigate"'), 'service worker should detect navigation requests');
 assert.ok(serviceWorker.includes('fetch(request, { cache: "no-store" })'), 'service worker should bypass stale HTTP cache for network-first requests');

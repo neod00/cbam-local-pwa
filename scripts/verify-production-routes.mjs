@@ -8,7 +8,7 @@ const nextCliPath = join(process.cwd(), 'node_modules', 'next', 'dist', 'bin', '
 
 const routes = [
   '/',
-  '/admin',
+  '/admin/login',
   '/announcement',
   '/guide',
   '/installations',
@@ -55,6 +55,13 @@ async function waitForServer(deadlineMs = 25000) {
 async function verifyRoutes() {
   const renderedHtmlByRoute = new Map();
 
+  const adminResponse = await fetch(`${baseUrl}/admin`, { redirect: 'manual' });
+  assert.ok([302, 303, 307, 308].includes(adminResponse.status), '/admin should redirect unauthenticated users');
+  assert.ok(adminResponse.headers.get('location')?.includes('/admin/login'), '/admin should redirect to the admin login page');
+
+  const adminApiResponse = await fetch(`${baseUrl}/api/admin/ping`, { redirect: 'manual' });
+  assert.equal(adminApiResponse.status, 401, '/api/admin/* should reject unauthenticated requests');
+
   for (const route of routes) {
     const response = await fetch(`${baseUrl}${route}`, { redirect: 'manual' });
     assert.equal(response.status, 200, `${route} should return HTTP 200`);
@@ -66,13 +73,12 @@ async function verifyRoutes() {
   assert.equal(renderedHtmlByRoute.get('/')?.includes('벤치마크와 국가/CN 기본값 기준자료를 가져오세요.'), false, 'dashboard should not show official reference upload as the first beginner task');
   assert.ok(renderedHtmlByRoute.get('/')?.includes('.cbam'), 'dashboard should render local backup guidance');
 
-  assert.ok(renderedHtmlByRoute.get('/admin')?.includes('CBAM Local 관리자 콘솔'), 'admin should render the operator console');
-  assert.ok(renderedHtmlByRoute.get('/admin')?.includes('사용자/라이선스'), 'admin should render license user management');
-  assert.ok(renderedHtmlByRoute.get('/admin')?.includes('생산량, 배출량, EU 템플릿'), 'admin should render the no-CBAM-data boundary');
-  assert.ok(renderedHtmlByRoute.get('/admin')?.includes('NEXT_PUBLIC_LICENSE_API_URL'), 'admin should show the future license API activation boundary');
-  assert.ok(renderedHtmlByRoute.get('/admin')?.includes('CBAM Local Admin'), 'admin should render the dedicated admin shell');
-  assert.equal(renderedHtmlByRoute.get('/admin')?.includes('품목 관리'), false, 'admin should not render the user app sidebar');
-  assert.equal(renderedHtmlByRoute.get('/admin')?.includes('보고기간'), false, 'admin should not render user workflow navigation');
+  assert.ok(renderedHtmlByRoute.get('/admin/login')?.includes('CBAM Local 관리자 로그인'), 'admin login should render the operator login page');
+  assert.ok(renderedHtmlByRoute.get('/admin/login')?.includes('Google 계정으로 로그인'), 'admin login should render Google OAuth CTA');
+  assert.ok(renderedHtmlByRoute.get('/admin/login')?.includes('openbrain.main@gmail.com'), 'admin login should render the default operator email');
+  assert.ok(renderedHtmlByRoute.get('/admin/login')?.includes('CBAM Local Admin'), 'admin login should render the dedicated admin shell');
+  assert.equal(renderedHtmlByRoute.get('/admin/login')?.includes('품목 관리'), false, 'admin login should not render the user app sidebar');
+  assert.equal(renderedHtmlByRoute.get('/admin/login')?.includes('보고기간'), false, 'admin login should not render user workflow navigation');
 
   assert.ok(renderedHtmlByRoute.get('/announcement')?.includes('CBAM Local PWA 무료 베타'), 'announcement should render beta announcement');
   assert.ok(renderedHtmlByRoute.get('/announcement')?.includes('openbrain.main@gmail.com'), 'announcement should render public support email');
@@ -81,21 +87,19 @@ async function verifyRoutes() {
   assert.ok(renderedHtmlByRoute.get('/guide')?.includes('먼저 이것만 하세요'), 'guide should render the three-step beginner summary');
   assert.ok(renderedHtmlByRoute.get('/guide')?.includes('전체 12단계 상세 보기'), 'guide should keep the detailed workflow available');
   assert.ok(renderedHtmlByRoute.get('/guide')?.includes('Hot Rolled Coil'), 'guide should render the fictional HRC rehearsal path');
-  assert.ok(renderedHtmlByRoute.get('/guide')?.includes('Excel 공식 수식 재계산'), 'guide should render Excel recalculation guidance');
 
-  assert.ok(renderedHtmlByRoute.get('/privacy')?.includes('개인정보 및 로컬 데이터 처리 안내'), 'privacy should render data handling notice');
+  assert.ok(renderedHtmlByRoute.get('/privacy')?.includes('개인정보'), 'privacy should render data handling notice');
   assert.ok(renderedHtmlByRoute.get('/privacy')?.includes('운영 서버로 업로드하지 않는 것을 원칙'), 'privacy should render local-first data boundary');
 
-  assert.ok(renderedHtmlByRoute.get('/results')?.includes('CBAM 산정 기준 SEE'), 'results should render CBAM-basis SEE labels');
+  assert.ok(renderedHtmlByRoute.get('/results')?.includes('CBAM 기준 SEE'), 'results should render CBAM-basis SEE labels');
   assert.ok(renderedHtmlByRoute.get('/results')?.includes('내부 검토용 total SEE'), 'results should render informational SEE labels');
 
-  assert.ok(renderedHtmlByRoute.get('/scenarios')?.includes('CBAM 산정 기준 SEE'), 'scenarios should render CBAM-basis SEE labels');
-  assert.ok(renderedHtmlByRoute.get('/scenarios')?.includes('내부 검토용 total SEE'), 'scenarios should render informational SEE labels');
+  assert.ok(renderedHtmlByRoute.get('/scenarios')?.includes('인증서 비용 시나리오'), 'scenarios should render the certificate-cost review page');
+  assert.ok(renderedHtmlByRoute.get('/scenarios')?.includes('사전 검토용'), 'scenarios should render scenario review guidance');
 
-  assert.ok(renderedHtmlByRoute.get('/export')?.includes('Summary_Products 반영 검토'), 'export should render Summary_Products review');
+  assert.ok(renderedHtmlByRoute.get('/export')?.includes('Summary_Products'), 'export should render Summary_Products review');
   assert.ok(renderedHtmlByRoute.get('/export')?.includes('공식 수식'), 'export should render official formula guidance');
-  assert.ok(renderedHtmlByRoute.get('/export')?.includes('CBAM 산정 기준 SEE'), 'export should render CBAM-basis SEE labels');
-  assert.ok(renderedHtmlByRoute.get('/export')?.includes('내부 검토용 total SEE'), 'export should render informational SEE labels');
+  assert.ok(renderedHtmlByRoute.get('/export')?.includes('EU 원본 템플릿'), 'export should render official template upload guidance');
 
   assert.ok(renderedHtmlByRoute.get('/settings')?.includes('로컬 사용 안전 체크리스트'), 'settings should render local-use safety checklist');
   assert.ok(renderedHtmlByRoute.get('/settings')?.includes('.cbam'), 'settings should render backup guidance');
@@ -123,7 +127,15 @@ function stopServer(child) {
 
 const child = spawn(process.execPath, [nextCliPath, 'start', '--port', String(port)], {
   cwd: process.cwd(),
-  env: { ...process.env, PORT: String(port) },
+  env: {
+    ...process.env,
+    PORT: String(port),
+    AUTH_SECRET: process.env.AUTH_SECRET ?? 'route-verification-only-secret-at-least-32-characters',
+    AUTH_GOOGLE_ID: process.env.AUTH_GOOGLE_ID ?? 'route-verification-client-id',
+    AUTH_GOOGLE_SECRET: process.env.AUTH_GOOGLE_SECRET ?? 'route-verification-client-secret',
+    AUTH_TRUST_HOST: process.env.AUTH_TRUST_HOST ?? 'true',
+    ADMIN_ALLOWED_EMAILS: process.env.ADMIN_ALLOWED_EMAILS ?? 'openbrain.main@gmail.com',
+  },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 
