@@ -15,6 +15,14 @@ import {
     setLocalSetting,
 } from '@/lib/local-db';
 import {
+    createOfflineAllowedRegistration,
+    FREE_LICENSE_SETTING_KEY,
+    FREE_LICENSE_TERMS_VERSION,
+    checkFreeLicenseStatus,
+    registerFreeLicense,
+    type FreeLicenseRegistration,
+} from '@/lib/free-license-client';
+import {
     DEFAULT_SCENARIO_ASSUMPTIONS,
     normalizeScenarioAssumptions,
     SCENARIO_ASSUMPTIONS_SETTING_KEY,
@@ -25,17 +33,18 @@ import { AlertTriangle, Database, Download, ExternalLink, FileUp, KeyRound, Refr
 import Link from 'next/link';
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
-const FREE_LICENSE_SETTING_KEY = 'license:free-registration';
-
-type FreeLicenseStatus = 'UNREGISTERED' | 'FREE_ACTIVE' | 'OFFLINE_ALLOWED';
-
-interface FreeLicenseRegistration {
-    email: string;
-    company_name: string;
-    contact_name: string;
-    license_key: string;
-    status: FreeLicenseStatus;
-    last_checked_at?: string;
+function emptyLicenseRegistration(): FreeLicenseRegistration {
+    return {
+        email: '',
+        company_name: '',
+        contact_name: '',
+        contact_phone: '',
+        country: 'South Korea',
+        industry: '',
+        license_key: '',
+        status: 'UNREGISTERED',
+        accepted_terms_version: FREE_LICENSE_TERMS_VERSION,
+    };
 }
 
 function formatDateTime(value?: string) {
@@ -54,19 +63,43 @@ function createBackupFilename() {
     return `cbam-local-backup-${stamp}.cbam`;
 }
 
-function getLicenseStatus(registration?: FreeLicenseRegistration): { label: string; helper: string; tone: 'success' | 'warning' | 'pending' } {
+function getLicenseStatus(registration?: FreeLicenseRegistration): { label: string; helper: string; tone: 'success' | 'warning' | 'pending' | 'danger' } {
     if (!registration?.email || !registration.company_name || !registration.license_key) {
         return {
             label: '미등록',
-            helper: '무료 라이선스 서버 연동 전 준비 상태입니다.',
+            helper: '이메일, 회사명, 담당자명, 연락처를 입력해 무료 라이선스를 등록하세요.',
             tone: 'warning',
         };
     }
 
+    if (registration.status === 'BLOCKED') {
+        return {
+            label: '차단',
+            helper: '관리자 확인이 필요한 상태입니다. 기존 .cbam 백업은 보관하세요.',
+            tone: 'danger',
+        };
+    }
+
+    if (registration.status === 'RECHECK_REQUIRED') {
+        return {
+            label: '재확인 필요',
+            helper: registration.last_checked_at ? `마지막 확인 ${formatDateTime(registration.last_checked_at)}` : '라이선스 상태 재확인이 필요합니다.',
+            tone: 'warning',
+        };
+    }
+
+    if (registration.status === 'OFFLINE_ALLOWED') {
+        return {
+            label: '오프라인 허용',
+            helper: registration.message ?? '서버 확인에 실패했지만 기존 로컬 사용과 .cbam 백업은 계속 가능합니다.',
+            tone: 'pending',
+        };
+    }
+
     return {
-        label: registration.status === 'OFFLINE_ALLOWED' ? '오프라인 사용 가능' : '무료 등록',
-        helper: registration.last_checked_at ? `마지막 확인 ${formatDateTime(registration.last_checked_at)}` : '로컬 mock 등록 상태입니다.',
-        tone: registration.status === 'OFFLINE_ALLOWED' ? 'pending' : 'success',
+        label: '무료 활성',
+        helper: registration.last_checked_at ? `마지막 확인 ${formatDateTime(registration.last_checked_at)}` : '무료 라이선스가 등록되었습니다.',
+        tone: 'success',
     };
 }
 
@@ -86,16 +119,11 @@ export default function SettingsPage() {
     const [backupPreview, setBackupPreview] = useState<CbamBackupFile | null>(null);
     const [importContent, setImportContent] = useState('');
     const [message, setMessage] = useState('');
+    const [isSubmittingLicense, setIsSubmittingLicense] = useState(false);
     const [lastBackupAt, setLastBackupAt] = useState<string | undefined>();
     const [scenarioAssumptions, setScenarioAssumptions] = useState<ScenarioAssumptions>();
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(() => evaluateUpdateStatus());
-    const [licenseRegistration, setLicenseRegistration] = useState<FreeLicenseRegistration>({
-        email: '',
-        company_name: '',
-        contact_name: '',
-        license_key: '',
-        status: 'UNREGISTERED',
-    });
+    const [licenseRegistration, setLicenseRegistration] = useState<FreeLicenseRegistration>(() => emptyLicenseRegistration());
 
     useEffect(() => {
         setLastBackupAt(window.localStorage.getItem(CBAM_LAST_BACKUP_AT_KEY) ?? undefined);
@@ -105,7 +133,7 @@ export default function SettingsPage() {
         getLocalSetting<FreeLicenseRegistration>(FREE_LICENSE_SETTING_KEY)
             .then((savedLicense) => {
                 if (savedLicense) {
-                    setLicenseRegistration(savedLicense);
+                    setLicenseRegistration({ ...emptyLicenseRegistration(), ...savedLicense });
                 }
             })
             .catch(() => undefined);
@@ -141,6 +169,11 @@ export default function SettingsPage() {
 
     const licenseStatus = useMemo(() => getLicenseStatus(licenseRegistration), [licenseRegistration]);
 
+    async function saveLicenseRegistration(nextRegistration: FreeLicenseRegistration) {
+        await setLocalSetting(FREE_LICENSE_SETTING_KEY, nextRegistration);
+        setLicenseRegistration(nextRegistration);
+    }
+
     async function handleExport() {
         const backup = await exportLocalBackup();
         const content = JSON.stringify(backup, null, 2);
@@ -162,17 +195,54 @@ export default function SettingsPage() {
 
     async function handleLicenseSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        const nextRegistration: FreeLicenseRegistration = {
-            ...licenseRegistration,
-            status: licenseRegistration.email && licenseRegistration.company_name && licenseRegistration.license_key
-                ? 'FREE_ACTIVE'
-                : 'UNREGISTERED',
-            last_checked_at: new Date().toISOString(),
+        setIsSubmittingLicense(true);
+        const input = {
+            email: licenseRegistration.email,
+            company_name: licenseRegistration.company_name,
+            contact_name: licenseRegistration.contact_name,
+            contact_phone: licenseRegistration.contact_phone,
+            country: licenseRegistration.country,
+            industry: licenseRegistration.industry,
         };
 
-        await setLocalSetting(FREE_LICENSE_SETTING_KEY, nextRegistration);
-        setLicenseRegistration(nextRegistration);
-        setMessage('무료 라이선스 정보를 로컬 설정에 저장했습니다. 현재 단계에서는 서버 검증을 수행하지 않습니다.');
+        if (!input.email || !input.company_name || !input.contact_name || !input.contact_phone) {
+            setMessage('이메일, 회사명, 담당자명, 연락처를 모두 입력하세요.');
+            setIsSubmittingLicense(false);
+            return;
+        }
+
+        try {
+            const registered = await registerFreeLicense(input);
+            await saveLicenseRegistration(registered);
+            setMessage(registered.message ?? '무료 라이선스를 등록했습니다. 관리자 콘솔의 사용자/라이선스 목록에서 확인할 수 있습니다.');
+        } catch (error) {
+            const offlineRegistration = createOfflineAllowedRegistration(input, licenseRegistration);
+            await saveLicenseRegistration(offlineRegistration);
+            setMessage(
+                `${error instanceof Error ? error.message : '무료 라이선스 등록에 실패했습니다.'} 기존 로컬 계산, Export 준비, .cbam 백업 기능은 계속 사용할 수 있습니다.`
+            );
+        } finally {
+            setIsSubmittingLicense(false);
+        }
+    }
+
+    async function handleLicenseStatusCheck() {
+        setIsSubmittingLicense(true);
+        try {
+            const checked = await checkFreeLicenseStatus(licenseRegistration);
+            await saveLicenseRegistration(checked);
+            setMessage('무료 라이선스 상태를 확인했습니다.');
+        } catch (error) {
+            const nextRegistration: FreeLicenseRegistration = {
+                ...licenseRegistration,
+                status: licenseRegistration.license_key ? 'OFFLINE_ALLOWED' : 'UNREGISTERED',
+                message: error instanceof Error ? error.message : '라이선스 상태 확인에 실패했습니다.',
+            };
+            await saveLicenseRegistration(nextRegistration);
+            setMessage(`${nextRegistration.message} 기존 로컬 계산, Export 준비, .cbam 백업 기능은 계속 사용할 수 있습니다.`);
+        } finally {
+            setIsSubmittingLicense(false);
+        }
     }
 
     async function handleUpdateCheck() {
@@ -182,7 +252,7 @@ export default function SettingsPage() {
         setMessage(
             nextStatus.shouldShow
                 ? `업데이트 상태를 확인했습니다. 현재 v${nextStatus.currentVersion}, 최신 v${nextStatus.latestVersion}입니다.`
-                : `현재 v${nextStatus.currentVersion}은 최신 무료 PWA 버전입니다.`
+                : `현재 v${nextStatus.currentVersion}은 계속 사용할 수 있는 버전입니다.`
         );
     }
 
@@ -226,7 +296,7 @@ export default function SettingsPage() {
         const restoredLicenseSetting = parsed.data.settings.find((item) => item.key === FREE_LICENSE_SETTING_KEY);
         setScenarioAssumptions(normalizeScenarioAssumptions(restoredScenarioSetting?.value as Partial<ScenarioAssumptions> | undefined));
         if (restoredLicenseSetting?.value) {
-            setLicenseRegistration(restoredLicenseSetting.value as FreeLicenseRegistration);
+            setLicenseRegistration({ ...emptyLicenseRegistration(), ...restoredLicenseSetting.value as FreeLicenseRegistration });
         }
         setMessage('백업을 복원했습니다. 시나리오 가정값과 무료 라이선스 로컬 설정도 백업 기준으로 갱신했습니다.');
         setBackupPreview(null);
@@ -245,13 +315,7 @@ export default function SettingsPage() {
         await clearLocalData();
         await seedLocalData();
         setScenarioAssumptions(DEFAULT_SCENARIO_ASSUMPTIONS);
-        setLicenseRegistration({
-            email: '',
-            company_name: '',
-            contact_name: '',
-            license_key: '',
-            status: 'UNREGISTERED',
-        });
+        setLicenseRegistration(emptyLicenseRegistration());
         setBackupPreview(null);
         setImportContent('');
         setMessage('로컬 데이터를 삭제하고 시작용 예시 데이터를 다시 생성했습니다. 시나리오 가정값과 라이선스 정보는 기본 상태로 돌아갔습니다.');
@@ -262,7 +326,7 @@ export default function SettingsPage() {
             <PageHeader
                 eyebrow="로컬 데이터 보호"
                 title="설정 및 데이터 안전"
-                description="CBAM Local은 기업 데이터를 이 브라우저의 로컬 DB에 저장합니다. 장기 보관, PC 교체, 검증 대응을 위해 .cbam 백업을 사용하세요."
+                description="CBAM Local은 기업 데이터를 브라우저 로컬 DB에 저장합니다. 장기 보관, PC 교체, 검증 대응을 위해 .cbam 백업을 사용하세요."
             />
 
             {message && (
@@ -272,8 +336,8 @@ export default function SettingsPage() {
             )}
 
             <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <StatCard label="서버 전송" value="없음" helper="PWA 버전은 로컬 처리" icon={ShieldCheck} tone="success" />
-                <StatCard label="로컬 저장" value="IndexedDB" helper="브라우저 데이터 삭제에 주의" icon={Database} tone="info" />
+                <StatCard label="서버 전송" value="없음" helper="CBAM 입력자료는 로컬 처리" icon={ShieldCheck} tone="success" />
+                <StatCard label="로컬 저장" value="IndexedDB" helper="브라우저 데이터 삭제 주의" icon={Database} tone="info" />
                 <StatCard label="마지막 백업" value={formatDateTime(lastBackupAt)} helper="중요 변경 후 백업 권장" icon={AlertTriangle} tone="warning" />
             </section>
 
@@ -304,56 +368,44 @@ export default function SettingsPage() {
                 description="무료 PWA를 실제 업무에 쓰기 전에 데이터 보관 위치와 전달 전 확인 책임을 먼저 점검하세요."
             >
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="flex gap-3">
-                            <ShieldCheck className="mt-0.5 h-5 w-5 flex-none text-emerald-700" />
-                            <div>
-                                <h3 className="text-sm font-semibold text-slate-950">서버 전송 없음</h3>
-                                <p className="mt-1 text-sm leading-6 text-slate-600">
-                                    CBAM 입력자료, EU 템플릿, `.cbam` 백업 파일은 무료 PWA의 라이선스/업데이트 확인 과정에서 서버로 전송하지 않습니다.
-                                </p>
+                    {[
+                        {
+                            icon: ShieldCheck,
+                            title: '서버 전송 없음',
+                            body: 'CBAM 입력자료, EU 템플릿, .cbam 백업 파일은 무료 PWA의 라이선스/업데이트 확인 과정에서 서버로 전송하지 않습니다.',
+                        },
+                        {
+                            icon: Database,
+                            title: '브라우저 로컬 저장',
+                            body: '데이터는 IndexedDB에 저장됩니다. 브라우저 데이터 삭제, PC 교체, 보안 프로그램 정리 전에 반드시 백업하세요.',
+                        },
+                        {
+                            icon: Download,
+                            title: '중요 변경 후 .cbam 백업',
+                            body: '사업장, 품목, 생산공정, 전구물질, 시나리오 가정값을 수정한 뒤에는 같은 시점의 .cbam 백업을 보관하세요.',
+                        },
+                        {
+                            icon: AlertTriangle,
+                            title: '전달 전 공식 확인',
+                            body: '최신 EU 원본 템플릿을 사용하고, Export 후 Microsoft Excel에서 공식 수식 재계산 결과를 확인하세요.',
+                        },
+                    ].map((item) => (
+                        <div key={item.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex gap-3">
+                                <item.icon className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
+                                <div>
+                                    <h3 className="text-sm font-semibold text-slate-950">{item.title}</h3>
+                                    <p className="mt-1 text-sm leading-6 text-slate-600">{item.body}</p>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="flex gap-3">
-                            <Database className="mt-0.5 h-5 w-5 flex-none text-blue-700" />
-                            <div>
-                                <h3 className="text-sm font-semibold text-slate-950">브라우저 로컬 저장</h3>
-                                <p className="mt-1 text-sm leading-6 text-slate-600">
-                                    데이터는 IndexedDB에 저장됩니다. 브라우저 데이터 삭제, PC 교체, 보안 프로그램 정리 전에 반드시 백업하세요.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="flex gap-3">
-                            <Download className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
-                            <div>
-                                <h3 className="text-sm font-semibold text-slate-950">중요 변경 후 .cbam 백업</h3>
-                                <p className="mt-1 text-sm leading-6 text-slate-600">
-                                    사업장, 품목, 생산공정, 전구물질, 시나리오 가정값을 수정한 뒤에는 같은 시점의 `.cbam` 백업을 보관하세요.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="flex gap-3">
-                            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-700" />
-                            <div>
-                                <h3 className="text-sm font-semibold text-slate-950">전달 전 공식 확인</h3>
-                                <p className="mt-1 text-sm leading-6 text-slate-600">
-                                    최신 EU 원본 템플릿을 사용하고, Export 후 Microsoft Excel에서 공식 수식 재계산 결과를 확인하세요.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                    ))}
                 </div>
             </SectionCard>
 
             <SectionCard
                 title="무료 라이선스"
-                description="무료 라이선스는 배포 관리, 공지, 업데이트 안내를 위한 준비 기능입니다. CBAM 산정 데이터, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다."
+                description="무료 라이선스는 배포 관리, 공지, 업데이트 안내를 위한 기능입니다. 생산량, 배출량, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다."
                 actions={<StatusBadge tone={licenseStatus.tone}>{licenseStatus.label}</StatusBadge>}
             >
                 <form onSubmit={handleLicenseSubmit} className="space-y-4">
@@ -377,61 +429,99 @@ export default function SettingsPage() {
                         <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
                             <p className="text-xs font-semibold text-teal-800">데이터 경계</p>
                             <p className="mt-2 text-sm leading-6 text-teal-900">
-                                라이선스와 업데이트 확인은 배포 관리 정보만 다룹니다. CBAM 입력자료와 백업 파일은 로컬에 남습니다.
+                                라이선스 등록에는 이메일, 회사명, 담당자명, 연락처, 국가, 업종, 앱 버전만 사용됩니다. CBAM 입력자료와 백업 파일은 로컬에 남습니다.
                             </p>
                         </div>
                     </div>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <label className="space-y-1 text-sm font-semibold text-slate-700">
-                            <span>이메일</span>
+                            <span>이메일 *</span>
                             <input
                                 value={licenseRegistration.email}
                                 onChange={(event) => setLicenseRegistration((current) => ({ ...current, email: event.target.value }))}
                                 type="email"
+                                required
                                 className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
                                 placeholder="name@company.com"
                             />
                         </label>
                         <label className="space-y-1 text-sm font-semibold text-slate-700">
-                            <span>회사명</span>
+                            <span>회사명 *</span>
                             <input
                                 value={licenseRegistration.company_name}
                                 onChange={(event) => setLicenseRegistration((current) => ({ ...current, company_name: event.target.value }))}
+                                required
                                 className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
                                 placeholder="회사명"
                             />
                         </label>
                         <label className="space-y-1 text-sm font-semibold text-slate-700">
-                            <span>담당자명</span>
+                            <span>담당자명 *</span>
                             <input
                                 value={licenseRegistration.contact_name}
                                 onChange={(event) => setLicenseRegistration((current) => ({ ...current, contact_name: event.target.value }))}
+                                required
                                 className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
                                 placeholder="담당자명"
                             />
                         </label>
                         <label className="space-y-1 text-sm font-semibold text-slate-700">
-                            <span>라이선스 키</span>
+                            <span>연락처 *</span>
                             <input
-                                value={licenseRegistration.license_key}
-                                onChange={(event) => setLicenseRegistration((current) => ({ ...current, license_key: event.target.value }))}
+                                value={licenseRegistration.contact_phone}
+                                onChange={(event) => setLicenseRegistration((current) => ({ ...current, contact_phone: event.target.value }))}
+                                required
                                 className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-                                placeholder="FREE-..."
+                                placeholder="010-0000-0000"
+                            />
+                        </label>
+                        <label className="space-y-1 text-sm font-semibold text-slate-700">
+                            <span>국가</span>
+                            <input
+                                value={licenseRegistration.country}
+                                onChange={(event) => setLicenseRegistration((current) => ({ ...current, country: event.target.value }))}
+                                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                                placeholder="South Korea"
+                            />
+                        </label>
+                        <label className="space-y-1 text-sm font-semibold text-slate-700">
+                            <span>업종</span>
+                            <input
+                                value={licenseRegistration.industry}
+                                onChange={(event) => setLicenseRegistration((current) => ({ ...current, industry: event.target.value }))}
+                                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                                placeholder="Iron and steel"
                             />
                         </label>
                     </div>
+                    {licenseRegistration.license_key && (
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+                            <p className="font-semibold text-slate-950">라이선스 키</p>
+                            <p className="mt-1 break-all">{licenseRegistration.license_key}</p>
+                            {licenseRegistration.next_check_after && (
+                                <p className="mt-2 text-slate-500">다음 확인 권장 시점: {formatDateTime(licenseRegistration.next_check_after)}</p>
+                            )}
+                        </div>
+                    )}
                     <div className="flex flex-col gap-3 rounded-2xl border border-teal-100 bg-teal-50 p-4 text-sm leading-6 text-teal-900 md:flex-row md:items-center md:justify-between">
                         <div className="flex gap-3">
                             <KeyRound className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
                             <p>
-                                {licenseStatus.helper} 실제 서버 검증, 사용자 목록, 공지/강제 업데이트 관리는 관리자 콘솔 단계에서 구현합니다.
+                                등록하면 관리자 콘솔의 사용자/라이선스 목록에 표시됩니다. 서버 연결에 실패해도 기존 로컬 계산과 .cbam 백업은 계속 사용할 수 있습니다.
                             </p>
                         </div>
-                        <Button type="submit" className="md:flex-none">로컬 저장</Button>
+                        <div className="flex flex-wrap gap-2 md:flex-none">
+                            <Button type="button" variant="secondary" onClick={() => void handleLicenseStatusCheck()} disabled={isSubmittingLicense || !licenseRegistration.license_key}>
+                                상태 확인
+                            </Button>
+                            <Button type="submit" disabled={isSubmittingLicense}>
+                                {isSubmittingLicense ? '처리 중' : '무료 라이선스 등록'}
+                            </Button>
+                        </div>
                     </div>
                     <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700 md:flex-row md:items-center md:justify-between">
                         <p>
-                            관리자 콘솔이 연결되면 이 영역에서 공지, 선택 업데이트, 강제 업데이트 상태를 확인하게 됩니다. 현재는 정적 update manifest만 확인합니다.
+                            업데이트 확인은 배포 정책과 공지만 확인합니다. CBAM 입력자료, EU 템플릿, .cbam 백업 파일은 전송하지 않습니다.
                         </p>
                         <Button type="button" variant="secondary" onClick={() => void handleUpdateCheck()} className="md:flex-none">
                             <RefreshCw className="mr-2 h-4 w-4" />
@@ -525,7 +615,7 @@ export default function SettingsPage() {
                         <div className="mt-4">
                             <ScenarioAssumptionSummary
                                 assumptions={backupScenarioAssumptions}
-                                description="이 백업 파일에 포함된 시나리오 가정값입니다. 복원하면 현재 로컬 설정이 이 값으로 교체됩니다."
+                                description="이 백업 파일에 포함된 시나리오 가정값입니다. 복원하면 현재 로컬 설정의 값으로 교체됩니다."
                                 mode="panel"
                             />
                         </div>

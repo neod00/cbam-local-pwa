@@ -9,6 +9,7 @@ const requiredFiles = [
   'src/app/api/license/status/route.ts',
   'src/app/api/update-manifest/route.ts',
   'src/app/api/announcements/route.ts',
+  'src/lib/free-license-client.ts',
 ];
 
 for (const file of requiredFiles) {
@@ -79,6 +80,23 @@ for (const required of [
 const announcementsApi = readFileSync('src/app/api/announcements/route.ts', 'utf8');
 for (const required of ['title', 'body', 'severity', 'starts_at', 'ends_at']) {
   assert.ok(announcementsApi.includes(required), `announcements API should include ${required}`);
+}
+
+const freeLicenseClient = readFileSync('src/lib/free-license-client.ts', 'utf8');
+for (const required of [
+  'email',
+  'company_name',
+  'contact_name',
+  'contact_phone',
+  'country',
+  'industry',
+  'accepted_terms_version',
+  'app_version',
+  '/api/license/register',
+  '/api/license/status',
+  'OFFLINE_ALLOWED',
+]) {
+  assert.ok(freeLicenseClient.includes(required), `free license client should include ${required}`);
 }
 
 const apiSource = requiredFiles

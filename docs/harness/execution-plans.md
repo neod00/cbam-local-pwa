@@ -174,6 +174,7 @@ Completed:
 - Added Google OAuth-based admin authentication using Auth.js, protected `/admin` and `/api/admin/*`, kept `/admin/login` as the only public admin entry point, and updated verification so protected admin routes are not pre-cached by the PWA service worker.
 - Added the Neon-ready admin DB schema and first public license/update/announcement API routes, keeping request fields allowlisted and returning safe fallback values when `DATABASE_URL` is not configured.
 - Connected the protected admin console to a Neon-backed data loader with sample fallback, so license users, update policy, announcements, terms, and stats will switch to live rows once `DATABASE_URL` and the admin schema are configured.
+- Connected the Settings free-license form to the live license API with local fallback behavior, preserving the rule that license/update checks only send deployment-management fields and never CBAM calculation data, EU templates, or `.cbam` backups.
 
 Pending product decisions:
 
@@ -184,7 +185,7 @@ Next:
 - Review the deployed beta rehearsal artifacts in `artifacts/beta-browser-rehearsal/20260601T131659` if a release reviewer needs screenshots or downloaded files.
 - Review and finalize `docs/free-pwa-terms-draft.md` and `docs/free-pwa-release-announcement-draft.md` with legal/operational wording before public distribution.
 - Make the limited beta Go/No-Go decision after legal/operator wording review.
-- Configure Vercel `DATABASE_URL` from the Neon project and run `db/admin/001_init.sql` in Neon SQL Editor, then add admin CRUD actions for license status, update manifests, announcements, and terms.
+- Add admin CRUD actions for license status, update manifests, announcements, and terms now that Google OAuth and Neon-backed reads are in place.
 
 ## Decision Log
 
