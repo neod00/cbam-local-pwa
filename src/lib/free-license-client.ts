@@ -30,6 +30,11 @@ export interface RegisterFreeLicenseInput {
     industry: string;
 }
 
+export interface VerifyLicenseCodeInput {
+    email: string;
+    code: string;
+}
+
 export const LICENSE_GATE_OPEN_ROUTES = [
     '/guide',
     '/license',
@@ -148,6 +153,62 @@ export async function checkFreeLicenseStatus(current: FreeLicenseRegistration): 
         last_checked_at: new Date().toISOString(),
         next_check_after: typeof data.next_check_after === 'string' ? data.next_check_after : current.next_check_after,
         message: '무료 라이선스 상태를 확인했습니다.',
+    };
+}
+
+export async function requestFreeLicenseRecoveryCode(email: string): Promise<string> {
+    const endpoint = `${getLicenseApiBaseUrl()}/api/license/request-code`;
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+            email: email.trim(),
+        }),
+    });
+    const data = await parseJsonResponse(response);
+
+    if (!response.ok) {
+        throw new Error(typeof data.message === 'string' ? data.message : '인증코드 발송에 실패했습니다.');
+    }
+
+    return typeof data.message === 'string' ? data.message : '인증코드를 이메일로 보냈습니다.';
+}
+
+export async function verifyFreeLicenseRecoveryCode(input: VerifyLicenseCodeInput): Promise<FreeLicenseRegistration> {
+    const endpoint = `${getLicenseApiBaseUrl()}/api/license/verify-code`;
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+            email: input.email.trim(),
+            code: input.code.trim(),
+            app_version: CBAM_LOCAL_APP_VERSION,
+        }),
+    });
+    const data = await parseJsonResponse(response);
+
+    if (!response.ok) {
+        throw new Error(typeof data.message === 'string' ? data.message : '인증코드 확인에 실패했습니다.');
+    }
+
+    return {
+        email: String(data.email ?? input.email).trim().toLowerCase(),
+        company_name: String(data.company_name ?? ''),
+        contact_name: String(data.contact_name ?? ''),
+        contact_phone: String(data.contact_phone ?? ''),
+        country: String(data.country ?? 'South Korea'),
+        industry: String(data.industry ?? ''),
+        license_key: String(data.license_key ?? ''),
+        status: (data.license_status as FreeLicenseStatus) ?? 'UNREGISTERED',
+        accepted_terms_version: String(data.accepted_terms_version ?? FREE_LICENSE_TERMS_VERSION),
+        expires_at: typeof data.expires_at === 'string' ? data.expires_at : null,
+        last_checked_at: new Date().toISOString(),
+        next_check_after: typeof data.next_check_after === 'string' ? data.next_check_after : undefined,
+        message: typeof data.message === 'string' ? data.message : undefined,
     };
 }
 

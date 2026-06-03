@@ -3,10 +3,13 @@ import { existsSync, readFileSync } from 'node:fs';
 
 const requiredFiles = [
   'db/admin/001_init.sql',
+  'db/admin/003_license_email_verifications.sql',
   'src/lib/admin-db.ts',
   'src/lib/license-api.ts',
   'src/app/api/license/register/route.ts',
+  'src/app/api/license/request-code/route.ts',
   'src/app/api/license/status/route.ts',
+  'src/app/api/license/verify-code/route.ts',
   'src/app/api/update-manifest/route.ts',
   'src/app/api/announcements/route.ts',
   'src/lib/free-license-client.ts',
@@ -19,7 +22,10 @@ for (const file of requiredFiles) {
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 assert.ok(packageJson.dependencies['@neondatabase/serverless'], 'Neon serverless driver should be installed');
 
-const schema = readFileSync('db/admin/001_init.sql', 'utf8');
+const schema = [
+  readFileSync('db/admin/001_init.sql', 'utf8'),
+  readFileSync('db/admin/003_license_email_verifications.sql', 'utf8'),
+].join('\n');
 for (const required of [
   'license_users',
   'update_manifests',
@@ -28,6 +34,7 @@ for (const required of [
   'contact_phone',
   'license_key',
   'expires_at',
+  'license_email_verifications',
   'UNREGISTERED',
   'FREE_ACTIVE',
   'RECHECK_REQUIRED',
@@ -70,6 +77,31 @@ for (const required of [
   assert.ok(statusApi.includes(required), `license status API should include ${required}`);
 }
 
+const requestCodeApi = readFileSync('src/app/api/license/request-code/route.ts', 'utf8');
+for (const required of [
+  'email',
+  'license_email_verifications',
+  'hashVerificationCode',
+  'sendLicenseVerificationEmail',
+  '등록된 이메일이면 인증코드를 발송합니다',
+]) {
+  assert.ok(requestCodeApi.includes(required), `license request-code API should include ${required}`);
+}
+
+const verifyCodeApi = readFileSync('src/app/api/license/verify-code/route.ts', 'utf8');
+for (const required of [
+  'email',
+  'code',
+  'app_version',
+  'license_email_verifications',
+  'attempt_count',
+  'consumed_at',
+  'license_key',
+  'expires_at',
+]) {
+  assert.ok(verifyCodeApi.includes(required), `license verify-code API should include ${required}`);
+}
+
 const updateApi = readFileSync('src/app/api/update-manifest/route.ts', 'utf8');
 for (const required of [
   'latest_version',
@@ -101,6 +133,8 @@ for (const required of [
   'OFFLINE_ALLOWED',
   'isLicenseExpired',
   'expires_at',
+  'requestFreeLicenseRecoveryCode',
+  'verifyFreeLicenseRecoveryCode',
 ]) {
   assert.ok(freeLicenseClient.includes(required), `free license client should include ${required}`);
 }

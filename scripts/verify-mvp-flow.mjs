@@ -97,9 +97,14 @@ includesAll(files.license, [
   '회사명 *',
   '담당자명 *',
   '연락처 *',
+  '기존 등록자 복구',
+  '인증코드 받기',
+  '인증하고 라이선스 불러오기',
   '생산량, 배출량, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다',
   '.cbam 백업/복원',
   'registerFreeLicense',
+  'requestFreeLicenseRecoveryCode',
+  'verifyFreeLicenseRecoveryCode',
   'setLocalSetting',
 ], 'license registration page');
 

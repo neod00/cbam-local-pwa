@@ -10,6 +10,8 @@ export type LicenseStatus = typeof LICENSE_STATUS[keyof typeof LICENSE_STATUS];
 
 export const DEFAULT_TERMS_VERSION = '2026.06-beta';
 export const DEFAULT_NEXT_CHECK_DAYS = 7;
+export const LICENSE_CODE_TTL_MINUTES = 10;
+export const LICENSE_CODE_MAX_ATTEMPTS = 5;
 
 export function jsonResponse(body: unknown, init?: ResponseInit) {
     return Response.json(body, {
@@ -56,6 +58,61 @@ export function nextCheckAfter(days = DEFAULT_NEXT_CHECK_DAYS) {
 
 export function makeLicenseKey() {
     return `free_${crypto.randomUUID().replaceAll('-', '')}`;
+}
+
+export function makeVerificationCode() {
+    return String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, '0');
+}
+
+export async function hashVerificationCode(email: string, code: string) {
+    const secret = process.env.LICENSE_CODE_SECRET ?? process.env.AUTH_SECRET ?? 'cbam-local-dev-secret';
+    const payload = `${normalizeEmail(email)}:${code.trim()}:${secret}`;
+    const bytes = new TextEncoder().encode(payload);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+
+    return Array.from(new Uint8Array(digest))
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+export function verificationCodeExpiresAt(minutes = LICENSE_CODE_TTL_MINUTES) {
+    const date = new Date();
+    date.setMinutes(date.getMinutes() + minutes);
+    return date.toISOString();
+}
+
+export async function sendLicenseVerificationEmail(email: string, code: string) {
+    const apiKey = process.env.RESEND_API_KEY;
+    const from = process.env.RESEND_FROM_EMAIL ?? 'CBAM Local <onboarding@resend.dev>';
+
+    if (!apiKey) {
+        throw new Error('RESEND_API_KEY is not configured');
+    }
+
+    const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+            authorization: `Bearer ${apiKey}`,
+            'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+            from,
+            to: email,
+            subject: '[CBAM Local] 무료 라이선스 인증코드',
+            text: [
+                'CBAM Local 무료 라이선스 복구 인증코드입니다.',
+                '',
+                `인증코드: ${code}`,
+                '',
+                `이 코드는 ${LICENSE_CODE_TTL_MINUTES}분 동안만 사용할 수 있습니다.`,
+                '생산량, 배출량, EU 템플릿, .cbam 백업 파일은 서버로 전송되지 않습니다.',
+            ].join('\n'),
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Resend email request failed: ${response.status}`);
+    }
 }
 
 export function defaultUpdateManifest() {

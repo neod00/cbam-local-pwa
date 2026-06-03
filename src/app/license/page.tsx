@@ -9,7 +9,9 @@ import {
     FREE_LICENSE_TERMS_VERSION,
     isLicenseExpired,
     registerFreeLicense,
+    requestFreeLicenseRecoveryCode,
     type FreeLicenseRegistration,
+    verifyFreeLicenseRecoveryCode,
 } from '@/lib/free-license-client';
 import { getLocalSetting, setLocalSetting } from '@/lib/local-db';
 import { ArrowRight, FileArchive, KeyRound, ShieldCheck } from 'lucide-react';
@@ -63,6 +65,9 @@ export default function LicensePage() {
     const [registration, setRegistration] = useState<FreeLicenseRegistration>(() => emptyLicenseRegistration());
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [recoveryEmail, setRecoveryEmail] = useState('');
+    const [recoveryCode, setRecoveryCode] = useState('');
+    const [isRecovering, setIsRecovering] = useState(false);
     const status = useMemo(() => getStatusLabel(registration), [registration]);
     const canEnterApp = canUseCoreApp(registration.status, registration.expires_at) && Boolean(registration.license_key);
 
@@ -123,6 +128,51 @@ export default function LicensePage() {
             setMessage(`${error instanceof Error ? error.message : '라이선스 상태 확인에 실패했습니다.'} 기존 .cbam 백업/복원은 계속 사용할 수 있습니다.`);
         } finally {
             setIsSubmitting(false);
+        }
+    }
+
+    async function handleRequestRecoveryCode(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        setIsRecovering(true);
+
+        if (!recoveryEmail.trim()) {
+            setMessage('복구할 이메일을 입력하세요.');
+            setIsRecovering(false);
+            return;
+        }
+
+        try {
+            const responseMessage = await requestFreeLicenseRecoveryCode(recoveryEmail);
+            setMessage(responseMessage);
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : '인증코드 발송에 실패했습니다.');
+        } finally {
+            setIsRecovering(false);
+        }
+    }
+
+    async function handleVerifyRecoveryCode(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        setIsRecovering(true);
+
+        if (!recoveryEmail.trim() || !recoveryCode.trim()) {
+            setMessage('이메일과 6자리 인증코드를 입력하세요.');
+            setIsRecovering(false);
+            return;
+        }
+
+        try {
+            const recoveredRegistration = await verifyFreeLicenseRecoveryCode({
+                email: recoveryEmail,
+                code: recoveryCode,
+            });
+            await saveRegistration(recoveredRegistration);
+            setMessage(recoveredRegistration.message ?? '무료 라이선스를 복구했습니다.');
+            setRecoveryCode('');
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : '인증코드 확인에 실패했습니다.');
+        } finally {
+            setIsRecovering(false);
         }
     }
 
@@ -240,6 +290,44 @@ export default function LicensePage() {
                 </SectionCard>
 
                 <div className="space-y-4">
+                    <SectionCard title="기존 등록자 복구" description="다른 PC, 휴대폰, 브라우저 재설치 후에는 같은 이메일로 인증코드를 받아 승인 상태를 다시 불러올 수 있습니다.">
+                        <div className="space-y-3">
+                            <form onSubmit={handleRequestRecoveryCode} className="space-y-3">
+                                <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                    <span>등록했던 이메일</span>
+                                    <input
+                                        type="email"
+                                        value={recoveryEmail}
+                                        onChange={(event) => setRecoveryEmail(event.target.value)}
+                                        className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                                        placeholder="name@company.com"
+                                    />
+                                </label>
+                                <Button type="submit" variant="secondary" className="w-full" disabled={isRecovering}>
+                                    인증코드 받기
+                                </Button>
+                            </form>
+
+                            <form onSubmit={handleVerifyRecoveryCode} className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                    <span>6자리 인증코드</span>
+                                    <input
+                                        inputMode="numeric"
+                                        pattern="[0-9]{6}"
+                                        maxLength={6}
+                                        value={recoveryCode}
+                                        onChange={(event) => setRecoveryCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                                        className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm tracking-[0.3em] outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                                        placeholder="000000"
+                                    />
+                                </label>
+                                <Button type="submit" className="w-full" disabled={isRecovering}>
+                                    인증하고 라이선스 불러오기
+                                </Button>
+                            </form>
+                        </div>
+                    </SectionCard>
+
                     <SectionCard title="등록 전에 알아둘 점" description="무료 사용 등록은 SaaS 데이터 수집이 아니라 배포 관리 장치입니다.">
                         <div className="space-y-3 text-sm leading-6 text-slate-700">
                             <div className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4">

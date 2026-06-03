@@ -184,6 +184,7 @@ Completed:
 - Added admin manual user/license creation for trusted users using only distribution-management fields: email, company, contact, phone, country, industry, license status, and terms version.
 - Changed free-use registration to an approval workflow: self-registration creates an approval-pending license, admins can approve/block/recheck users, and optional license expiry dates are tracked in the admin DB.
 - Removed automatic sample-data seeding from user-facing PWA routes so newly registered users start from a clean local workspace unless they restore a `.cbam` backup or enter data themselves.
+- Added email-code based license recovery endpoints and `/license` UI so users can recover an approved free license on another browser/device without a password, using only email ownership verification.
 
 Pending product decisions:
 
@@ -195,6 +196,7 @@ Next:
 - Review and finalize `docs/free-pwa-terms-draft.md` and `docs/free-pwa-release-announcement-draft.md` with legal/operational wording before public distribution.
 - Make the limited beta Go/No-Go decision after legal/operator wording review.
 - Run post-deploy smoke checks for the live `/license` registration gate and Neon admin forms after pushing these updates.
+- Configure `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in Vercel before relying on email-code license recovery in production.
 
 ## Decision Log
 
@@ -204,3 +206,4 @@ Next:
 - 2026-05-31: MVP free PWA hosting defaults to Vercel with a Private GitHub repository; Cloudflare Pages, Netlify, self-hosted static hosting, and Docker/on-premise remain fallback or paid-edition channels.
 - 2026-06-01: Pushed the latest local MVP commits to GitHub `main` and verified the Vercel deployment at `https://cbam-local-pwa.vercel.app/` with the beta browser rehearsal. Route checks, including `/announcement`, `/privacy`, and `/terms`, local IndexedDB seed data, EU template Export download, `.cbam` backup download, and external request review all passed.
 - 2026-06-03: Free PWA use should follow a simple registration-and-approval model. Registration collects only distribution-management data, app usage starts after admin approval, optional expiry can be set, and CBAM local work data must not be sent to the admin/license server.
+- 2026-06-03: License recovery should use short-lived email verification codes instead of passwords for the free PWA. This avoids password storage and keeps the server scope limited to distribution-management metadata.
