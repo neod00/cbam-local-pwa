@@ -172,6 +172,7 @@ Completed:
 - Added a first-pass `/admin` operator console mock for free-license users, update policies, announcements, terms versions, and safety checks, plus an admin-boundary verification guard that prevents admin source from importing CBAM local calculation/export stores.
 - Split `/admin` away from the user PWA shell with a dedicated `AdminShell`, horizontal admin navigation, mobile-friendly license cards, and route checks that ensure user workflow menus do not appear in the operator console.
 - Added Google OAuth-based admin authentication using Auth.js, protected `/admin` and `/api/admin/*`, kept `/admin/login` as the only public admin entry point, and updated verification so protected admin routes are not pre-cached by the PWA service worker.
+- Added the Neon-ready admin DB schema and first public license/update/announcement API routes, keeping request fields allowlisted and returning safe fallback values when `DATABASE_URL` is not configured.
 
 Pending product decisions:
 
@@ -182,7 +183,7 @@ Next:
 - Review the deployed beta rehearsal artifacts in `artifacts/beta-browser-rehearsal/20260601T131659` if a release reviewer needs screenshots or downloaded files.
 - Review and finalize `docs/free-pwa-terms-draft.md` and `docs/free-pwa-release-announcement-draft.md` with legal/operational wording before public distribution.
 - Make the limited beta Go/No-Go decision after legal/operator wording review.
-- Connect the protected admin console to Neon Postgres license/update/announcement tables after Vercel OAuth environment variables are configured.
+- Configure Vercel `DATABASE_URL` from the Neon project, run `db/admin/001_init.sql` in Neon SQL Editor, then connect the protected admin console to live license/update/announcement rows.
 
 ## Decision Log
 

@@ -10,7 +10,7 @@
     "release:approval": "node scripts/verify-release-approval.mjs",
     "rehearse:beta-browser": "node scripts/rehearse-beta-browser.mjs",
     "release:status": "node scripts/release-status.mjs",
-    "verify": "npm run verify:source-streams && npm run verify:calculation && npm run verify:scenarios && npm run verify:dashboard && npm run verify:export && npm run verify:backup && npm run verify:pwa && npm run verify:mvp-flow && npm run verify:design-system && npm run verify:update-policy && npm run verify:admin-boundary && npm run verify:deployment && npm run lint && npm run build && npm run verify:routes",
+    "verify": "npm run verify:source-streams && npm run verify:calculation && npm run verify:scenarios && npm run verify:dashboard && npm run verify:export && npm run verify:backup && npm run verify:pwa && npm run verify:mvp-flow && npm run verify:design-system && npm run verify:update-policy && npm run verify:admin-boundary && npm run verify:license-api && npm run verify:deployment && npm run lint && npm run build && npm run verify:routes",
     "verify:backup": "node scripts/verify-local-backup.mjs",
     "verify:admin-boundary": "node scripts/verify-admin-boundary.mjs",
     "verify:calculation": "node scripts/verify-local-calculation.mjs",
@@ -21,6 +21,7 @@
     "verify:export": "node scripts/verify-eu-export.mjs",
     "verify:local-eu-template": "node scripts/verify-local-eu-template.mjs",
     "verify:local-references": "node scripts/verify-local-reference-workbooks.mjs",
+    "verify:license-api": "node scripts/verify-license-api-boundary.mjs",
     "verify:pwa": "node scripts/verify-pwa-release.mjs",
     "verify:routes": "node scripts/verify-production-routes.mjs",
     "verify:mvp-flow": "node scripts/verify-mvp-flow.mjs",
@@ -29,6 +30,7 @@
     "verify:update-policy": "node scripts/verify-update-policy.mjs"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "@supabase/supabase-js": "^2.87.1",
     "clsx": "^2.1.1",
     "fflate": "^0.8.3",

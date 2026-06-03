@@ -62,6 +62,45 @@ async function verifyRoutes() {
   const adminApiResponse = await fetch(`${baseUrl}/api/admin/ping`, { redirect: 'manual' });
   assert.equal(adminApiResponse.status, 401, '/api/admin/* should reject unauthenticated requests');
 
+  const updateManifestResponse = await fetch(`${baseUrl}/api/update-manifest`, { redirect: 'manual' });
+  assert.equal(updateManifestResponse.status, 200, '/api/update-manifest should return HTTP 200 without DB configuration');
+  const updateManifest = await updateManifestResponse.json();
+  assert.equal(updateManifest.update_policy, 'none', '/api/update-manifest should return the safe default manifest without DB configuration');
+
+  const announcementsResponse = await fetch(`${baseUrl}/api/announcements`, { redirect: 'manual' });
+  assert.equal(announcementsResponse.status, 200, '/api/announcements should return HTTP 200 without DB configuration');
+  const announcements = await announcementsResponse.json();
+  assert.ok(Array.isArray(announcements.announcements), '/api/announcements should return an announcements array');
+
+  const registerResponse = await fetch(`${baseUrl}/api/license/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      email: 'manager@example.co.kr',
+      company_name: '대한철강 주식회사',
+      contact_name: '김지연',
+      contact_phone: '010-0000-1001',
+      country: 'South Korea',
+      industry: 'Iron and steel',
+      accepted_terms_version: '2026.06-beta',
+      app_version: '0.1.0-beta',
+    }),
+    redirect: 'manual',
+  });
+  assert.equal(registerResponse.status, 503, '/api/license/register should stay unavailable until DATABASE_URL is configured');
+
+  const forbiddenRegisterResponse = await fetch(`${baseUrl}/api/license/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      email: 'manager@example.co.kr',
+      company_name: '대한철강 주식회사',
+      production_volume: 1000,
+    }),
+    redirect: 'manual',
+  });
+  assert.equal(forbiddenRegisterResponse.status, 400, '/api/license/register should reject unsupported fields');
+
   for (const route of routes) {
     const response = await fetch(`${baseUrl}${route}`, { redirect: 'manual' });
     assert.equal(response.status, 200, `${route} should return HTTP 200`);

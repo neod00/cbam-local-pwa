@@ -58,6 +58,18 @@ Google OAuth callback URL:
 - Local: `http://localhost:3000/api/auth/callback/google`
 - Vercel: `https://cbam-local-pwa.vercel.app/api/auth/callback/google`
 
+## Neon Setup
+
+Neon project console:
+
+- `https://console.neon.tech/app/org-round-lake-37357959/projects`
+
+The app does not need Neon credentials in source code. Add the Neon connection string only as a Vercel environment variable:
+
+- `DATABASE_URL`
+
+Run the SQL migration in `db/admin/001_init.sql` from the Neon SQL Editor before enabling license registration.
+
 ## Minimal Data Model
 
 ### `license_users`
