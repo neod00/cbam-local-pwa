@@ -16,6 +16,7 @@ export type AdminLicenseUser = {
 
 export type AdminAnnouncement = {
     title: string;
+    body: string;
     severity: 'info' | 'warning' | 'critical';
     period: string;
     target: string;
@@ -103,12 +104,14 @@ const sampleData: AdminConsoleData = {
     announcements: [
         {
             title: 'v0.1.0-beta 배포 안내',
+            body: 'CBAM Local 무료 베타를 시작합니다.',
             severity: 'info',
             period: '2026-06-03 - 2026-06-30',
             target: '전체 사용자',
         },
         {
             title: 'EU 원본 템플릿 최신본 확인 요청',
+            body: 'Export 전 최신 EU 원본 템플릿을 확인하세요.',
             severity: 'warning',
             period: '2026-06-10 - 2026-07-10',
             target: '철강 품목 사용자',
@@ -179,8 +182,8 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
 
         const userRows = (await sql`
             select
-                license_status,
                 id,
+                license_status,
                 email,
                 company_name,
                 contact_name,
@@ -194,8 +197,8 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
             order by updated_at desc
             limit 25
         `) as Array<{
-            license_status: string;
             id: string;
+            license_status: string;
             email: string;
             company_name: string;
             contact_name: string | null;
@@ -208,12 +211,13 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
         }>;
 
         const announcementRows = (await sql`
-            select title, severity, target_audience, starts_at, ends_at
+            select title, body, severity, target_audience, starts_at, ends_at
             from announcements
             order by starts_at desc nulls last, created_at desc
             limit 10
         `) as Array<{
             title: string;
+            body: string;
             severity: 'info' | 'warning' | 'critical';
             target_audience: string;
             starts_at: string | null;
@@ -276,6 +280,7 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
             })),
             announcements: announcementRows.map((item) => ({
                 title: item.title,
+                body: item.body,
                 severity: item.severity,
                 period: formatPeriod(item.starts_at, item.ends_at),
                 target: item.target_audience,

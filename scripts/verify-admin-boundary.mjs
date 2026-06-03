@@ -22,6 +22,7 @@ const authConfig = readFileSync('src/auth.ts', 'utf8');
 const adminAuth = readFileSync('src/lib/admin-auth.ts', 'utf8');
 const adminConsoleData = readFileSync('src/lib/admin-console-data.ts', 'utf8');
 const adminActions = readFileSync('src/lib/admin-actions.ts', 'utf8');
+const adminAnnouncement = readFileSync('src/lib/admin-announcement.ts', 'utf8');
 const adminLicenseStatus = readFileSync('src/lib/admin-license-status.ts', 'utf8');
 const adminUpdatePolicy = readFileSync('src/lib/admin-update-policy.ts', 'utf8');
 const proxy = readFileSync('proxy.ts', 'utf8');
@@ -41,10 +42,13 @@ for (const required of [
   'getAdminConsoleData',
   'updateLicenseUserStatus',
   'createUpdateManifest',
+  'createAnnouncement',
+  'ADMIN_ANNOUNCEMENT_SEVERITIES',
   'ADMIN_LICENSE_STATUSES',
   'ADMIN_UPDATE_POLICIES',
   '상태 변경 가능',
   '새 업데이트 정책 저장',
+  '공지 등록',
 ]) {
   assert.ok(adminPage.includes(required), `admin page should include ${required}`);
 }
@@ -79,6 +83,8 @@ for (const required of [
   'notice_title',
   'notice_body',
   'release_notes_url',
+  'body',
+  'severity',
 ]) {
   assert.ok(adminConsoleData.includes(required), `admin console data loader should include ${required}`);
 }
@@ -92,9 +98,11 @@ for (const required of [
   'updated_at = now()',
   'revalidatePath',
   'update_manifests',
+  'announcements',
 ]) {
   assert.ok(adminActions.includes(required), `admin actions should include ${required}`);
 }
+assert.ok(adminAnnouncement.includes('ADMIN_ANNOUNCEMENT_SEVERITIES'), 'admin announcement helper should define allowed severities');
 assert.ok(adminLicenseStatus.includes('ADMIN_LICENSE_STATUSES'), 'admin license status helper should define allowed statuses');
 assert.ok(adminUpdatePolicy.includes('ADMIN_UPDATE_POLICIES'), 'admin update policy helper should define allowed policies');
 
@@ -140,6 +148,7 @@ const adminSource = [
     : []),
   adminConsoleData,
   adminActions,
+  adminAnnouncement,
   adminLicenseStatus,
   adminUpdatePolicy,
   adminAuth,

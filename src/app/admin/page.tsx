@@ -1,6 +1,7 @@
 import { auth, signOut } from '@/auth';
 import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
-import { createUpdateManifest, updateLicenseUserStatus } from '@/lib/admin-actions';
+import { createAnnouncement, createUpdateManifest, updateLicenseUserStatus } from '@/lib/admin-actions';
+import { ADMIN_ANNOUNCEMENT_SEVERITIES } from '@/lib/admin-announcement';
 import { ADMIN_LICENSE_STATUSES } from '@/lib/admin-license-status';
 import { ADMIN_UPDATE_POLICIES } from '@/lib/admin-update-policy';
 import { isAllowedAdminEmail } from '@/lib/admin-auth';
@@ -360,12 +361,81 @@ export default async function AdminPage() {
                     title="공지"
                     description="새 버전, 템플릿 확인 요청, 약관 변경 같은 운영 안내만 게시합니다."
                     actions={
-                        <Button type="button" variant="secondary" disabled>
-                            공지 등록
-                        </Button>
+                        <StatusBadge tone={isLive ? 'success' : 'pending'}>
+                            {isLive ? '등록 가능' : 'Neon 연결 후 등록 가능'}
+                        </StatusBadge>
                     }
                     className="lg:col-span-2"
                 >
+                    <form action={createAnnouncement} className="mb-4 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <label className="space-y-1 text-sm font-semibold text-slate-700">
+                            <span>공지 제목</span>
+                            <input
+                                name="title"
+                                disabled={!isLive}
+                                placeholder="예: EU 원본 템플릿 최신본 확인 요청"
+                                className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                            />
+                        </label>
+                        <label className="space-y-1 text-sm font-semibold text-slate-700">
+                            <span>공지 본문</span>
+                            <textarea
+                                name="body"
+                                disabled={!isLive}
+                                rows={3}
+                                placeholder="운영 안내, 템플릿 확인 요청, 약관 변경 안내만 입력하세요."
+                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                            />
+                        </label>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>심각도</span>
+                                <select
+                                    name="severity"
+                                    defaultValue="info"
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                >
+                                    {ADMIN_ANNOUNCEMENT_SEVERITIES.map((severity) => (
+                                        <option key={severity} value={severity}>
+                                            {severity === 'critical' ? '긴급' : severity === 'warning' ? '주의' : '안내'}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>대상 그룹</span>
+                                <input
+                                    name="target_audience"
+                                    defaultValue="all"
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>게시 시작일</span>
+                                <input
+                                    name="starts_at"
+                                    type="date"
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>게시 종료일</span>
+                                <input
+                                    name="ends_at"
+                                    type="date"
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                        </div>
+                        <Button type="submit" variant="secondary" className="w-full md:w-auto" disabled={!isLive}>
+                            공지 등록
+                        </Button>
+                    </form>
+
                     <div className="space-y-3">
                         {data.announcements.map((item) => (
                             <div key={item.title} className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
@@ -373,7 +443,8 @@ export default async function AdminPage() {
                                     <Megaphone className="mt-1 h-5 w-5 flex-none text-teal-700" />
                                     <div>
                                         <h3 className="text-sm font-semibold text-slate-950">{item.title}</h3>
-                                        <p className="mt-1 text-sm text-slate-600">{item.period} / {item.target}</p>
+                                        <p className="mt-1 text-sm leading-6 text-slate-600">{item.body}</p>
+                                        <p className="mt-1 text-xs text-slate-500">{item.period} / {item.target}</p>
                                     </div>
                                 </div>
                                 <StatusBadge tone={item.severity === 'warning' ? 'warning' : item.severity === 'critical' ? 'danger' : 'info'}>

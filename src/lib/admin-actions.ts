@@ -1,6 +1,7 @@
 'use server';
 
 import { auth } from '@/auth';
+import { isAdminAnnouncementSeverity } from '@/lib/admin-announcement';
 import { isAdminLicenseStatus } from '@/lib/admin-license-status';
 import { isAdminUpdatePolicyMode } from '@/lib/admin-update-policy';
 import { isAllowedAdminEmail } from '@/lib/admin-auth';
@@ -76,6 +77,43 @@ export async function createUpdateManifest(formData: FormData) {
             ${releaseNotesUrl || null},
             ${effectiveFrom || new Date().toISOString()},
             ${targetAudience}
+        )
+    `;
+
+    revalidatePath('/admin');
+}
+
+export async function createAnnouncement(formData: FormData) {
+    await ensureAdmin();
+
+    const title = normalizeFormValue(formData.get('title'));
+    const body = normalizeFormValue(formData.get('body'));
+    const severity = normalizeFormValue(formData.get('severity')) || 'info';
+    const targetAudience = normalizeFormValue(formData.get('target_audience')) || 'all';
+    const startsAt = normalizeFormValue(formData.get('starts_at'));
+    const endsAt = normalizeFormValue(formData.get('ends_at'));
+
+    if (!title || !body || !isAdminAnnouncementSeverity(severity)) {
+        throw new Error('공지 제목, 본문, 심각도를 확인하세요.');
+    }
+
+    const sql = getAdminSql();
+    await sql`
+        insert into announcements (
+            title,
+            body,
+            severity,
+            target_audience,
+            starts_at,
+            ends_at
+        )
+        values (
+            ${title},
+            ${body},
+            ${severity},
+            ${targetAudience},
+            ${startsAt || new Date().toISOString()},
+            ${endsAt || null}
         )
     `;
 

@@ -177,6 +177,7 @@ Completed:
 - Connected the Settings free-license form to the live license API with local fallback behavior, preserving the rule that license/update checks only send deployment-management fields and never CBAM calculation data, EU templates, or `.cbam` backups.
 - Added the first live admin operation: a protected server action for changing `license_users.license_status`, with the admin page rewritten as a clean Korean operations console and sample-mode controls disabled until Neon is connected.
 - Added the admin update-policy create action and a mobile-friendly policy form, so operators can publish new `update_manifests` rows for latest/minimum version, optional/recommended/required policy, notice text, release notes, and effective date.
+- Added the admin announcement create action and form for operational notices only, including title, body, severity, audience, and posting window, while continuing to block CBAM calculation data from admin flows.
 
 Pending product decisions:
 
@@ -187,7 +188,7 @@ Next:
 - Review the deployed beta rehearsal artifacts in `artifacts/beta-browser-rehearsal/20260601T131659` if a release reviewer needs screenshots or downloaded files.
 - Review and finalize `docs/free-pwa-terms-draft.md` and `docs/free-pwa-release-announcement-draft.md` with legal/operational wording before public distribution.
 - Make the limited beta Go/No-Go decision after legal/operator wording review.
-- Add admin CRUD actions for announcements and terms now that Google OAuth, Neon-backed reads, license-status updates, and update-policy publishing are in place.
+- Add admin CRUD actions for terms now that Google OAuth, Neon-backed reads, license-status updates, update-policy publishing, and announcement publishing are in place.
 
 ## Decision Log
 
