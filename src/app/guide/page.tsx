@@ -73,7 +73,7 @@ export default function GuidePage() {
                     <div className="space-y-3 text-sm leading-6 text-slate-600">
                         <p>
                             대표 품목은 CN 72083900 Hot Rolled Coil입니다. Rolling and finishing 공정, Natural gas combustion 배출원,
-                            Purchased hot rolled coil 전구물질을 연결해 산정 결과, SEFA·인증서 시나리오, Export 게이트를 확인합니다.
+                            Purchased hot rolled coil 전구물질을 연결해 산정 결과, 인증서 비용 시나리오, Export 게이트를 확인합니다.
                         </p>
                         <Link href="/products" className="inline-flex items-center text-sm font-semibold text-teal-800 hover:text-teal-700">
                             품목 관리에서 시작

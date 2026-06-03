@@ -34,7 +34,7 @@ P3 implementation note: the app now exposes this flow as an in-app `/guide` page
 | 6 | 전구물질 확인 | 전구물질 소비량, SEE 출처, 검증 상태가 입력됨 | 구매량, 소비량, 공급사 SEE, 기본값 사유 | 전구물질 확인 |
 | 7 | 공식 기준자료 가져오기 | 벤치마크와 국가/CN 기본값이 로컬에 저장됨 | CBAMBenchmarks, DVsasadopted | 기준자료 업로드 |
 | 8 | 산정 결과 검토 | 제품별 SEE와 경고가 검토됨 | 산정 결과, 배분 기준, 경고 | 산정 결과 검토 |
-| 9 | SEFA·인증서 시나리오 | SEFA/인증서 지표가 검토됨 | 기준값, 벤치마크, 인증서 가격 가정 | 시나리오 검토 |
+| 9 | 인증서 비용 시나리오 | SEFA/인증서 지표가 검토됨 | 기준값, 벤치마크, 인증서 가격 가정 | 시나리오 검토 |
 | 10 | EU Communication Export | 최신 EU 원본 템플릿 검증과 Export 체크리스트 통과 | 공식 템플릿, 준비 상태, 백업 | 수입자 전달용 복사본 생성 |
 | 11 | Excel 공식 수식 재계산 | Summary_Products 공식 수식 결과가 수동 검토됨 | Export 복사본, Microsoft Excel | Excel 검토 |
 | 12 | `.cbam` 백업 보관 | `.cbam` 백업 파일이 내려받아짐 | 로컬 데이터, 시나리오 가정값 | 백업 다운로드 |

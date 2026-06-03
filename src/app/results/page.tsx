@@ -142,7 +142,7 @@ export default function ResultsPage() {
                                 <span className="ml-1 text-base font-medium">tCO₂e/t</span>
                             </div>
                             <p className="mt-2 text-xs leading-5 text-teal-900">
-                                인증서 산정 시나리오 판단에 쓰는 기준값입니다. Annex II direct-only 품목의 최종제품 자체 간접배출은 여기에서 제외될 수 있습니다.
+                                제품 1톤당 CBAM 계산에 사용할 배출량입니다. 철강 Annex II 품목은 최종제품 자체의 간접배출을 여기서 제외할 수 있습니다.
                             </p>
                         </div>
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -155,7 +155,7 @@ export default function ResultsPage() {
                                 <span className="ml-1 text-base font-medium">tCO₂e/t</span>
                             </div>
                             <p className="mt-2 text-xs leading-5 text-slate-600">
-                                최종제품 자체 간접배출까지 포함해 내부 비교와 Excel 공식 수식 재계산 차이를 검토할 때 참고합니다.
+                                직접배출, 간접배출, 전구물질 배출을 모두 더한 참고값입니다. EU 템플릿 수식 결과와 비교할 때 사용합니다.
                             </p>
                         </div>
                     </div>

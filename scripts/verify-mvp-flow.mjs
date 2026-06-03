@@ -27,7 +27,7 @@ const workflowRoutes = [
   ['배출원 자료', '/source-streams'],
   ['구매 전구물질', '/precursors'],
   ['산정 결과', '/results'],
-  ['시나리오', '/scenarios'],
+  ['인증서 비용 시나리오', '/scenarios'],
   ['EU Communication', '/export'],
   ['데이터 안전', '/settings'],
   ['약관/고지', '/terms'],
@@ -43,7 +43,7 @@ for (const label of ['홈', '품목', '결과', '설정']) {
   assert.ok(sidebar.includes(label), `mobile navigation should include ${label}`);
 }
 
-for (const label of ['대시보드', '시작 가이드', '베타 배포 안내', '품목 관리', '개인정보 및 데이터 처리', '생산공정', '시나리오', 'EU Communication Template Export', '데이터 안전']) {
+for (const label of ['대시보드', '시작 가이드', '베타 배포 안내', '품목 관리', '개인정보 및 데이터 처리', '생산공정', '인증서 비용 시나리오', 'EU Communication Template Export', '데이터 안전']) {
   assert.ok(appShell.includes(label), `topbar route title should include ${label}`);
 }
 
@@ -57,6 +57,7 @@ assert.ok(dashboard.includes('CBAM 신고 지원자료 작업실'), 'dashboard s
 assert.ok(dashboard.includes('무엇부터 하면 되나요?'), 'dashboard should expose beginner-first start guidance');
 assert.ok(dashboard.includes('사업장 등록') && dashboard.includes('품목 추가') && dashboard.includes('배출량 입력'), 'dashboard should show the first three beginner actions');
 assert.equal(dashboard.includes('벤치마크와 국가/CN 기본값 기준자료를 가져오세요.'), false, 'dashboard should not put official reference upload as the first beginner CTA copy');
+assert.ok(dashboard.includes('상세 가이드와 검토 정보 펼치기'), 'dashboard should keep detailed guidance behind an expandable section');
 assert.ok(dashboard.includes('자료 준비 체크리스트'), 'dashboard should show evidence preparation guidance');
 assert.ok(dashboard.includes('WorkflowGuideCard'), 'dashboard should include a compact first-run workflow guide');
 assert.ok(guidePage.includes('시작 가이드'), 'guide page should introduce the first-run workflow');
@@ -100,7 +101,10 @@ assert.ok(precursorsPage.includes('2. 자료 모드와 검증 상태'), 'Precurs
 assert.ok(precursorsPage.includes('5. SEE와 증빙'), 'Precursor form should group SEE and evidence inputs');
 assert.ok(resultsPage.includes('제품별 SEE 산정 결과'), 'Results page should show product-level SEE results');
 assert.ok(resultsPage.includes('CBAM 산정 기준 SEE') && resultsPage.includes('내부 검토용 total SEE'), 'Results page should separate CBAM-basis SEE from informational total SEE');
-assert.ok(scenariosPage.includes('SEFA 및 CBAM 인증서 시나리오'), 'Scenarios page should show SEFA/certificate review');
+assert.ok(resultsPage.includes('제품 1톤당 CBAM 계산에 사용할 배출량입니다'), 'Results page should explain CBAM-basis SEE in beginner-friendly Korean');
+assert.ok(resultsPage.includes('직접배출, 간접배출, 전구물질 배출을 모두 더한 참고값입니다'), 'Results page should explain informational total SEE in beginner-friendly Korean');
+assert.ok(scenariosPage.includes('인증서 비용 시나리오'), 'Scenarios page should show certificate cost review');
+assert.ok(scenariosPage.includes('비용을 대략 검토하는 고급 단계'), 'Scenarios page should position certificate scenarios as an advanced review step');
 assert.ok(scenariosPage.includes('CBAM 산정 기준 SEE') && scenariosPage.includes('내부 검토용 total SEE'), 'Scenarios page should separate CBAM-basis SEE from informational total SEE');
 assert.ok(scenariosPage.includes('사전 검토용 시나리오') && scenariosPage.includes('carbon price paid evidence'), 'Scenarios page should avoid outdated formula-not-final copy');
 assert.equal(scenariosPage.includes('공식 산식 확인 전까지'), false, 'Scenarios page should not imply 2026 formulas are not final');

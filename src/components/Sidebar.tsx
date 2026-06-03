@@ -47,7 +47,7 @@ const navigationGroups = [
         label: '산정·검토',
         items: [
             { name: '산정 결과', href: '/results', icon: BarChart3 },
-            { name: 'SEFA·인증서 시나리오', href: '/scenarios', icon: Calculator },
+            { name: '인증서 비용 시나리오', href: '/scenarios', icon: Calculator },
         ],
     },
     {

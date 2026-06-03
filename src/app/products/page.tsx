@@ -37,21 +37,17 @@ const fieldClass =
 
 function GoodsRuleBadges({ product }: { product: Product }) {
     const metadata = getCbamGoodsMetadata(product);
-    const indirectRule = getIndirectEmissionsApplicability(product);
 
     return (
         <div className="mt-2 flex flex-wrap gap-1.5">
             <StatusBadge tone={metadata.annex_i_candidate ? 'info' : 'warning'}>
-                {metadata.annex_i_candidate ? 'Annex I 후보' : 'Annex I 확인 필요'}
+                {metadata.annex_i_candidate ? 'CBAM 대상 가능 품목' : 'CBAM 대상 확인 필요'}
             </StatusBadge>
             <StatusBadge tone={metadata.annex_ii_direct_only ? 'warning' : 'neutral'}>
-                {metadata.direct_only_label}
-            </StatusBadge>
-            <StatusBadge tone={indirectRule.applicable ? 'success' : 'warning'}>
-                {indirectRule.applicable ? '간접 포함' : '인증서 산정 제외'}
+                {metadata.annex_ii_direct_only ? '직접배출 중심 계산 품목' : '간접배출 포함 검토'}
             </StatusBadge>
             {metadata.precursor_review_recommended && (
-                <StatusBadge tone="pending">전구물질 검토</StatusBadge>
+                <StatusBadge tone="pending">원재료·중간재 배출자료 확인</StatusBadge>
             )}
         </div>
     );
@@ -69,6 +65,35 @@ function GoodsRuleNote({ product }: { product: Product }) {
                 </p>
             )}
         </div>
+    );
+}
+
+function GoodsExpertDisclosure({ product }: { product: Product }) {
+    const metadata = getCbamGoodsMetadata(product);
+    const indirectRule = getIndirectEmissionsApplicability(product);
+
+    return (
+        <details className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+            <summary className="cursor-pointer font-semibold text-slate-700">고급 규정 정보</summary>
+            <dl className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+                <div>
+                    <dt className="font-semibold text-slate-500">Annex I</dt>
+                    <dd>{metadata.annex_i_candidate ? 'Annex I 후보' : 'Annex I 확인 필요'}</dd>
+                </div>
+                <div>
+                    <dt className="font-semibold text-slate-500">Annex II direct-only</dt>
+                    <dd>{metadata.direct_only_label}</dd>
+                </div>
+                <div>
+                    <dt className="font-semibold text-slate-500">Indirect emissions</dt>
+                    <dd>{indirectRule.applicable ? 'certificate-basis 포함 검토' : 'certificate-basis 제외 검토'}</dd>
+                </div>
+                <div>
+                    <dt className="font-semibold text-slate-500">Precursor</dt>
+                    <dd>{metadata.precursor_review_recommended ? '전구물질 검토 권장' : '전구물질 검토 우선순위 낮음'}</dd>
+                </div>
+            </dl>
+        </details>
     );
 }
 
@@ -328,8 +353,8 @@ export default function ProductsPage() {
             />
 
             <SectionCard
-                title="EU 템플릿 CN 코드 목록"
-                description="최신 EU 템플릿을 선택하면 Parameters_CNCodes의 전체 CN 코드 목록을 로컬에 저장해 제품 검색에 사용합니다."
+                title="EU 수출 품목 코드 목록"
+                description="최신 EU 템플릿을 선택하면 EU 템플릿의 CN 코드 목록(Parameters_CNCodes)을 로컬에 저장해 제품 검색에 사용합니다."
                 actions={
                     <label className="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50">
                         <FileSpreadsheet className="mr-2 h-4 w-4 text-teal-700" />
@@ -365,17 +390,19 @@ export default function ProductsPage() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
                         <CheckCircle2 className="h-4 w-4 text-teal-700" />
-                        CN 준비
+                        품목 코드 등록
                     </div>
                     <div className="mt-3 text-2xl font-semibold text-slate-950">
-                        {productSummary.cnReadyCount}/{productSummary.totalCount}
+                        {productSummary.totalCount === 0 ? '없음' : `${productSummary.cnReadyCount}/${productSummary.totalCount}`}
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">CN 8자리 입력 완료</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                        {productSummary.totalCount === 0 ? '아직 등록된 품목 없음' : 'CN 8자리 입력 완료'}
+                    </p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
                         <FileSpreadsheet className="h-4 w-4 text-blue-700" />
-                        Annex I 후보
+                        CBAM 대상 가능 품목
                     </div>
                     <div className="mt-3 text-2xl font-semibold text-slate-950">{productSummary.annexCandidateCount}개</div>
                     <p className="mt-1 text-xs text-slate-500">대표 규칙 기준 대상 가능 품목</p>
@@ -383,7 +410,7 @@ export default function ProductsPage() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
                         <AlertTriangle className="h-4 w-4 text-amber-700" />
-                        Direct-only
+                        직접배출 중심 계산 품목
                     </div>
                     <div className="mt-3 text-2xl font-semibold text-slate-950">{productSummary.directOnlyCount}개</div>
                     <p className="mt-1 text-xs text-slate-500">인증서 계산은 직접배출 중심</p>
@@ -391,7 +418,7 @@ export default function ProductsPage() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
                         <Boxes className="h-4 w-4 text-slate-600" />
-                        전구물질 검토
+                        원재료·중간재 확인
                     </div>
                     <div className="mt-3 text-2xl font-semibold text-slate-950">{productSummary.precursorReviewCount}개</div>
                     <p className="mt-1 text-xs text-slate-500">공급망 SEE 자료 확인 필요</p>
@@ -561,6 +588,7 @@ export default function ProductsPage() {
                                     </p>
                                     <GoodsRuleBadges product={product} />
                                     <GoodsRuleNote product={product} />
+                                    <GoodsExpertDisclosure product={product} />
                                 </div>
                                 <div className="flex gap-2">
                                     <Button
@@ -656,6 +684,7 @@ export default function ProductsPage() {
                                         <div className="font-medium text-slate-900">{product.name}</div>
                                         <GoodsRuleBadges product={product} />
                                         <GoodsRuleNote product={product} />
+                                        <GoodsExpertDisclosure product={product} />
                                     </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{product.product_type_enum}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{product.hs_code}</td>

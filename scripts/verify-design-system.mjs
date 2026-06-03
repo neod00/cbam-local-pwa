@@ -11,6 +11,8 @@ const adminPlan = readFileSync('docs/harness/admin-console-plan.md', 'utf8');
 
 for (const required of [
   'Guided Compliance Workspace',
+  'BeginnerFirstView',
+  'ExpertDisclosure',
   'NextActionPanel',
   'WorkflowStepper',
   'FixCard',
@@ -38,7 +40,7 @@ for (const required of [
   '전구물질 확인',
   '공식 기준자료 가져오기',
   '산정 결과 검토',
-  'SEFA·인증서 시나리오',
+  '인증서 비용 시나리오',
   'EU Communication Export',
   'Excel 공식 수식 재계산',
   '.cbam',

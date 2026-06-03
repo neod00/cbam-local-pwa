@@ -644,7 +644,7 @@ export function createExportChecklist(input: ExportChecklistInput): ExportCheckl
             actionLabel: firstErrorHref ? '첫 오류 수정' : undefined,
         },
         {
-            label: 'SEFA·인증서 시나리오 검토',
+            label: '인증서 비용 시나리오 검토',
             description: scenarioRiskSummary.is_ready_for_review
                 ? scenarioRiskSummary.above_default_count > 0 || scenarioRiskSummary.certificate_exposure_count > 0 || scenarioRiskSummary.default_lower_certificate_count > 0
                     ? `기준자료는 연결됐지만 기본값 우위 ${scenarioRiskSummary.default_lower_certificate_count}건, 기본값 대비 차이 ${scenarioRiskSummary.above_default_count}건을 검토해야 합니다.`

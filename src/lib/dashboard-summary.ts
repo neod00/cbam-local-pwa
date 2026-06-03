@@ -66,7 +66,7 @@ function getScenarioActionTasks(input: DashboardSummaryInput): DashboardTask[] {
 
     if (scenarioRiskSummary.missing_official_reference_count > 0 || !hasBenchmarkReference || !hasDefaultValueReference) {
         tasks.push({
-            label: '공식 기준자료를 가져오세요. SEFA·인증서 시나리오 검토에 필요한 파일입니다.',
+            label: '공식 기준자료를 가져오세요. 인증서 비용 시나리오 검토에 필요한 파일입니다.',
             href: scenarioAction.href === '/upload' ? scenarioAction.href : '/upload',
             tone: 'warning',
         });
@@ -212,7 +212,7 @@ export function createDashboardSummary(input: DashboardSummaryInput): DashboardS
             tone: hasOfficialReferences ? 'success' : 'warning',
         },
         {
-            name: 'SEFA·인증서',
+            name: '인증서 비용',
             status: scenarioRiskSummary.is_ready_for_review ? '검토 가능' : '확인 필요',
             tone: scenarioRiskSummary.is_ready_for_review ? 'success' : 'warning',
         },
@@ -229,7 +229,7 @@ export function createDashboardSummary(input: DashboardSummaryInput): DashboardS
         ? priorityTasks.slice(0, 4)
         : [
             { label: 'EU 템플릿 Parameters_CNCodes 기준으로 제품 CN 코드를 확인하세요.', href: '/products', tone: 'success' },
-            { label: '공식 기준자료를 가져와 SEFA·인증서 시나리오를 확인하세요.', href: '/scenarios', tone: 'success' },
+            { label: '공식 기준자료를 가져와 인증서 비용 시나리오를 확인하세요.', href: '/scenarios', tone: 'success' },
             { label: indirectNotRequired ? 'CN 코드별 간접배출 제외 여부를 확인하세요.' : '생산공정별 전력 사용량을 입력하세요.', href: '/processes', tone: 'success' },
             { label: 'EU 원본 템플릿 복사본 Export를 준비하세요.', href: '/export', tone: 'success' },
         ];

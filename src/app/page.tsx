@@ -263,8 +263,6 @@ export default function Home() {
         </div>
       </section>
 
-      <WorkflowGuideCard currentRoute="/" compact />
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="CBAM 대상 품목" value={loading ? '-' : `${productCount}개`} helper="CN 8자리 기준 관리" icon={Package} tone="pending" />
         <StatCard label="총 생산량" value={loading ? '-' : `${formatNumber(dashboard.totalOutput)}t`} helper={`${processCount}개 공정 기준`} icon={Factory} tone="info" />
@@ -336,6 +334,54 @@ export default function Home() {
           </div>
         </SectionCard>
       </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <SectionCard title="수입자 전달용 파일 만들기" description="EU 원본 Communication Template을 선택해 수입자에게 전달할 복사본을 준비합니다.">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="rounded-2xl bg-blue-50 p-2 text-blue-700">
+                <FileSpreadsheet className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-950">공식 수식은 Excel에서 계산</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  앱은 입력 셀에만 값을 반영하고, Summary_Products의 SEE 수식 셀은 원본 템플릿이 계산하도록 둡니다.
+                </p>
+              </div>
+            </div>
+            <Link href="/export">
+              <Button type="button" className="w-full md:w-auto">
+                Export 준비
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+        </SectionCard>
+
+        <SectionCard title="데이터 백업" description="현재 브라우저에 저장된 입력자료를 `.cbam` 파일로 보관합니다.">
+          <Link href="/settings" className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm transition hover:bg-slate-50">
+            <span>
+              <span className="block font-semibold text-slate-900">마지막 백업</span>
+              <span className="mt-1 block text-xs text-slate-500">{backupStatus.helper}</span>
+            </span>
+            <span className="flex flex-col items-end gap-2 text-right text-slate-600">
+              <StatusBadge tone={backupStatus.tone}>{backupStatus.label}</StatusBadge>
+              <span>{formatDateTime(lastBackupAt)}</span>
+            </span>
+          </Link>
+          <p className="mt-3 text-xs leading-5 text-slate-500">
+            PC 교체나 브라우저 데이터 삭제에 대비해 주요 입력 후에는 회사의 안전한 폴더에 백업 파일을 보관하세요.
+          </p>
+        </SectionCard>
+      </div>
+
+      <details className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
+        <summary className="cursor-pointer list-none text-base font-semibold text-slate-950 marker:hidden">
+          상세 가이드와 검토 정보 펼치기
+          <span className="ml-2 text-sm font-medium text-slate-500">체크리스트, 규정 상세, 책임 안내</span>
+        </summary>
+        <div className="mt-5 space-y-6">
+          <WorkflowGuideCard currentRoute="/" compact />
 
       <SectionCard
         title="신고 지원자료 준비 단계"
@@ -439,6 +485,8 @@ export default function Home() {
           </div>
         </SectionCard>
       </div>
+        </div>
+      </details>
     </div>
   );
 }

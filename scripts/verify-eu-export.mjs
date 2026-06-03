@@ -568,7 +568,7 @@ const scenarioChecklist = euExport.createExportChecklist({
   templateFileName: file.name,
   validation,
 });
-const scenarioChecklistItem = scenarioChecklist.items.find((item) => item.label === 'SEFA·인증서 시나리오 검토');
+const scenarioChecklistItem = scenarioChecklist.items.find((item) => item.label === '인증서 비용 시나리오 검토');
 assertEqual(
   String(scenarioChecklistItem?.description.includes('기본값 우위 1건')),
   'true',

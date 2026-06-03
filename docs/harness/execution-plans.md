@@ -168,6 +168,7 @@ Completed:
 - Refined the beginner UX after deployment review by renaming the guide to `시작 가이드`, moving a three-step `무엇부터 하면 되나요?` CTA to the dashboard top, replacing outdated scenario caveat copy, and adding plain Korean guidance for Annex II direct-only goods.
 - Followed up on deployed-app expert review by confirming the live Vercel routes use the new AppShell and 2026 period badge, demoting official-reference upload below basic beginner tasks, converting the guide to a three-step summary plus expandable 12-step detail, and cleaning remaining user-facing legacy submission/formula-not-final wording in release docs.
 - Fixed the F5 versus Ctrl+F5 PWA mismatch by changing the service worker from cache-first route handling to network-first navigation/update handling, bumping the app cache version, and making the client registration bypass stale service-worker HTTP cache during update checks.
+- Refined the beginner-first UX by documenting `BeginnerFirstView`/`ExpertDisclosure`, simplifying the dashboard visible sections, moving detailed checklists into an expandable area, softening product/rule terminology, and renaming the scenario workflow to certificate-cost review while preserving SEFA/Annex details for expert disclosure.
 
 Pending product decisions:
 

@@ -269,9 +269,9 @@ export default function ScenariosPage() {
     return (
         <div className="space-y-6">
             <PageHeader
-                eyebrow="시나리오"
-                title="SEFA 및 CBAM 인증서 시나리오"
-                description="제품별 CBAM 산정 기준 SEE, 공식 기본값, 벤치마크를 비교해 인증서 부담 가능성을 1차로 판단합니다. 현재 화면은 검증 전 의사결정 보조용입니다."
+                eyebrow="고급 검토"
+                title="인증서 비용 시나리오"
+                description="이 화면은 비용을 대략 검토하는 고급 단계입니다. 먼저 품목, 생산공정, 배출량 입력을 완료하세요. SEFA와 CBAM 인증서 지표는 사전 검토용으로 사용합니다."
             />
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
@@ -335,7 +335,7 @@ export default function ScenariosPage() {
 
             <SectionCard
                 title="시나리오 가정"
-                description="이 화면은 입력자료와 기준자료를 바탕으로 한 사전 검토용 시나리오입니다. 최종 CBAM declaration에는 검증자료, CBAM Registry 입력값, carbon price paid evidence 등이 추가로 반영될 수 있습니다."
+                description="입력자료와 기준자료를 바탕으로 한 사전 검토용 시나리오입니다. 최종 CBAM declaration에는 검증자료, CBAM Registry 입력값, carbon price paid evidence 등이 추가로 반영될 수 있습니다."
                 actions={
                     <div className="flex items-center gap-2">
                         <StatusBadge tone={assumptionSaveState === 'saving' ? 'pending' : assumptionSaveState === 'saved' ? 'success' : 'neutral'}>
