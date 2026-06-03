@@ -8,6 +8,10 @@ type ContactMailtoOptions = {
     detailsPrompt?: string;
 };
 
+function encodeMailtoValue(value: string) {
+    return encodeURIComponent(value).replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
 export function createContactMailto({ detailsPrompt = '문의 내용:', inquiryType, subject }: ContactMailtoOptions) {
     const body = [
         '회사명:',
@@ -20,10 +24,5 @@ export function createContactMailto({ detailsPrompt = '문의 내용:', inquiryT
         CONTACT_DATA_WARNING,
     ].join('\r\n');
 
-    const params = new URLSearchParams({
-        subject,
-        body,
-    });
-
-    return `mailto:${SUPPORT_EMAIL}?${params.toString()}`;
+    return `mailto:${SUPPORT_EMAIL}?subject=${encodeMailtoValue(subject)}&body=${encodeMailtoValue(body)}`;
 }

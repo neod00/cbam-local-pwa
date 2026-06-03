@@ -19,10 +19,14 @@ for (const required of [
   'CONTACT_DATA_WARNING',
   'createContactMailto',
   'mailto:',
+  'encodeMailtoValue',
+  'encodeURIComponent',
   '생산량, 배출량, EU 템플릿 작성본, .cbam 백업 파일',
 ]) {
   assert.ok(contact.includes(required), `contact helper should include ${required}`);
 }
+
+assert.equal(contact.includes('new URLSearchParams'), false, 'contact mailto helper should not encode spaces as plus signs');
 
 const sidebar = readFileSync('src/components/Sidebar.tsx', 'utf8');
 for (const required of [
