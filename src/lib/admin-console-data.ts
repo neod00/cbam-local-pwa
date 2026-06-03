@@ -1,6 +1,7 @@
 import { getAdminSql, isAdminDbUnavailable } from '@/lib/admin-db';
 
 export type AdminLicenseUser = {
+    id: string;
     status: string;
     email: string;
     company: string;
@@ -57,6 +58,7 @@ const sampleData: AdminConsoleData = {
     },
     licenseUsers: [
         {
+            id: 'sample-free-active',
             status: 'FREE_ACTIVE',
             email: 'manager@example.co.kr',
             company: '대한철강 주식회사',
@@ -69,6 +71,7 @@ const sampleData: AdminConsoleData = {
             terms: '2026.06-beta',
         },
         {
+            id: 'sample-recheck-required',
             status: 'RECHECK_REQUIRED',
             email: 'esg-team@example.com',
             company: '한빛소재',
@@ -81,6 +84,7 @@ const sampleData: AdminConsoleData = {
             terms: '2026.06-beta',
         },
         {
+            id: 'sample-offline-allowed',
             status: 'OFFLINE_ALLOWED',
             email: 'cbam@example.net',
             company: '동아케미칼',
@@ -170,6 +174,7 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
         const userRows = (await sql`
             select
                 license_status,
+                id,
                 email,
                 company_name,
                 contact_name,
@@ -184,6 +189,7 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
             limit 25
         `) as Array<{
             license_status: string;
+            id: string;
             email: string;
             company_name: string;
             contact_name: string | null;
@@ -247,6 +253,7 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
                 blocked: stats.blocked,
             },
             licenseUsers: userRows.map((user) => ({
+                id: user.id,
                 status: user.license_status,
                 email: user.email,
                 company: user.company_name,

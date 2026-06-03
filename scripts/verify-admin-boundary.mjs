@@ -6,14 +6,6 @@ const adminDir = 'src/app/admin';
 const adminApiDir = 'src/app/api/admin';
 const adminPagePath = `${adminDir}/page.tsx`;
 const adminLoginPath = `${adminDir}/login/page.tsx`;
-const appShell = readFileSync('src/components/AppShell.tsx', 'utf8');
-const adminShell = readFileSync('src/components/AdminShell.tsx', 'utf8');
-const serviceWorker = readFileSync('public/sw.js', 'utf8');
-const adminPlan = readFileSync('docs/harness/admin-console-plan.md', 'utf8');
-const authConfig = readFileSync('src/auth.ts', 'utf8');
-const adminAuth = readFileSync('src/lib/admin-auth.ts', 'utf8');
-const adminConsoleData = readFileSync('src/lib/admin-console-data.ts', 'utf8');
-const proxy = readFileSync('proxy.ts', 'utf8');
 const skillPath = 'C:/Users/NT940XHA/.codex/skills/cbam-admin-panel/SKILL.md';
 
 assert.ok(existsSync(adminPagePath), 'admin page should exist');
@@ -22,22 +14,32 @@ assert.ok(existsSync('src/app/api/auth/[...nextauth]/route.ts'), 'Auth.js route 
 
 const adminPage = readFileSync(adminPagePath, 'utf8');
 const adminLogin = readFileSync(adminLoginPath, 'utf8');
+const appShell = readFileSync('src/components/AppShell.tsx', 'utf8');
+const adminShell = readFileSync('src/components/AdminShell.tsx', 'utf8');
+const serviceWorker = readFileSync('public/sw.js', 'utf8');
+const adminPlan = readFileSync('docs/harness/admin-console-plan.md', 'utf8');
+const authConfig = readFileSync('src/auth.ts', 'utf8');
+const adminAuth = readFileSync('src/lib/admin-auth.ts', 'utf8');
+const adminConsoleData = readFileSync('src/lib/admin-console-data.ts', 'utf8');
+const adminActions = readFileSync('src/lib/admin-actions.ts', 'utf8');
+const proxy = readFileSync('proxy.ts', 'utf8');
 
 for (const required of [
   'CBAM Local 관리자 콘솔',
   '무료 PWA 배포, 라이선스, 공지, 업데이트 정책만 관리',
-  '생산량, 배출량, 전구물질, EU 템플릿',
-  '.cbam 백업 파일은 서버로 전송하지',
+  '생산량, 배출량, 전구물질, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다',
   '사용자/라이선스',
   '현재 업데이트 정책',
   '공지',
   '약관 버전',
   '감사/보안 체크',
-  'NEXT_PUBLIC_LICENSE_API_URL',
   '오늘 확인할 운영 작업',
   '연락처',
   'Neon 연결 상태',
   'getAdminConsoleData',
+  'updateLicenseUserStatus',
+  'ADMIN_LICENSE_STATUSES',
+  '상태 변경 가능',
 ]) {
   assert.ok(adminPage.includes(required), `admin page should include ${required}`);
 }
@@ -54,13 +56,7 @@ for (const required of [
   assert.ok(adminLogin.includes(required), `admin login page should include ${required}`);
 }
 
-for (const required of [
-  'license_users',
-  'update_manifests',
-  'announcements',
-  'Data Boundary',
-  'Neon',
-]) {
+for (const required of ['license_users', 'update_manifests', 'announcements', 'Data Boundary', 'Neon']) {
   assert.ok(adminPlan.includes(required), `admin plan should include ${required}`);
 }
 
@@ -73,8 +69,22 @@ for (const required of [
   'sampleData',
   "source: 'live'",
   "source: 'sample'",
+  'id',
+  'contact_phone',
 ]) {
   assert.ok(adminConsoleData.includes(required), `admin console data loader should include ${required}`);
+}
+
+for (const required of [
+  'use server',
+  'auth',
+  'isAllowedAdminEmail',
+  'license_users',
+  'license_status',
+  'updated_at = now()',
+  'revalidatePath',
+]) {
+  assert.ok(adminActions.includes(required), `admin actions should include ${required}`);
 }
 
 assert.ok(appShell.includes("pathname.startsWith('/admin')"), 'app shell should route admin paths to the dedicated admin shell');
@@ -85,7 +95,7 @@ assert.equal(serviceWorker.includes('"/admin"'), false, 'protected admin route s
 assert.equal(serviceWorker.includes('"/admin/login"'), false, 'admin login should not be pre-cached by the service worker');
 
 assert.ok(authConfig.includes('next-auth/providers/google'), 'auth config should use Google OAuth');
-assert.ok(authConfig.includes("signIn({ profile, user })"), 'auth config should restrict sign-ins');
+assert.ok(authConfig.includes('signIn({ profile, user })'), 'auth config should restrict sign-ins');
 assert.ok(authConfig.includes("signIn: '/admin/login'"), 'auth config should use the custom admin login page');
 assert.ok(adminAuth.includes('ADMIN_ALLOWED_EMAILS'), 'admin auth should support an email allowlist');
 assert.ok(adminAuth.includes('openbrain.main@gmail.com'), 'admin auth should default to the provided operator email');
@@ -118,6 +128,7 @@ const adminSource = [
       .map((file) => readFileSync(file, 'utf8'))
     : []),
   adminConsoleData,
+  adminActions,
   adminAuth,
   authConfig,
   proxy,
@@ -143,6 +154,8 @@ for (const forbiddenApiField of [
   'see_informational_total',
   'template_file',
   'backup_file',
+  'production_volume',
+  'supplier_evidence',
 ]) {
   assert.equal(adminSource.includes(forbiddenApiField), false, `admin source should not define forbidden API field ${forbiddenApiField}`);
 }

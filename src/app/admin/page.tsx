@@ -1,5 +1,7 @@
 import { auth, signOut } from '@/auth';
 import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { updateLicenseUserStatus } from '@/lib/admin-actions';
+import { ADMIN_LICENSE_STATUSES } from '@/lib/admin-license-status';
 import { isAllowedAdminEmail } from '@/lib/admin-auth';
 import { getAdminConsoleData } from '@/lib/admin-console-data';
 import {
@@ -55,6 +57,29 @@ function updatePolicyLabel(policy: string) {
     return labels[policy] ?? policy;
 }
 
+function LicenseStatusForm({ userId, currentStatus, disabled }: { userId: string; currentStatus: string; disabled: boolean }) {
+    return (
+        <form action={updateLicenseUserStatus} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <input type="hidden" name="user_id" value={userId} />
+            <select
+                name="license_status"
+                defaultValue={currentStatus}
+                disabled={disabled}
+                className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+            >
+                {ADMIN_LICENSE_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                        {statusLabel[status] ?? status}
+                    </option>
+                ))}
+            </select>
+            <Button type="submit" variant="secondary" className="min-h-9 px-3 py-1.5" disabled={disabled}>
+                저장
+            </Button>
+        </form>
+    );
+}
+
 export default async function AdminPage() {
     const session = await auth();
     if (!isAllowedAdminEmail(session?.user?.email)) {
@@ -62,11 +87,12 @@ export default async function AdminPage() {
     }
 
     const data = await getAdminConsoleData();
+    const isLive = data.source === 'live';
 
     const quickActions = [
         {
             title: '재확인 필요 사용자 처리',
-            description: '장기간 라이선스 확인이 없는 사용자를 검토하고 안내 메일 발송 대상을 정리합니다.',
+            description: '장기간 라이선스 확인이 없는 사용자를 검토하고 안내 대상자를 정리합니다.',
             status: `${data.stats.recheckRequired}건`,
             tone: data.stats.recheckRequired > 0 ? 'warning' as const : 'success' as const,
         },
@@ -97,9 +123,7 @@ export default async function AdminPage() {
                 description="무료 PWA 배포, 라이선스, 공지, 업데이트 정책만 관리하는 운영자용 콘솔입니다. CBAM 산정 데이터 저장소가 아닙니다."
                 actions={
                     <div className="flex flex-wrap items-center gap-2">
-                        <StatusBadge tone={data.source === 'live' ? 'success' : 'pending'}>
-                            {data.source === 'live' ? 'Neon 연결됨' : '샘플 데이터'}
-                        </StatusBadge>
+                        <StatusBadge tone={isLive ? 'success' : 'pending'}>{isLive ? 'Neon 연결됨' : '샘플 데이터'}</StatusBadge>
                         <StatusBadge tone="success">{session?.user?.email ?? '관리자 로그인'}</StatusBadge>
                         <form action={signOutAdmin}>
                             <Button type="submit" variant="secondary">
@@ -117,8 +141,8 @@ export default async function AdminPage() {
                     <div>
                         <h2 className="font-semibold text-teal-950">데이터 경계</h2>
                         <p className="mt-1">
-                            무료 라이선스와 업데이트 확인에는 이메일, 회사명, 담당자명, 연락처, 앱 버전 같은 배포 관리 정보만
-                            사용됩니다. 생산량, 배출량, 전구물질, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다.
+                            무료 라이선스와 업데이트 확인에는 이메일, 회사명, 담당자명, 연락처, 앱 버전 같은 배포 관리 정보만 사용합니다.
+                            생산량, 배출량, 전구물질, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다.
                         </p>
                     </div>
                 </div>
@@ -141,7 +165,7 @@ export default async function AdminPage() {
                             badge={<StatusBadge tone={item.tone}>{item.status}</StatusBadge>}
                             action={
                                 <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" disabled>
-                                    열기
+                                    보기
                                 </Button>
                             }
                         />
@@ -155,42 +179,37 @@ export default async function AdminPage() {
                     title="사용자/라이선스"
                     description="무료 배포 관리에 필요한 사용자 정보와 라이선스 상태만 확인합니다."
                     actions={
-                        <Button type="button" disabled>
-                            무료 라이선스 발급
-                        </Button>
+                        <StatusBadge tone={isLive ? 'success' : 'pending'}>
+                            {isLive ? '상태 변경 가능' : 'Neon 연결 후 변경 가능'}
+                        </StatusBadge>
                     }
                 >
                     <div className="space-y-3 md:hidden">
                         {data.licenseUsers.map((user) => (
-                            <div key={`${user.email}-mobile`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div key={`${user.id}-mobile`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
                                         <StatusBadge tone={statusTone[user.status] ?? 'pending'}>{statusLabel[user.status] ?? user.status}</StatusBadge>
                                         <h3 className="mt-3 break-words text-base font-semibold text-slate-950">{user.company}</h3>
                                         <p className="mt-1 break-words text-sm text-slate-600">{user.email}</p>
                                     </div>
-                                    <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" disabled>
-                                        변경
-                                    </Button>
                                 </div>
                                 <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                                    <div className="rounded-xl bg-slate-50 p-3">
-                                        <dt className="text-xs text-slate-500">담당자</dt>
-                                        <dd className="mt-1 font-medium text-slate-900">{user.contact}</dd>
-                                    </div>
-                                    <div className="rounded-xl bg-slate-50 p-3">
-                                        <dt className="text-xs text-slate-500">연락처</dt>
-                                        <dd className="mt-1 font-medium text-slate-900">{user.phone}</dd>
-                                    </div>
-                                    <div className="rounded-xl bg-slate-50 p-3">
-                                        <dt className="text-xs text-slate-500">앱 버전</dt>
-                                        <dd className="mt-1 font-medium text-slate-900">{user.appVersion}</dd>
-                                    </div>
-                                    <div className="rounded-xl bg-slate-50 p-3">
-                                        <dt className="text-xs text-slate-500">마지막 확인</dt>
-                                        <dd className="mt-1 font-medium text-slate-900">{user.lastCheck}</dd>
-                                    </div>
+                                    {[
+                                        ['담당자', user.contact],
+                                        ['연락처', user.phone],
+                                        ['앱 버전', user.appVersion],
+                                        ['마지막 확인', user.lastCheck],
+                                    ].map(([label, value]) => (
+                                        <div key={label} className="rounded-xl bg-slate-50 p-3">
+                                            <dt className="text-xs text-slate-500">{label}</dt>
+                                            <dd className="mt-1 font-medium text-slate-900">{value}</dd>
+                                        </div>
+                                    ))}
                                 </dl>
+                                <div className="mt-4">
+                                    <LicenseStatusForm userId={user.id} currentStatus={user.status} disabled={!isLive} />
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -208,7 +227,7 @@ export default async function AdminPage() {
                             </thead>
                             <tbody className="divide-y divide-slate-100 bg-white">
                                 {data.licenseUsers.map((user) => (
-                                    <tr key={user.email}>
+                                    <tr key={user.id}>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm">
                                             <StatusBadge tone={statusTone[user.status] ?? 'pending'}>{statusLabel[user.status] ?? user.status}</StatusBadge>
                                         </td>
@@ -222,14 +241,7 @@ export default async function AdminPage() {
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.lastCheck}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.terms}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm">
-                                            <div className="flex justify-end gap-2">
-                                                <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" disabled>
-                                                    상태 변경
-                                                </Button>
-                                                <Button type="button" variant="danger" className="min-h-9 px-3 py-1.5" disabled>
-                                                    차단
-                                                </Button>
-                                            </div>
+                                            <LicenseStatusForm userId={user.id} currentStatus={user.status} disabled={!isLive} />
                                         </td>
                                     </tr>
                                 ))}
@@ -325,12 +337,12 @@ export default async function AdminPage() {
                             <Database className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
                             <div>
                                 <h3 className="font-semibold text-slate-950">
-                                    {data.source === 'live' ? 'Neon 데이터로 표시 중' : 'DATABASE_URL 미설정 또는 연결 실패'}
+                                    {isLive ? 'Neon 데이터로 표시 중' : 'DATABASE_URL 미설정 또는 연결 실패'}
                                 </h3>
                                 <p className="mt-1">
-                                    Neon SQL Editor에서 `db/admin/001_init.sql`을 실행하고 Vercel에 `DATABASE_URL`을 설정하면 이 화면이
+                                    Neon SQL Editor에서 `db/admin/001_init.sql`을 실행하고 Vercel에 `DATABASE_URL`을 설정하면 이 화면은
                                     실제 license_users, update_manifests, announcements, terms_versions 데이터를 표시합니다.
-                                    사용자 PWA의 원격 라이선스 확인은 `NEXT_PUBLIC_LICENSE_API_URL`이 설정된 경우에만 켭니다.
+                                    샘플 데이터 상태에서는 라이선스 상태 변경 버튼이 비활성화됩니다.
                                 </p>
                             </div>
                         </div>
