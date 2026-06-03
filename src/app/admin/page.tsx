@@ -1,4 +1,4 @@
-import { Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import {
     Bell,
     CheckCircle2,
@@ -6,6 +6,7 @@ import {
     FileText,
     KeyRound,
     Megaphone,
+    RefreshCw,
     ShieldAlert,
     ShieldCheck,
     UserCheck,
@@ -77,6 +78,27 @@ const announcementItems = [
     },
 ];
 
+const quickActions = [
+    {
+        title: '재확인 필요 사용자 처리',
+        description: '장기간 라이선스 확인이 없는 사용자 9명을 검토하고 안내 메일 발송 대상을 정리합니다.',
+        status: '9건',
+        tone: 'warning' as const,
+    },
+    {
+        title: '업데이트 정책 확인',
+        description: '현재 정책은 권장 업데이트입니다. 강제 업데이트로 바꾸기 전 .cbam 백업 안내 문구를 확인하세요.',
+        status: '권장',
+        tone: 'pending' as const,
+    },
+    {
+        title: '공지 게시 상태 점검',
+        description: '게시 중인 공지 2건의 대상 그룹과 종료일을 확인합니다.',
+        status: '2건',
+        tone: 'info' as const,
+    },
+];
+
 const safetyChecks = [
     '관리자 콘솔은 사용자 등록, 무료 라이선스, 공지, 업데이트 정책만 관리합니다.',
     '생산량, 배출량, EU 템플릿, .cbam 백업 파일은 저장하거나 조회하지 않습니다.',
@@ -90,7 +112,7 @@ export default function AdminPage() {
             <PageHeader
                 eyebrow="Operator Console"
                 title="CBAM Local 관리자 콘솔"
-                description="무료 PWA 배포, 라이선스, 공지, 업데이트 정책만 관리하는 운영자용 콘솔 초안입니다. CBAM 산정 데이터 저장소가 아닙니다."
+                description="무료 PWA 배포, 라이선스, 공지, 업데이트 정책만 관리하는 운영자용 콘솔입니다. CBAM 산정 데이터 저장소가 아닙니다."
                 actions={
                     <Button type="button" variant="secondary" disabled>
                         인증 연동 전
@@ -118,8 +140,27 @@ export default function AdminPage() {
                 <StatCard label="차단 상태" value="2" helper="약관 위반 또는 악용 대응" icon={ShieldAlert} tone="danger" />
             </div>
 
+            <SectionCard title="오늘 확인할 운영 작업" description="노트북과 휴대폰에서 빠르게 확인할 수 있는 관리자 우선 작업입니다.">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                    {quickActions.map((item) => (
+                        <ActionItemCard
+                            key={item.title}
+                            title={item.title}
+                            description={item.description}
+                            badge={<StatusBadge tone={item.tone}>{item.status}</StatusBadge>}
+                            action={
+                                <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" disabled>
+                                    열기
+                                </Button>
+                            }
+                        />
+                    ))}
+                </div>
+            </SectionCard>
+
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.8fr)]">
                 <SectionCard
+                    id="licenses"
                     title="사용자/라이선스"
                     description="관리자는 배포 관리용 사용자 정보와 라이선스 상태만 확인합니다."
                     actions={
@@ -128,7 +169,42 @@ export default function AdminPage() {
                         </Button>
                     }
                 >
-                    <DataTable>
+                    <div className="space-y-3 md:hidden">
+                        {licenseUsers.map((user) => (
+                            <div key={`${user.email}-mobile`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <StatusBadge tone={statusTone[user.status]}>{statusLabel[user.status]}</StatusBadge>
+                                        <h3 className="mt-3 break-words text-base font-semibold text-slate-950">{user.company}</h3>
+                                        <p className="mt-1 break-words text-sm text-slate-600">{user.email}</p>
+                                    </div>
+                                    <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" disabled>
+                                        변경
+                                    </Button>
+                                </div>
+                                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                                    <div className="rounded-xl bg-slate-50 p-3">
+                                        <dt className="text-xs text-slate-500">담당자</dt>
+                                        <dd className="mt-1 font-medium text-slate-900">{user.contact}</dd>
+                                    </div>
+                                    <div className="rounded-xl bg-slate-50 p-3">
+                                        <dt className="text-xs text-slate-500">업종</dt>
+                                        <dd className="mt-1 font-medium text-slate-900">{user.industry}</dd>
+                                    </div>
+                                    <div className="rounded-xl bg-slate-50 p-3">
+                                        <dt className="text-xs text-slate-500">앱 버전</dt>
+                                        <dd className="mt-1 font-medium text-slate-900">{user.appVersion}</dd>
+                                    </div>
+                                    <div className="rounded-xl bg-slate-50 p-3">
+                                        <dt className="text-xs text-slate-500">마지막 확인</dt>
+                                        <dd className="mt-1 font-medium text-slate-900">{user.lastCheck}</dd>
+                                    </div>
+                                </dl>
+                            </div>
+                        ))}
+                    </div>
+
+                    <DataTable className="hidden md:block">
                         <table className="min-w-full divide-y divide-slate-200">
                             <thead className="bg-slate-50">
                                 <tr>
@@ -175,7 +251,7 @@ export default function AdminPage() {
                     </DataTable>
                 </SectionCard>
 
-                <SectionCard title="현재 업데이트 정책" description="PWA 업데이트 안내와 최소 지원 버전을 관리합니다.">
+                <SectionCard id="updates" title="현재 업데이트 정책" description="PWA 업데이트 안내와 최소 지원 버전을 관리합니다.">
                     <dl className="space-y-3 text-sm">
                         {[
                             ['최신 버전', '0.1.0-beta'],
@@ -193,11 +269,16 @@ export default function AdminPage() {
                     <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
                         강제 업데이트 정책을 게시하더라도 사용자가 먼저 .cbam 백업 안내를 확인할 수 있어야 합니다.
                     </div>
+                    <Button type="button" variant="secondary" className="mt-4 w-full" disabled>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        업데이트 정책 수정
+                    </Button>
                 </SectionCard>
             </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <SectionCard
+                    id="announcements"
                     title="공지"
                     description="공지에는 앱 버전, 템플릿 확인 요청, 약관 변경 같은 운영 안내만 게시합니다."
                     actions={
@@ -225,7 +306,7 @@ export default function AdminPage() {
                     </div>
                 </SectionCard>
 
-                <SectionCard title="약관 버전" description="무료 사용 약관과 고지 버전을 관리합니다.">
+                <SectionCard id="terms" title="약관 버전" description="무료 사용 약관과 고지 버전을 관리합니다.">
                     <div className="space-y-3 text-sm">
                         <div className="rounded-2xl border border-slate-200 bg-white p-4">
                             <FileText className="mb-3 h-5 w-5 text-blue-700" />
@@ -240,7 +321,7 @@ export default function AdminPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                <SectionCard title="감사/보안 체크" description="관리자 기능을 확장할 때마다 아래 조건을 먼저 확인합니다.">
+                <SectionCard id="security" title="감사/보안 체크" description="관리자 기능을 확장할 때마다 아래 조건을 먼저 확인합니다.">
                     <ul className="space-y-3 text-sm text-slate-700">
                         {safetyChecks.map((item) => (
                             <li key={item} className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -251,7 +332,7 @@ export default function AdminPage() {
                     </ul>
                 </SectionCard>
 
-                <SectionCard title="다음 구현 단계" description="현재 화면은 운영 콘솔 UI 초안이며, 실제 운영 전 인증과 API가 필요합니다.">
+                <SectionCard title="다음 구현 단계" description="실제 운영 전 인증과 API 연결이 필요합니다. 화면 구조는 운영 콘솔 기준으로 유지합니다.">
                     <ol className="space-y-3 text-sm text-slate-700">
                         {[
                             '관리자 인증: Magic link 또는 Google OAuth 연결',

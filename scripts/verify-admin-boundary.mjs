@@ -5,6 +5,7 @@ import { join } from 'node:path';
 const adminDir = 'src/app/admin';
 const adminPagePath = `${adminDir}/page.tsx`;
 const appShell = readFileSync('src/components/AppShell.tsx', 'utf8');
+const adminShell = readFileSync('src/components/AdminShell.tsx', 'utf8');
 const serviceWorker = readFileSync('public/sw.js', 'utf8');
 const adminPlan = readFileSync('docs/harness/admin-console-plan.md', 'utf8');
 const skillPath = 'C:/Users/NT940XHA/.codex/skills/cbam-admin-panel/SKILL.md';
@@ -24,6 +25,7 @@ for (const required of [
   '약관 버전',
   '감사/보안 체크',
   'NEXT_PUBLIC_LICENSE_API_URL',
+  '오늘 확인할 운영 작업',
 ]) {
   assert.ok(adminPage.includes(required), `admin page should include ${required}`);
 }
@@ -39,6 +41,10 @@ for (const required of [
 }
 
 assert.ok(appShell.includes("'/admin': '관리자 콘솔'"), 'app shell should include admin route title');
+assert.ok(appShell.includes("pathname.startsWith('/admin')"), 'app shell should route admin paths to the dedicated admin shell');
+assert.ok(appShell.includes('<AdminShell>{children}</AdminShell>'), 'app shell should render AdminShell for admin paths');
+assert.ok(adminShell.includes('CBAM Local Admin'), 'admin shell should render a dedicated admin header');
+assert.ok(adminShell.includes('사용자 앱'), 'admin shell should link back to the user app without showing the user sidebar');
 assert.ok(serviceWorker.includes('"/admin"'), 'service worker should include admin route in the app shell');
 
 if (existsSync(skillPath)) {

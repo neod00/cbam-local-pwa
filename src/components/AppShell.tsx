@@ -1,5 +1,6 @@
 'use client';
 
+import AdminShell from '@/components/AdminShell';
 import Sidebar from '@/components/Sidebar';
 import PeriodBadge from '@/components/PeriodBadge';
 import UpdateNotice from '@/components/UpdateNotice';
@@ -32,6 +33,10 @@ const pageTitles: Record<string, string> = {
 export default function AppShell({ children }: { children: ReactNode }) {
     const pathname = usePathname();
     const title = pageTitles[pathname] ?? 'CBAM Local';
+
+    if (pathname.startsWith('/admin')) {
+        return <AdminShell>{children}</AdminShell>;
+    }
 
     return (
         <div className="min-h-screen min-w-0 overflow-x-hidden bg-[#F6F8F7] text-slate-950">

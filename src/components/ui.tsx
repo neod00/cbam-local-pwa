@@ -44,12 +44,14 @@ export function PageHeader({
 }
 
 export function SectionCard({
+    id,
     title,
     description,
     children,
     className,
     actions,
 }: {
+    id?: string;
     title?: string;
     description?: string;
     children: ReactNode;
@@ -57,7 +59,7 @@ export function SectionCard({
     actions?: ReactNode;
 }) {
     return (
-        <section className={clsx('w-full min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]', className)}>
+        <section id={id} className={clsx('w-full min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]', className)}>
             {(title || description || actions) && (
                 <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">

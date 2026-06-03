@@ -170,6 +170,7 @@ Completed:
 - Fixed the F5 versus Ctrl+F5 PWA mismatch by changing the service worker from cache-first route handling to network-first navigation/update handling, bumping the app cache version, and making the client registration bypass stale service-worker HTTP cache during update checks.
 - Refined the beginner-first UX by documenting `BeginnerFirstView`/`ExpertDisclosure`, simplifying the dashboard visible sections, moving detailed checklists into an expandable area, softening product/rule terminology, and renaming the scenario workflow to certificate-cost review while preserving SEFA/Annex details for expert disclosure.
 - Added a first-pass `/admin` operator console mock for free-license users, update policies, announcements, terms versions, and safety checks, plus an admin-boundary verification guard that prevents admin source from importing CBAM local calculation/export stores.
+- Split `/admin` away from the user PWA shell with a dedicated `AdminShell`, horizontal admin navigation, mobile-friendly license cards, and route checks that ensure user workflow menus do not appear in the operator console.
 
 Pending product decisions:
 

@@ -70,6 +70,9 @@ async function verifyRoutes() {
   assert.ok(renderedHtmlByRoute.get('/admin')?.includes('사용자/라이선스'), 'admin should render license user management');
   assert.ok(renderedHtmlByRoute.get('/admin')?.includes('생산량, 배출량, EU 템플릿'), 'admin should render the no-CBAM-data boundary');
   assert.ok(renderedHtmlByRoute.get('/admin')?.includes('NEXT_PUBLIC_LICENSE_API_URL'), 'admin should show the future license API activation boundary');
+  assert.ok(renderedHtmlByRoute.get('/admin')?.includes('CBAM Local Admin'), 'admin should render the dedicated admin shell');
+  assert.equal(renderedHtmlByRoute.get('/admin')?.includes('품목 관리'), false, 'admin should not render the user app sidebar');
+  assert.equal(renderedHtmlByRoute.get('/admin')?.includes('보고기간'), false, 'admin should not render user workflow navigation');
 
   assert.ok(renderedHtmlByRoute.get('/announcement')?.includes('CBAM Local PWA 무료 베타'), 'announcement should render beta announcement');
   assert.ok(renderedHtmlByRoute.get('/announcement')?.includes('openbrain.main@gmail.com'), 'announcement should render public support email');
