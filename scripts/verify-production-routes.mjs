@@ -8,6 +8,7 @@ const nextCliPath = join(process.cwd(), 'node_modules', 'next', 'dist', 'bin', '
 
 const routes = [
   '/',
+  '/admin',
   '/announcement',
   '/guide',
   '/installations',
@@ -64,6 +65,11 @@ async function verifyRoutes() {
   assert.ok(renderedHtmlByRoute.get('/')?.includes('사업장 등록'), 'dashboard should render the first beginner action');
   assert.equal(renderedHtmlByRoute.get('/')?.includes('벤치마크와 국가/CN 기본값 기준자료를 가져오세요.'), false, 'dashboard should not show official reference upload as the first beginner task');
   assert.ok(renderedHtmlByRoute.get('/')?.includes('.cbam'), 'dashboard should render local backup guidance');
+
+  assert.ok(renderedHtmlByRoute.get('/admin')?.includes('CBAM Local 관리자 콘솔'), 'admin should render the operator console');
+  assert.ok(renderedHtmlByRoute.get('/admin')?.includes('사용자/라이선스'), 'admin should render license user management');
+  assert.ok(renderedHtmlByRoute.get('/admin')?.includes('생산량, 배출량, EU 템플릿'), 'admin should render the no-CBAM-data boundary');
+  assert.ok(renderedHtmlByRoute.get('/admin')?.includes('NEXT_PUBLIC_LICENSE_API_URL'), 'admin should show the future license API activation boundary');
 
   assert.ok(renderedHtmlByRoute.get('/announcement')?.includes('CBAM Local PWA 무료 베타'), 'announcement should render beta announcement');
   assert.ok(renderedHtmlByRoute.get('/announcement')?.includes('openbrain.main@gmail.com'), 'announcement should render public support email');

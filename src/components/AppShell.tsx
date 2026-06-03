@@ -11,6 +11,7 @@ import type { ReactNode } from 'react';
 
 const pageTitles: Record<string, string> = {
     '/': '대시보드',
+    '/admin': '관리자 콘솔',
     '/announcement': '베타 배포 안내',
     '/guide': '시작 가이드',
     '/products': '품목 관리',

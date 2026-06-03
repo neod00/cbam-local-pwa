@@ -169,6 +169,7 @@ Completed:
 - Followed up on deployed-app expert review by confirming the live Vercel routes use the new AppShell and 2026 period badge, demoting official-reference upload below basic beginner tasks, converting the guide to a three-step summary plus expandable 12-step detail, and cleaning remaining user-facing legacy submission/formula-not-final wording in release docs.
 - Fixed the F5 versus Ctrl+F5 PWA mismatch by changing the service worker from cache-first route handling to network-first navigation/update handling, bumping the app cache version, and making the client registration bypass stale service-worker HTTP cache during update checks.
 - Refined the beginner-first UX by documenting `BeginnerFirstView`/`ExpertDisclosure`, simplifying the dashboard visible sections, moving detailed checklists into an expandable area, softening product/rule terminology, and renaming the scenario workflow to certificate-cost review while preserving SEFA/Annex details for expert disclosure.
+- Added a first-pass `/admin` operator console mock for free-license users, update policies, announcements, terms versions, and safety checks, plus an admin-boundary verification guard that prevents admin source from importing CBAM local calculation/export stores.
 
 Pending product decisions:
 
