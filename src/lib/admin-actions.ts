@@ -54,6 +54,28 @@ export async function updateLicenseUserStatus(formData: FormData) {
     redirectWithAdminMessage('라이선스 상태와 사용기한을 저장했습니다.');
 }
 
+export async function archiveLicenseUser(formData: FormData) {
+    await ensureAdmin();
+
+    const userId = normalizeFormValue(formData.get('user_id'));
+
+    if (!userId) {
+        redirectWithAdminMessage('보관 처리할 사용자를 선택하세요.', 'warning');
+    }
+
+    const sql = getAdminSql();
+    await sql`
+        update license_users
+        set archived_at = now(),
+            updated_at = now()
+        where id = ${userId}
+          and archived_at is null
+    `;
+
+    revalidatePath('/admin');
+    redirectWithAdminMessage('사용자를 운영 목록에서 보관 처리했습니다. CBAM 계산 데이터는 저장하거나 조회하지 않았습니다.');
+}
+
 export async function createLicenseUser(formData: FormData) {
     await ensureAdmin();
 

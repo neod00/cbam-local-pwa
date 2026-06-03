@@ -16,6 +16,7 @@ create table if not exists license_users (
     accepted_terms_at timestamptz,
     last_license_check_at timestamptz,
     last_app_version text,
+    archived_at timestamptz,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
@@ -60,6 +61,7 @@ create table if not exists terms_versions (
 
 create index if not exists license_users_status_idx on license_users (license_status);
 create index if not exists license_users_expires_idx on license_users (expires_at);
+create index if not exists license_users_archived_idx on license_users (archived_at);
 create index if not exists update_manifests_effective_idx on update_manifests (effective_from desc);
 create index if not exists announcements_window_idx on announcements (starts_at, ends_at);
 create index if not exists terms_versions_effective_idx on terms_versions (effective_from desc);

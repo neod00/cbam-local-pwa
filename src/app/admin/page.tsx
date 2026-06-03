@@ -1,6 +1,6 @@
 import { auth, signOut } from '@/auth';
 import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
-import { createAnnouncement, createLicenseUser, createTermsVersion, createUpdateManifest, updateLicenseUserStatus } from '@/lib/admin-actions';
+import { archiveLicenseUser, createAnnouncement, createLicenseUser, createTermsVersion, createUpdateManifest, updateLicenseUserStatus } from '@/lib/admin-actions';
 import { ADMIN_ANNOUNCEMENT_SEVERITIES } from '@/lib/admin-announcement';
 import { ADMIN_LICENSE_STATUSES } from '@/lib/admin-license-status';
 import { ADMIN_UPDATE_POLICIES } from '@/lib/admin-update-policy';
@@ -85,6 +85,17 @@ function LicenseStatusForm({ userId, currentStatus, currentExpiresAt, disabled }
             />
             <Button type="submit" variant="secondary" className="min-h-9 px-3 py-1.5" disabled={disabled}>
                 저장
+            </Button>
+        </form>
+    );
+}
+
+function ArchiveLicenseUserForm({ userId, disabled }: { userId: string; disabled: boolean }) {
+    return (
+        <form action={archiveLicenseUser}>
+            <input type="hidden" name="user_id" value={userId} />
+            <Button type="submit" variant="secondary" className="min-h-9 px-3 py-1.5" disabled={disabled}>
+                목록 보관
             </Button>
         </form>
     );
@@ -181,7 +192,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                 <StatCard label="등록 사용자" value={data.stats.registeredUsers} helper="배포 관리용 연락처 기준" icon={Users} tone="info" />
                 <StatCard label="활성 무료 라이선스" value={data.stats.activeFreeLicenses} helper="FREE_ACTIVE" icon={UserCheck} tone="success" />
                 <StatCard label="재확인 필요" value={data.stats.recheckRequired} helper="장기 미확인 사용자" icon={Clock3} tone="warning" />
-                <StatCard label="차단 상태" value={data.stats.blocked} helper="약관 위반 또는 운영 대응" icon={ShieldAlert} tone="danger" />
+                <StatCard label="차단/보관" value={`${data.stats.blocked}/${data.stats.archived}`} helper="차단 상태 / 목록 보관" icon={ShieldAlert} tone="danger" />
             </div>
 
             <SectionCard title="오늘 확인할 운영 작업" description="노트북과 휴대폰에서 빠르게 확인할 수 있는 관리자 우선 작업입니다.">
@@ -341,6 +352,9 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                                 <div className="mt-4">
                                     <LicenseStatusForm userId={user.id} currentStatus={user.status} currentExpiresAt={user.expiresAt} disabled={!isLive} />
                                 </div>
+                                <div className="mt-2">
+                                    <ArchiveLicenseUserForm userId={user.id} disabled={!isLive} />
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -373,7 +387,10 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.lastCheck}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.terms}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm">
-                                            <LicenseStatusForm userId={user.id} currentStatus={user.status} currentExpiresAt={user.expiresAt} disabled={!isLive} />
+                                            <div className="flex flex-col items-end gap-2">
+                                                <LicenseStatusForm userId={user.id} currentStatus={user.status} currentExpiresAt={user.expiresAt} disabled={!isLive} />
+                                                <ArchiveLicenseUserForm userId={user.id} disabled={!isLive} />
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

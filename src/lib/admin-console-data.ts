@@ -49,6 +49,7 @@ export type AdminConsoleData = {
         activeFreeLicenses: number;
         recheckRequired: number;
         blocked: number;
+        archived: number;
     };
     licenseUsers: AdminLicenseUser[];
     announcements: AdminAnnouncement[];
@@ -63,6 +64,7 @@ const sampleData: AdminConsoleData = {
         activeFreeLicenses: 112,
         recheckRequired: 9,
         blocked: 2,
+        archived: 0,
     },
     licenseUsers: [
         {
@@ -178,16 +180,18 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
         const sql = getAdminSql();
         const statsRows = (await sql`
             select
-                count(*)::int as registered_users,
-                count(*) filter (where license_status = 'FREE_ACTIVE')::int as active_free_licenses,
-                count(*) filter (where license_status = 'RECHECK_REQUIRED')::int as recheck_required,
-                count(*) filter (where license_status = 'BLOCKED')::int as blocked
+                count(*) filter (where archived_at is null)::int as registered_users,
+                count(*) filter (where archived_at is null and license_status = 'FREE_ACTIVE')::int as active_free_licenses,
+                count(*) filter (where archived_at is null and license_status = 'RECHECK_REQUIRED')::int as recheck_required,
+                count(*) filter (where archived_at is null and license_status = 'BLOCKED')::int as blocked,
+                count(*) filter (where archived_at is not null)::int as archived
             from license_users
         `) as Array<{
             registered_users: number;
             active_free_licenses: number;
             recheck_required: number;
             blocked: number;
+            archived: number;
         }>;
 
         const userRows = (await sql`
@@ -205,6 +209,7 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
                 expires_at,
                 accepted_terms_version
             from license_users
+            where archived_at is null
             order by updated_at desc
             limit 25
         `) as Array<{
@@ -270,6 +275,7 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
             active_free_licenses: 0,
             recheck_required: 0,
             blocked: 0,
+            archived: 0,
         };
 
         return {
@@ -279,6 +285,7 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
                 activeFreeLicenses: stats.active_free_licenses,
                 recheckRequired: stats.recheck_required,
                 blocked: stats.blocked,
+                archived: stats.archived,
             },
             licenseUsers: userRows.map((user) => ({
                 id: user.id,

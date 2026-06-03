@@ -187,6 +187,7 @@ Completed:
 - Added email-code based license recovery endpoints and `/license` UI so users can recover an approved free license on another browser/device without a password, using only email ownership verification.
 - Added Gmail API mail sending for license recovery codes and configured the production flow so `openbrain.main@gmail.com` can send free-license verification emails without Resend.
 - Added automatic license-status refresh in the client gate so admin approval, expiry extension, or blocking changes are picked up on user revisit without requiring manual status-check navigation.
+- Added admin-side license-user archive handling so test or mistaken registrations can be hidden from the active operations list without deleting license history or collecting CBAM calculation data.
 
 Pending product decisions:
 
@@ -198,6 +199,7 @@ Next:
 - Review and finalize `docs/free-pwa-terms-draft.md` and `docs/free-pwa-release-announcement-draft.md` with legal/operational wording before public distribution.
 - Make the limited beta Go/No-Go decision after legal/operator wording review.
 - Run post-deploy smoke checks for the live `/license` registration gate, email-code recovery, automatic approval refresh, and Neon admin forms after pushing these updates.
+- Run `db/admin/004_license_user_archive.sql` in Neon before using the admin `목록 보관` action in production.
 
 ## Decision Log
 

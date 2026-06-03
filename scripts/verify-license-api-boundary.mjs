@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 
 const requiredFiles = [
   'db/admin/001_init.sql',
+  'db/admin/004_license_user_archive.sql',
   'db/admin/003_license_email_verifications.sql',
   'src/lib/admin-db.ts',
   'src/lib/license-api.ts',
@@ -24,6 +25,7 @@ assert.ok(packageJson.dependencies['@neondatabase/serverless'], 'Neon serverless
 
 const schema = [
   readFileSync('db/admin/001_init.sql', 'utf8'),
+  readFileSync('db/admin/004_license_user_archive.sql', 'utf8'),
   readFileSync('db/admin/003_license_email_verifications.sql', 'utf8'),
 ].join('\n');
 for (const required of [
@@ -34,6 +36,7 @@ for (const required of [
   'contact_phone',
   'license_key',
   'expires_at',
+  'archived_at',
   'license_email_verifications',
   'UNREGISTERED',
   'FREE_ACTIVE',
