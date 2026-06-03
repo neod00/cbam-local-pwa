@@ -43,12 +43,14 @@ for (const required of [
   'updateLicenseUserStatus',
   'createUpdateManifest',
   'createAnnouncement',
+  'createTermsVersion',
   'ADMIN_ANNOUNCEMENT_SEVERITIES',
   'ADMIN_LICENSE_STATUSES',
   'ADMIN_UPDATE_POLICIES',
   '상태 변경 가능',
   '새 업데이트 정책 저장',
   '공지 등록',
+  '새 약관 버전 등록',
 ]) {
   assert.ok(adminPage.includes(required), `admin page should include ${required}`);
 }
@@ -85,6 +87,8 @@ for (const required of [
   'release_notes_url',
   'body',
   'severity',
+  'body_url',
+  'is_required',
 ]) {
   assert.ok(adminConsoleData.includes(required), `admin console data loader should include ${required}`);
 }
@@ -99,6 +103,7 @@ for (const required of [
   'revalidatePath',
   'update_manifests',
   'announcements',
+  'terms_versions',
 ]) {
   assert.ok(adminActions.includes(required), `admin actions should include ${required}`);
 }

@@ -119,3 +119,42 @@ export async function createAnnouncement(formData: FormData) {
 
     revalidatePath('/admin');
 }
+
+export async function createTermsVersion(formData: FormData) {
+    await ensureAdmin();
+
+    const version = normalizeFormValue(formData.get('version'));
+    const title = normalizeFormValue(formData.get('title'));
+    const bodyUrl = normalizeFormValue(formData.get('body_url'));
+    const effectiveFrom = normalizeFormValue(formData.get('effective_from'));
+    const isRequired = normalizeFormValue(formData.get('is_required')) !== 'false';
+
+    if (!version || !title) {
+        throw new Error('약관 버전과 제목을 입력하세요.');
+    }
+
+    const sql = getAdminSql();
+    await sql`
+        insert into terms_versions (
+            version,
+            title,
+            body_url,
+            effective_from,
+            is_required
+        )
+        values (
+            ${version},
+            ${title},
+            ${bodyUrl || null},
+            ${effectiveFrom || new Date().toISOString()},
+            ${isRequired}
+        )
+        on conflict (version) do update
+        set title = excluded.title,
+            body_url = excluded.body_url,
+            effective_from = excluded.effective_from,
+            is_required = excluded.is_required
+    `;
+
+    revalidatePath('/admin');
+}

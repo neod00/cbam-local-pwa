@@ -1,6 +1,6 @@
 import { auth, signOut } from '@/auth';
 import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
-import { createAnnouncement, createUpdateManifest, updateLicenseUserStatus } from '@/lib/admin-actions';
+import { createAnnouncement, createTermsVersion, createUpdateManifest, updateLicenseUserStatus } from '@/lib/admin-actions';
 import { ADMIN_ANNOUNCEMENT_SEVERITIES } from '@/lib/admin-announcement';
 import { ADMIN_LICENSE_STATUSES } from '@/lib/admin-license-status';
 import { ADMIN_UPDATE_POLICIES } from '@/lib/admin-update-policy';
@@ -461,10 +461,77 @@ export default async function AdminPage() {
                             <FileText className="mb-3 h-5 w-5 text-blue-700" />
                             <div className="font-semibold text-slate-950">{data.termsVersion.version}</div>
                             <p className="mt-1 text-slate-600">{data.termsVersion.title}</p>
+                            <dl className="mt-3 space-y-2 text-xs text-slate-500">
+                                <div className="flex justify-between gap-3">
+                                    <dt>본문 URL</dt>
+                                    <dd className="font-medium text-slate-700">{data.termsVersion.bodyUrl}</dd>
+                                </div>
+                                <div className="flex justify-between gap-3">
+                                    <dt>적용일</dt>
+                                    <dd className="font-medium text-slate-700">{data.termsVersion.effectiveFrom}</dd>
+                                </div>
+                                <div className="flex justify-between gap-3">
+                                    <dt>필수 동의</dt>
+                                    <dd className="font-medium text-slate-700">{data.termsVersion.isRequired ? '예' : '아니오'}</dd>
+                                </div>
+                            </dl>
                         </div>
-                        <Button type="button" variant="secondary" className="w-full" disabled>
-                            새 약관 버전 등록
-                        </Button>
+                        <form action={createTermsVersion} className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>약관 버전</span>
+                                <input
+                                    name="version"
+                                    defaultValue={data.termsVersion.version}
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>약관 제목</span>
+                                <input
+                                    name="title"
+                                    defaultValue={data.termsVersion.title}
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>본문 URL</span>
+                                <input
+                                    name="body_url"
+                                    defaultValue={data.termsVersion.bodyUrl}
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                    <span>적용일</span>
+                                    <input
+                                        name="effective_from"
+                                        defaultValue={data.termsVersion.effectiveFrom}
+                                        disabled={!isLive}
+                                        type="date"
+                                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                    />
+                                </label>
+                                <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                    <span>필수 동의</span>
+                                    <select
+                                        name="is_required"
+                                        defaultValue={data.termsVersion.isRequired ? 'true' : 'false'}
+                                        disabled={!isLive}
+                                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                    >
+                                        <option value="true">예</option>
+                                        <option value="false">아니오</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <Button type="submit" variant="secondary" className="w-full" disabled={!isLive}>
+                                새 약관 버전 등록
+                            </Button>
+                        </form>
                     </div>
                 </SectionCard>
             </div>

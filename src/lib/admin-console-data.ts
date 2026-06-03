@@ -36,6 +36,9 @@ export type AdminUpdatePolicy = {
 export type AdminTermsVersion = {
     version: string;
     title: string;
+    bodyUrl: string;
+    effectiveFrom: string;
+    isRequired: boolean;
 };
 
 export type AdminConsoleData = {
@@ -130,6 +133,9 @@ const sampleData: AdminConsoleData = {
     termsVersion: {
         version: '2026.06-beta',
         title: '현재 무료 베타 약관',
+        bodyUrl: '/terms',
+        effectiveFrom: '2026-06-03',
+        isRequired: true,
     },
 };
 
@@ -241,13 +247,16 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
         }>;
 
         const termsRows = (await sql`
-            select version, title
+            select version, title, body_url, effective_from, is_required
             from terms_versions
             order by effective_from desc nulls last, created_at desc
             limit 1
         `) as Array<{
             version: string;
             title: string;
+            body_url: string | null;
+            effective_from: string | null;
+            is_required: boolean;
         }>;
 
         const stats = statsRows[0] ?? {
@@ -297,7 +306,15 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
                     targetAudience: updateRows[0].target_audience,
                 }
                 : sampleData.updatePolicy,
-            termsVersion: termsRows[0] ?? sampleData.termsVersion,
+            termsVersion: termsRows[0]
+                ? {
+                    version: termsRows[0].version,
+                    title: termsRows[0].title,
+                    bodyUrl: termsRows[0].body_url ?? sampleData.termsVersion.bodyUrl,
+                    effectiveFrom: formatDate(termsRows[0].effective_from),
+                    isRequired: termsRows[0].is_required,
+                }
+                : sampleData.termsVersion,
         };
     } catch (error) {
         if (isAdminDbUnavailable(error)) {
