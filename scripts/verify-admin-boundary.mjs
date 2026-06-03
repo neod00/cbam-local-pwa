@@ -12,6 +12,7 @@ const serviceWorker = readFileSync('public/sw.js', 'utf8');
 const adminPlan = readFileSync('docs/harness/admin-console-plan.md', 'utf8');
 const authConfig = readFileSync('src/auth.ts', 'utf8');
 const adminAuth = readFileSync('src/lib/admin-auth.ts', 'utf8');
+const adminConsoleData = readFileSync('src/lib/admin-console-data.ts', 'utf8');
 const proxy = readFileSync('proxy.ts', 'utf8');
 const skillPath = 'C:/Users/NT940XHA/.codex/skills/cbam-admin-panel/SKILL.md';
 
@@ -35,6 +36,8 @@ for (const required of [
   'NEXT_PUBLIC_LICENSE_API_URL',
   '오늘 확인할 운영 작업',
   '연락처',
+  'Neon 연결 상태',
+  'getAdminConsoleData',
 ]) {
   assert.ok(adminPage.includes(required), `admin page should include ${required}`);
 }
@@ -56,8 +59,22 @@ for (const required of [
   'update_manifests',
   'announcements',
   'Data Boundary',
+  'Neon',
 ]) {
   assert.ok(adminPlan.includes(required), `admin plan should include ${required}`);
+}
+
+for (const required of [
+  'getAdminSql',
+  'license_users',
+  'update_manifests',
+  'announcements',
+  'terms_versions',
+  'sampleData',
+  "source: 'live'",
+  "source: 'sample'",
+]) {
+  assert.ok(adminConsoleData.includes(required), `admin console data loader should include ${required}`);
 }
 
 assert.ok(appShell.includes("pathname.startsWith('/admin')"), 'app shell should route admin paths to the dedicated admin shell');
@@ -100,6 +117,7 @@ const adminSource = [
       .filter((file) => /\.(tsx|ts|js|mjs)$/.test(file))
       .map((file) => readFileSync(file, 'utf8'))
     : []),
+  adminConsoleData,
   adminAuth,
   authConfig,
   proxy,

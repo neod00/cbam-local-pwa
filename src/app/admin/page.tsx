@@ -1,10 +1,12 @@
 import { auth, signOut } from '@/auth';
 import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { isAllowedAdminEmail } from '@/lib/admin-auth';
+import { getAdminConsoleData } from '@/lib/admin-console-data';
 import {
     Bell,
     CheckCircle2,
     Clock3,
+    Database,
     FileText,
     KeyRound,
     LogOut,
@@ -19,50 +21,12 @@ import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-const licenseUsers = [
-    {
-        status: 'FREE_ACTIVE',
-        email: 'manager@example.co.kr',
-        company: '대한철강 주식회사',
-        contact: '김지연',
-        phone: '010-0000-1001',
-        country: 'South Korea',
-        industry: 'Iron and steel',
-        appVersion: '0.1.0-beta',
-        lastCheck: '2026-06-03 09:12',
-        terms: '2026.06-beta',
-    },
-    {
-        status: 'RECHECK_REQUIRED',
-        email: 'esg-team@example.com',
-        company: '한빛소재',
-        contact: '박민수',
-        phone: '010-0000-1002',
-        country: 'South Korea',
-        industry: 'Aluminium',
-        appVersion: '0.1.0-beta',
-        lastCheck: '2026-05-24 16:40',
-        terms: '2026.06-beta',
-    },
-    {
-        status: 'OFFLINE_ALLOWED',
-        email: 'cbam@example.net',
-        company: '동아케미칼',
-        contact: '이서현',
-        phone: '010-0000-1003',
-        country: 'South Korea',
-        industry: 'Fertiliser',
-        appVersion: '0.1.0-beta',
-        lastCheck: '2026-05-31 11:05',
-        terms: '2026.06-beta',
-    },
-];
-
 const statusTone: Record<string, 'success' | 'warning' | 'pending' | 'danger'> = {
     FREE_ACTIVE: 'success',
     RECHECK_REQUIRED: 'warning',
     OFFLINE_ALLOWED: 'pending',
     BLOCKED: 'danger',
+    UNREGISTERED: 'pending',
 };
 
 const statusLabel: Record<string, string> = {
@@ -70,43 +34,8 @@ const statusLabel: Record<string, string> = {
     RECHECK_REQUIRED: '재확인 필요',
     OFFLINE_ALLOWED: '오프라인 허용',
     BLOCKED: '차단',
+    UNREGISTERED: '미등록',
 };
-
-const announcementItems = [
-    {
-        title: 'v0.1.0-beta 배포 안내',
-        severity: 'info' as const,
-        period: '2026-06-03 - 2026-06-30',
-        target: '전체 사용자',
-    },
-    {
-        title: 'EU 원본 템플릿 최신본 확인 요청',
-        severity: 'warning' as const,
-        period: '2026-06-10 - 2026-07-10',
-        target: '철강 품목 사용자',
-    },
-];
-
-const quickActions = [
-    {
-        title: '재확인 필요 사용자 처리',
-        description: '장기간 라이선스 확인이 없는 사용자를 검토하고 안내 메일 발송 대상을 정리합니다.',
-        status: '9건',
-        tone: 'warning' as const,
-    },
-    {
-        title: '업데이트 정책 확인',
-        description: '현재 정책은 권장 업데이트입니다. 강제 업데이트로 전환할 경우 .cbam 백업 안내 문구를 함께 확인하세요.',
-        status: '권장',
-        tone: 'pending' as const,
-    },
-    {
-        title: '공지 게시 상태 점검',
-        description: '게시 중인 공지 2건의 대상 그룹과 종료일을 확인합니다.',
-        status: '2건',
-        tone: 'info' as const,
-    },
-];
 
 const safetyChecks = [
     '관리자 콘솔은 사용자 등록, 무료 라이선스, 공지, 업데이트 정책만 관리합니다.',
@@ -115,11 +44,45 @@ const safetyChecks = [
     '라이선스 확인 실패 또는 오프라인 상태에서는 마지막 확인 결과를 기준으로 계속 사용할 수 있게 합니다.',
 ];
 
+function updatePolicyLabel(policy: string) {
+    const labels: Record<string, string> = {
+        none: '업데이트 없음',
+        optional: '선택 업데이트',
+        recommended: '권장 업데이트',
+        required: '강제 업데이트',
+    };
+
+    return labels[policy] ?? policy;
+}
+
 export default async function AdminPage() {
     const session = await auth();
     if (!isAllowedAdminEmail(session?.user?.email)) {
         redirect('/admin/login');
     }
+
+    const data = await getAdminConsoleData();
+
+    const quickActions = [
+        {
+            title: '재확인 필요 사용자 처리',
+            description: '장기간 라이선스 확인이 없는 사용자를 검토하고 안내 메일 발송 대상을 정리합니다.',
+            status: `${data.stats.recheckRequired}건`,
+            tone: data.stats.recheckRequired > 0 ? 'warning' as const : 'success' as const,
+        },
+        {
+            title: '업데이트 정책 확인',
+            description: '강제 업데이트로 전환할 경우 .cbam 백업 안내 문구를 함께 확인하세요.',
+            status: updatePolicyLabel(data.updatePolicy.updatePolicy),
+            tone: data.updatePolicy.updatePolicy === 'required' ? 'warning' as const : 'pending' as const,
+        },
+        {
+            title: '공지 게시 상태 점검',
+            description: '게시 중인 공지의 대상 그룹과 종료일을 확인합니다.',
+            status: `${data.announcements.length}건`,
+            tone: data.announcements.length > 0 ? 'info' as const : 'pending' as const,
+        },
+    ];
 
     async function signOutAdmin() {
         'use server';
@@ -134,6 +97,9 @@ export default async function AdminPage() {
                 description="무료 PWA 배포, 라이선스, 공지, 업데이트 정책만 관리하는 운영자용 콘솔입니다. CBAM 산정 데이터 저장소가 아닙니다."
                 actions={
                     <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge tone={data.source === 'live' ? 'success' : 'pending'}>
+                            {data.source === 'live' ? 'Neon 연결됨' : '샘플 데이터'}
+                        </StatusBadge>
                         <StatusBadge tone="success">{session?.user?.email ?? '관리자 로그인'}</StatusBadge>
                         <form action={signOutAdmin}>
                             <Button type="submit" variant="secondary">
@@ -151,19 +117,18 @@ export default async function AdminPage() {
                     <div>
                         <h2 className="font-semibold text-teal-950">데이터 경계</h2>
                         <p className="mt-1">
-                            무료 라이선스와 업데이트 확인에는 이메일, 회사명, 담당자명, 연락처, 앱 버전 같은 배포 관리
-                            정보만 사용됩니다. 생산량, 배출량, 전구물질, EU 템플릿, .cbam 백업 파일은 서버로 전송하지
-                            않습니다.
+                            무료 라이선스와 업데이트 확인에는 이메일, 회사명, 담당자명, 연락처, 앱 버전 같은 배포 관리 정보만
+                            사용됩니다. 생산량, 배출량, 전구물질, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다.
                         </p>
                     </div>
                 </div>
             </SectionCard>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <StatCard label="등록 사용자" value="128" helper="배포 관리용 연락처 기준" icon={Users} tone="info" />
-                <StatCard label="활성 무료 라이선스" value="112" helper="FREE_ACTIVE" icon={UserCheck} tone="success" />
-                <StatCard label="재확인 필요" value="9" helper="장기 미확인 사용자" icon={Clock3} tone="warning" />
-                <StatCard label="차단 상태" value="2" helper="약관 위반 또는 운영 대응" icon={ShieldAlert} tone="danger" />
+                <StatCard label="등록 사용자" value={data.stats.registeredUsers} helper="배포 관리용 연락처 기준" icon={Users} tone="info" />
+                <StatCard label="활성 무료 라이선스" value={data.stats.activeFreeLicenses} helper="FREE_ACTIVE" icon={UserCheck} tone="success" />
+                <StatCard label="재확인 필요" value={data.stats.recheckRequired} helper="장기 미확인 사용자" icon={Clock3} tone="warning" />
+                <StatCard label="차단 상태" value={data.stats.blocked} helper="약관 위반 또는 운영 대응" icon={ShieldAlert} tone="danger" />
             </div>
 
             <SectionCard title="오늘 확인할 운영 작업" description="노트북과 휴대폰에서 빠르게 확인할 수 있는 관리자 우선 작업입니다.">
@@ -196,11 +161,11 @@ export default async function AdminPage() {
                     }
                 >
                     <div className="space-y-3 md:hidden">
-                        {licenseUsers.map((user) => (
+                        {data.licenseUsers.map((user) => (
                             <div key={`${user.email}-mobile`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
-                                        <StatusBadge tone={statusTone[user.status]}>{statusLabel[user.status]}</StatusBadge>
+                                        <StatusBadge tone={statusTone[user.status] ?? 'pending'}>{statusLabel[user.status] ?? user.status}</StatusBadge>
                                         <h3 className="mt-3 break-words text-base font-semibold text-slate-950">{user.company}</h3>
                                         <p className="mt-1 break-words text-sm text-slate-600">{user.email}</p>
                                     </div>
@@ -242,10 +207,10 @@ export default async function AdminPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 bg-white">
-                                {licenseUsers.map((user) => (
+                                {data.licenseUsers.map((user) => (
                                     <tr key={user.email}>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm">
-                                            <StatusBadge tone={statusTone[user.status]}>{statusLabel[user.status]}</StatusBadge>
+                                            <StatusBadge tone={statusTone[user.status] ?? 'pending'}>{statusLabel[user.status] ?? user.status}</StatusBadge>
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-slate-950">{user.email}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-700">{user.company}</td>
@@ -276,11 +241,11 @@ export default async function AdminPage() {
                 <SectionCard id="updates" title="현재 업데이트 정책" description="PWA 업데이트 안내와 최소 지원 버전을 관리합니다.">
                     <dl className="space-y-3 text-sm">
                         {[
-                            ['최신 버전', '0.1.0-beta'],
-                            ['최소 지원 버전', '0.1.0-beta'],
-                            ['업데이트 정책', '권장 업데이트'],
-                            ['적용 시작일', '2026-06-03'],
-                            ['대상 그룹', '전체 사용자'],
+                            ['최신 버전', data.updatePolicy.latestVersion],
+                            ['최소 지원 버전', data.updatePolicy.minimumSupportedVersion],
+                            ['업데이트 정책', updatePolicyLabel(data.updatePolicy.updatePolicy)],
+                            ['적용 시작일', data.updatePolicy.effectiveFrom],
+                            ['대상 그룹', data.updatePolicy.targetAudience],
                         ].map(([label, value]) => (
                             <div key={label} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
                                 <dt className="text-slate-500">{label}</dt>
@@ -311,7 +276,7 @@ export default async function AdminPage() {
                     className="lg:col-span-2"
                 >
                     <div className="space-y-3">
-                        {announcementItems.map((item) => (
+                        {data.announcements.map((item) => (
                             <div key={item.title} className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
                                 <div className="flex gap-3">
                                     <Megaphone className="mt-1 h-5 w-5 flex-none text-teal-700" />
@@ -320,8 +285,8 @@ export default async function AdminPage() {
                                         <p className="mt-1 text-sm text-slate-600">{item.period} / {item.target}</p>
                                     </div>
                                 </div>
-                                <StatusBadge tone={item.severity === 'warning' ? 'warning' : 'info'}>
-                                    {item.severity === 'warning' ? '주의' : '안내'}
+                                <StatusBadge tone={item.severity === 'warning' ? 'warning' : item.severity === 'critical' ? 'danger' : 'info'}>
+                                    {item.severity === 'warning' ? '주의' : item.severity === 'critical' ? '긴급' : '안내'}
                                 </StatusBadge>
                             </div>
                         ))}
@@ -332,8 +297,8 @@ export default async function AdminPage() {
                     <div className="space-y-3 text-sm">
                         <div className="rounded-2xl border border-slate-200 bg-white p-4">
                             <FileText className="mb-3 h-5 w-5 text-blue-700" />
-                            <div className="font-semibold text-slate-950">2026.06-beta</div>
-                            <p className="mt-1 text-slate-600">현재 무료 베타 약관</p>
+                            <div className="font-semibold text-slate-950">{data.termsVersion.version}</div>
+                            <p className="mt-1 text-slate-600">{data.termsVersion.title}</p>
                         </div>
                         <Button type="button" variant="secondary" className="w-full" disabled>
                             새 약관 버전 등록
@@ -354,22 +319,22 @@ export default async function AdminPage() {
                     </ul>
                 </SectionCard>
 
-                <SectionCard title="다음 구현 단계" description="실제 운영에는 인증, API, DB 연결이 순차적으로 필요합니다.">
-                    <ol className="space-y-3 text-sm text-slate-700">
-                        {[
-                            'Google OAuth 관리자 로그인 적용',
-                            'Neon Postgres에 license_users, update_manifests, announcements, terms_versions 생성',
-                            'license-api: 등록, 상태 확인, update manifest, 공지 API 구현',
-                            'PWA 연동: NEXT_PUBLIC_LICENSE_API_URL이 있을 때만 원격 확인 활성화',
-                        ].map((item, index) => (
-                            <li key={item} className="flex gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                                <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-teal-50 text-xs font-semibold text-teal-800">
-                                    {index + 1}
-                                </span>
-                                <span>{item}</span>
-                            </li>
-                        ))}
-                    </ol>
+                <SectionCard title="Neon 연결 상태" description="실제 운영 데이터 연결 여부와 다음 작업을 확인합니다.">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
+                        <div className="flex gap-3">
+                            <Database className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
+                            <div>
+                                <h3 className="font-semibold text-slate-950">
+                                    {data.source === 'live' ? 'Neon 데이터로 표시 중' : 'DATABASE_URL 미설정 또는 연결 실패'}
+                                </h3>
+                                <p className="mt-1">
+                                    Neon SQL Editor에서 `db/admin/001_init.sql`을 실행하고 Vercel에 `DATABASE_URL`을 설정하면 이 화면이
+                                    실제 license_users, update_manifests, announcements, terms_versions 데이터를 표시합니다.
+                                    사용자 PWA의 원격 라이선스 확인은 `NEXT_PUBLIC_LICENSE_API_URL`이 설정된 경우에만 켭니다.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </SectionCard>
             </div>
 
