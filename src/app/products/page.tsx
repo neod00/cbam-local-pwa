@@ -12,7 +12,6 @@ import {
     Product,
     ProductionProcess,
     PurchasedPrecursor,
-    seedLocalData,
     setLocalSetting,
     updateLocalItem,
 } from '@/lib/local-db';
@@ -114,7 +113,6 @@ export default function ProductsPage() {
     useEffect(() => {
         async function fetchProducts() {
             setLoading(true);
-            await seedLocalData();
             const [data, storedCnOptions, processData, precursorData] = await Promise.all([
                 listLocalItems('products'),
                 getLocalSetting<CnCodeOption[]>('cn-code-options'),

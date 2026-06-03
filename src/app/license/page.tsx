@@ -2,10 +2,12 @@
 
 import { Button, PageHeader, SectionCard, StatusBadge } from '@/components/ui';
 import {
+    canUseCoreApp,
     checkFreeLicenseStatus,
     createOfflineAllowedRegistration,
     FREE_LICENSE_SETTING_KEY,
     FREE_LICENSE_TERMS_VERSION,
+    isLicenseExpired,
     registerFreeLicense,
     type FreeLicenseRegistration,
 } from '@/lib/free-license-client';
@@ -25,6 +27,7 @@ function emptyLicenseRegistration(): FreeLicenseRegistration {
         license_key: '',
         status: 'UNREGISTERED',
         accepted_terms_version: FREE_LICENSE_TERMS_VERSION,
+        expires_at: null,
     };
 }
 
@@ -35,6 +38,14 @@ function getStatusLabel(registration: FreeLicenseRegistration) {
 
     if (registration.status === 'BLOCKED') {
         return { label: '사용 제한', tone: 'danger' as const };
+    }
+
+    if (isLicenseExpired(registration.expires_at)) {
+        return { label: '사용기한 만료', tone: 'danger' as const };
+    }
+
+    if (registration.status === 'UNREGISTERED') {
+        return { label: '승인 대기', tone: 'pending' as const };
     }
 
     if (registration.status === 'RECHECK_REQUIRED') {
@@ -53,6 +64,7 @@ export default function LicensePage() {
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const status = useMemo(() => getStatusLabel(registration), [registration]);
+    const canEnterApp = canUseCoreApp(registration.status, registration.expires_at) && Boolean(registration.license_key);
 
     useEffect(() => {
         getLocalSetting<FreeLicenseRegistration>(FREE_LICENSE_SETTING_KEY)
@@ -91,7 +103,7 @@ export default function LicensePage() {
         try {
             const nextRegistration = await registerFreeLicense(input);
             await saveRegistration(nextRegistration);
-            setMessage(nextRegistration.message ?? '무료 사용 등록이 완료되었습니다. 이제 CBAM 업무 기능을 사용할 수 있습니다.');
+            setMessage(nextRegistration.message ?? '무료 사용 등록이 접수되었습니다. 관리자가 승인하면 사용할 수 있습니다.');
         } catch (error) {
             const offlineRegistration = createOfflineAllowedRegistration(input, registration);
             await saveRegistration(offlineRegistration);
@@ -131,7 +143,7 @@ export default function LicensePage() {
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
                 <SectionCard
                     title="무료 사용 등록"
-                    description="일반 회원가입처럼 먼저 등록한 뒤 사업장, 품목, 산정, Export 기능을 사용합니다."
+                    description="일반 회원가입처럼 먼저 등록합니다. 신규 등록은 관리자 승인 후 사업장, 품목, 산정, Export 기능을 사용할 수 있습니다."
                     actions={<StatusBadge tone={status.tone}>{status.label}</StatusBadge>}
                 >
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -201,6 +213,9 @@ export default function LicensePage() {
                             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
                                 <p className="font-semibold text-slate-950">라이선스 키</p>
                                 <p className="mt-1 break-all">{registration.license_key}</p>
+                                <p className="mt-2 text-slate-600">
+                                    사용기한: {registration.expires_at ? new Date(registration.expires_at).toLocaleDateString('ko-KR') : '관리자 승인 시 설정'}
+                                </p>
                             </div>
                         )}
 
@@ -212,7 +227,7 @@ export default function LicensePage() {
                             <Button type="button" variant="secondary" onClick={() => void handleStatusCheck()} disabled={isSubmitting || !registration.license_key}>
                                 상태 확인
                             </Button>
-                            {registration.license_key && registration.status !== 'BLOCKED' && (
+                            {canEnterApp && (
                                 <Link href="/">
                                     <Button type="button" variant="secondary">
                                         대시보드로 이동

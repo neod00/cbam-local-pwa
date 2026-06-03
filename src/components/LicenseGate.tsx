@@ -5,6 +5,7 @@ import {
     canUseCoreApp,
     FREE_LICENSE_SETTING_KEY,
     isLicenseBlocked,
+    isLicenseExpired,
     isLicenseGateOpenRoute,
     type FreeLicenseRegistration,
 } from '@/lib/free-license-client';
@@ -17,7 +18,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 type GateState =
     | { status: 'loading' }
     | { status: 'open' }
-    | { status: 'locked'; reason: 'unregistered' | 'blocked'; registration?: FreeLicenseRegistration };
+    | { status: 'locked'; reason: 'unregistered' | 'pending' | 'expired' | 'blocked'; registration?: FreeLicenseRegistration };
 
 function getGateState(pathname: string, registration?: FreeLicenseRegistration): GateState {
     if (isLicenseGateOpenRoute(pathname)) {
@@ -28,15 +29,40 @@ function getGateState(pathname: string, registration?: FreeLicenseRegistration):
         return { status: 'locked', reason: 'blocked', registration };
     }
 
-    if (canUseCoreApp(registration?.status) && registration?.license_key) {
+    if (isLicenseExpired(registration?.expires_at)) {
+        return { status: 'locked', reason: 'expired', registration };
+    }
+
+    if (canUseCoreApp(registration?.status, registration?.expires_at) && registration?.license_key) {
         return { status: 'open' };
+    }
+
+    if (registration?.license_key && registration.status === 'UNREGISTERED') {
+        return { status: 'locked', reason: 'pending', registration };
     }
 
     return { status: 'locked', reason: 'unregistered', registration };
 }
 
-function LockedLicensePanel({ reason, registration }: { reason: 'unregistered' | 'blocked'; registration?: FreeLicenseRegistration }) {
+function LockedLicensePanel({ reason, registration }: { reason: 'unregistered' | 'pending' | 'expired' | 'blocked'; registration?: FreeLicenseRegistration }) {
     const isBlocked = reason === 'blocked';
+    const isExpired = reason === 'expired';
+    const isPending = reason === 'pending';
+    const badgeLabel = isBlocked ? '사용 제한' : isExpired ? '사용기한 만료' : isPending ? '승인 대기' : '무료 라이선스 필요';
+    const title = isBlocked
+        ? '관리자 확인이 필요한 라이선스 상태입니다.'
+        : isExpired
+            ? '무료 라이선스 사용기한이 만료되었습니다.'
+            : isPending
+                ? '무료 사용 등록이 접수되었습니다. 관리자 승인 후 사용할 수 있습니다.'
+                : '무료 사용 등록 후 관리자 승인을 받으면 업무 기능을 사용할 수 있습니다.';
+    const description = isBlocked
+        ? '현재 라이선스가 차단 상태입니다. 사업장, 품목, 산정, Export 같은 핵심 기능은 잠시 제한됩니다.'
+        : isExpired
+            ? '관리자에게 사용기한 연장을 요청하세요. 기존 .cbam 백업/복원 경로는 계속 열려 있습니다.'
+            : isPending
+                ? '등록 정보는 관리자 콘솔에 표시됩니다. 승인되면 이 화면의 상태 확인 버튼으로 사용 가능 상태를 갱신하세요.'
+                : '무료 배포 관리를 위해 이메일, 회사명, 담당자명, 연락처만 등록합니다. 등록 전에는 사업장, 품목, 산정, Export 기능을 사용할 수 없습니다.';
 
     return (
         <div className="mx-auto max-w-4xl space-y-5">
@@ -48,15 +74,13 @@ function LockedLicensePanel({ reason, registration }: { reason: 'unregistered' |
                         </div>
                         <div>
                             <StatusBadge tone={isBlocked ? 'danger' : 'warning'}>
-                                {isBlocked ? '사용 제한' : '무료 라이선스 필요'}
+                                {badgeLabel}
                             </StatusBadge>
                             <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">
-                                {isBlocked ? '관리자 확인이 필요한 라이선스 상태입니다.' : '무료 라이선스를 등록하면 업무 기능을 사용할 수 있습니다.'}
+                                {title}
                             </h2>
                             <p className="mt-3 text-sm leading-6 text-slate-700">
-                                {isBlocked
-                                    ? '현재 라이선스가 차단 상태입니다. 사업장, 품목, 산정, Export 같은 핵심 기능은 잠시 제한됩니다.'
-                                    : '무료 배포 관리를 위해 이메일, 회사명, 담당자명, 연락처만 등록합니다. 등록 전에는 사업장, 품목, 산정, Export 기능을 사용할 수 없습니다.'}
+                                {description}
                             </p>
                         </div>
                     </div>
@@ -64,7 +88,7 @@ function LockedLicensePanel({ reason, registration }: { reason: 'unregistered' |
                         <Link href="/license">
                             <Button>
                                 <KeyRound className="mr-2 h-4 w-4" />
-                                {isBlocked ? '상태 확인하기' : '무료 라이선스 등록'}
+                                {isBlocked || isPending || isExpired ? '상태 확인하기' : '무료 사용 등록'}
                             </Button>
                         </Link>
                         <Link href="/guide">

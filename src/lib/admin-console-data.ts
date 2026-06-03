@@ -11,6 +11,7 @@ export type AdminLicenseUser = {
     industry: string;
     appVersion: string;
     lastCheck: string;
+    expiresAt: string;
     terms: string;
 };
 
@@ -75,6 +76,7 @@ const sampleData: AdminConsoleData = {
             industry: 'Iron and steel',
             appVersion: '0.1.0-beta',
             lastCheck: '2026-06-03 09:12',
+            expiresAt: '2027-06-03',
             terms: '2026.06-beta',
         },
         {
@@ -88,6 +90,7 @@ const sampleData: AdminConsoleData = {
             industry: 'Aluminium',
             appVersion: '0.1.0-beta',
             lastCheck: '2026-05-24 16:40',
+            expiresAt: '2026-09-01',
             terms: '2026.06-beta',
         },
         {
@@ -101,6 +104,7 @@ const sampleData: AdminConsoleData = {
             industry: 'Fertiliser',
             appVersion: '0.1.0-beta',
             lastCheck: '2026-05-31 11:05',
+            expiresAt: '-',
             terms: '2026.06-beta',
         },
     ],
@@ -198,6 +202,7 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
                 industry,
                 last_app_version,
                 last_license_check_at,
+                expires_at,
                 accepted_terms_version
             from license_users
             order by updated_at desc
@@ -213,6 +218,7 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
             industry: string | null;
             last_app_version: string | null;
             last_license_check_at: string | null;
+            expires_at: string | null;
             accepted_terms_version: string | null;
         }>;
 
@@ -285,6 +291,7 @@ export async function getAdminConsoleData(): Promise<AdminConsoleData> {
                 industry: user.industry ?? '-',
                 appVersion: user.last_app_version ?? '-',
                 lastCheck: formatDateTime(user.last_license_check_at),
+                expiresAt: formatDate(user.expires_at),
                 terms: user.accepted_terms_version ?? '-',
             })),
             announcements: announcementRows.map((item) => ({

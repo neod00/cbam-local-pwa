@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, EmptyState, FormSection, PageHeader, SectionCard, StatusBadge } from '@/components/ui';
-import { createLocalItem, Installation, listLocalItems, seedLocalData, updateLocalItem } from '@/lib/local-db';
+import { createLocalItem, Installation, listLocalItems, updateLocalItem } from '@/lib/local-db';
 import { Building2, Mail, MapPin, Pencil, Phone, Plus, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -105,7 +105,6 @@ export default function InstallationsPage() {
 
     useEffect(() => {
         async function fetchInstallations() {
-            await seedLocalData();
             const data = await listLocalItems('installations');
             setItems(data.sort((a, b) => b.created_at.localeCompare(a.created_at)));
         }

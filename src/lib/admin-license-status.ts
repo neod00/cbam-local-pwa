@@ -1,9 +1,9 @@
 export const ADMIN_LICENSE_STATUSES = [
+    'UNREGISTERED',
     'FREE_ACTIVE',
     'RECHECK_REQUIRED',
     'OFFLINE_ALLOWED',
     'BLOCKED',
-    'UNREGISTERED',
 ] as const;
 
 export type AdminLicenseStatus = (typeof ADMIN_LICENSE_STATUSES)[number];

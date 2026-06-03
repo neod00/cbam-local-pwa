@@ -64,7 +64,10 @@ includesAll(files.licenseGate, [
   'FREE_LICENSE_SETTING_KEY',
   'canUseCoreApp',
   'isLicenseBlocked',
+  'isLicenseExpired',
   '무료 라이선스 필요',
+  '승인 대기',
+  '사용기한 만료',
   '사용 제한',
   '/license',
   '.cbam 백업/복원',
@@ -80,6 +83,7 @@ includesAll(files.freeLicenseClient, [
   '/api/license/status',
   'canUseCoreApp',
   'isLicenseBlocked',
+  'isLicenseExpired',
   'OFFLINE_ALLOWED',
   'BLOCKED',
 ], 'free license client');
@@ -88,6 +92,7 @@ includesAll(files.license, [
   '무료 사용 등록',
   'CBAM Local 시작하기',
   '일반 회원가입처럼 먼저 등록',
+  '관리자 승인 후',
   '이메일 *',
   '회사명 *',
   '담당자명 *',
@@ -115,5 +120,27 @@ includesAll(files.export, [
 includesAll(files.dashboard, ['WorkflowGuideCard'], 'dashboard');
 includesAll(files.guide, ['Hot Rolled Coil'], 'guide page');
 includesAll(files.workflowGuide, ['Excel', '.cbam'], 'workflow guide');
+
+for (const [label, source] of Object.entries({
+  dashboard: files.dashboard,
+  export: files.export,
+  settings: files.settings,
+})) {
+  assert.equal(source.includes('seedLocalData('), false, `${label} should not auto-seed sample data`);
+}
+
+for (const routePath of [
+  'src/app/products/page.tsx',
+  'src/app/installations/page.tsx',
+  'src/app/periods/page.tsx',
+  'src/app/processes/page.tsx',
+  'src/app/source-streams/page.tsx',
+  'src/app/precursors/page.tsx',
+  'src/app/results/page.tsx',
+  'src/app/scenarios/page.tsx',
+]) {
+  const source = readFileSync(routePath, 'utf8');
+  assert.equal(source.includes('seedLocalData('), false, `${routePath} should not auto-seed sample data`);
+}
 
 console.log('MVP flow verification passed.');

@@ -38,7 +38,7 @@ const statusLabel: Record<string, string> = {
     RECHECK_REQUIRED: '재확인 필요',
     OFFLINE_ALLOWED: '오프라인 허용',
     BLOCKED: '차단',
-    UNREGISTERED: '미등록',
+    UNREGISTERED: '승인 대기',
 };
 
 const safetyChecks = [
@@ -59,7 +59,7 @@ function updatePolicyLabel(policy: string) {
     return labels[policy] ?? policy;
 }
 
-function LicenseStatusForm({ userId, currentStatus, disabled }: { userId: string; currentStatus: string; disabled: boolean }) {
+function LicenseStatusForm({ userId, currentStatus, currentExpiresAt, disabled }: { userId: string; currentStatus: string; currentExpiresAt: string; disabled: boolean }) {
     return (
         <form action={updateLicenseUserStatus} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
             <input type="hidden" name="user_id" value={userId} />
@@ -75,6 +75,14 @@ function LicenseStatusForm({ userId, currentStatus, disabled }: { userId: string
                     </option>
                 ))}
             </select>
+            <input
+                name="expires_at"
+                type="date"
+                defaultValue={currentExpiresAt === '-' ? '' : currentExpiresAt}
+                disabled={disabled}
+                aria-label="사용기한"
+                className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+            />
             <Button type="submit" variant="secondary" className="min-h-9 px-3 py-1.5" disabled={disabled}>
                 저장
             </Button>
@@ -103,10 +111,10 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
 
     const quickActions = [
         {
-            title: '재확인 필요 사용자 처리',
-            description: '장기간 라이선스 확인이 없는 사용자를 검토하고 안내 대상자를 정리합니다.',
-            status: `${data.stats.recheckRequired}건`,
-            tone: data.stats.recheckRequired > 0 ? 'warning' as const : 'success' as const,
+            title: '승인 대기 사용자 처리',
+            description: '무료 사용 등록을 완료했지만 아직 승인되지 않은 사용자를 검토합니다.',
+            status: `${data.licenseUsers.filter((user) => user.status === 'UNREGISTERED').length}건`,
+            tone: data.licenseUsers.some((user) => user.status === 'UNREGISTERED') ? 'warning' as const : 'success' as const,
         },
         {
             title: '업데이트 정책 확인',
@@ -210,7 +218,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                             <div>
                                 <h3 className="text-sm font-semibold text-slate-950">사용자 수동 추가</h3>
                                 <p className="mt-1 text-sm leading-6 text-slate-600">
-                                    관리자가 확인한 사용자에게 무료 라이선스를 미리 발급합니다. CBAM 계산 데이터는 입력하지 않습니다.
+                                    관리자가 확인한 사용자에게 무료 라이선스를 미리 발급합니다. 추가 후 사용자에게 같은 이메일로 무료 사용 등록 화면에서 상태 확인하라고 안내하세요.
                                 </p>
                             </div>
                             <StatusBadge tone={isLive ? 'success' : 'pending'}>{isLive ? '추가 가능' : 'Neon 필요'}</StatusBadge>
@@ -291,6 +299,15 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                                     className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
                                 />
                             </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>사용기한</span>
+                                <input
+                                    name="expires_at"
+                                    type="date"
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
                         </div>
                         <Button type="submit" variant="secondary" disabled={!isLive}>
                             사용자/라이선스 추가
@@ -312,6 +329,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                                         ['담당자', user.contact],
                                         ['연락처', user.phone],
                                         ['앱 버전', user.appVersion],
+                                        ['사용기한', user.expiresAt],
                                         ['마지막 확인', user.lastCheck],
                                     ].map(([label, value]) => (
                                         <div key={label} className="rounded-xl bg-slate-50 p-3">
@@ -321,7 +339,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                                     ))}
                                 </dl>
                                 <div className="mt-4">
-                                    <LicenseStatusForm userId={user.id} currentStatus={user.status} disabled={!isLive} />
+                                    <LicenseStatusForm userId={user.id} currentStatus={user.status} currentExpiresAt={user.expiresAt} disabled={!isLive} />
                                 </div>
                             </div>
                         ))}
@@ -331,7 +349,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                         <table className="min-w-full divide-y divide-slate-200">
                             <thead className="bg-slate-50">
                                 <tr>
-                                    {['상태', '이메일', '회사명', '담당자', '연락처', '국가', '업종', '앱 버전', '마지막 확인', '약관', '작업'].map((heading) => (
+                                    {['상태', '이메일', '회사명', '담당자', '연락처', '국가', '업종', '앱 버전', '사용기한', '마지막 확인', '약관', '작업'].map((heading) => (
                                         <th key={heading} className="px-4 py-4 text-left text-sm font-semibold text-slate-900">
                                             {heading}
                                         </th>
@@ -351,10 +369,11 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.country}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.industry}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.appVersion}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.expiresAt}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.lastCheck}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{user.terms}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm">
-                                            <LicenseStatusForm userId={user.id} currentStatus={user.status} disabled={!isLive} />
+                                            <LicenseStatusForm userId={user.id} currentStatus={user.status} currentExpiresAt={user.expiresAt} disabled={!isLive} />
                                         </td>
                                     </tr>
                                 ))}

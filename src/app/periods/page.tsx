@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, DataTable, PageHeader, SectionCard, StatusBadge } from '@/components/ui';
-import { createLocalItem, listLocalItems, ReportingPeriod, seedLocalData, updateLocalItem } from '@/lib/local-db';
+import { createLocalItem, listLocalItems, ReportingPeriod, updateLocalItem } from '@/lib/local-db';
 import { CalendarDays, Pencil, Plus, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -27,7 +27,6 @@ export default function PeriodsPage() {
 
     useEffect(() => {
         async function fetchPeriods() {
-            await seedLocalData();
             const data = await listLocalItems('periods');
             setPeriods(data.sort((a, b) => b.created_at.localeCompare(a.created_at)));
         }

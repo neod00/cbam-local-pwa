@@ -3,7 +3,7 @@
 import { ActionItemCard, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, getLocalCalculationWarningHref } from '@/lib/calculation-engine';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
-import { listLocalItems, seedLocalData } from '@/lib/local-db';
+import { listLocalItems } from '@/lib/local-db';
 import { AlertTriangle, ArrowRight, Factory, Gauge, Percent, Scale, Split, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -64,7 +64,6 @@ export default function ResultsPage() {
     useEffect(() => {
         async function loadResults() {
             setLoading(true);
-            await seedLocalData();
             const [processes, precursors, products, periods, sourceStreams, productOutputLines] = await Promise.all([
                 listLocalItems('processes'),
                 listLocalItems('precursors'),

@@ -7,7 +7,6 @@ import {
     listLocalItems,
     ProductionProcess,
     ReportingPeriod,
-    seedLocalData,
     SourceStream,
     updateLocalItem,
 } from '@/lib/local-db';
@@ -159,7 +158,6 @@ export default function SourceStreamsPage() {
     useEffect(() => {
         async function loadData() {
             setLoading(true);
-            await seedLocalData();
             const [sourceStreamData, periodData, processData] = await Promise.all([
                 listLocalItems('source_streams'),
                 listLocalItems('periods'),

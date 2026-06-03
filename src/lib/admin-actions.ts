@@ -13,6 +13,11 @@ function normalizeFormValue(value: FormDataEntryValue | null) {
     return typeof value === 'string' ? value.trim() : '';
 }
 
+function normalizeOptionalDate(value: FormDataEntryValue | null) {
+    const text = normalizeFormValue(value);
+    return text ? text : null;
+}
+
 async function ensureAdmin() {
     const session = await auth();
     if (!isAllowedAdminEmail(session?.user?.email)) {
@@ -30,6 +35,7 @@ export async function updateLicenseUserStatus(formData: FormData) {
 
     const userId = normalizeFormValue(formData.get('user_id'));
     const status = normalizeFormValue(formData.get('license_status'));
+    const expiresAt = normalizeOptionalDate(formData.get('expires_at'));
 
     if (!userId || !isAdminLicenseStatus(status)) {
         redirectWithAdminMessage('유효한 사용자와 라이선스 상태를 선택하세요.', 'warning');
@@ -39,12 +45,13 @@ export async function updateLicenseUserStatus(formData: FormData) {
     await sql`
         update license_users
         set license_status = ${status},
+            expires_at = ${expiresAt},
             updated_at = now()
         where id = ${userId}
     `;
 
     revalidatePath('/admin');
-    redirectWithAdminMessage('라이선스 상태를 저장했습니다.');
+    redirectWithAdminMessage('라이선스 상태와 사용기한을 저장했습니다.');
 }
 
 export async function createLicenseUser(formData: FormData) {
@@ -58,6 +65,7 @@ export async function createLicenseUser(formData: FormData) {
     const industry = normalizeFormValue(formData.get('industry'));
     const licenseStatus = normalizeFormValue(formData.get('license_status')) || 'FREE_ACTIVE';
     const acceptedTermsVersion = normalizeFormValue(formData.get('accepted_terms_version')) || '2026.06-beta';
+    const expiresAt = normalizeOptionalDate(formData.get('expires_at'));
 
     if (!email || !companyName || !contactName || !contactPhone || !isAdminLicenseStatus(licenseStatus)) {
         redirectWithAdminMessage('이메일, 회사명, 담당자명, 연락처, 라이선스 상태를 확인하세요.', 'warning');
@@ -73,6 +81,7 @@ export async function createLicenseUser(formData: FormData) {
             country,
             industry,
             license_status,
+            expires_at,
             accepted_terms_version,
             accepted_terms_at,
             last_license_check_at
@@ -85,6 +94,7 @@ export async function createLicenseUser(formData: FormData) {
             ${country},
             ${industry || null},
             ${licenseStatus},
+            ${expiresAt},
             ${acceptedTermsVersion},
             now(),
             now()
@@ -96,6 +106,7 @@ export async function createLicenseUser(formData: FormData) {
             country = excluded.country,
             industry = excluded.industry,
             license_status = excluded.license_status,
+            expires_at = excluded.expires_at,
             accepted_terms_version = excluded.accepted_terms_version,
             updated_at = now()
     `;

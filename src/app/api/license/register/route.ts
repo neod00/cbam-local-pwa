@@ -75,7 +75,7 @@ export async function POST(request: Request) {
                 ${normalizeOptionalText(payload.country)},
                 ${normalizeOptionalText(payload.industry)},
                 ${makeLicenseKey()},
-                'FREE_ACTIVE',
+                'UNREGISTERED',
                 ${acceptedTermsVersion},
                 now(),
                 ${normalizeOptionalText(payload.app_version)},
@@ -93,11 +93,12 @@ export async function POST(request: Request) {
                 last_app_version = excluded.last_app_version,
                 last_license_check_at = now(),
                 updated_at = now()
-            returning license_status, license_key, accepted_terms_version
+            returning license_status, license_key, accepted_terms_version, expires_at
         ` as Array<{
             license_status: string;
             license_key: string;
             accepted_terms_version: string;
+            expires_at: string | null;
         }>;
 
         const user = rows[0];
@@ -106,8 +107,11 @@ export async function POST(request: Request) {
             license_status: user.license_status,
             license_key: user.license_key,
             accepted_terms_version: user.accepted_terms_version,
+            expires_at: user.expires_at,
             next_check_after: nextCheckAfter(),
-            message: '무료 라이선스가 등록되었습니다. CBAM 계산 데이터는 서버로 전송되지 않았습니다.',
+            message: user.license_status === 'UNREGISTERED'
+                ? '무료 사용 등록이 접수되었습니다. 관리자가 승인하면 사업장, 품목, 산정, Export 기능을 사용할 수 있습니다.'
+                : '무료 라이선스 상태를 확인했습니다. CBAM 계산 데이터는 서버로 전송되지 않았습니다.',
         });
     } catch (error) {
         if (isAdminDbUnavailable(error)) {

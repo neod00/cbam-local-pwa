@@ -6,7 +6,7 @@ import { ActionItemCard, Button, PageHeader, SectionCard, StatCard, StatusBadge 
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import { createDashboardSummary } from '@/lib/dashboard-summary';
 import { evaluateEuExportReadiness } from '@/lib/eu-template-export';
-import { CBAM_LAST_BACKUP_AT_KEY, getBackupStatus, getLocalSetting, listLocalItems, seedLocalData } from '@/lib/local-db';
+import { CBAM_LAST_BACKUP_AT_KEY, getBackupStatus, getLocalSetting, listLocalItems } from '@/lib/local-db';
 import type { ImportedBenchmarkReference, ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import {
   calculateProductScenarios,
@@ -71,7 +71,6 @@ export default function Home() {
   useEffect(() => {
     async function loadDashboard() {
       setLoading(true);
-      await seedLocalData();
       setLastBackupAt(window.localStorage.getItem(CBAM_LAST_BACKUP_AT_KEY) ?? undefined);
       const [
         processes,

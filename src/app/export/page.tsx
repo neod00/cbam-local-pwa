@@ -21,7 +21,6 @@ import {
     getBackupStatus,
     getLocalSetting,
     listLocalItems,
-    seedLocalData,
     type Installation,
     type Product,
     type ProductOutputLine,
@@ -137,7 +136,6 @@ export default function ExportPage() {
 
     useEffect(() => {
         async function loadPreviewData() {
-            await seedLocalData();
             setLastBackupAt(window.localStorage.getItem(CBAM_LAST_BACKUP_AT_KEY) ?? undefined);
 
             const [

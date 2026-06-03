@@ -10,7 +10,6 @@ import {
     ProductionProcess,
     PurchasedPrecursor,
     ReportingPeriod,
-    seedLocalData,
     updateLocalItem,
 } from '@/lib/local-db';
 import {
@@ -117,7 +116,6 @@ export default function PrecursorsPage() {
     useEffect(() => {
         async function loadData() {
             setLoading(true);
-            await seedLocalData();
             const [precursorData, periodData, processData, productData, defaultReference] = await Promise.all([
                 listLocalItems('precursors'),
                 listLocalItems('periods'),

@@ -58,8 +58,8 @@ export async function GET(request: Request) {
                 last_app_version = coalesce(${appVersion}, last_app_version),
                 updated_at = now()
             where license_key = ${licenseKey}
-            returning license_status
-        ` as Array<{ license_status?: string }>;
+            returning license_status, expires_at
+        ` as Array<{ license_status?: string; expires_at?: string | null }>;
 
         const user = rows[0];
 
@@ -75,6 +75,7 @@ export async function GET(request: Request) {
 
         return jsonResponse({
             license_status: user.license_status,
+            expires_at: user.expires_at ?? null,
             minimum_supported_version: minimumSupportedVersion,
             terms_version: termsVersion,
             notice_count: noticeCount,

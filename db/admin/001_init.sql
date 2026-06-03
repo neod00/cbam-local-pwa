@@ -9,8 +9,9 @@ create table if not exists license_users (
     country text,
     industry text,
     license_key text not null unique default encode(gen_random_bytes(24), 'hex'),
-    license_status text not null default 'FREE_ACTIVE'
+    license_status text not null default 'UNREGISTERED'
         check (license_status in ('UNREGISTERED', 'FREE_ACTIVE', 'OFFLINE_ALLOWED', 'RECHECK_REQUIRED', 'BLOCKED')),
+    expires_at timestamptz,
     accepted_terms_version text,
     accepted_terms_at timestamptz,
     last_license_check_at timestamptz,
@@ -58,6 +59,7 @@ create table if not exists terms_versions (
 );
 
 create index if not exists license_users_status_idx on license_users (license_status);
+create index if not exists license_users_expires_idx on license_users (expires_at);
 create index if not exists update_manifests_effective_idx on update_manifests (effective_from desc);
 create index if not exists announcements_window_idx on announcements (starts_at, ends_at);
 create index if not exists terms_versions_effective_idx on terms_versions (effective_from desc);

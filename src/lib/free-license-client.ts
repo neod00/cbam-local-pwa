@@ -15,6 +15,7 @@ export interface FreeLicenseRegistration {
     license_key: string;
     status: FreeLicenseStatus;
     accepted_terms_version: string;
+    expires_at?: string | null;
     last_checked_at?: string;
     next_check_after?: string;
     message?: string;
@@ -43,7 +44,20 @@ export function isLicenseGateOpenRoute(pathname: string) {
     return LICENSE_GATE_OPEN_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
 
-export function canUseCoreApp(status?: FreeLicenseStatus) {
+export function isLicenseExpired(expiresAt?: string | null) {
+    if (!expiresAt) {
+        return false;
+    }
+
+    const expiresAtDate = new Date(expiresAt);
+    return !Number.isNaN(expiresAtDate.getTime()) && expiresAtDate.getTime() < Date.now();
+}
+
+export function canUseCoreApp(status?: FreeLicenseStatus, expiresAt?: string | null) {
+    if (isLicenseExpired(expiresAt)) {
+        return false;
+    }
+
     return status === 'FREE_ACTIVE' || status === 'OFFLINE_ALLOWED' || status === 'RECHECK_REQUIRED';
 }
 
@@ -95,8 +109,9 @@ export async function registerFreeLicense(input: RegisterFreeLicenseInput): Prom
         country: input.country.trim(),
         industry: input.industry.trim(),
         license_key: String(data.license_key ?? ''),
-        status: (data.license_status as FreeLicenseStatus) ?? 'FREE_ACTIVE',
+        status: (data.license_status as FreeLicenseStatus) ?? 'UNREGISTERED',
         accepted_terms_version: String(data.accepted_terms_version ?? FREE_LICENSE_TERMS_VERSION),
+        expires_at: typeof data.expires_at === 'string' ? data.expires_at : null,
         last_checked_at: new Date().toISOString(),
         next_check_after: typeof data.next_check_after === 'string' ? data.next_check_after : undefined,
         message: typeof data.message === 'string' ? data.message : undefined,
@@ -129,6 +144,7 @@ export async function checkFreeLicenseStatus(current: FreeLicenseRegistration): 
         ...current,
         status: (data.license_status as FreeLicenseStatus) ?? current.status,
         accepted_terms_version: typeof data.terms_version === 'string' ? data.terms_version : current.accepted_terms_version,
+        expires_at: typeof data.expires_at === 'string' ? data.expires_at : null,
         last_checked_at: new Date().toISOString(),
         next_check_after: typeof data.next_check_after === 'string' ? data.next_check_after : current.next_check_after,
         message: '무료 라이선스 상태를 확인했습니다.',
@@ -146,6 +162,7 @@ export function createOfflineAllowedRegistration(input: RegisterFreeLicenseInput
         license_key: previous?.license_key ?? '',
         status: previous?.license_key ? 'OFFLINE_ALLOWED' : 'UNREGISTERED',
         accepted_terms_version: previous?.accepted_terms_version ?? FREE_LICENSE_TERMS_VERSION,
+        expires_at: previous?.expires_at ?? null,
         last_checked_at: previous?.last_checked_at,
         next_check_after: previous?.next_check_after,
         message: '라이선스 서버 연결에 실패했습니다. 기존 로컬 데이터와 .cbam 백업 기능은 계속 사용할 수 있습니다.',

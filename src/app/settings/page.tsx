@@ -11,7 +11,6 @@ import {
     getLocalSetting,
     importLocalBackup,
     parseBackupFile,
-    seedLocalData,
     setLocalSetting,
 } from '@/lib/local-db';
 import {
@@ -19,6 +18,7 @@ import {
     FREE_LICENSE_SETTING_KEY,
     FREE_LICENSE_TERMS_VERSION,
     checkFreeLicenseStatus,
+    isLicenseExpired,
     registerFreeLicense,
     type FreeLicenseRegistration,
 } from '@/lib/free-license-client';
@@ -77,6 +77,22 @@ function getLicenseStatus(registration?: FreeLicenseRegistration): { label: stri
             label: '차단',
             helper: '관리자 확인이 필요한 상태입니다. 기존 .cbam 백업은 보관하세요.',
             tone: 'danger',
+        };
+    }
+
+    if (isLicenseExpired(registration.expires_at)) {
+        return {
+            label: '사용기한 만료',
+            helper: '관리자에게 사용기한 연장을 요청하세요. 기존 .cbam 백업은 계속 사용할 수 있습니다.',
+            tone: 'danger',
+        };
+    }
+
+    if (registration.status === 'UNREGISTERED') {
+        return {
+            label: '승인 대기',
+            helper: '무료 사용 등록이 접수되었습니다. 관리자 승인 후 사용할 수 있습니다.',
+            tone: 'pending',
         };
     }
 
@@ -313,12 +329,11 @@ export default function SettingsPage() {
         }
 
         await clearLocalData();
-        await seedLocalData();
         setScenarioAssumptions(DEFAULT_SCENARIO_ASSUMPTIONS);
         setLicenseRegistration(emptyLicenseRegistration());
         setBackupPreview(null);
         setImportContent('');
-        setMessage('로컬 데이터를 삭제하고 시작용 예시 데이터를 다시 생성했습니다. 시나리오 가정값과 라이선스 정보는 기본 상태로 돌아갔습니다.');
+        setMessage('로컬 데이터를 삭제했습니다. 이제 예시 데이터 없이 빈 상태에서 다시 시작합니다.');
     }
 
     return (

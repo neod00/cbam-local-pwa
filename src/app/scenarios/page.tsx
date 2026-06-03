@@ -2,7 +2,7 @@
 
 import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults } from '@/lib/calculation-engine';
-import { getLocalSetting, listLocalItems, seedLocalData, setLocalSetting } from '@/lib/local-db';
+import { getLocalSetting, listLocalItems, setLocalSetting } from '@/lib/local-db';
 import {
     calculateProductScenarios,
     CERTIFICATE_INDICATOR_NOTICE,
@@ -77,7 +77,6 @@ export default function ScenariosPage() {
     useEffect(() => {
         async function loadScenarios() {
             setLoading(true);
-            await seedLocalData();
             const [
                 processes,
                 precursors,

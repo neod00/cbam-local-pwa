@@ -27,6 +27,8 @@ for (const required of [
   'terms_versions',
   'contact_phone',
   'license_key',
+  'expires_at',
+  'UNREGISTERED',
   'FREE_ACTIVE',
   'RECHECK_REQUIRED',
   'required',
@@ -50,7 +52,8 @@ for (const required of [
   'accepted_terms_version',
   'app_version',
   'hasOnlyAllowedKeys',
-  '무료 라이선스가 등록되었습니다',
+  "'UNREGISTERED'",
+  '무료 사용 등록이 접수되었습니다',
 ]) {
   assert.ok(registerApi.includes(required), `license register API should include ${required}`);
 }
@@ -62,6 +65,7 @@ for (const required of [
   'terms_version',
   'notice_count',
   'next_check_after',
+  'expires_at',
 ]) {
   assert.ok(statusApi.includes(required), `license status API should include ${required}`);
 }
@@ -95,6 +99,8 @@ for (const required of [
   '/api/license/register',
   '/api/license/status',
   'OFFLINE_ALLOWED',
+  'isLicenseExpired',
+  'expires_at',
 ]) {
   assert.ok(freeLicenseClient.includes(required), `free license client should include ${required}`);
 }

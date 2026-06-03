@@ -182,6 +182,8 @@ Completed:
 - Added server-action feedback redirects for admin license, update-policy, announcement, and terms forms so the operations console shows success or validation messages after saves.
 - Added a first-run `/license` registration flow and client-side `LicenseGate` so unregistered or blocked users cannot use core CBAM work routes, while guide, terms, privacy, data safety, and `.cbam` backup/restore remain available.
 - Added admin manual user/license creation for trusted users using only distribution-management fields: email, company, contact, phone, country, industry, license status, and terms version.
+- Changed free-use registration to an approval workflow: self-registration creates an approval-pending license, admins can approve/block/recheck users, and optional license expiry dates are tracked in the admin DB.
+- Removed automatic sample-data seeding from user-facing PWA routes so newly registered users start from a clean local workspace unless they restore a `.cbam` backup or enter data themselves.
 
 Pending product decisions:
 
@@ -201,3 +203,4 @@ Next:
 - 2026-05-29: `revfactory/harness` is not installed because it is Claude Code native; this repository uses a Codex-native lightweight harness through versioned docs.
 - 2026-05-31: MVP free PWA hosting defaults to Vercel with a Private GitHub repository; Cloudflare Pages, Netlify, self-hosted static hosting, and Docker/on-premise remain fallback or paid-edition channels.
 - 2026-06-01: Pushed the latest local MVP commits to GitHub `main` and verified the Vercel deployment at `https://cbam-local-pwa.vercel.app/` with the beta browser rehearsal. Route checks, including `/announcement`, `/privacy`, and `/terms`, local IndexedDB seed data, EU template Export download, `.cbam` backup download, and external request review all passed.
+- 2026-06-03: Free PWA use should follow a simple registration-and-approval model. Registration collects only distribution-management data, app usage starts after admin approval, optional expiry can be set, and CBAM local work data must not be sent to the admin/license server.
