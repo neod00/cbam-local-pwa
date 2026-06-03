@@ -180,6 +180,8 @@ Completed:
 - Added the admin announcement create action and form for operational notices only, including title, body, severity, audience, and posting window, while continuing to block CBAM calculation data from admin flows.
 - Added the admin terms-version create/update action and form for version, title, body URL, effective date, and required-consent flag, keeping legal text references separate from CBAM calculation data.
 - Added server-action feedback redirects for admin license, update-policy, announcement, and terms forms so the operations console shows success or validation messages after saves.
+- Added a first-run `/license` registration flow and client-side `LicenseGate` so unregistered or blocked users cannot use core CBAM work routes, while guide, terms, privacy, data safety, and `.cbam` backup/restore remain available.
+- Added admin manual user/license creation for trusted users using only distribution-management fields: email, company, contact, phone, country, industry, license status, and terms version.
 
 Pending product decisions:
 
@@ -190,7 +192,7 @@ Next:
 - Review the deployed beta rehearsal artifacts in `artifacts/beta-browser-rehearsal/20260601T131659` if a release reviewer needs screenshots or downloaded files.
 - Review and finalize `docs/free-pwa-terms-draft.md` and `docs/free-pwa-release-announcement-draft.md` with legal/operational wording before public distribution.
 - Make the limited beta Go/No-Go decision after legal/operator wording review.
-- Run post-deploy smoke checks for the live Neon admin forms after pushing these admin-console updates.
+- Run post-deploy smoke checks for the live `/license` registration gate and Neon admin forms after pushing these updates.
 
 ## Decision Log
 

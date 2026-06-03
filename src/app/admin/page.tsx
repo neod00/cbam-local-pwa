@@ -1,6 +1,6 @@
 import { auth, signOut } from '@/auth';
 import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
-import { createAnnouncement, createTermsVersion, createUpdateManifest, updateLicenseUserStatus } from '@/lib/admin-actions';
+import { createAnnouncement, createLicenseUser, createTermsVersion, createUpdateManifest, updateLicenseUserStatus } from '@/lib/admin-actions';
 import { ADMIN_ANNOUNCEMENT_SEVERITIES } from '@/lib/admin-announcement';
 import { ADMIN_LICENSE_STATUSES } from '@/lib/admin-license-status';
 import { ADMIN_UPDATE_POLICIES } from '@/lib/admin-update-policy';
@@ -205,6 +205,98 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                         </StatusBadge>
                     }
                 >
+                    <form action={createLicenseUser} className="mb-4 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-950">사용자 수동 추가</h3>
+                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                    관리자가 확인한 사용자에게 무료 라이선스를 미리 발급합니다. CBAM 계산 데이터는 입력하지 않습니다.
+                                </p>
+                            </div>
+                            <StatusBadge tone={isLive ? 'success' : 'pending'}>{isLive ? '추가 가능' : 'Neon 필요'}</StatusBadge>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>이메일 *</span>
+                                <input
+                                    name="email"
+                                    type="email"
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>회사명 *</span>
+                                <input
+                                    name="company_name"
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>담당자명 *</span>
+                                <input
+                                    name="contact_name"
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>연락처 *</span>
+                                <input
+                                    name="contact_phone"
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>국가</span>
+                                <input
+                                    name="country"
+                                    defaultValue="South Korea"
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>업종</span>
+                                <input
+                                    name="industry"
+                                    placeholder="Iron and steel"
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>라이선스 상태</span>
+                                <select
+                                    name="license_status"
+                                    defaultValue="FREE_ACTIVE"
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                >
+                                    {ADMIN_LICENSE_STATUSES.map((status) => (
+                                        <option key={status} value={status}>
+                                            {statusLabel[status] ?? status}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="space-y-1 text-sm font-semibold text-slate-700">
+                                <span>약관 버전</span>
+                                <input
+                                    name="accepted_terms_version"
+                                    defaultValue={data.termsVersion.version}
+                                    disabled={!isLive}
+                                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                            </label>
+                        </div>
+                        <Button type="submit" variant="secondary" disabled={!isLive}>
+                            사용자/라이선스 추가
+                        </Button>
+                    </form>
+
                     <div className="space-y-3 md:hidden">
                         {data.licenseUsers.map((user) => (
                             <div key={`${user.id}-mobile`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

@@ -1,8 +1,9 @@
 'use client';
 
 import AdminShell from '@/components/AdminShell';
-import Sidebar from '@/components/Sidebar';
+import LicenseGate from '@/components/LicenseGate';
 import PeriodBadge from '@/components/PeriodBadge';
+import Sidebar from '@/components/Sidebar';
 import UpdateNotice from '@/components/UpdateNotice';
 import { WorkflowRouteBanner } from '@/components/WorkflowRouteBanner';
 import { Bell, Building2, CircleHelp } from 'lucide-react';
@@ -13,18 +14,19 @@ import type { ReactNode } from 'react';
 const pageTitles: Record<string, string> = {
     '/': '대시보드',
     '/admin': '관리자 콘솔',
-    '/announcement': '베타 배포 안내',
+    '/announcement': '배포 안내',
     '/guide': '시작 가이드',
+    '/license': '무료 사용 등록',
     '/products': '품목 관리',
     '/periods': '보고기간',
-    '/privacy': '개인정보 및 데이터 처리',
+    '/privacy': '개인정보 안내',
     '/processes': '생산공정',
     '/source-streams': '배출원 자료',
     '/precursors': '구매 전구물질',
     '/upload': '자료 업로드',
     '/results': '산정 결과',
     '/scenarios': '인증서 비용 시나리오',
-    '/export': 'EU Communication Template Export',
+    '/export': 'EU Communication Export',
     '/installations': '사업장',
     '/settings': '데이터 안전',
     '/terms': '무료 약관 및 고지',
@@ -74,7 +76,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
                 <UpdateNotice />
                 <WorkflowRouteBanner />
                 <main className="min-w-0 overflow-x-hidden px-4 py-7 pb-24 sm:px-6 lg:px-8 lg:pb-8">
-                    <div className="mx-auto w-full min-w-0 max-w-7xl overflow-x-hidden">{children}</div>
+                    <div className="mx-auto w-full min-w-0 max-w-7xl overflow-x-hidden">
+                        <LicenseGate>{children}</LicenseGate>
+                    </div>
                 </main>
             </div>
         </div>

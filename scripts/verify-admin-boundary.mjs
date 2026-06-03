@@ -32,6 +32,8 @@ for (const required of [
   '무료 PWA 배포, 라이선스, 공지, 업데이트 정책만 관리',
   '생산량, 배출량, 전구물질, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다',
   '사용자/라이선스',
+  '사용자 수동 추가',
+  '사용자/라이선스 추가',
   '현재 업데이트 정책',
   '공지',
   '약관 버전',
@@ -41,6 +43,7 @@ for (const required of [
   'Neon 연결 상태',
   'getAdminConsoleData',
   'updateLicenseUserStatus',
+  'createLicenseUser',
   'createUpdateManifest',
   'createAnnouncement',
   'createTermsVersion',
@@ -100,6 +103,8 @@ for (const required of [
   'isAllowedAdminEmail',
   'license_users',
   'license_status',
+  'accepted_terms_version',
+  'on conflict (email)',
   'updated_at = now()',
   'revalidatePath',
   'redirect',
@@ -109,12 +114,14 @@ for (const required of [
 ]) {
   assert.ok(adminActions.includes(required), `admin actions should include ${required}`);
 }
+
 assert.ok(adminAnnouncement.includes('ADMIN_ANNOUNCEMENT_SEVERITIES'), 'admin announcement helper should define allowed severities');
 assert.ok(adminLicenseStatus.includes('ADMIN_LICENSE_STATUSES'), 'admin license status helper should define allowed statuses');
 assert.ok(adminUpdatePolicy.includes('ADMIN_UPDATE_POLICIES'), 'admin update policy helper should define allowed policies');
 
 assert.ok(appShell.includes("pathname.startsWith('/admin')"), 'app shell should route admin paths to the dedicated admin shell');
 assert.ok(appShell.includes('<AdminShell>{children}</AdminShell>'), 'app shell should render AdminShell for admin paths');
+assert.ok(appShell.includes('LicenseGate'), 'app shell should render the user PWA license gate');
 assert.ok(adminShell.includes('CBAM Local Admin'), 'admin shell should render a dedicated admin header');
 assert.ok(adminShell.includes('사용자 앱'), 'admin shell should link back to the user app without showing the user sidebar');
 assert.equal(serviceWorker.includes('"/admin"'), false, 'protected admin route should not be pre-cached by the service worker');

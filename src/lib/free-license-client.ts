@@ -29,6 +29,28 @@ export interface RegisterFreeLicenseInput {
     industry: string;
 }
 
+export const LICENSE_GATE_OPEN_ROUTES = [
+    '/guide',
+    '/license',
+    '/settings',
+    '/terms',
+    '/privacy',
+    '/announcement',
+    '/release-notes',
+] as const;
+
+export function isLicenseGateOpenRoute(pathname: string) {
+    return LICENSE_GATE_OPEN_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+}
+
+export function canUseCoreApp(status?: FreeLicenseStatus) {
+    return status === 'FREE_ACTIVE' || status === 'OFFLINE_ALLOWED' || status === 'RECHECK_REQUIRED';
+}
+
+export function isLicenseBlocked(status?: FreeLicenseStatus) {
+    return status === 'BLOCKED';
+}
+
 function getLicenseApiBaseUrl() {
     return process.env.NEXT_PUBLIC_LICENSE_API_URL?.replace(/\/$/, '') ?? '';
 }

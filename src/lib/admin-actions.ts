@@ -47,6 +47,63 @@ export async function updateLicenseUserStatus(formData: FormData) {
     redirectWithAdminMessage('라이선스 상태를 저장했습니다.');
 }
 
+export async function createLicenseUser(formData: FormData) {
+    await ensureAdmin();
+
+    const email = normalizeFormValue(formData.get('email')).toLowerCase();
+    const companyName = normalizeFormValue(formData.get('company_name'));
+    const contactName = normalizeFormValue(formData.get('contact_name'));
+    const contactPhone = normalizeFormValue(formData.get('contact_phone'));
+    const country = normalizeFormValue(formData.get('country')) || 'South Korea';
+    const industry = normalizeFormValue(formData.get('industry'));
+    const licenseStatus = normalizeFormValue(formData.get('license_status')) || 'FREE_ACTIVE';
+    const acceptedTermsVersion = normalizeFormValue(formData.get('accepted_terms_version')) || '2026.06-beta';
+
+    if (!email || !companyName || !contactName || !contactPhone || !isAdminLicenseStatus(licenseStatus)) {
+        redirectWithAdminMessage('이메일, 회사명, 담당자명, 연락처, 라이선스 상태를 확인하세요.', 'warning');
+    }
+
+    const sql = getAdminSql();
+    await sql`
+        insert into license_users (
+            email,
+            company_name,
+            contact_name,
+            contact_phone,
+            country,
+            industry,
+            license_status,
+            accepted_terms_version,
+            accepted_terms_at,
+            last_license_check_at
+        )
+        values (
+            ${email},
+            ${companyName},
+            ${contactName},
+            ${contactPhone},
+            ${country},
+            ${industry || null},
+            ${licenseStatus},
+            ${acceptedTermsVersion},
+            now(),
+            now()
+        )
+        on conflict (email) do update
+        set company_name = excluded.company_name,
+            contact_name = excluded.contact_name,
+            contact_phone = excluded.contact_phone,
+            country = excluded.country,
+            industry = excluded.industry,
+            license_status = excluded.license_status,
+            accepted_terms_version = excluded.accepted_terms_version,
+            updated_at = now()
+    `;
+
+    revalidatePath('/admin');
+    redirectWithAdminMessage('사용자/라이선스를 추가했습니다.');
+}
+
 export async function createUpdateManifest(formData: FormData) {
     await ensureAdmin();
 
