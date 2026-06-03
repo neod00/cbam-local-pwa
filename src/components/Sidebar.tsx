@@ -12,6 +12,7 @@ import {
     Flame,
     Home,
     ListChecks,
+    Mail,
     Megaphone,
     Package,
     ServerOff,
@@ -22,6 +23,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { createContactMailto } from '@/lib/contact';
 
 const navigationGroups = [
     {
@@ -76,6 +78,10 @@ const mobileNavigation = [
 
 export default function Sidebar() {
     const pathname = usePathname();
+    const contactHref = createContactMailto({
+        subject: '[CBAM Local] 사용/사업 문의',
+        inquiryType: '사용 문의 / 컨설팅 지원 / 기업 내부 설치 / 유료 도입 / 사업 제휴',
+    });
 
     return (
         <>
@@ -126,7 +132,7 @@ export default function Sidebar() {
                 </nav>
 
                 <div className="border-t border-slate-200 p-4">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
                             <ShieldCheck className="h-4 w-4 text-teal-700" />
                             로컬 사용 중
@@ -134,6 +140,13 @@ export default function Sidebar() {
                         <p className="mt-1 text-xs leading-5 text-slate-500">
                             기업 데이터는 현재 브라우저에 저장되며 서버로 전송하지 않습니다.
                         </p>
+                        <a
+                            href={contactHref}
+                            className="inline-flex min-h-9 w-full items-center justify-center rounded-xl border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-800 shadow-sm transition hover:bg-teal-50"
+                        >
+                            <Mail className="mr-2 h-4 w-4" />
+                            사용/사업 문의
+                        </a>
                     </div>
                 </div>
             </aside>

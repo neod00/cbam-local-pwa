@@ -20,6 +20,7 @@ import {
     isLicenseExpired,
     type FreeLicenseRegistration,
 } from '@/lib/free-license-client';
+import { CONTACT_DATA_WARNING, createContactMailto, SUPPORT_EMAIL } from '@/lib/contact';
 import {
     DEFAULT_SCENARIO_ASSUMPTIONS,
     normalizeScenarioAssumptions,
@@ -27,7 +28,7 @@ import {
     type ScenarioAssumptions,
 } from '@/lib/scenario-calculation';
 import { evaluateUpdateStatus, fetchUpdateManifest, type UpdateStatus } from '@/lib/update-policy';
-import { AlertTriangle, Database, Download, ExternalLink, FileUp, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertTriangle, Database, Download, ExternalLink, FileUp, Mail, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -182,6 +183,11 @@ export default function SettingsPage() {
     }, [backupPreview]);
 
     const licenseStatus = useMemo(() => getLicenseStatus(licenseRegistration), [licenseRegistration]);
+    const businessContactHref = createContactMailto({
+        subject: '[CBAM Local] 사용/도입/컨설팅 문의',
+        inquiryType: '사용 문의 / 컨설팅 지원 / 기업 내부 설치 / 유료 도입 / 사업 제휴',
+        detailsPrompt: '원하시는 지원 범위와 문의 내용을 적어주세요:',
+    });
 
     async function saveLicenseRegistration(nextRegistration: FreeLicenseRegistration) {
         await setLocalSetting(FREE_LICENSE_SETTING_KEY, nextRegistration);
@@ -456,6 +462,28 @@ export default function SettingsPage() {
                 assumptions={scenarioAssumptions}
                 description="이 가정값은 로컬 설정에 저장되며 .cbam 백업 파일에 함께 포함됩니다."
             />
+
+            <SectionCard
+                title="사용·도입 문의"
+                description="앱 사용, CBAM 컨설팅 지원, 기업 내부 설치, 유료 도입, 사업 제휴가 필요하면 이메일로 문의하세요."
+            >
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                    <div className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+                        <Mail className="mt-0.5 h-5 w-5 flex-none text-blue-700" />
+                        <div>
+                            <p className="font-semibold text-slate-950">{SUPPORT_EMAIL}</p>
+                            <p className="mt-1">{CONTACT_DATA_WARNING}</p>
+                        </div>
+                    </div>
+                    <a
+                        href={businessContactHref}
+                        className="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-teal-900/20 transition hover:bg-teal-800"
+                    >
+                        <Mail className="mr-2 h-4 w-4" />
+                        문의 메일 보내기
+                    </a>
+                </div>
+            </SectionCard>
 
             <SectionCard
                 title=".cbam 백업 내보내기"

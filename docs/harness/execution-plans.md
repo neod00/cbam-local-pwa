@@ -188,6 +188,7 @@ Completed:
 - Added Gmail API mail sending for license recovery codes and configured the production flow so `openbrain.main@gmail.com` can send free-license verification emails without Resend.
 - Added automatic license-status refresh in the client gate so admin approval, expiry extension, or blocking changes are picked up on user revisit without requiring manual status-check navigation.
 - Added admin-side license-user archive handling so test or mistaken registrations can be hidden from the active operations list without deleting license history or collecting CBAM calculation data.
+- Added in-app `mailto:` contact CTAs for usage, license approval, CBAM Export review, consulting support, enterprise installation, paid adoption, and business partnership inquiries through `openbrain.main@gmail.com`, with sensitive-data attachment warnings preserved.
 
 Pending product decisions:
 

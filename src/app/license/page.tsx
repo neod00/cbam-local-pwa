@@ -13,8 +13,9 @@ import {
     type FreeLicenseRegistration,
     verifyFreeLicenseRecoveryCode,
 } from '@/lib/free-license-client';
+import { CONTACT_DATA_WARNING, createContactMailto, SUPPORT_EMAIL } from '@/lib/contact';
 import { getLocalSetting, setLocalSetting } from '@/lib/local-db';
-import { ArrowRight, FileArchive, KeyRound, ShieldCheck } from 'lucide-react';
+import { ArrowRight, FileArchive, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
@@ -70,6 +71,11 @@ export default function LicensePage() {
     const [isRecovering, setIsRecovering] = useState(false);
     const status = useMemo(() => getStatusLabel(registration), [registration]);
     const canEnterApp = canUseCoreApp(registration.status, registration.expires_at) && Boolean(registration.license_key);
+    const licenseContactHref = createContactMailto({
+        subject: '[CBAM Local] 무료 사용 승인 문의',
+        inquiryType: '무료 라이선스 승인 / 사용기한 / 등록 복구 문의',
+        detailsPrompt: '등록 이메일과 문의 내용을 적어주세요:',
+    });
 
     useEffect(() => {
         getLocalSetting<FreeLicenseRegistration>(FREE_LICENSE_SETTING_KEY)
@@ -338,6 +344,25 @@ export default function LicensePage() {
                                 <FileArchive className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
                                 <p>생산량, 배출량, 품목/CN 산정값, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다.</p>
                             </div>
+                        </div>
+                    </SectionCard>
+
+                    <SectionCard title="승인·사용 문의" description="무료 사용 승인, 사용기한, 기존 등록 복구가 필요하면 이메일로 문의하세요.">
+                        <div className="space-y-3 text-sm leading-6 text-slate-700">
+                            <div className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+                                <Mail className="mt-0.5 h-5 w-5 flex-none text-blue-700" />
+                                <div>
+                                    <p className="font-semibold text-slate-950">{SUPPORT_EMAIL}</p>
+                                    <p className="mt-1 text-slate-600">{CONTACT_DATA_WARNING}</p>
+                                </div>
+                            </div>
+                            <a
+                                href={licenseContactHref}
+                                className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-teal-900/20 transition hover:bg-teal-800"
+                            >
+                                <Mail className="mr-2 h-4 w-4" />
+                                무료 사용 문의 메일 보내기
+                            </a>
                         </div>
                     </SectionCard>
 
