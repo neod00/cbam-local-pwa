@@ -189,6 +189,7 @@ Completed:
 - Added automatic license-status refresh in the client gate so admin approval, expiry extension, or blocking changes are picked up on user revisit without requiring manual status-check navigation.
 - Added admin-side license-user archive handling so test or mistaken registrations can be hidden from the active operations list without deleting license history or collecting CBAM calculation data.
 - Added in-app `mailto:` contact CTAs for usage, license approval, CBAM Export review, consulting support, enterprise installation, paid adoption, and business partnership inquiries through `openbrain.main@gmail.com`, with sensitive-data attachment warnings preserved.
+- Replaced primary `mailto:` contact CTAs with an in-app inquiry modal that reuses free-license registration contact metadata, sends only support metadata and inquiry text by email, keeps a direct `openbrain.main@gmail.com` mail fallback, and does not collect CBAM calculation files or `.cbam` backups.
 
 Pending product decisions:
 
@@ -211,3 +212,4 @@ Next:
 - 2026-06-01: Pushed the latest local MVP commits to GitHub `main` and verified the Vercel deployment at `https://cbam-local-pwa.vercel.app/` with the beta browser rehearsal. Route checks, including `/announcement`, `/privacy`, and `/terms`, local IndexedDB seed data, EU template Export download, `.cbam` backup download, and external request review all passed.
 - 2026-06-03: Free PWA use should follow a simple registration-and-approval model. Registration collects only distribution-management data, app usage starts after admin approval, optional expiry can be set, and CBAM local work data must not be sent to the admin/license server.
 - 2026-06-03: License recovery should use short-lived email verification codes instead of passwords for the free PWA. This avoids password storage and keeps the server scope limited to distribution-management metadata.
+- 2026-06-03: User/business inquiries should default to an in-app form instead of opening the user's mail client, but the form must reuse already registered license contact metadata, avoid extra identity fields and pre-send checkboxes, and retain a direct email fallback to `openbrain.main@gmail.com`.

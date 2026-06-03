@@ -1,5 +1,6 @@
 'use client';
 
+import { ContactDialog } from '@/components/ContactDialog';
 import { Button, PageHeader, SectionCard, StatusBadge } from '@/components/ui';
 import {
     canUseCoreApp,
@@ -13,7 +14,6 @@ import {
     type FreeLicenseRegistration,
     verifyFreeLicenseRecoveryCode,
 } from '@/lib/free-license-client';
-import { CONTACT_DATA_WARNING, createContactMailto, SUPPORT_EMAIL } from '@/lib/contact';
 import { getLocalSetting, setLocalSetting } from '@/lib/local-db';
 import { ArrowRight, FileArchive, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
@@ -71,12 +71,6 @@ export default function LicensePage() {
     const [isRecovering, setIsRecovering] = useState(false);
     const status = useMemo(() => getStatusLabel(registration), [registration]);
     const canEnterApp = canUseCoreApp(registration.status, registration.expires_at) && Boolean(registration.license_key);
-    const licenseContactHref = createContactMailto({
-        subject: '[CBAM Local] 무료 사용 승인 문의',
-        inquiryType: '무료 라이선스 승인 / 사용기한 / 등록 복구 문의',
-        detailsPrompt: '등록 이메일과 문의 내용을 적어주세요:',
-    });
-
     useEffect(() => {
         getLocalSetting<FreeLicenseRegistration>(FREE_LICENSE_SETTING_KEY)
             .then((saved) => {
@@ -347,22 +341,22 @@ export default function LicensePage() {
                         </div>
                     </SectionCard>
 
-                    <SectionCard title="승인·사용 문의" description="무료 사용 승인, 사용기한, 기존 등록 복구가 필요하면 이메일로 문의하세요.">
+                    <SectionCard title="승인·사용 문의" description="무료 사용 승인, 사용기한, 기존 등록 복구가 필요하면 문의폼을 보내거나 회사 메일 시스템으로 직접 문의하세요.">
                         <div className="space-y-3 text-sm leading-6 text-slate-700">
                             <div className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4">
                                 <Mail className="mt-0.5 h-5 w-5 flex-none text-blue-700" />
                                 <div>
-                                    <p className="font-semibold text-slate-950">{SUPPORT_EMAIL}</p>
-                                    <p className="mt-1 text-slate-600">{CONTACT_DATA_WARNING}</p>
+                                    <p className="font-semibold text-slate-950">무료 사용 등록 정보로 문의합니다</p>
+                                    <p className="mt-1 text-slate-600">이메일, 회사명, 담당자명, 연락처는 등록 정보를 사용하고 문의 유형과 내용만 입력합니다.</p>
                                 </div>
                             </div>
-                            <a
-                                href={licenseContactHref}
-                                className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-teal-900/20 transition hover:bg-teal-800"
-                            >
-                                <Mail className="mr-2 h-4 w-4" />
-                                무료 사용 문의 메일 보내기
-                            </a>
+                            <ContactDialog
+                                triggerLabel="무료 사용 문의하기"
+                                inquiryType="무료 라이선스 승인/복구"
+                                subject="[CBAM Local] 무료 사용 승인 문의"
+                                triggerIcon={<Mail className="mr-2 h-4 w-4" />}
+                                buttonClassName="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-teal-900/20 transition hover:bg-teal-800"
+                            />
                         </div>
                     </SectionCard>
 

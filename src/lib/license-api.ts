@@ -81,6 +81,13 @@ export function verificationCodeExpiresAt(minutes = LICENSE_CODE_TTL_MINUTES) {
     return date.toISOString();
 }
 
+type OperationalTextEmail = {
+    to: string;
+    subject: string;
+    text: string;
+    replyTo?: string | null;
+};
+
 function createLicenseVerificationEmailText(code: string) {
     return [
         'CBAM Local 무료 라이선스 복구 인증코드입니다.',
@@ -104,7 +111,11 @@ function encodeEmailHeader(value: string) {
     return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;
 }
 
-async function sendLicenseVerificationEmailWithGmail(email: string, code: string) {
+function sanitizeEmailHeaderValue(value: string) {
+    return value.replace(/[\r\n]+/g, ' ').trim();
+}
+
+async function sendOperationalTextEmailWithGmail({ replyTo, subject, text, to }: OperationalTextEmail) {
     const clientId = process.env.GMAIL_CLIENT_ID;
     const clientSecret = process.env.GMAIL_CLIENT_SECRET;
     const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
@@ -133,16 +144,23 @@ async function sendLicenseVerificationEmailWithGmail(email: string, code: string
         throw new Error(`Gmail OAuth token request failed: ${tokenResponse.status}`);
     }
 
-    const subject = '[CBAM Local] 무료 라이선스 인증코드';
-    const rawMessage = [
+    const rawHeaders = [
         `From: ${encodeEmailHeader(fromName)} <${fromEmail}>`,
-        `To: ${email}`,
-        `Subject: ${encodeEmailHeader(subject)}`,
+        `To: ${sanitizeEmailHeaderValue(to)}`,
+        `Subject: ${encodeEmailHeader(sanitizeEmailHeaderValue(subject))}`,
         'MIME-Version: 1.0',
         'Content-Type: text/plain; charset=UTF-8',
         'Content-Transfer-Encoding: 8bit',
+    ];
+
+    if (replyTo) {
+        rawHeaders.push(`Reply-To: ${sanitizeEmailHeaderValue(replyTo)}`);
+    }
+
+    const rawMessage = [
+        ...rawHeaders,
         '',
-        createLicenseVerificationEmailText(code),
+        text,
     ].join('\r\n');
 
     const sendResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
@@ -161,7 +179,7 @@ async function sendLicenseVerificationEmailWithGmail(email: string, code: string
     }
 }
 
-async function sendLicenseVerificationEmailWithResend(email: string, code: string) {
+async function sendOperationalTextEmailWithResend({ replyTo, subject, text, to }: OperationalTextEmail) {
     const apiKey = process.env.RESEND_API_KEY;
     const from = process.env.RESEND_FROM_EMAIL ?? 'CBAM Local <onboarding@resend.dev>';
 
@@ -177,9 +195,10 @@ async function sendLicenseVerificationEmailWithResend(email: string, code: strin
         },
         body: JSON.stringify({
             from,
-            to: email,
-            subject: '[CBAM Local] 무료 라이선스 인증코드',
-            text: createLicenseVerificationEmailText(code),
+            to,
+            subject,
+            text,
+            ...(replyTo ? { reply_to: replyTo } : {}),
         }),
     });
 
@@ -188,13 +207,21 @@ async function sendLicenseVerificationEmailWithResend(email: string, code: strin
     }
 }
 
-export async function sendLicenseVerificationEmail(email: string, code: string) {
+export async function sendOperationalTextEmail(email: OperationalTextEmail) {
     if (process.env.GMAIL_REFRESH_TOKEN) {
-        await sendLicenseVerificationEmailWithGmail(email, code);
+        await sendOperationalTextEmailWithGmail(email);
         return;
     }
 
-    await sendLicenseVerificationEmailWithResend(email, code);
+    await sendOperationalTextEmailWithResend(email);
+}
+
+export async function sendLicenseVerificationEmail(email: string, code: string) {
+    await sendOperationalTextEmail({
+        to: email,
+        subject: '[CBAM Local] 무료 라이선스 인증코드',
+        text: createLicenseVerificationEmailText(code),
+    });
 }
 
 export function defaultUpdateManifest() {

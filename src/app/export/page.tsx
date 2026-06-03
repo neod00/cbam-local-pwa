@@ -1,9 +1,9 @@
 'use client';
 
+import { ContactDialog } from '@/components/ContactDialog';
 import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummary';
 import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
-import { CONTACT_DATA_WARNING, createContactMailto, SUPPORT_EMAIL } from '@/lib/contact';
 import {
     createEuExportFilename,
     createExportChecklist,
@@ -221,12 +221,6 @@ export default function ExportPage() {
             Boolean(defaultValueReference)
         );
     }, [benchmarkReference, defaultValueReference, scenarioRiskSummary]);
-    const exportContactHref = createContactMailto({
-        subject: '[CBAM Local] CBAM Export 검토 문의',
-        inquiryType: 'CBAM 산정 / EU Communication Template Export 검토 / 컨설팅 지원 문의',
-        detailsPrompt: '검토가 필요한 범위와 질문을 적어주세요:',
-    });
-
     const plannedCellWrites = useMemo(
         () => createEuTemplateExportCellWrites({ installations, periods, processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
         [installations, periods, processes, productOutputLines, sourceStreams, precursors, products, validation?.cnCodeMap]
@@ -920,23 +914,23 @@ export default function ExportPage() {
 
             <SectionCard
                 title="CBAM 산정·Export 검토 문의"
-                description="EU Communication Template 작성 방향, Excel 재계산 차이, 컨설팅 지원이 필요하면 이메일로 문의하세요."
+                description="EU Communication Template 작성 방향, Excel 재계산 차이, 컨설팅 지원이 필요하면 문의폼을 보내거나 회사 메일 시스템으로 직접 문의하세요."
             >
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                     <div className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
                         <Mail className="mt-0.5 h-5 w-5 flex-none text-blue-700" />
                         <div>
-                            <p className="font-semibold text-slate-950">{SUPPORT_EMAIL}</p>
-                            <p className="mt-1">{CONTACT_DATA_WARNING}</p>
+                            <p className="font-semibold text-slate-950">검토 범위만 문의하세요</p>
+                            <p className="mt-1">생산량, 배출량, EU 템플릿 작성본, .cbam 백업 파일은 문의폼이나 이메일에 첨부하지 마세요.</p>
                         </div>
                     </div>
-                    <a
-                        href={exportContactHref}
-                        className="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-teal-900/20 transition hover:bg-teal-800"
-                    >
-                        <Mail className="mr-2 h-4 w-4" />
-                        Export 검토 문의
-                    </a>
+                    <ContactDialog
+                        triggerLabel="Export 검토 문의"
+                        inquiryType="EU Communication Export 검토"
+                        subject="[CBAM Local] CBAM Export 검토 문의"
+                        triggerIcon={<Mail className="mr-2 h-4 w-4" />}
+                        buttonClassName="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-teal-900/20 transition hover:bg-teal-800"
+                    />
                 </div>
             </SectionCard>
 
