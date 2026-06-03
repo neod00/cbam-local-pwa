@@ -16,6 +16,7 @@ const adminPage = readFileSync(adminPagePath, 'utf8');
 const adminLogin = readFileSync(adminLoginPath, 'utf8');
 const appShell = readFileSync('src/components/AppShell.tsx', 'utf8');
 const adminShell = readFileSync('src/components/AdminShell.tsx', 'utf8');
+const licenseGate = readFileSync('src/components/LicenseGate.tsx', 'utf8');
 const serviceWorker = readFileSync('public/sw.js', 'utf8');
 const adminPlan = readFileSync('docs/harness/admin-console-plan.md', 'utf8');
 const authConfig = readFileSync('src/auth.ts', 'utf8');
@@ -125,6 +126,9 @@ assert.ok(adminUpdatePolicy.includes('ADMIN_UPDATE_POLICIES'), 'admin update pol
 assert.ok(appShell.includes("pathname.startsWith('/admin')"), 'app shell should route admin paths to the dedicated admin shell');
 assert.ok(appShell.includes('<AdminShell>{children}</AdminShell>'), 'app shell should render AdminShell for admin paths');
 assert.ok(appShell.includes('LicenseGate'), 'app shell should render the user PWA license gate');
+assert.ok(licenseGate.includes('checkFreeLicenseStatus'), 'license gate should refresh remote license status when a local license key exists');
+assert.ok(licenseGate.includes('setLocalSetting(FREE_LICENSE_SETTING_KEY'), 'license gate should persist refreshed license status locally');
+assert.ok(licenseGate.includes('shouldRefreshLicenseStatus'), 'license gate should avoid unnecessary status checks for recently checked active licenses');
 assert.ok(adminShell.includes('CBAM Local Admin'), 'admin shell should render a dedicated admin header');
 assert.ok(adminShell.includes('사용자 앱'), 'admin shell should link back to the user app without showing the user sidebar');
 assert.equal(serviceWorker.includes('"/admin"'), false, 'protected admin route should not be pre-cached by the service worker');

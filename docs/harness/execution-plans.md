@@ -185,6 +185,8 @@ Completed:
 - Changed free-use registration to an approval workflow: self-registration creates an approval-pending license, admins can approve/block/recheck users, and optional license expiry dates are tracked in the admin DB.
 - Removed automatic sample-data seeding from user-facing PWA routes so newly registered users start from a clean local workspace unless they restore a `.cbam` backup or enter data themselves.
 - Added email-code based license recovery endpoints and `/license` UI so users can recover an approved free license on another browser/device without a password, using only email ownership verification.
+- Added Gmail API mail sending for license recovery codes and configured the production flow so `openbrain.main@gmail.com` can send free-license verification emails without Resend.
+- Added automatic license-status refresh in the client gate so admin approval, expiry extension, or blocking changes are picked up on user revisit without requiring manual status-check navigation.
 
 Pending product decisions:
 
@@ -195,8 +197,7 @@ Next:
 - Review the deployed beta rehearsal artifacts in `artifacts/beta-browser-rehearsal/20260601T131659` if a release reviewer needs screenshots or downloaded files.
 - Review and finalize `docs/free-pwa-terms-draft.md` and `docs/free-pwa-release-announcement-draft.md` with legal/operational wording before public distribution.
 - Make the limited beta Go/No-Go decision after legal/operator wording review.
-- Run post-deploy smoke checks for the live `/license` registration gate and Neon admin forms after pushing these updates.
-- Configure Gmail API mail-sending environment variables in Vercel before relying on email-code license recovery in production: `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, and `GMAIL_FROM_EMAIL`. Resend remains available as a fallback through `RESEND_API_KEY`.
+- Run post-deploy smoke checks for the live `/license` registration gate, email-code recovery, automatic approval refresh, and Neon admin forms after pushing these updates.
 
 ## Decision Log
 

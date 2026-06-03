@@ -3,13 +3,14 @@
 import { Button, SectionCard, StatusBadge } from '@/components/ui';
 import {
     canUseCoreApp,
+    checkFreeLicenseStatus,
     FREE_LICENSE_SETTING_KEY,
     isLicenseBlocked,
     isLicenseExpired,
     isLicenseGateOpenRoute,
     type FreeLicenseRegistration,
 } from '@/lib/free-license-client';
-import { getLocalSetting } from '@/lib/local-db';
+import { getLocalSetting, setLocalSetting } from '@/lib/local-db';
 import { AlertTriangle, FileArchive, KeyRound, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -42,6 +43,27 @@ function getGateState(pathname: string, registration?: FreeLicenseRegistration):
     }
 
     return { status: 'locked', reason: 'unregistered', registration };
+}
+
+function shouldRefreshLicenseStatus(registration?: FreeLicenseRegistration) {
+    if (!registration?.license_key) {
+        return false;
+    }
+
+    if (registration.status === 'UNREGISTERED' || registration.status === 'BLOCKED') {
+        return true;
+    }
+
+    if (isLicenseExpired(registration.expires_at)) {
+        return true;
+    }
+
+    if (!registration.next_check_after) {
+        return true;
+    }
+
+    const nextCheckAt = new Date(registration.next_check_after);
+    return Number.isNaN(nextCheckAt.getTime()) || nextCheckAt.getTime() <= Date.now();
 }
 
 function LockedLicensePanel({ reason, registration }: { reason: 'unregistered' | 'pending' | 'expired' | 'blocked'; registration?: FreeLicenseRegistration }) {
@@ -139,9 +161,20 @@ export default function LicenseGate({ children }: { children: ReactNode }) {
         let cancelled = false;
 
         getLocalSetting<FreeLicenseRegistration>(FREE_LICENSE_SETTING_KEY)
-            .then((registration) => {
+            .then(async (registration) => {
+                let nextRegistration = registration;
+
+                if (registration && shouldRefreshLicenseStatus(registration)) {
+                    try {
+                        nextRegistration = await checkFreeLicenseStatus(registration);
+                        await setLocalSetting(FREE_LICENSE_SETTING_KEY, nextRegistration);
+                    } catch {
+                        nextRegistration = registration;
+                    }
+                }
+
                 if (!cancelled) {
-                    setGateState(getGateState(pathname, registration));
+                    setGateState(getGateState(pathname, nextRegistration));
                 }
             })
             .catch(() => {
