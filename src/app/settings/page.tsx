@@ -14,12 +14,10 @@ import {
     setLocalSetting,
 } from '@/lib/local-db';
 import {
-    createOfflineAllowedRegistration,
     FREE_LICENSE_SETTING_KEY,
     FREE_LICENSE_TERMS_VERSION,
     checkFreeLicenseStatus,
     isLicenseExpired,
-    registerFreeLicense,
     type FreeLicenseRegistration,
 } from '@/lib/free-license-client';
 import {
@@ -29,9 +27,9 @@ import {
     type ScenarioAssumptions,
 } from '@/lib/scenario-calculation';
 import { evaluateUpdateStatus, fetchUpdateManifest, type UpdateStatus } from '@/lib/update-policy';
-import { AlertTriangle, Database, Download, ExternalLink, FileUp, KeyRound, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertTriangle, Database, Download, ExternalLink, FileUp, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 function emptyLicenseRegistration(): FreeLicenseRegistration {
     return {
@@ -135,7 +133,7 @@ export default function SettingsPage() {
     const [backupPreview, setBackupPreview] = useState<CbamBackupFile | null>(null);
     const [importContent, setImportContent] = useState('');
     const [message, setMessage] = useState('');
-    const [isSubmittingLicense, setIsSubmittingLicense] = useState(false);
+    const [isCheckingLicense, setIsCheckingLicense] = useState(false);
     const [lastBackupAt, setLastBackupAt] = useState<string | undefined>();
     const [scenarioAssumptions, setScenarioAssumptions] = useState<ScenarioAssumptions>();
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(() => evaluateUpdateStatus());
@@ -209,41 +207,8 @@ export default function SettingsPage() {
         setMessage('백업 파일을 내보냈습니다. 회사의 안전한 폴더에 보관하세요.');
     }
 
-    async function handleLicenseSubmit(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        setIsSubmittingLicense(true);
-        const input = {
-            email: licenseRegistration.email,
-            company_name: licenseRegistration.company_name,
-            contact_name: licenseRegistration.contact_name,
-            contact_phone: licenseRegistration.contact_phone,
-            country: licenseRegistration.country,
-            industry: licenseRegistration.industry,
-        };
-
-        if (!input.email || !input.company_name || !input.contact_name || !input.contact_phone) {
-            setMessage('이메일, 회사명, 담당자명, 연락처를 모두 입력하세요.');
-            setIsSubmittingLicense(false);
-            return;
-        }
-
-        try {
-            const registered = await registerFreeLicense(input);
-            await saveLicenseRegistration(registered);
-            setMessage(registered.message ?? '무료 라이선스를 등록했습니다. 관리자 콘솔의 사용자/라이선스 목록에서 확인할 수 있습니다.');
-        } catch (error) {
-            const offlineRegistration = createOfflineAllowedRegistration(input, licenseRegistration);
-            await saveLicenseRegistration(offlineRegistration);
-            setMessage(
-                `${error instanceof Error ? error.message : '무료 라이선스 등록에 실패했습니다.'} 기존 로컬 계산, Export 준비, .cbam 백업 기능은 계속 사용할 수 있습니다.`
-            );
-        } finally {
-            setIsSubmittingLicense(false);
-        }
-    }
-
     async function handleLicenseStatusCheck() {
-        setIsSubmittingLicense(true);
+        setIsCheckingLicense(true);
         try {
             const checked = await checkFreeLicenseStatus(licenseRegistration);
             await saveLicenseRegistration(checked);
@@ -257,7 +222,7 @@ export default function SettingsPage() {
             await saveLicenseRegistration(nextRegistration);
             setMessage(`${nextRegistration.message} 기존 로컬 계산, Export 준비, .cbam 백업 기능은 계속 사용할 수 있습니다.`);
         } finally {
-            setIsSubmittingLicense(false);
+            setIsCheckingLicense(false);
         }
     }
 
@@ -420,10 +385,10 @@ export default function SettingsPage() {
 
             <SectionCard
                 title="무료 라이선스"
-                description="무료 라이선스는 배포 관리, 공지, 업데이트 안내를 위한 기능입니다. 생산량, 배출량, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다."
+                description="무료 사용 등록과 기존 등록 복구는 전용 화면에서 진행합니다. 이 화면에서는 현재 브라우저의 등록 상태와 업데이트 상태만 확인합니다."
                 actions={<StatusBadge tone={licenseStatus.tone}>{licenseStatus.label}</StatusBadge>}
             >
-                <form onSubmit={handleLicenseSubmit} className="space-y-4">
+                <div className="space-y-4">
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                             <p className="text-xs font-semibold text-slate-500">등록 상태</p>
@@ -431,6 +396,9 @@ export default function SettingsPage() {
                                 <StatusBadge tone={licenseStatus.tone}>{licenseStatus.label}</StatusBadge>
                             </div>
                             <p className="mt-3 text-sm leading-6 text-slate-600">{licenseStatus.helper}</p>
+                            {licenseRegistration.expires_at && (
+                                <p className="mt-2 text-xs font-medium text-slate-500">사용기한: {licenseRegistration.expires_at}</p>
+                            )}
                         </div>
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                             <p className="text-xs font-semibold text-slate-500">업데이트 상태</p>
@@ -444,70 +412,9 @@ export default function SettingsPage() {
                         <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
                             <p className="text-xs font-semibold text-teal-800">데이터 경계</p>
                             <p className="mt-2 text-sm leading-6 text-teal-900">
-                                라이선스 등록에는 이메일, 회사명, 담당자명, 연락처, 국가, 업종, 앱 버전만 사용됩니다. CBAM 입력자료와 백업 파일은 로컬에 남습니다.
+                                무료 라이선스와 업데이트 확인에는 배포 관리 정보만 사용됩니다. 생산량, 배출량, EU 템플릿, .cbam 백업 파일은 서버로 전송하지 않습니다.
                             </p>
                         </div>
-                    </div>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <label className="space-y-1 text-sm font-semibold text-slate-700">
-                            <span>이메일 *</span>
-                            <input
-                                value={licenseRegistration.email}
-                                onChange={(event) => setLicenseRegistration((current) => ({ ...current, email: event.target.value }))}
-                                type="email"
-                                required
-                                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-                                placeholder="name@company.com"
-                            />
-                        </label>
-                        <label className="space-y-1 text-sm font-semibold text-slate-700">
-                            <span>회사명 *</span>
-                            <input
-                                value={licenseRegistration.company_name}
-                                onChange={(event) => setLicenseRegistration((current) => ({ ...current, company_name: event.target.value }))}
-                                required
-                                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-                                placeholder="회사명"
-                            />
-                        </label>
-                        <label className="space-y-1 text-sm font-semibold text-slate-700">
-                            <span>담당자명 *</span>
-                            <input
-                                value={licenseRegistration.contact_name}
-                                onChange={(event) => setLicenseRegistration((current) => ({ ...current, contact_name: event.target.value }))}
-                                required
-                                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-                                placeholder="담당자명"
-                            />
-                        </label>
-                        <label className="space-y-1 text-sm font-semibold text-slate-700">
-                            <span>연락처 *</span>
-                            <input
-                                value={licenseRegistration.contact_phone}
-                                onChange={(event) => setLicenseRegistration((current) => ({ ...current, contact_phone: event.target.value }))}
-                                required
-                                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-                                placeholder="010-0000-0000"
-                            />
-                        </label>
-                        <label className="space-y-1 text-sm font-semibold text-slate-700">
-                            <span>국가</span>
-                            <input
-                                value={licenseRegistration.country}
-                                onChange={(event) => setLicenseRegistration((current) => ({ ...current, country: event.target.value }))}
-                                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-                                placeholder="South Korea"
-                            />
-                        </label>
-                        <label className="space-y-1 text-sm font-semibold text-slate-700">
-                            <span>업종</span>
-                            <input
-                                value={licenseRegistration.industry}
-                                onChange={(event) => setLicenseRegistration((current) => ({ ...current, industry: event.target.value }))}
-                                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-                                placeholder="Iron and steel"
-                            />
-                        </label>
                     </div>
                     {licenseRegistration.license_key && (
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
@@ -519,19 +426,18 @@ export default function SettingsPage() {
                         </div>
                     )}
                     <div className="flex flex-col gap-3 rounded-2xl border border-teal-100 bg-teal-50 p-4 text-sm leading-6 text-teal-900 md:flex-row md:items-center md:justify-between">
-                        <div className="flex gap-3">
-                            <KeyRound className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
-                            <p>
-                                등록하면 관리자 콘솔의 사용자/라이선스 목록에 표시됩니다. 서버 연결에 실패해도 기존 로컬 계산과 .cbam 백업은 계속 사용할 수 있습니다.
-                            </p>
-                        </div>
+                        <p>
+                            신규 등록, 승인 대기 상태 확인, 다른 브라우저에서 기존 등록 복구는 무료 사용 등록 화면에서 진행하세요.
+                        </p>
                         <div className="flex flex-wrap gap-2 md:flex-none">
-                            <Button type="button" variant="secondary" onClick={() => void handleLicenseStatusCheck()} disabled={isSubmittingLicense || !licenseRegistration.license_key}>
+                            <Button type="button" variant="secondary" onClick={() => void handleLicenseStatusCheck()} disabled={isCheckingLicense || !licenseRegistration.license_key}>
                                 상태 확인
                             </Button>
-                            <Button type="submit" disabled={isSubmittingLicense}>
-                                {isSubmittingLicense ? '처리 중' : '무료 라이선스 등록'}
-                            </Button>
+                            <Link href="/license">
+                                <Button type="button">
+                                    무료 사용 등록/복구
+                                </Button>
+                            </Link>
                         </div>
                     </div>
                     <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700 md:flex-row md:items-center md:justify-between">
@@ -543,7 +449,7 @@ export default function SettingsPage() {
                             업데이트 상태 확인
                         </Button>
                     </div>
-                </form>
+                </div>
             </SectionCard>
 
             <ScenarioAssumptionSummary

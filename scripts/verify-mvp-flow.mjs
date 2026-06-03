@@ -111,9 +111,10 @@ includesAll(files.license, [
 includesAll(files.settings, [
   '.cbam',
   '무료 라이선스',
-  'handleLicenseSubmit',
   'handleLicenseStatusCheck',
-  'contact_phone',
+  '무료 사용 등록/복구',
+  'href="/license"',
+  '배포 관리 정보만 사용됩니다',
 ], 'Settings page');
 
 includesAll(files.export, [
