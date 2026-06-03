@@ -7,6 +7,7 @@ import { isAdminUpdatePolicyMode } from '@/lib/admin-update-policy';
 import { isAllowedAdminEmail } from '@/lib/admin-auth';
 import { getAdminSql } from '@/lib/admin-db';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 
 function normalizeFormValue(value: FormDataEntryValue | null) {
     return typeof value === 'string' ? value.trim() : '';
@@ -19,6 +20,11 @@ async function ensureAdmin() {
     }
 }
 
+function redirectWithAdminMessage(message: string, tone: 'success' | 'warning' = 'success'): never {
+    const params = new URLSearchParams({ admin_message: message, admin_message_tone: tone });
+    redirect(`/admin?${params.toString()}`);
+}
+
 export async function updateLicenseUserStatus(formData: FormData) {
     await ensureAdmin();
 
@@ -26,7 +32,7 @@ export async function updateLicenseUserStatus(formData: FormData) {
     const status = normalizeFormValue(formData.get('license_status'));
 
     if (!userId || !isAdminLicenseStatus(status)) {
-        throw new Error('유효한 사용자와 라이선스 상태를 선택하세요.');
+        redirectWithAdminMessage('유효한 사용자와 라이선스 상태를 선택하세요.', 'warning');
     }
 
     const sql = getAdminSql();
@@ -38,6 +44,7 @@ export async function updateLicenseUserStatus(formData: FormData) {
     `;
 
     revalidatePath('/admin');
+    redirectWithAdminMessage('라이선스 상태를 저장했습니다.');
 }
 
 export async function createUpdateManifest(formData: FormData) {
@@ -53,7 +60,7 @@ export async function createUpdateManifest(formData: FormData) {
     const targetAudience = normalizeFormValue(formData.get('target_audience')) || 'all';
 
     if (!latestVersion || !minimumSupportedVersion || !isAdminUpdatePolicyMode(updatePolicy)) {
-        throw new Error('최신 버전, 최소 지원 버전, 업데이트 정책을 확인하세요.');
+        redirectWithAdminMessage('최신 버전, 최소 지원 버전, 업데이트 정책을 확인하세요.', 'warning');
     }
 
     const sql = getAdminSql();
@@ -81,6 +88,7 @@ export async function createUpdateManifest(formData: FormData) {
     `;
 
     revalidatePath('/admin');
+    redirectWithAdminMessage('새 업데이트 정책을 저장했습니다.');
 }
 
 export async function createAnnouncement(formData: FormData) {
@@ -94,7 +102,7 @@ export async function createAnnouncement(formData: FormData) {
     const endsAt = normalizeFormValue(formData.get('ends_at'));
 
     if (!title || !body || !isAdminAnnouncementSeverity(severity)) {
-        throw new Error('공지 제목, 본문, 심각도를 확인하세요.');
+        redirectWithAdminMessage('공지 제목, 본문, 심각도를 확인하세요.', 'warning');
     }
 
     const sql = getAdminSql();
@@ -118,6 +126,7 @@ export async function createAnnouncement(formData: FormData) {
     `;
 
     revalidatePath('/admin');
+    redirectWithAdminMessage('공지사항을 등록했습니다.');
 }
 
 export async function createTermsVersion(formData: FormData) {
@@ -130,7 +139,7 @@ export async function createTermsVersion(formData: FormData) {
     const isRequired = normalizeFormValue(formData.get('is_required')) !== 'false';
 
     if (!version || !title) {
-        throw new Error('약관 버전과 제목을 입력하세요.');
+        redirectWithAdminMessage('약관 버전과 제목을 입력하세요.', 'warning');
     }
 
     const sql = getAdminSql();
@@ -157,4 +166,5 @@ export async function createTermsVersion(formData: FormData) {
     `;
 
     revalidatePath('/admin');
+    redirectWithAdminMessage('약관 버전을 저장했습니다.');
 }

@@ -179,6 +179,7 @@ Completed:
 - Added the admin update-policy create action and a mobile-friendly policy form, so operators can publish new `update_manifests` rows for latest/minimum version, optional/recommended/required policy, notice text, release notes, and effective date.
 - Added the admin announcement create action and form for operational notices only, including title, body, severity, audience, and posting window, while continuing to block CBAM calculation data from admin flows.
 - Added the admin terms-version create/update action and form for version, title, body URL, effective date, and required-consent flag, keeping legal text references separate from CBAM calculation data.
+- Added server-action feedback redirects for admin license, update-policy, announcement, and terms forms so the operations console shows success or validation messages after saves.
 
 Pending product decisions:
 
@@ -189,7 +190,7 @@ Next:
 - Review the deployed beta rehearsal artifacts in `artifacts/beta-browser-rehearsal/20260601T131659` if a release reviewer needs screenshots or downloaded files.
 - Review and finalize `docs/free-pwa-terms-draft.md` and `docs/free-pwa-release-announcement-draft.md` with legal/operational wording before public distribution.
 - Make the limited beta Go/No-Go decision after legal/operator wording review.
-- Add admin success/error feedback and post-deploy smoke checks for the live Neon admin forms.
+- Run post-deploy smoke checks for the live Neon admin forms after pushing these admin-console updates.
 
 ## Decision Log
 

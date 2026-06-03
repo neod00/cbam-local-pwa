@@ -82,12 +82,22 @@ function LicenseStatusForm({ userId, currentStatus, disabled }: { userId: string
     );
 }
 
-export default async function AdminPage() {
+type AdminSearchParams = Record<string, string | string[] | undefined>;
+
+function getSearchParamValue(params: AdminSearchParams, key: string) {
+    const value = params[key];
+    return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function AdminPage({ searchParams }: { searchParams?: Promise<AdminSearchParams> }) {
     const session = await auth();
     if (!isAllowedAdminEmail(session?.user?.email)) {
         redirect('/admin/login');
     }
 
+    const resolvedSearchParams = searchParams ? await searchParams : {};
+    const adminMessage = getSearchParamValue(resolvedSearchParams, 'admin_message');
+    const adminMessageTone = getSearchParamValue(resolvedSearchParams, 'admin_message_tone');
     const data = await getAdminConsoleData();
     const isLive = data.source === 'live';
 
@@ -136,6 +146,15 @@ export default async function AdminPage() {
                     </div>
                 }
             />
+
+            {adminMessage && (
+                <div className={`rounded-2xl border p-4 text-sm leading-6 ${adminMessageTone === 'warning'
+                    ? 'border-amber-200 bg-amber-50 text-amber-900'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                    }`}>
+                    {adminMessage}
+                </div>
+            )}
 
             <SectionCard className="border-teal-200 bg-teal-50">
                 <div className="flex gap-3 text-sm leading-6 text-teal-950">

@@ -51,6 +51,7 @@ for (const required of [
   '새 업데이트 정책 저장',
   '공지 등록',
   '새 약관 버전 등록',
+  'admin_message',
 ]) {
   assert.ok(adminPage.includes(required), `admin page should include ${required}`);
 }
@@ -101,6 +102,7 @@ for (const required of [
   'license_status',
   'updated_at = now()',
   'revalidatePath',
+  'redirect',
   'update_manifests',
   'announcements',
   'terms_versions',
