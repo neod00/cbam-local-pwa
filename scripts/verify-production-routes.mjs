@@ -60,6 +60,10 @@ async function verifyRoutes() {
   assert.ok([302, 303, 307, 308].includes(adminResponse.status), '/admin should redirect unauthenticated users');
   assert.ok(adminResponse.headers.get('location')?.includes('/admin/login'), '/admin should redirect to the admin login page');
 
+  const aiStaffAdminResponse = await fetch(`${baseUrl}/admin/ai-staff`, { redirect: 'manual' });
+  assert.ok([302, 303, 307, 308].includes(aiStaffAdminResponse.status), '/admin/ai-staff should redirect unauthenticated users');
+  assert.ok(aiStaffAdminResponse.headers.get('location')?.includes('/admin/login'), '/admin/ai-staff should redirect to the admin login page');
+
   const adminApiResponse = await fetch(`${baseUrl}/api/admin/ping`, { redirect: 'manual' });
   assert.equal(adminApiResponse.status, 401, '/api/admin/* should reject unauthenticated requests');
 

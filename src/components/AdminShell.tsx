@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { Bell, FileText, KeyRound, LayoutDashboard, Megaphone, ShieldCheck, UploadCloud, Users } from 'lucide-react';
+import { Bell, BrainCircuit, FileText, KeyRound, LayoutDashboard, Megaphone, ShieldCheck, UploadCloud, Users } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
 const adminNavigation = [
     { name: '대시보드', href: '/admin', icon: LayoutDashboard },
     { name: '사용자/라이선스', href: '/admin#licenses', icon: Users },
+    { name: 'AI 직원 운영', href: '/admin/ai-staff', icon: BrainCircuit },
     { name: '공지', href: '/admin#announcements', icon: Megaphone },
     { name: '업데이트', href: '/admin#updates', icon: UploadCloud },
     { name: '약관', href: '/admin#terms', icon: FileText },
@@ -17,7 +18,6 @@ const adminNavigation = [
 
 export default function AdminShell({ children }: { children: ReactNode }) {
     const pathname = usePathname();
-    const isAdminRoot = pathname === '/admin';
 
     return (
         <div className="min-h-screen min-w-0 overflow-x-hidden bg-[#F6F8F7] text-slate-950">
@@ -57,7 +57,11 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                     <nav className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
                         {adminNavigation.map((item) => {
                             const Icon = item.icon;
-                            const isActive = isAdminRoot && item.href === '/admin';
+                            const itemPath = item.href.split('#')[0];
+                            const isAnchor = item.href.includes('#');
+                            const isActive = item.href === '/admin'
+                                ? pathname === '/admin'
+                                : !isAnchor && pathname === itemPath;
 
                             return (
                                 <Link
