@@ -22,13 +22,13 @@ function clampFraction(value: number) {
 }
 
 export function calculateSourceStreamEmissions(sourceStream: SourceStreamCalculationInput) {
-    const activityData = Math.max(sourceStream.activity_data, 0);
     const emissionFactor = Math.max(sourceStream.emission_factor_tco2e_per_unit, 0);
     const oxidationFactor = clampFraction(sourceStream.oxidation_factor);
     const conversionFactor = clampFraction(sourceStream.conversion_factor);
     const fossilFraction = clampFraction(sourceStream.fossil_fraction);
 
     if (sourceStream.stream_type === 'FUEL' || sourceStream.method === 'Combustion') {
+        const activityData = Math.max(sourceStream.activity_data, 0);
         const netCalorificValue = Math.max(sourceStream.ncv_gj_per_unit, 0);
 
         return (
@@ -41,6 +41,12 @@ export function calculateSourceStreamEmissions(sourceStream: SourceStreamCalcula
             1000
         );
     }
+
+    // 물질수지(Mass balance)는 산출물(조강·슬래그 등) 탄소를 차감해야 하므로 음수 활동량을 허용한다
+    // (투입 +, 산출 −). 그 외 공정배출 등은 음수가 의미 없으므로 0으로 클램프한다.
+    const activityData = sourceStream.method === 'Mass balance'
+        ? sourceStream.activity_data
+        : Math.max(sourceStream.activity_data, 0);
 
     return activityData * emissionFactor * oxidationFactor * conversionFactor * fossilFraction;
 }
