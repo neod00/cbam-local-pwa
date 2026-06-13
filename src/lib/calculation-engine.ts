@@ -297,8 +297,11 @@ export function calculateLocalResults(input: {
         const precursorEmissions = precursorDirectEmissions + precursorIndirectEmissions;
 
         for (const precursor of processPrecursors) {
-            if (precursor.consumed_mass_t > process.output_mass_t && process.output_mass_t > 0) {
-                addWarning(`${precursor.name} 소비량이 공정 생산량보다 큽니다.`, { type: 'precursor', id: precursor.id });
+            // 소비량이 공정 생산량을 초과하는 것은 수율 손실(슬래그·스케일·가스)·전구물질 투입 특성상 정상이므로
+            // 경고하지 않는다. 대신 "소비량 > 구매량"(재고 이월분이 아니라면 데이터 오류)을 점검한다.
+            const totalConsumedMass = precursor.consumed_mass_t + precursor.consumed_for_non_cbam_mass_t;
+            if (precursor.purchased_mass_t > 0 && totalConsumedMass > precursor.purchased_mass_t) {
+                addWarning(`${precursor.name} 소비량이 구매량을 초과합니다. 전기 이월(재고) 사용분이 아니라면 구매량/소비량을 확인하세요.`, { type: 'precursor', id: precursor.id });
             }
 
             if (!precursor.source) {

@@ -276,4 +276,22 @@ assertClose(euP1Res.see_indirect_incl_precursor, 1.37842, 0.01);
 // see_cbam_basis가 전구물질 indirect를 포함하던 과거 버그값(약 1.797)이 아님을 가드
 assert.ok(euP1Res.see_cbam_basis < 1.2, `P1 see_cbam_basis(${euP1Res.see_cbam_basis})가 전구물질 indirect를 포함하면 안 됨`);
 
+// --- #8 회귀: 소비량 경고는 "소비>생산"이 아니라 "소비>구매"에만 발생 ---
+const yieldProcess = { ...process, id: 'proc-yield', output_mass_t: 1000, direct_attributable_emissions_tco2e: 0 };
+// 소비 1200 > 생산 1000 (정상 수율 손실) 이지만 구매 1300 이내 → 소비량 경고가 없어야 함
+const yieldPrecursor = { ...precursor, id: 'pp-yield', process_id: 'proc-yield', purchased_mass_t: 1300, consumed_mass_t: 1200, consumed_for_non_cbam_mass_t: 0 };
+const yieldResults = calculateLocalResults({ processes: [yieldProcess], precursors: [yieldPrecursor], products: [product], periods: [period] });
+assert.ok(
+  !yieldResults[0].warnings.some((w) => w.includes('소비량')),
+  '정상 수율(소비량>생산량, 소비량<=구매량)에서는 소비량 경고가 발생하면 안 됩니다.'
+);
+// 소비 1400 > 구매 1300 → 데이터 오류 경고 발생해야 함
+const overProcess = { ...process, id: 'proc-over', output_mass_t: 1000, direct_attributable_emissions_tco2e: 0 };
+const overPrecursor = { ...yieldPrecursor, id: 'pp-over', process_id: 'proc-over', consumed_mass_t: 1400 };
+const overResults = calculateLocalResults({ processes: [overProcess], precursors: [overPrecursor], products: [product], periods: [period] });
+assert.ok(
+  overResults[0].warnings.some((w) => w.includes('소비량이 구매량을 초과')),
+  '소비량이 구매량을 초과하면 경고가 발생해야 합니다.'
+);
+
 console.log('Local calculation verification passed.');
