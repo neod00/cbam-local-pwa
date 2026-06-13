@@ -10,7 +10,7 @@ import {
     SourceStream,
     updateLocalItem,
 } from '@/lib/local-db';
-import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from '@/lib/source-stream-calculation';
+import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown, getSourceStreamUnitWarnings } from '@/lib/source-stream-calculation';
 import { AlertTriangle, ArrowRight, Flame, Gauge, Pencil, Plus, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
@@ -327,6 +327,7 @@ export default function SourceStreamsPage() {
     }
 
     const draftEnergyBreakdown = calculateSourceStreamEnergyBreakdown(newItem);
+    const draftUnitWarnings = getSourceStreamUnitWarnings(newItem);
 
     return (
         <div className="space-y-6">
@@ -520,6 +521,19 @@ export default function SourceStreamsPage() {
                                 </p>
                             </div>
                         </div>
+                        {draftUnitWarnings.length > 0 && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 md:col-span-2">
+                                <p className="flex items-center gap-2 font-semibold">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    단위·순발열량(NCV) 정합성 확인 필요
+                                </p>
+                                <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-5">
+                                    {draftUnitWarnings.map((warning, index) => (
+                                        <li key={index}>{warning}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
                         </FormSection>
 
                         <div className="flex flex-wrap gap-2">
