@@ -26,6 +26,10 @@ export interface CalcResult {
     own_indirect_see: number;
     indirect_see_excluded: number;
     precursor_see: number;
+    precursor_direct_see: number;
+    precursor_indirect_see: number;
+    see_direct_incl_precursor: number;
+    see_indirect_incl_precursor: number;
     see_cbam_basis: number;
     see_informational_total: number;
     total_see: number;
@@ -61,6 +65,10 @@ export interface LocalCalculationResult {
     indirect_see: number;
     indirect_see_excluded: number;
     precursor_see: number;
+    precursor_direct_see: number;
+    precursor_indirect_see: number;
+    see_direct_incl_precursor: number;
+    see_indirect_incl_precursor: number;
     see_cbam_basis: number;
     see_informational_total: number;
     total_see: number;
@@ -167,6 +175,13 @@ export function calculateEmission(input: CalcInput): CalcResult {
 
     const own_indirect_see = indirect_see;
     const indirect_see_excluded = 0;
+    // 주의(레거시 helper): CalcInput.precursors는 direct/indirect 분리가 없어 전구물질 기여를
+    // direct/indirect로 쪼갤 수 없다. 정확한 인증서 기준(direct-only 전구물질 indirect 제외)이
+    // 필요하면 calculateLocalResults를 사용한다. 여기서는 전구물질을 indirect 포함으로 본다.
+    const precursor_direct_see = precursor_see;
+    const precursor_indirect_see = 0;
+    const see_direct_incl_precursor = direct_see + precursor_direct_see;
+    const see_indirect_incl_precursor = own_indirect_see + precursor_indirect_see;
     const see_cbam_basis = direct_see + indirect_see + precursor_see;
     const see_informational_total = direct_see + own_indirect_see + precursor_see;
     const total_see = see_informational_total;
@@ -177,6 +192,10 @@ export function calculateEmission(input: CalcInput): CalcResult {
         own_indirect_see,
         indirect_see_excluded,
         precursor_see,
+        precursor_direct_see,
+        precursor_indirect_see,
+        see_direct_incl_precursor,
+        see_indirect_incl_precursor,
         see_cbam_basis,
         see_informational_total,
         total_see,
@@ -267,11 +286,15 @@ export function calculateLocalResults(input: {
         const processIndirectApplicability = getIndirectEmissionsApplicability(product);
         const indirectEmissions = processIndirectApplicability.applicable ? grossIndirectEmissions : 0;
         const indirectEmissionsExcluded = processIndirectApplicability.applicable ? 0 : grossIndirectEmissions;
-        const precursorEmissions = processPrecursors.reduce((sum, precursor) => {
-            const precursorSee =
-                precursor.direct_see_tco2e_per_t + precursor.indirect_see_tco2e_per_t;
-            return sum + precursor.consumed_mass_t * precursorSee;
-        }, 0);
+        const precursorDirectEmissions = processPrecursors.reduce(
+            (sum, precursor) => sum + precursor.consumed_mass_t * precursor.direct_see_tco2e_per_t,
+            0
+        );
+        const precursorIndirectEmissions = processPrecursors.reduce(
+            (sum, precursor) => sum + precursor.consumed_mass_t * precursor.indirect_see_tco2e_per_t,
+            0
+        );
+        const precursorEmissions = precursorDirectEmissions + precursorIndirectEmissions;
 
         for (const precursor of processPrecursors) {
             if (precursor.consumed_mass_t > process.output_mass_t && process.output_mass_t > 0) {
@@ -296,7 +319,15 @@ export function calculateLocalResults(input: {
         const indirect_see = output > 0 ? indirectEmissions / output : 0;
         const indirect_see_excluded = output > 0 ? indirectEmissionsExcluded / output : 0;
         const precursor_see = output > 0 ? precursorEmissions / output : 0;
-        const see_cbam_basis = direct_see + indirect_see + precursor_see;
+        const precursor_direct_see = output > 0 ? precursorDirectEmissions / output : 0;
+        const precursor_indirect_see = output > 0 ? precursorIndirectEmissions / output : 0;
+        // declarant 보고용 SEE(direct/indirect) — 자체 + 전구물질 기여 포함 (EU Communication Template 컬럼)
+        const see_direct_incl_precursor = direct_see + precursor_direct_see;
+        const see_indirect_incl_precursor = own_indirect_see + precursor_indirect_see;
+        // 인증서 산정 기준: Annex II direct-only 품목은 자체 indirect뿐 아니라 전구물질 indirect도 제외
+        const see_cbam_basis = processIndirectApplicability.applicable
+            ? see_direct_incl_precursor + see_indirect_incl_precursor
+            : see_direct_incl_precursor;
         const see_informational_total = direct_see + own_indirect_see + precursor_see;
         const total_see = see_informational_total;
         const outputLines = outputLinesByProcess.get(process.id) ?? [];
@@ -345,6 +376,10 @@ export function calculateLocalResults(input: {
                 indirect_see,
                 indirect_see_excluded,
                 precursor_see,
+                precursor_direct_see,
+                precursor_indirect_see,
+                see_direct_incl_precursor,
+                see_indirect_incl_precursor,
                 see_cbam_basis,
                 see_informational_total,
                 total_see,
@@ -364,12 +399,20 @@ export function calculateLocalResults(input: {
             const allocatedExcludedIndirectEmissions = lineIndirectApplicability.applicable ? 0 : lineGrossIndirectEmissions;
             const allocatedDirectEmissions = directEmissions * allocationShare;
             const allocatedPrecursorEmissions = precursorEmissions * allocationShare;
+            const allocatedPrecursorDirectEmissions = precursorDirectEmissions * allocationShare;
+            const allocatedPrecursorIndirectEmissions = precursorIndirectEmissions * allocationShare;
             const lineDirectSee = line.output_mass_t > 0 ? allocatedDirectEmissions / line.output_mass_t : 0;
             const lineOwnIndirectSee = line.output_mass_t > 0 ? lineGrossIndirectEmissions / line.output_mass_t : 0;
             const lineIndirectSee = line.output_mass_t > 0 ? allocatedIndirectEmissions / line.output_mass_t : 0;
             const lineIndirectSeeExcluded = line.output_mass_t > 0 ? allocatedExcludedIndirectEmissions / line.output_mass_t : 0;
             const linePrecursorSee = line.output_mass_t > 0 ? allocatedPrecursorEmissions / line.output_mass_t : 0;
-            const lineSeeCbamBasis = lineDirectSee + lineIndirectSee + linePrecursorSee;
+            const linePrecursorDirectSee = line.output_mass_t > 0 ? allocatedPrecursorDirectEmissions / line.output_mass_t : 0;
+            const linePrecursorIndirectSee = line.output_mass_t > 0 ? allocatedPrecursorIndirectEmissions / line.output_mass_t : 0;
+            const lineSeeDirectInclPrecursor = lineDirectSee + linePrecursorDirectSee;
+            const lineSeeIndirectInclPrecursor = lineOwnIndirectSee + linePrecursorIndirectSee;
+            const lineSeeCbamBasis = lineIndirectApplicability.applicable
+                ? lineSeeDirectInclPrecursor + lineSeeIndirectInclPrecursor
+                : lineSeeDirectInclPrecursor;
             const lineSeeInformationalTotal = lineDirectSee + lineOwnIndirectSee + linePrecursorSee;
 
             return {
@@ -401,6 +444,10 @@ export function calculateLocalResults(input: {
                 indirect_see: lineIndirectSee,
                 indirect_see_excluded: lineIndirectSeeExcluded,
                 precursor_see: linePrecursorSee,
+                precursor_direct_see: linePrecursorDirectSee,
+                precursor_indirect_see: linePrecursorIndirectSee,
+                see_direct_incl_precursor: lineSeeDirectInclPrecursor,
+                see_indirect_incl_precursor: lineSeeIndirectInclPrecursor,
                 see_cbam_basis: lineSeeCbamBasis,
                 see_informational_total: lineSeeInformationalTotal,
                 total_see: lineSeeInformationalTotal,

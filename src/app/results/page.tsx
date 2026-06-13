@@ -198,8 +198,8 @@ export default function ResultsPage() {
                                 <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">배분기준</th>
                                 <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">생산량(t)</th>
                                 <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">배분율</th>
-                                <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 SEE</th>
-                                <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">간접 SEE</th>
+                                <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">직접 SEE(자체)</th>
+                                <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">간접 SEE(자체)</th>
                                 <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">전구물질 SEE</th>
                                 <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 산정 기준 SEE</th>
                                 <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">내부 검토용 total SEE</th>
@@ -254,6 +254,7 @@ export default function ResultsPage() {
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
                                             {formatNumber(result.direct_see)}
+                                            <div className="mt-1 text-xs text-slate-400">보고용 SEE(직접) {formatNumber(result.see_direct_incl_precursor)}</div>
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
                                             {formatNumber(result.indirect_see)}
@@ -263,6 +264,7 @@ export default function ResultsPage() {
                                                     ? ` ${formatNumber(result.indirect_emissions_excluded_tco2e)} tCO2e`
                                                     : ''}
                                             </div>
+                                            <div className="mt-1 text-xs text-slate-400">보고용 SEE(간접) {formatNumber(result.see_indirect_incl_precursor)}</div>
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
                                             {formatNumber(result.precursor_see)}
@@ -325,6 +327,14 @@ export default function ResultsPage() {
                                 <div>
                                     <dt className="text-xs text-slate-500">전구물질 SEE</dt>
                                     <dd className="mt-1 font-medium text-slate-900">{formatNumber(result.precursor_see)}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs text-slate-500">보고용 SEE(직접)</dt>
+                                    <dd className="mt-1 font-medium text-slate-900">{formatNumber(result.see_direct_incl_precursor)}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs text-slate-500">보고용 SEE(간접)</dt>
+                                    <dd className="mt-1 font-medium text-slate-900">{formatNumber(result.see_indirect_incl_precursor)}</dd>
                                 </div>
                                 <div>
                                     <dt className="text-xs text-slate-500">내부 검토용 total SEE</dt>

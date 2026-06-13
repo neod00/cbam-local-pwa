@@ -339,6 +339,8 @@ export default function ExportPage() {
             allocationShare: result.allocation_share,
             directSee: result.direct_see,
             indirectSee: result.indirect_see,
+            reportingDirectSee: result.see_direct_incl_precursor,
+            reportingIndirectSee: result.see_indirect_incl_precursor,
             cbamBasisSee: result.see_cbam_basis,
             informationalTotalSee: result.see_informational_total,
             isIndirectIncluded: result.indirect_emissions_applicable,
@@ -988,16 +990,20 @@ export default function ExportPage() {
                                         <dd className="mt-1 font-semibold text-slate-900">{formatNumber(row.cbamBasisSee)}</dd>
                                     </div>
                                     <div>
-                                        <dt className="text-xs text-slate-500">직접 SEE</dt>
-                                        <dd className="mt-1 text-slate-700">{formatNumber(row.directSee)}</dd>
+                                        <dt className="text-xs text-slate-500">직접 SEE(자체)</dt>
+                                        <dd className="mt-1 text-slate-700">
+                                            {formatNumber(row.directSee)}
+                                            <div className="mt-0.5 text-xs text-slate-400">보고용 SEE(직접) {formatNumber(row.reportingDirectSee)} · 전구물질 포함</div>
+                                        </dd>
                                     </div>
                                     <div>
-                                        <dt className="text-xs text-slate-500">간접 SEE</dt>
+                                        <dt className="text-xs text-slate-500">간접 SEE(자체)</dt>
                                         <dd className="mt-1 text-slate-700">
                                             {formatNumber(row.indirectSee)}
                                             <span className={row.isIndirectIncluded ? 'ml-1 text-xs text-slate-400' : 'ml-1 text-xs font-semibold text-amber-700'}>
                                                 {row.isIndirectIncluded ? '포함' : '인증서 제외'}
                                             </span>
+                                            <div className="mt-0.5 text-xs text-slate-400">보고용 SEE(간접) {formatNumber(row.reportingIndirectSee)} · 전구물질 포함</div>
                                         </dd>
                                     </div>
                                     <div>
@@ -1041,12 +1047,16 @@ export default function ExportPage() {
                                             <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{row.productCode}</td>
                                             <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{row.productName}</td>
                                             <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{formatPercent(row.allocationShare)}</td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{formatNumber(row.directSee)}</td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">
+                                                <div>{formatNumber(row.directSee)}</div>
+                                                <div className="text-xs text-slate-400">보고용 {formatNumber(row.reportingDirectSee)}</div>
+                                            </td>
                                             <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">
                                                 <div>{formatNumber(row.indirectSee)}</div>
                                                 <div className={row.isIndirectIncluded ? 'text-xs text-slate-400' : 'text-xs font-semibold text-amber-700'}>
                                                     {row.isIndirectIncluded ? '포함' : '인증서 제외'}
                                                 </div>
+                                                <div className="text-xs text-slate-400">보고용 {formatNumber(row.reportingIndirectSee)}</div>
                                             </td>
                                             <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-950">{formatNumber(row.cbamBasisSee)}</td>
                                             <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{formatNumber(row.informationalTotalSee)}</td>
