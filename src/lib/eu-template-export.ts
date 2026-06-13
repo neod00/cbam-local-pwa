@@ -1038,6 +1038,17 @@ function parseWorkbookSheetTargets(zip: Record<string, Uint8Array>): Map<string,
     return sheetTargetByName;
 }
 
+// 앱 전력 EF 출처 enum → EU 템플릿 D_Processes EF 출처 드롭다운 코드(CONST_ElecSource).
+// 허용값: D.4(a) IEA/Commission, D.4(b) 기타 공개자료, D.4.1 설비내(비열병합),
+// D.4.2 설비내 열병합, D.4.3.1 직접 기술적 연결, D.4.3.2 PPA, Mix.
+const ELECTRICITY_EF_SOURCE_TO_TEMPLATE: Record<string, string> = {
+    COUNTRY_GRID_DEFAULT: 'D.4(a)',
+    DIRECT_TECHNICAL_LINK: 'D.4.3.1',
+    PPA: 'D.4.3.2',
+    INSTALLATION_OWN: 'D.4.1',
+    MIX: 'Mix',
+};
+
 function createProcessCellWrites(processes: ProductionProcess[]): EuTemplateExportCellWrite[] {
     const writes: EuTemplateExportCellWrite[] = [];
 
@@ -1064,6 +1075,20 @@ function createProcessCellWrites(processes: ProductionProcess[]): EuTemplateExpo
                 sourceId: process.id,
             }
         );
+
+        // 전력 EF 출처 유형(분류된 경우만) → D_Processes "Source of the emission factor" 셀(L+56, 예: L67)
+        const efSourceCode = process.electricity_ef_source
+            ? ELECTRICITY_EF_SOURCE_TO_TEMPLATE[process.electricity_ef_source]
+            : undefined;
+        if (efSourceCode) {
+            writes.push({
+                sheetName: 'D_Processes',
+                cell: `L${startRow + 56}`,
+                label: '전력 EF 출처',
+                value: efSourceCode,
+                sourceId: process.id,
+            });
+        }
     });
 
     return writes;
