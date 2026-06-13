@@ -370,6 +370,7 @@ export default function ScenariosPage() {
                             <option value="2027">2027</option>
                             <option value="2028_ONWARDS">2028년 이후</option>
                         </select>
+                        <p className="mt-1 text-xs text-slate-500">기본값(default)에는 연도별 mark-up(보수적 가산)이 포함됩니다. 실측 자료가 있으면 보통 기본값보다 유리합니다.</p>
                     </div>
                     <div>
                         <label className="text-sm font-semibold text-slate-700">CBAM factor</label>
@@ -469,6 +470,9 @@ export default function ScenariosPage() {
                                 <div>
                                     <dt className="text-xs text-slate-500">기본값 SEE</dt>
                                     <dd className="mt-1 font-semibold text-slate-900">{formatNumber(scenario.default_see)}</dd>
+                                    {scenario.default_markup_amount !== undefined && scenario.default_markup_amount > 0 && (
+                                        <p className="mt-0.5 text-xs text-amber-700">mark-up 포함값 · 기준 {formatNumber(scenario.default_see_raw)} + 가산 {formatNumber(scenario.default_markup_amount)}</p>
+                                    )}
                                 </div>
                                 <div>
                                     <dt className="text-xs text-slate-500">CBAM 기준 인증서 비용</dt>
@@ -534,7 +538,12 @@ export default function ScenariosPage() {
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.output_mass_t)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.actual_see)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.informational_total_see)}</td>
-                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.default_see)}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
+                                        {formatNumber(scenario.default_see)}
+                                        {scenario.default_markup_amount !== undefined && scenario.default_markup_amount > 0 && (
+                                            <div className="text-xs text-amber-700">mark-up +{formatNumber(scenario.default_markup_amount)}</div>
+                                        )}
+                                    </td>
                                     <td className={`whitespace-nowrap px-4 py-4 text-right text-sm ${(scenario.default_gap ?? 0) > 0 ? 'font-semibold text-amber-700' : 'text-slate-600'}`}>{formatNumber(scenario.default_gap)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.benchmark_column_a)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.benchmark_column_b)}</td>

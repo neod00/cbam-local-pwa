@@ -51,6 +51,8 @@ export interface ProductScenarioResult {
     actual_see: number;
     informational_total_see?: number;
     default_see?: number;
+    default_see_raw?: number;
+    default_markup_amount?: number;
     default_gap?: number;
     benchmark_column_a?: number;
     benchmark_column_b?: number;
@@ -181,6 +183,10 @@ export function calculateProductScenarios(
             assumptions.default_value_year
         );
         const defaultSee = defaultValue ? getDefaultValueTotalForYear(defaultValue, assumptions.default_value_year) : undefined;
+        // 기본값(default)은 연도별 mark-up이 포함된 값이다. 원본(가산 전) total_default와 가산액을 분리해 노출한다.
+        const defaultSeeRaw = defaultValue?.total_default;
+        const defaultMarkupAmount =
+            defaultSee !== undefined && defaultSeeRaw !== undefined ? defaultSee - defaultSeeRaw : undefined;
         const defaultGap = defaultSee === undefined ? undefined : actualSee - defaultSee;
         const benchmarkColumnA = benchmark?.column_a_benchmark;
         const benchmarkColumnB = benchmark?.column_b_benchmark;
@@ -225,6 +231,8 @@ export function calculateProductScenarios(
             actual_see: actualSee,
             informational_total_see: informationalTotalSee,
             default_see: defaultSee,
+            default_see_raw: defaultSeeRaw,
+            default_markup_amount: defaultMarkupAmount,
             default_gap: defaultGap,
             benchmark_column_a: benchmarkColumnA,
             benchmark_column_b: benchmarkColumnB,
