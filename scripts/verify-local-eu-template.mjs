@@ -130,7 +130,8 @@ globalThis.euExport = {
   createEuTemplateExportCopyResult,
   createEuTemplateExportCellWrites,
   evaluateEuExportReadiness,
-  validateEuTemplateFile
+  validateEuTemplateFile,
+  getIndirectEmissionsApplicability
 };`,
     {
       compilerOptions: {
@@ -265,6 +266,7 @@ function makeSampleData() {
     direct_attributable_emissions_tco2e: 120,
     electricity_mwh: 500,
     electricity_ef_tco2e_per_mwh: 0.47,
+    electricity_ef_source: 'MIX',
   };
   const sourceStream = {
     id: 'source-stream-1',
@@ -380,6 +382,7 @@ const checkedCells = {
   'B_EmInst!E17': readExportedCell('B_EmInst', 'E17'),
   'D_Processes!L16': readExportedCell('D_Processes', 'L16'),
   'D_Processes!L54': readExportedCell('D_Processes', 'L54'),
+  'D_Processes!L67': readExportedCell('D_Processes', 'L67'),
   'E_PurchPrec!L17': readExportedCell('E_PurchPrec', 'L17'),
   'E_PurchPrec!L49': readExportedCell('E_PurchPrec', 'L49'),
   'E_PurchPrec!L50': readExportedCell('E_PurchPrec', 'L50'),
@@ -395,40 +398,50 @@ const checkedFormulas = {
   'Summary_Products!K10': readExportedFormula('Summary_Products', 'K10'),
 };
 
+// 계산엔진(calculation-engine.ts)과 동일한 의미로 산출한다:
+// - 전구물질 기여를 direct/indirect로 분리
+// - Annex II direct-only 품목은 인증서 기준(see_cbam_basis)에서 자체·전구물질 indirect를 모두 제외
+const reviewProduct = data.products[0];
+const reviewProcess = data.processes[0];
+const reviewLine = data.productOutputLines[0];
+const reviewPrecursor = data.precursors[0];
+const reviewIndirectApplicable = euExport.getIndirectEmissionsApplicability(reviewProduct).applicable;
+const appDirectSee = roundNumber(reviewProcess.direct_attributable_emissions_tco2e / reviewLine.output_mass_t);
+const appOwnIndirectSee = roundNumber(
+  reviewProcess.electricity_mwh * reviewProcess.electricity_ef_tco2e_per_mwh / reviewLine.output_mass_t
+);
+const appPrecursorDirectSee = roundNumber(
+  reviewPrecursor.consumed_mass_t * reviewPrecursor.direct_see_tco2e_per_t / reviewLine.output_mass_t
+);
+const appPrecursorIndirectSee = roundNumber(
+  reviewPrecursor.consumed_mass_t * reviewPrecursor.indirect_see_tco2e_per_t / reviewLine.output_mass_t
+);
+const appPrecursorSee = roundNumber(appPrecursorDirectSee + appPrecursorIndirectSee);
+const appSeeDirectInclPrecursor = roundNumber(appDirectSee + appPrecursorDirectSee);
+const appSeeIndirectInclPrecursor = roundNumber(appOwnIndirectSee + appPrecursorIndirectSee);
+const appCbamBasisSee = roundNumber(
+  reviewIndirectApplicable ? appSeeDirectInclPrecursor + appSeeIndirectInclPrecursor : appSeeDirectInclPrecursor
+);
+const appInformationalTotalSee = roundNumber(appDirectSee + appOwnIndirectSee + appPrecursorSee);
 const localSummaryProductReview = {
   row: 10,
-  process: data.processes[0].name,
-  cnCode: data.products[0].cn_code,
-  productName: data.products[0].name,
-  outputMassT: data.productOutputLines[0].output_mass_t,
-  appDirectSee: roundNumber(data.processes[0].direct_attributable_emissions_tco2e / data.productOutputLines[0].output_mass_t),
-  appOwnIndirectSee: roundNumber(
-    data.processes[0].electricity_mwh *
-    data.processes[0].electricity_ef_tco2e_per_mwh /
-    data.productOutputLines[0].output_mass_t
-  ),
-  appIndirectSeeIncludedInCbamBasis: 0,
-  appIndirectSeeExcludedFromCbamBasis: roundNumber(
-    data.processes[0].electricity_mwh *
-    data.processes[0].electricity_ef_tco2e_per_mwh /
-    data.productOutputLines[0].output_mass_t
-  ),
-  appPrecursorSee: roundNumber(
-    data.precursors[0].consumed_mass_t *
-    (data.precursors[0].direct_see_tco2e_per_t + data.precursors[0].indirect_see_tco2e_per_t) /
-    data.productOutputLines[0].output_mass_t
-  ),
+  process: reviewProcess.name,
+  cnCode: reviewProduct.cn_code,
+  productName: reviewProduct.name,
+  outputMassT: reviewLine.output_mass_t,
+  indirectApplicable: reviewIndirectApplicable,
+  appDirectSee,
+  appOwnIndirectSee,
+  appIndirectSeeIncludedInCbamBasis: reviewIndirectApplicable ? appOwnIndirectSee : 0,
+  appIndirectSeeExcludedFromCbamBasis: reviewIndirectApplicable ? 0 : appOwnIndirectSee,
+  appPrecursorSee,
+  appPrecursorDirectSee,
+  appPrecursorIndirectSee,
+  appSeeDirectInclPrecursor,
+  appSeeIndirectInclPrecursor,
+  appCbamBasisSee,
+  appInformationalTotalSee,
 };
-localSummaryProductReview.appCbamBasisSee = roundNumber(
-  localSummaryProductReview.appDirectSee +
-  localSummaryProductReview.appIndirectSeeIncludedInCbamBasis +
-  localSummaryProductReview.appPrecursorSee
-);
-localSummaryProductReview.appInformationalTotalSee = roundNumber(
-  localSummaryProductReview.appDirectSee +
-  localSummaryProductReview.appOwnIndirectSee +
-  localSummaryProductReview.appPrecursorSee
-);
 
 assert.equal(checkedCells['A_InstData!I9'], '45292');
 assert.equal(checkedCells['A_InstData!L9'], '45657');
@@ -445,6 +458,7 @@ assert.equal(checkedCells['B_EmInst!D17'], 'Combustion');
 assert.equal(checkedCells['B_EmInst!E17'], 'Natural gas combustion');
 assert.equal(checkedCells['D_Processes!L16'], '1000');
 assert.equal(checkedCells['D_Processes!L54'], '120');
+assert.equal(checkedCells['D_Processes!L67'], 'Mix');
 assert.equal(checkedCells['E_PurchPrec!L17'], '1100');
 assert.equal(checkedCells['E_PurchPrec!L49'], '1.2');
 assert.equal(checkedCells['E_PurchPrec!L50'], '1');
@@ -460,7 +474,12 @@ assert.equal(localSummaryProductReview.appOwnIndirectSee, 0.235);
 assert.equal(localSummaryProductReview.appIndirectSeeIncludedInCbamBasis, 0);
 assert.equal(localSummaryProductReview.appIndirectSeeExcludedFromCbamBasis, 0.235);
 assert.equal(localSummaryProductReview.appPrecursorSee, 1.45);
-assert.equal(localSummaryProductReview.appCbamBasisSee, 1.57);
+assert.equal(localSummaryProductReview.appPrecursorDirectSee, 1.2);
+assert.equal(localSummaryProductReview.appPrecursorIndirectSee, 0.25);
+assert.equal(localSummaryProductReview.appSeeDirectInclPrecursor, 1.32);
+assert.equal(localSummaryProductReview.appSeeIndirectInclPrecursor, 0.485);
+// 철강(Annex II direct-only): 전구물질 indirect 제외 → 인증서 기준 = SEE(direct) = 1.32 (수정 전 1.57에서 교정)
+assert.equal(localSummaryProductReview.appCbamBasisSee, 1.32);
 assert.equal(localSummaryProductReview.appInformationalTotalSee, 1.805);
 
 await mkdir('artifacts', { recursive: true });
