@@ -17,6 +17,8 @@ import {
     getDefaultValueTotalForYear,
     type ImportedDefaultValueReference,
 } from '@/lib/reference-workbooks';
+import { Term } from '@/components/ux/Term';
+import { FieldHelp } from '@/components/ux/FieldHelp';
 import { AlertTriangle, ArrowRight, Boxes, Factory, Pencil, Plus, Scale, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
@@ -488,7 +490,7 @@ export default function PrecursorsPage() {
                             badge={<StatusBadge tone="warning">필수</StatusBadge>}
                         >
                         <div>
-                            <label htmlFor="precursor-name" className="text-sm font-semibold text-slate-700">전구물질명</label>
+                            <label htmlFor="precursor-name" className="text-sm font-semibold text-slate-700"><Term term="전구물질">전구물질</Term>명</label>
                             <input id="precursor-name" required className={fieldClass} value={newItem.name} onChange={(event) => setNewItem({ ...newItem, name: event.target.value })} />
                             {errors.name && <p className="mt-1 text-xs font-medium text-red-600">{errors.name}</p>}
                         </div>
@@ -644,12 +646,31 @@ export default function PrecursorsPage() {
                             badge={<StatusBadge tone="warning">필수</StatusBadge>}
                         >
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">직접 SEE(tCO2e/t)</label>
+                            <label className="text-sm font-semibold text-slate-700">직접 <Term term="SEE">SEE</Term>(tCO2e/t)</label>{' '}
+                            <FieldHelp
+                                title="원료(전구물질) 직접 SEE는 어디서?"
+                                sources={[
+                                    '공급사가 준 탄소데이터시트(EU Communication Template)의 SEE(direct)',
+                                    '공급사 자료가 없으면 위 "기본값 적용"으로 국가/CN 공식 기본값 사용',
+                                ]}
+                                exampleLabel="예시값 채우기 (3.0)"
+                                onExample={() => setNewItem({ ...newItem, direct_see_tco2e_per_t: 3.0 })}
+                            />
                             <input required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.direct_see_tco2e_per_t} onChange={(event) => setNewItem({ ...newItem, direct_see_tco2e_per_t: toNumber(event.target.value) })} />
                             {errors.direct_see_tco2e_per_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.direct_see_tco2e_per_t}</p>}
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">간접 SEE(tCO2e/t)</label>
+                            <label className="text-sm font-semibold text-slate-700">간접 <Term term="SEE">SEE</Term>(tCO2e/t)</label>{' '}
+                            <FieldHelp
+                                title="원료 간접 SEE는 어디서?"
+                                sources={[
+                                    '공급사 시트의 SEE(indirect) — 이미 tCO₂e/t로 환산된 값',
+                                    '⚠️ 공급사가 "전력 MWh/t"로만 줬다면 전력 배출계수를 곱해 tCO₂e/t로 환산해 입력',
+                                    '없으면 국가/CN 기본값 사용',
+                                ]}
+                                exampleLabel="예시값 채우기 (2.5)"
+                                onExample={() => setNewItem({ ...newItem, indirect_see_tco2e_per_t: 2.5 })}
+                            />
                             <input required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.indirect_see_tco2e_per_t} onChange={(event) => setNewItem({ ...newItem, indirect_see_tco2e_per_t: toNumber(event.target.value) })} />
                             {errors.indirect_see_tco2e_per_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.indirect_see_tco2e_per_t}</p>}
                         </div>

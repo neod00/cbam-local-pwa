@@ -15,6 +15,8 @@ import {
     setLocalSetting,
     updateLocalItem,
 } from '@/lib/local-db';
+import { Term } from '@/components/ux/Term';
+import { FieldHelp } from '@/components/ux/FieldHelp';
 import { AlertTriangle, Boxes, CheckCircle2, FileSpreadsheet, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -458,7 +460,17 @@ export default function ProductsPage() {
                             {errors.hs_code && <p className="mt-1 text-xs font-medium text-red-600">{errors.hs_code}</p>}
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">CN 8자리 코드</label>
+                            <label className="text-sm font-semibold text-slate-700"><Term term="CN 코드">CN</Term> 8자리 코드</label>{' '}
+                            <FieldHelp
+                                title="CN 코드는 어디서 확인하나요?"
+                                sources={[
+                                    '수출 인보이스·관세사에게 받은 HS코드 앞 6자리 + EU CN 뒤 2자리',
+                                    'EU TARIC 또는 관세청 품목분류 조회',
+                                    '아래 "CN 코드 검색"으로 EU 템플릿 목록에서 찾아 적용',
+                                ]}
+                                exampleLabel="예시값 채우기 (72191310)"
+                                onExample={() => setDraft({ ...draft, cn_code: '72191310' })}
+                            />
                             <input
                                 type="text"
                                 inputMode="numeric"
