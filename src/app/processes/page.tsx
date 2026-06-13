@@ -16,6 +16,8 @@ import {
 import { summarizeProductOutputLines } from '@/lib/calculation-engine';
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from '@/lib/source-stream-calculation';
 import { getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
+import { Term } from '@/components/ux/Term';
+import { FieldHelp } from '@/components/ux/FieldHelp';
 import { AlertTriangle, ArrowRight, Factory, Gauge, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
@@ -683,7 +685,18 @@ export default function ProcessesPage() {
                             {errors.internal_consumption_mass_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.internal_consumption_mass_t}</p>}
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">직접귀속배출량(tCO2e)</label>
+                            <label className="text-sm font-semibold text-slate-700"><Term term="직접귀속배출량">직접귀속배출량</Term>(tCO2e)</label>{' '}
+                            <FieldHelp
+                                title="직접귀속배출량은 어디서?"
+                                sources={[
+                                    '연료 사용량 × 배출계수(고지서·계측기 검침)',
+                                    '단위 주의: 활동량(t/Nm³)과 NCV(GJ/단위) 기준이 같아야 함',
+                                    '물질수지면 산출물(조강·슬래그) 탄소는 음수(−)로 차감',
+                                    '배출원 자료를 입력하면 합계를 이 값에 적용할 수 있음',
+                                ]}
+                                exampleLabel="예시값 채우기 (402,245)"
+                                onExample={() => setNewItem({ ...newItem, direct_attributable_emissions_tco2e: 402245 })}
+                            />
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.direct_attributable_emissions_tco2e} onChange={(event) => setNewItem({ ...newItem, direct_attributable_emissions_tco2e: toNumber(event.target.value) })} />
                             {errors.direct_attributable_emissions_tco2e && <p className="mt-1 text-xs font-medium text-red-600">{errors.direct_attributable_emissions_tco2e}</p>}
                         </div>
@@ -734,12 +747,28 @@ export default function ProcessesPage() {
                             </div>
                         )}
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">전력 사용량(MWh)</label>
+                            <label className="text-sm font-semibold text-slate-700">전력 사용량(MWh)</label>{' '}
+                            <FieldHelp
+                                title="전력 사용량은 어디서?"
+                                sources={['한전 전기요금 고지서 연간 합계 (kWh ÷ 1000 = MWh)', '공장 계측기 합산']}
+                                exampleLabel="예시값 채우기 (324,700)"
+                                onExample={() => setNewItem({ ...newItem, electricity_mwh: 324700 })}
+                            />
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.electricity_mwh} onChange={(event) => setNewItem({ ...newItem, electricity_mwh: toNumber(event.target.value) })} />
                             {errors.electricity_mwh && <p className="mt-1 text-xs font-medium text-red-600">{errors.electricity_mwh}</p>}
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">전력 배출계수(tCO2e/MWh)</label>
+                            <label className="text-sm font-semibold text-slate-700"><Term term="전력 배출계수">전력 배출계수</Term>(tCO2e/MWh)</label>{' '}
+                            <FieldHelp
+                                title="전력 배출계수는 어디서? (CBAM 위계 주의)"
+                                sources={[
+                                    '원칙: EU Commission 제공 국가/지역 계통 기본값(IEA 기반)',
+                                    '실측 EF는 발전소 직접 연결 또는 PPA에 한해 허용',
+                                    '⛔ Guarantees of Origin·녹색인증서로 EF를 낮출 수 없음',
+                                ]}
+                                exampleLabel="EU 예제값 채우기 (0.833)"
+                                onExample={() => setNewItem({ ...newItem, electricity_ef_tco2e_per_mwh: 0.833 })}
+                            />
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.electricity_ef_tco2e_per_mwh} onChange={(event) => setNewItem({ ...newItem, electricity_ef_tco2e_per_mwh: toNumber(event.target.value) })} />
                             {errors.electricity_ef_tco2e_per_mwh && <p className="mt-1 text-xs font-medium text-red-600">{errors.electricity_ef_tco2e_per_mwh}</p>}
                         </div>

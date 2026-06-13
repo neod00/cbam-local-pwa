@@ -11,6 +11,8 @@ import {
     updateLocalItem,
 } from '@/lib/local-db';
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown, getSourceStreamUnitWarnings } from '@/lib/source-stream-calculation';
+import { Term } from '@/components/ux/Term';
+import { FieldHelp } from '@/components/ux/FieldHelp';
 import { AlertTriangle, ArrowRight, Flame, Gauge, Pencil, Plus, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
@@ -471,12 +473,30 @@ export default function SourceStreamsPage() {
                             {errors.activity_unit && <p className="mt-1 text-xs font-medium text-red-600">{errors.activity_unit}</p>}
                         </div>
                         <div>
-                            <label htmlFor="source-stream-ncv" className="text-sm font-semibold text-slate-700">순발열량(GJ/단위)</label>
+                            <label htmlFor="source-stream-ncv" className="text-sm font-semibold text-slate-700"><Term term="NCV">순발열량</Term>(GJ/단위)</label>{' '}
+                            <FieldHelp
+                                title="순발열량(NCV)은 어디서?"
+                                sources={[
+                                    '연료 공급사 사양서·고지서의 발열량',
+                                    '⚠️ 활동량 단위와 같은 기준이어야 함 (예: 활동량 Nm³면 NCV도 GJ/Nm³)',
+                                    '표준값 예: LNG ≈ 48 GJ/t (= 약 0.037 GJ/Nm³)',
+                                ]}
+                                exampleLabel="예시값 채우기 (48 GJ/t)"
+                                onExample={() => setNewItem({ ...newItem, ncv_gj_per_unit: 48 })}
+                            />
                             <input id="source-stream-ncv" type="number" min="0" step="0.0001" className={fieldClass} value={newItem.ncv_gj_per_unit} onChange={(event) => setNewItem({ ...newItem, ncv_gj_per_unit: toNumber(event.target.value) })} />
                             {errors.ncv_gj_per_unit && <p className="mt-1 text-xs font-medium text-red-600">{errors.ncv_gj_per_unit}</p>}
                         </div>
                         <div>
-                            <label htmlFor="source-stream-ef" className="text-sm font-semibold text-slate-700">배출계수(tCO2e/단위)</label>
+                            <label htmlFor="source-stream-ef" className="text-sm font-semibold text-slate-700">배출계수(tCO2e/단위)</label>{' '}
+                            <FieldHelp
+                                title="배출계수는 어디서?"
+                                sources={[
+                                    '연소: IPCC/국가 연료별 기본 배출계수(에너지 기준 tCO₂/TJ)',
+                                    '물질수지: 탄소함량을 CO₂ 기준으로 환산(tCO₂/t = tC/t × 3.667)',
+                                    '단위는 활동량·NCV 기준과 일치시켜야 함',
+                                ]}
+                            />
                             <input id="source-stream-ef" type="number" min="0" step="0.0001" className={fieldClass} value={newItem.emission_factor_tco2e_per_unit} onChange={(event) => setNewItem({ ...newItem, emission_factor_tco2e_per_unit: toNumber(event.target.value) })} />
                             {errors.emission_factor_tco2e_per_unit && <p className="mt-1 text-xs font-medium text-red-600">{errors.emission_factor_tco2e_per_unit}</p>}
                         </div>
@@ -488,7 +508,7 @@ export default function SourceStreamsPage() {
                             badge={<StatusBadge tone="pending">검토용</StatusBadge>}
                         >
                         <div>
-                            <label htmlFor="source-stream-oxidation" className="text-sm font-semibold text-slate-700">산화계수</label>
+                            <label htmlFor="source-stream-oxidation" className="text-sm font-semibold text-slate-700"><Term term="산화계수">산화계수</Term></label>
                             <input id="source-stream-oxidation" type="number" min="0" max="1" step="0.0001" className={fieldClass} value={newItem.oxidation_factor} onChange={(event) => setNewItem({ ...newItem, oxidation_factor: toNumber(event.target.value) })} />
                             {errors.oxidation_factor && <p className="mt-1 text-xs font-medium text-red-600">{errors.oxidation_factor}</p>}
                         </div>
