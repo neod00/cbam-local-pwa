@@ -35,7 +35,17 @@ const emptyDraft: ProcessDraft = {
     direct_attributable_emissions_tco2e: 0,
     electricity_mwh: 0,
     electricity_ef_tco2e_per_mwh: 0.47,
+    electricity_ef_source: '',
 };
+
+const electricityEfSources = [
+    { value: '', label: '— 출처 유형 선택 —' },
+    { value: 'COUNTRY_GRID_DEFAULT', label: '국가/지역 계통 평균 기본값 (Commission/IEA)' },
+    { value: 'DIRECT_TECHNICAL_LINK', label: '발전설비 직접 기술적 연결 (실측)' },
+    { value: 'PPA', label: '전력구매계약(PPA) (실측)' },
+    { value: 'INSTALLATION_OWN', label: '설비 내 자가발전' },
+    { value: 'MIX', label: '혼합(Mix)' },
+] as const;
 
 const fieldClass =
     'mt-1 block h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100';
@@ -132,6 +142,7 @@ export default function ProcessesPage() {
                     direct_attributable_emissions_tco2e: editProcess.direct_attributable_emissions_tco2e,
                     electricity_mwh: editProcess.electricity_mwh,
                     electricity_ef_tco2e_per_mwh: editProcess.electricity_ef_tco2e_per_mwh,
+                    electricity_ef_source: editProcess.electricity_ef_source ?? '',
                 });
                 const existingLines = outputLineData.filter((line) => line.process_id === editProcess.id);
                 setOutputLineDrafts(existingLines.length > 0
@@ -731,6 +742,20 @@ export default function ProcessesPage() {
                             <label className="text-sm font-semibold text-slate-700">전력 배출계수(tCO2e/MWh)</label>
                             <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.electricity_ef_tco2e_per_mwh} onChange={(event) => setNewItem({ ...newItem, electricity_ef_tco2e_per_mwh: toNumber(event.target.value) })} />
                             {errors.electricity_ef_tco2e_per_mwh && <p className="mt-1 text-xs font-medium text-red-600">{errors.electricity_ef_tco2e_per_mwh}</p>}
+                        </div>
+                        <div className="md:col-span-2">
+                            <label htmlFor="process-ef-source" className="text-sm font-semibold text-slate-700">전력 EF 출처 유형</label>
+                            <select id="process-ef-source" className={fieldClass} value={newItem.electricity_ef_source ?? ''} onChange={(event) => setNewItem({ ...newItem, electricity_ef_source: event.target.value })}>
+                                {electricityEfSources.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                            </select>
+                            <p className="mt-1 text-xs text-slate-500">
+                                CBAM 전력 EF 위계: 기본값=국가/지역 계통(Commission/IEA). 실측 EF는 발전설비 직접 기술적 연결 또는 PPA에 한해 허용됩니다. Guarantees of Origin·녹색인증서 등 시장기반 증서로 EF를 낮출 수 없습니다(금지).
+                            </p>
+                            {newItem.electricity_mwh > 0 && !newItem.electricity_ef_source && (
+                                <p className="mt-1 text-xs font-semibold text-amber-700">전력 사용량이 입력되었으나 EF 출처 유형이 분류되지 않았습니다. 검증 대응을 위해 출처를 선택하세요.</p>
+                            )}
                         </div>
                         </FormSection>
 

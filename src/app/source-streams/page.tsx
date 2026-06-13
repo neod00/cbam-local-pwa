@@ -10,7 +10,7 @@ import {
     SourceStream,
     updateLocalItem,
 } from '@/lib/local-db';
-import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from '@/lib/source-stream-calculation';
+import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown, getSourceStreamUnitWarnings } from '@/lib/source-stream-calculation';
 import { AlertTriangle, ArrowRight, Flame, Gauge, Pencil, Plus, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
@@ -93,8 +93,8 @@ function createSourceStreamValidationErrors(sourceStream: SourceStreamDraft): So
         nextErrors.stream_type = '기타 배출원은 아직 EU Export 대상이 아닙니다. 연료 또는 공정 원료로 분류할 수 있는지 확인하세요.';
     }
 
-    if (sourceStream.activity_data < 0) {
-        nextErrors.activity_data = '활동자료는 0 이상이어야 합니다.';
+    if (sourceStream.activity_data < 0 && sourceStream.method !== 'Mass balance') {
+        nextErrors.activity_data = '활동자료는 0 이상이어야 합니다. (산출물 차감은 물질수지 방법에서만 음수로 입력)';
     }
 
     if (!activityUnits.includes(sourceStream.activity_unit as (typeof activityUnits)[number])) {
@@ -327,6 +327,7 @@ export default function SourceStreamsPage() {
     }
 
     const draftEnergyBreakdown = calculateSourceStreamEnergyBreakdown(newItem);
+    const draftUnitWarnings = getSourceStreamUnitWarnings(newItem);
 
     return (
         <div className="space-y-6">
@@ -456,7 +457,10 @@ export default function SourceStreamsPage() {
                         >
                         <div>
                             <label htmlFor="source-stream-activity" className="text-sm font-semibold text-slate-700">활동자료</label>
-                            <input id="source-stream-activity" type="number" min="0" step="0.0001" className={fieldClass} value={newItem.activity_data} onChange={(event) => setNewItem({ ...newItem, activity_data: toNumber(event.target.value) })} />
+                            <input id="source-stream-activity" type="number" min={newItem.method === 'Mass balance' ? undefined : '0'} step="0.0001" className={fieldClass} value={newItem.activity_data} onChange={(event) => setNewItem({ ...newItem, activity_data: toNumber(event.target.value) })} />
+                            {newItem.method === 'Mass balance' && (
+                                <p className="mt-1 text-xs text-slate-500">물질수지: 투입은 양수(+), 산출물(조강·슬래그 등) 차감은 <span className="font-semibold">음수(−)</span>로 입력. 배출계수는 탄소함량을 CO₂ 기준(tCO₂/t = tC/t × 3.667)으로 입력하세요.</p>
+                            )}
                             {errors.activity_data && <p className="mt-1 text-xs font-medium text-red-600">{errors.activity_data}</p>}
                         </div>
                         <div>
@@ -520,6 +524,19 @@ export default function SourceStreamsPage() {
                                 </p>
                             </div>
                         </div>
+                        {draftUnitWarnings.length > 0 && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 md:col-span-2">
+                                <p className="flex items-center gap-2 font-semibold">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    단위·순발열량(NCV) 정합성 확인 필요
+                                </p>
+                                <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-5">
+                                    {draftUnitWarnings.map((warning, index) => (
+                                        <li key={index}>{warning}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
                         </FormSection>
 
                         <div className="flex flex-wrap gap-2">

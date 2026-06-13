@@ -61,6 +61,8 @@ export interface ProductionProcess extends LocalEntity {
   direct_attributable_emissions_tco2e: number;
   electricity_mwh: number;
   electricity_ef_tco2e_per_mwh: number;
+  // 전력 EF 출처 유형(CBAM 위계). 선택적: 기존 .cbam 백업과의 하위호환을 위해 undefined 허용.
+  electricity_ef_source?: string;
 }
 
 export interface ProductOutputLine extends LocalEntity {
