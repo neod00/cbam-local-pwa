@@ -11,6 +11,7 @@
 ## 준비물
 
 - 앱에서 생성한 수입자 전달용 Communication Template 복사본
+- 전달 패키지를 생성한 경우 `02_Calculation_Basis_Summary_KO-EN.docx`와 `03_Evidence_Checklist_KO-EN.docx`
 - 앱 Export 화면의 `Summary_Products 반영 검토` 표
 - `artifacts/local-eu-template-verification.json` 파일이 있다면 그 안의 `localSummaryProductReview` 값
 - Microsoft Excel 데스크톱 앱
@@ -42,6 +43,21 @@
    - 생산공정 배분 또는 CN 코드 선택 차이
    - EU 템플릿 버전 변경
 9. 검토가 끝나면 `.cbam` 백업을 별도로 생성해 같은 검토 시점의 로컬 입력값을 보존한다.
+
+## 전달 패키지 사용
+
+Export 화면의 `ZIP 패키지 다운로드`는 다음 파일을 한 번에 묶는다.
+
+- 작성된 Communication Template 복사본 `.xlsx`
+- 국영문 산정근거 요약 보고서 `.docx`
+- 국영문 증빙 체크리스트 `.docx`
+- 내부 보관용 `.cbam` 백업
+- `export-log.json`
+- `README_KO-EN.txt`
+
+DOCX 파일은 수입자, 컨설턴트, 검증기관과 협업하며 문구를 보완할 수 있도록 수정 가능한 형식으로 제공한다. PDF 최종본이 필요하면 회사 문서관리 절차에 따라 DOCX 검토 후 별도 변환한다.
+
+`.cbam` 백업은 생산량, 배출량, 전구물질, 시나리오 가정값 등 민감한 로컬 입력자료를 포함할 수 있으므로 기본 수입자 전달 파일로 보지 않는다. 회사가 명시적으로 승인한 경우에만 공유하고, 일반 전달에는 Excel과 DOCX만 분리해 보내는 것을 권장한다.
 
 ## 가상 데이터 기준 기대값
 

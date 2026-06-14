@@ -120,6 +120,7 @@ globalThis.euExport = {
   createExportChecklist,
   createEuTemplateExportCellWrites,
   createEuTemplateExportCopy,
+  createEuTemplateExportCopyResult,
   evaluateEuExportReadiness,
   getEuExportDownloadStatusMessage,
   getEuExportIssueEditHref,
@@ -135,6 +136,33 @@ globalThis.euExport = {
   const context = { Blob, File, DOMParser, fflate, console };
   vm.runInNewContext(compiled, context);
   return context.euExport;
+}
+
+function loadDeliveryPackageModule() {
+  const source = readFileSync('src/lib/delivery-package.ts', 'utf8')
+    .replace(
+      "import { strToU8, zipSync } from 'fflate';",
+      'const { strToU8, zipSync } = fflate;'
+    )
+    .replace(/import type[\s\S]*?;\r?\n/gm, '')
+    .replace(/^export /gm, '');
+  const compiled = ts.transpileModule(
+    `${source}
+globalThis.deliveryPackage = {
+  createCbamBackupFilename,
+  createDeliveryPackage,
+  createDeliveryPackageFilename
+};`,
+    {
+      compilerOptions: {
+        module: ts.ModuleKind.None,
+        target: ts.ScriptTarget.ES2022,
+      },
+    }
+  ).outputText;
+  const context = { Blob, fflate, console, Intl };
+  vm.runInNewContext(compiled, context);
+  return context.deliveryPackage;
 }
 
 function inlineCell(cell, value) {
@@ -319,6 +347,7 @@ function assertEqual(actual, expected, label) {
 }
 
 const euExport = loadEuExportModule();
+const deliveryPackage = loadDeliveryPackageModule();
 const product = {
   id: 'product-1',
   created_at: '2026-01-01T00:00:00.000Z',
@@ -668,7 +697,8 @@ assertEqual(
   'download status backup warning'
 );
 
-const exportedBlob = await euExport.createEuTemplateExportCopy(file, data);
+const exportResult = await euExport.createEuTemplateExportCopyResult(file, data);
+const exportedBlob = exportResult.blob;
 const exportedZip = fflate.unzipSync(new Uint8Array(await exportedBlob.arrayBuffer()));
 const installationSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet5.xml']);
 const sourceStreamSheet = fflate.strFromU8(exportedZip['xl/worksheets/sheet6.xml']);
@@ -728,5 +758,138 @@ assertEqual(readCell(summaryProductsSheet, 'H10'), 'Hot Rolled Coil', 'Summary_P
 assertEqual(readFormula(summaryProductsSheet, 'I10'), 'D10&" direct SEE"', 'Summary_Products I10 formula');
 assertEqual(readFormula(summaryProductsSheet, 'J10'), 'D10&" indirect SEE"', 'Summary_Products J10 formula');
 assertEqual(readFormula(summaryProductsSheet, 'K10'), 'I10+J10', 'Summary_Products K10 formula');
+
+const packageGeneratedAt = new Date('2026-06-14T00:00:00.000Z');
+const backup = {
+  manifest: {
+    format: 'cbam-local-backup',
+    format_version: 1,
+    app_name: 'CBAM Local',
+    app_version: '0.1.0',
+    exported_at: packageGeneratedAt.toISOString(),
+    counts: {
+      installations: 1,
+      products: 1,
+      periods: 1,
+      processes: 1,
+      product_output_lines: 1,
+      source_streams: 1,
+      precursors: 1,
+      settings: 0,
+    },
+  },
+  data: {
+    installations: [installation],
+    products: [product],
+    periods: [period],
+    processes: [process],
+    product_output_lines: [outputLine],
+    source_streams: [sourceStream],
+    precursors: [precursor],
+    settings: [],
+  },
+};
+const calculationResult = {
+  id: 'result-process-1',
+  period_id: period.id,
+  period_name: period.name,
+  process_id: process.id,
+  process_name: process.name,
+  product_output_line_id: outputLine.id,
+  allocation_basis: 'MASS',
+  allocation_share: 1,
+  product_id: product.id,
+  product_name: product.name,
+  hs_code: product.hs_code,
+  cn_code: product.cn_code,
+  production_route: process.production_route,
+  output_mass_t: process.output_mass_t,
+  direct_emissions_tco2e: process.direct_attributable_emissions_tco2e,
+  indirect_emissions_applicable: false,
+  indirect_emissions_rule: 'ANNEX_II_DIRECT_ONLY',
+  indirect_emissions_excluded_tco2e: 235,
+  indirect_emissions_gross_tco2e: 235,
+  source_stream_count: 1,
+  source_stream_emissions_tco2e: 18250,
+  source_stream_energy_tj: 11.25,
+  source_stream_delta_tco2e: 18130,
+  direct_see: 0.12,
+  own_indirect_see: 0.235,
+  indirect_see: 0,
+  indirect_see_excluded: 0.235,
+  precursor_see: 1.45,
+  precursor_direct_see: 1.2,
+  precursor_indirect_see: 0.25,
+  see_direct_incl_precursor: 1.32,
+  see_indirect_incl_precursor: 0.485,
+  see_cbam_basis: 1.32,
+  see_informational_total: 1.805,
+  total_see: 1.805,
+  warnings: ['Synthetic warning for package verification'],
+  warningDetails: [],
+};
+const packageResult = await deliveryPackage.createDeliveryPackage({
+  backup,
+  exportChecklist: checklist,
+  exportVerification: exportResult.verification,
+  exportWorkbookBlob: exportResult.blob,
+  exportWorkbookFilename: 'synthetic-cbam-template_cbam-local-copy_20260614.xlsx',
+  generatedAt: packageGeneratedAt,
+  installations: [installation],
+  periods: [period],
+  precursors: [precursor],
+  processes: [process],
+  products: [product],
+  readiness,
+  results: [calculationResult],
+  sourceStreams: [sourceStream],
+  templateFilename: file.name,
+  writtenCellCount: exportResult.writtenCellCount,
+});
+const packageZip = fflate.unzipSync(new Uint8Array(await packageResult.blob.arrayBuffer()));
+const expectedPackageFiles = [
+  '01_synthetic-cbam-template_cbam-local-copy_20260614.xlsx',
+  '02_Calculation_Basis_Summary_KO-EN.docx',
+  '03_Evidence_Checklist_KO-EN.docx',
+  'internal_archive/04_cbam-local-backup-20260614000000.cbam',
+  'internal_archive/05_export-log.json',
+  'README_KO-EN.txt',
+];
+
+assertEqual(String(packageResult.filename.startsWith('CBAM_delivery_package_')), 'true', 'delivery package filename');
+assertEqual(String(packageResult.files.length), '6', 'delivery package file count');
+for (const expectedFile of expectedPackageFiles) {
+  assertEqual(String(Boolean(packageZip[expectedFile])), 'true', `delivery package includes ${expectedFile}`);
+}
+
+const summaryDocxZip = fflate.unzipSync(packageZip['02_Calculation_Basis_Summary_KO-EN.docx']);
+const checklistDocxZip = fflate.unzipSync(packageZip['03_Evidence_Checklist_KO-EN.docx']);
+assertEqual(String(Boolean(summaryDocxZip['word/document.xml'])), 'true', 'summary docx document xml');
+assertEqual(String(Boolean(checklistDocxZip['word/document.xml'])), 'true', 'checklist docx document xml');
+assertEqual(
+  String(fflate.strFromU8(summaryDocxZip['word/document.xml']).includes('CBAM Calculation Basis Summary')),
+  'true',
+  'summary docx title'
+);
+assertEqual(
+  String(fflate.strFromU8(checklistDocxZip['word/document.xml']).includes('CBAM Evidence Checklist')),
+  'true',
+  'checklist docx title'
+);
+assertEqual(
+  JSON.parse(fflate.strFromU8(packageZip['internal_archive/04_cbam-local-backup-20260614000000.cbam'])).manifest.format,
+  'cbam-local-backup',
+  'delivery package backup format'
+);
+assertEqual(
+  JSON.parse(fflate.strFromU8(packageZip['internal_archive/05_export-log.json'])).export_verification_valid,
+  true,
+  'delivery package export log validity'
+);
+assertEqual(
+  String(fflate.strFromU8(packageZip['README_KO-EN.txt']).includes('.cbam backup can contain sensitive local project data')),
+  'true',
+  'delivery package readme caution'
+);
 
 console.log('EU export synthetic workbook verification passed.');

@@ -17,8 +17,10 @@ import {
     validateEuTemplateFile,
     type EuTemplateValidationResult,
 } from '@/lib/eu-template-export';
+import { createDeliveryPackage } from '@/lib/delivery-package';
 import {
     CBAM_LAST_BACKUP_AT_KEY,
+    exportLocalBackup,
     getBackupStatus,
     getLocalSetting,
     listLocalItems,
@@ -62,6 +64,12 @@ type LastExportResult = {
     writtenCellCount: number;
     writtenSheets: string[];
     protectedFormulaCellsOverwritten: boolean;
+};
+
+type LastPackageResult = {
+    filename: string;
+    generatedAt: string;
+    files: string[];
 };
 
 function formatNumber(value: number) {
@@ -133,7 +141,10 @@ export default function ExportPage() {
     const [defaultValueReference, setDefaultValueReference] = useState<ImportedDefaultValueReference | undefined>();
     const [scenarioAssumptions, setScenarioAssumptions] = useState<ScenarioAssumptions>();
     const [exportError, setExportError] = useState('');
+    const [packageError, setPackageError] = useState('');
+    const [isPackaging, setIsPackaging] = useState(false);
     const [lastExportResult, setLastExportResult] = useState<LastExportResult | undefined>();
+    const [lastPackageResult, setLastPackageResult] = useState<LastPackageResult | undefined>();
     const [lastBackupAt, setLastBackupAt] = useState<string | undefined>();
 
     useEffect(() => {
@@ -404,7 +415,9 @@ export default function ExportPage() {
         setValidation(undefined);
         setValidationError('');
         setExportError('');
+        setPackageError('');
         setLastExportResult(undefined);
+        setLastPackageResult(undefined);
 
         if (!file) {
             return;
@@ -453,6 +466,71 @@ export default function ExportPage() {
         }
     }
 
+    async function handleDownloadDeliveryPackage() {
+        if (!templateFile || !validation?.isValid) {
+            return;
+        }
+
+        setPackageError('');
+        setExportError('');
+        setLastPackageResult(undefined);
+        setIsPackaging(true);
+
+        try {
+            const generatedAt = new Date();
+            const exportResult = await createEuTemplateExportCopyResult(templateFile, {
+                installations,
+                periods,
+                processes,
+                productOutputLines,
+                sourceStreams,
+                precursors,
+                products,
+            });
+            const exportWorkbookFilename = createEuExportFilename(templateFile.name);
+            const backup = await exportLocalBackup();
+            const packageResult = await createDeliveryPackage({
+                backup,
+                exportChecklist,
+                exportVerification: exportResult.verification,
+                exportWorkbookBlob: exportResult.blob,
+                exportWorkbookFilename,
+                generatedAt,
+                installations,
+                periods,
+                precursors,
+                processes,
+                products,
+                readiness,
+                results,
+                sourceStreams,
+                templateFilename: templateFile.name,
+                writtenCellCount: exportResult.writtenCellCount,
+            });
+
+            downloadBlob(packageResult.blob, packageResult.filename);
+            window.localStorage.setItem(CBAM_LAST_BACKUP_AT_KEY, backup.manifest.exported_at);
+            setLastBackupAt(backup.manifest.exported_at);
+            setLastExportResult({
+                filename: exportWorkbookFilename,
+                generatedAt: generatedAt.toLocaleString('ko-KR'),
+                checkedCellCount: exportResult.verification.checkedCellCount,
+                writtenCellCount: exportResult.writtenCellCount,
+                writtenSheets: writtenSheetNames,
+                protectedFormulaCellsOverwritten: protectedSummaryProductFormulaOverwriteCount > 0,
+            });
+            setLastPackageResult({
+                filename: packageResult.filename,
+                generatedAt: generatedAt.toLocaleString('ko-KR'),
+                files: packageResult.files,
+            });
+        } catch (error) {
+            setPackageError(error instanceof Error ? error.message : 'CBAM 전달 패키지 생성 중 오류가 발생했습니다.');
+        } finally {
+            setIsPackaging(false);
+        }
+    }
+
     return (
         <div className="space-y-6">
             <PageHeader
@@ -485,6 +563,15 @@ export default function ExportPage() {
                                     수입자 전달용 복사본 생성
                                 </Button>
                             )}
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={handleDownloadDeliveryPackage}
+                                disabled={!validation?.isValid || !readiness.canExportDraft || isPackaging}
+                            >
+                                <PackageCheck className="mr-2 h-4 w-4" />
+                                {isPackaging ? '패키지 생성 중' : 'DOCX+Excel+.cbam 패키지'}
+                            </Button>
                             <Link href="/settings">
                                 <Button type="button" variant="secondary">
                                     백업 상태 확인
@@ -640,6 +727,28 @@ export default function ExportPage() {
                         </div>
                     </div>
 
+                    <div className="mt-4 rounded-2xl border border-teal-200 bg-teal-50 p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0">
+                                <h3 className="text-sm font-semibold text-teal-950">전달 패키지 생성</h3>
+                                <p className="mt-1 text-xs leading-5 text-teal-900">
+                                    Export Excel, 국영문 DOCX 산정근거 요약 보고서, 국영문 DOCX 증빙 체크리스트, .cbam 백업,
+                                    export 로그를 하나의 ZIP으로 묶습니다. .cbam 백업은 민감한 로컬 데이터가 포함될 수 있으므로 내부 보관 또는 명시 승인된 공유에만 사용하세요.
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={handleDownloadDeliveryPackage}
+                                disabled={!validation?.isValid || !readiness.canExportDraft || isPackaging}
+                                className="w-full border-teal-200 bg-white text-teal-900 hover:bg-teal-100 lg:w-auto"
+                            >
+                                <PackageCheck className="mr-2 h-4 w-4" />
+                                {isPackaging ? '패키지 생성 중' : 'ZIP 패키지 다운로드'}
+                            </Button>
+                        </div>
+                    </div>
+
                     <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
                         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                             <p className="text-xs font-semibold text-slate-500">공식 수식 보호</p>
@@ -675,6 +784,13 @@ export default function ExportPage() {
                         </div>
                     )}
 
+                    {packageError && (
+                        <div className="mt-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                            <span>{packageError}</span>
+                        </div>
+                    )}
+
                     {lastExportResult && (
                         <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                             <div className="flex items-start gap-2">
@@ -704,6 +820,37 @@ export default function ExportPage() {
                                             <dt className="inline font-medium">보호 수식 셀: </dt>
                                             <dd className="inline">
                                                 Summary_Products I:J:K 덮어쓰기 {lastExportResult.protectedFormulaCellsOverwritten ? '발견' : '없음'}
+                                            </dd>
+                                        </div>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {lastPackageResult && (
+                        <div className="mt-4 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
+                            <div className="flex items-start gap-2">
+                                <PackageCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-700" />
+                                <div>
+                                    <p className="text-sm font-semibold text-teal-950">CBAM 전달 패키지 생성 완료</p>
+                                    <dl className="mt-2 grid gap-1 text-xs leading-5 text-teal-900/90">
+                                        <div>
+                                            <dt className="inline font-medium">파일명: </dt>
+                                            <dd className="inline break-all">{lastPackageResult.filename}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="inline font-medium">생성 시각: </dt>
+                                            <dd className="inline">{lastPackageResult.generatedAt}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="inline font-medium">포함 파일: </dt>
+                                            <dd className="mt-1 block">
+                                                <ul className="list-disc space-y-1 pl-5">
+                                                    {lastPackageResult.files.map((file) => (
+                                                        <li key={file} className="break-all">{file}</li>
+                                                    ))}
+                                                </ul>
                                             </dd>
                                         </div>
                                     </dl>
