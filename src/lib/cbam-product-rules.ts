@@ -77,6 +77,50 @@ export function getIndirectEmissionsApplicability(product?: Pick<Product, 'cn_co
     };
 }
 
+export type CbamCoverageStatus = 'COVERED' | 'NOT_COVERED' | 'CHECK_NEEDED';
+
+export interface CbamCoverage {
+    status: CbamCoverageStatus;
+    label: string;
+    reason: string;
+}
+
+// 이 제품(CN)이 CBAM 대상 품목인지 1차 판별한다(가드레일용).
+// 비전문 담당자가 가장 틀리는 지점: "맨 강철 와이어(CN 7217/7223/7229)는 대상이지만
+// 피복·플럭스코어드·메탈코어드 용접봉(CN 8311, HS 83류)은 비대상". 8311을 명시 차단한다.
+// ⚠️ 휴리스틱(72/73 prefix)이므로 최종 포함 여부는 EU 템플릿 CN 목록으로 교차확인한다.
+export function getCbamCoverage(product?: Pick<Product, 'cn_code' | 'hs_code'>): CbamCoverage {
+    const code = getProductCode(product);
+
+    if (!code) {
+        return { status: 'CHECK_NEEDED', label: 'CN 확인', reason: 'CN 코드를 입력하면 CBAM 대상 여부를 확인합니다.' };
+    }
+
+    // 명시적 비대상: 피복·코어드 용접봉(CN 8311, Chapter 83은 CBAM Annex I 아님)
+    if (code.startsWith('8311')) {
+        return {
+            status: 'NOT_COVERED',
+            label: 'CBAM 대상 아님 (CN 8311)',
+            reason: '피복·플럭스코어드·메탈코어드 용접봉(CN 8311, HS 83류)은 CBAM 대상이 아닙니다. 맨 강철 와이어(CN 7217/7223/7229)만 대상입니다. 등록이 필요한지 확인하세요.',
+        };
+    }
+
+    const meta = getCbamGoodsMetadata(product);
+    if (meta.annex_i_candidate) {
+        return {
+            status: 'COVERED',
+            label: `CBAM 대상 · ${meta.sector_label}`,
+            reason: 'CBAM Annex I 대상 품목군으로 확인됩니다. 정확한 포함 여부는 최신 EU 템플릿 CN 목록으로 교차확인하세요.',
+        };
+    }
+
+    return {
+        status: 'CHECK_NEEDED',
+        label: 'CBAM 대상 여부 확인 필요',
+        reason: '현재 대표 규칙에 없는 CN입니다. 철강(72/73)·알루미늄·시멘트·비료·수소가 아니면 비대상일 수 있습니다(비철·티타늄·플럭스 등). EU 템플릿 CN 목록으로 확인하세요.',
+    };
+}
+
 export function getCbamGoodsMetadata(product?: Pick<Product, 'cn_code' | 'hs_code'>): CbamGoodsMetadata {
     const code = getProductCode(product);
 

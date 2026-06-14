@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, DataTable, EmptyState, PageHeader, SectionCard, StatusBadge } from '@/components/ui';
-import { getCbamGoodsMetadata, getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
+import { getCbamCoverage, getCbamGoodsMetadata, getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
 import { CN_CODE_OPTIONS, type CnCodeOption } from '@/lib/cn-code-options';
 import { parseEuTemplateCnCodeOptions } from '@/lib/eu-template-export';
 import {
@@ -486,7 +486,21 @@ export default function ProductsPage() {
                                 }
                                 placeholder="예: 72083900"
                             />
-                            <p className="mt-1 text-xs text-slate-500">EU Communication Template 검증은 CN 8자리 기준으로 수행합니다.</p>
+                            <p className="mt-1 text-xs text-slate-500">EU Communication Template 검증은 CN 8자리 기준으로 수행합니다. 용접 제품: 맨 강철 와이어(7217/7223/7229)는 대상, 피복·플럭스코어드 용접봉(8311)은 비대상입니다.</p>
+                            {(draft.cn_code?.length ?? 0) >= 4 && (() => {
+                                const cov = getCbamCoverage({ cn_code: draft.cn_code, hs_code: draft.hs_code });
+                                const cls = cov.status === 'COVERED'
+                                    ? 'border-teal-200 bg-teal-50 text-teal-900'
+                                    : cov.status === 'NOT_COVERED'
+                                      ? 'border-red-200 bg-red-50 text-red-800'
+                                      : 'border-amber-200 bg-amber-50 text-amber-900';
+                                return (
+                                    <div className={`mt-2 rounded-xl border p-2.5 text-xs leading-5 ${cls}`}>
+                                        <p className="font-semibold">{cov.label}</p>
+                                        <p className="mt-0.5">{cov.reason}</p>
+                                    </div>
+                                );
+                            })()}
                             {errors.cn_code && <p className="mt-1 text-xs font-medium text-red-600">{errors.cn_code}</p>}
                         </div>
                         <div>
