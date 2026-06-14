@@ -81,6 +81,28 @@ function normalizeCode(value: string) {
     return value.replace(/\D/g, '');
 }
 
+function normalizeReferenceCountry(value: string) {
+    const normalized = value
+        .trim()
+        .toLowerCase()
+        .replaceAll('&', 'and')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if ([
+        'south korea',
+        'korea republic of',
+        'republic of korea',
+        'korea south',
+        'kr',
+    ].includes(normalized)) {
+        return 'south korea';
+    }
+
+    return normalized;
+}
+
 function toNumber(value: string): number | undefined {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : undefined;
@@ -314,7 +336,7 @@ export async function parseDefaultValueWorkbook(file: File): Promise<ImportedDef
 
     const cnCodeCount = new Set(rows.map((row) => row.cn_code)).size;
     const countryCount = new Set(rows.map((row) => row.country)).size;
-    const sampleSourceRows = rows.filter((row) => row.country === 'South Korea').slice(0, 5);
+    const sampleSourceRows = rows.filter((row) => normalizeReferenceCountry(row.country) === 'south korea').slice(0, 5);
 
     return {
         summary: {
@@ -343,11 +365,11 @@ export function findDefaultValueReference(
         return undefined;
     }
 
-    const normalizedCountry = country.trim().toLowerCase();
+    const normalizedCountry = normalizeReferenceCountry(country);
     const normalizedCnCode = normalizeCode(cnCode);
     const candidates = reference.rows.filter(
         (row) =>
-            row.country.trim().toLowerCase() === normalizedCountry &&
+            normalizeReferenceCountry(row.country) === normalizedCountry &&
             row.cn_code === normalizedCnCode
     );
 

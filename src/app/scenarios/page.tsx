@@ -169,6 +169,12 @@ export default function ScenariosPage() {
         };
     }, [scenarios]);
 
+    const hasBenchmarkFile = Boolean(benchmarkReference);
+    const hasDefaultValueFile = Boolean(defaultValueReference);
+    const hasAllOfficialReferenceFiles = hasBenchmarkFile && hasDefaultValueFile;
+    const missingReferenceFileCount = Number(!hasBenchmarkFile) + Number(!hasDefaultValueFile);
+    const hasUnmatchedReferenceRows = hasAllOfficialReferenceFiles && summary.missingOfficialReferenceCount > 0;
+
     const actionItems = useMemo(() => {
         const items: Array<{
             key: string;
@@ -194,16 +200,27 @@ export default function ScenariosPage() {
             });
         }
 
-        if (summary.missingOfficialReferenceCount > 0 || !benchmarkReference || !defaultValueReference) {
+        if (!hasAllOfficialReferenceFiles) {
             items.push({
                 key: 'missing-reference',
                 title: '공식 기준자료 연결',
-                description: 'EU 벤치마크와 국가/CN 기본값 파일을 가져와야 SEFA 및 인증서 지표를 비교할 수 있습니다.',
-                count: summary.missingOfficialReferenceCount,
+                description: 'EU 벤치마크와 국가/CN 기본값 파일이 모두 있어야 SEFA 및 인증서 지표를 비교할 수 있습니다.',
+                count: missingReferenceFileCount,
                 unit: '건',
                 tone: 'warning',
                 href: '/upload',
                 cta: '기준자료 가져오기',
+            });
+        } else if (hasUnmatchedReferenceRows) {
+            items.push({
+                key: 'unmatched-reference',
+                title: '기준자료 매칭 확인',
+                description: '기준자료 파일은 저장되어 있지만 일부 제품의 CN 코드, 생산경로, 원산지/공급국가 조합과 일치하는 기준값을 찾지 못했습니다.',
+                count: summary.missingOfficialReferenceCount,
+                unit: '건',
+                tone: 'warning',
+                href: '/products',
+                cta: 'CN 코드 확인',
             });
         }
 
@@ -263,7 +280,7 @@ export default function ScenariosPage() {
         }
 
         return items;
-    }, [benchmarkReference, defaultValueReference, loading, scenarios.length, summary]);
+    }, [hasAllOfficialReferenceFiles, hasUnmatchedReferenceRows, loading, missingReferenceFileCount, scenarios.length, summary]);
 
     return (
         <div className="space-y-6">
@@ -280,23 +297,40 @@ export default function ScenariosPage() {
                 <StatCard label="예상 비용 지표" value={formatCurrency(summary.totalCost)} helper={`기본값 ${formatCurrency(summary.totalDefaultCost)}`} icon={AlertTriangle} tone={summary.missingReferenceCount > 0 ? 'warning' : 'success'} />
             </div>
 
-            {(summary.missingReferenceCount > 0 || !benchmarkReference || !defaultValueReference) && (
+            {(summary.missingReferenceCount > 0 || !hasAllOfficialReferenceFiles) && (
                 <SectionCard className="border-amber-200 bg-amber-50">
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div>
-                            <h2 className="text-base font-semibold text-amber-950">공식 기준자료 연결이 필요합니다</h2>
+                            <h2 className="text-base font-semibold text-amber-950">
+                                {!hasAllOfficialReferenceFiles ? '공식 기준자료 업로드가 필요합니다' : '기준자료 매칭 확인이 필요합니다'}
+                            </h2>
                             <p className="mt-1 text-sm leading-6 text-amber-900">
-                                벤치마크와 국가/CN 기본값을 가져와야 SEFA, 기본값 비교, 인증서 지표가 계산됩니다.
-                                제품 CN 코드가 누락된 경우 제품 관리에서 먼저 수정하세요.
+                                {!hasAllOfficialReferenceFiles
+                                    ? '벤치마크와 국가/CN 기본값 파일을 모두 가져와야 SEFA, 기본값 비교, 인증서 지표가 계산됩니다.'
+                                    : '기준자료 파일은 저장되어 있습니다. 다만 일부 제품의 CN 코드, 생산경로, 원산지/공급국가 조합과 맞는 기준값을 찾지 못했습니다.'}
+                                {' '}제품 CN 코드가 누락되었거나 기준자료에 없는 CN인 경우 제품 관리에서 먼저 수정하세요.
                             </p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                <StatusBadge tone={hasBenchmarkFile ? 'success' : 'warning'}>
+                                    벤치마크 {hasBenchmarkFile ? `${benchmarkReference?.summary.row_count.toLocaleString('ko-KR')}행` : '미업로드'}
+                                </StatusBadge>
+                                <StatusBadge tone={hasDefaultValueFile ? 'success' : 'warning'}>
+                                    국가/CN 기본값 {hasDefaultValueFile ? `${defaultValueReference?.summary.row_count.toLocaleString('ko-KR')}행` : '미업로드'}
+                                </StatusBadge>
+                                {hasUnmatchedReferenceRows && (
+                                    <StatusBadge tone="warning">매칭 실패 {summary.missingOfficialReferenceCount}건</StatusBadge>
+                                )}
+                            </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                            <Link
-                                href="/upload"
-                                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-900 shadow-sm hover:bg-amber-100"
-                            >
-                                기준자료 가져오기
-                            </Link>
+                            {!hasAllOfficialReferenceFiles && (
+                                <Link
+                                    href="/upload"
+                                    className="inline-flex min-h-10 items-center justify-center rounded-xl border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-900 shadow-sm hover:bg-amber-100"
+                                >
+                                    기준자료 가져오기
+                                </Link>
+                            )}
                             <Link
                                 href="/products"
                                 className="inline-flex min-h-10 items-center justify-center rounded-xl border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-900 shadow-sm hover:bg-amber-100"
