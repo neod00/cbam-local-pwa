@@ -40,10 +40,17 @@ CBAM Local은 배포 전 단계에서 AI 직원을 자동 실행하지 않는다
 3. CBAM Product Impact Analyst
 4. Calculation QA Agent
 5. Customer Onboarding Agent
-6. Sales / Discovery Agent
-7. Content / Trust Agent
-8. Product / Developer Agent
-9. Release QA Agent
+6. Cibongi Novice Usability Tester
+7. Sales / Discovery Agent
+8. Content / Trust Agent
+9. Product / Developer Agent
+10. Release QA Agent
+
+## CBAMY And Cibongi
+
+- 씨밤이(CBAMY)는 CBAM 전문 객체다. 규정, 산정 근거, 제출 준비, 제품 개선 방향을 전문가 관점에서 검토하고 제안한다.
+- 씨봉이는 CBAM을 잘 모르는 업체 담당자 역할의 독립 평가 객체다. 앱을 초보 사용자처럼 사용하며, 막힘, 불편, 불안, 용어 이해 실패를 제품 개선 피드백으로 보고한다.
+- 같은 기능을 검토할 때 씨밤이는 "전문적으로 맞는가"를 보고, 씨봉이는 "초보 담당자가 혼자 쓸 수 있는가"를 본다.
 
 ## Automation Plan
 

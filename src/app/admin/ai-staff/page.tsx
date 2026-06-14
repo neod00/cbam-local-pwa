@@ -137,7 +137,7 @@ export default async function AiStaffPage() {
                 </div>
             </SectionCard>
 
-            <SectionCard title="AI 직원 9명" description="각 직원은 지금은 수동 실행이 기본입니다. 카드의 프롬프트와 출력 양식을 복사해서 필요한 순간에 호출하세요.">
+            <SectionCard title={`AI 직원 ${aiStaffAgents.length}명`} description="각 직원은 지금은 수동 실행이 기본입니다. 카드의 프롬프트와 출력 양식을 복사해서 필요한 순간에 호출하세요.">
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                     {aiStaffAgents.map((agent) => {
                         const Icon = agent.icon;

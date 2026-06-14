@@ -19,6 +19,7 @@ const agentDocs = [
   'product-impact-analyst',
   'calculation-qa',
   'customer-onboarding',
+  'cibongi-usability-tester',
   'sales-discovery',
   'content-trust',
   'product-developer',
@@ -32,6 +33,7 @@ for (const doc of agentDocs) {
 for (const workflow of [
   'customer-inquiry',
   'regulation-update',
+  'beginner-usability-review',
   'app-impact-review',
   'weekly-operations',
   'release-check',
@@ -49,6 +51,7 @@ for (const required of [
   'CBAM Product Impact Analyst',
   'Calculation QA Agent',
   'Customer Onboarding Agent',
+  'Cibongi Novice Usability Tester',
   'Sales / Discovery Agent',
   'Content / Trust Agent',
   'Product / Developer Agent',
@@ -66,7 +69,7 @@ const agentsSection = definitions.slice(
   definitions.indexOf('export const aiStaffWorkflows')
 );
 const agentIdCount = [...agentsSection.matchAll(/id: '/g)].length;
-assert.equal(agentIdCount, 9, 'AI staff definitions should contain exactly 9 agent IDs');
+assert.equal(agentIdCount, 10, 'AI staff definitions should contain exactly 10 agent IDs');
 
 const adminPage = readFileSync('src/app/admin/ai-staff/page.tsx', 'utf8');
 for (const required of [
