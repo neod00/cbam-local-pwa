@@ -379,6 +379,20 @@ export default function PrecursorsPage() {
     }
 
     function applyDefaultValueFromReference() {
+        // 공급사 자료가 없을 때 빈칸 없이 1차 산정이 끝나도록, 미입수 상태를 먼저 명시한다.
+        if (!defaultValueReference) {
+            setNewItem({
+                ...newItem,
+                data_mode: 'DEFAULT',
+                verification_status: 'UNVERIFIED',
+                default_value_justification:
+                    newItem.default_value_justification ||
+                    `공급사 measured SEE 미입수 — EU 국가/CN 기본값(${newItem.default_value_year}) 적용 예정`,
+            });
+            setDefaultLookupMessage('공식 기본값 파일(DVs as adopted)을 먼저 가져오세요. [자료 업로드] 화면에서 가져온 뒤 다시 "기본값 채우기"를 누르면 국가/CN 기본값(연도 mark-up 포함)이 자동 입력됩니다.');
+            return;
+        }
+
         const match = findDefaultValueReference(
             defaultValueReference,
             newItem.supplier_country,
@@ -387,7 +401,7 @@ export default function PrecursorsPage() {
         );
 
         if (!match) {
-            setDefaultLookupMessage('일치하는 국가/CN 기본값을 찾지 못했습니다. 공식 기본값 파일을 가져왔는지와 전구물질 CN 코드를 확인하세요.');
+            setDefaultLookupMessage('일치하는 국가/CN 기본값을 찾지 못했습니다. 전구물질 CN 코드와 공급국가를 확인하세요. (기본값은 국가/CN/연도 기준으로 조회됩니다)');
             return;
         }
 
@@ -612,13 +626,13 @@ export default function PrecursorsPage() {
                         <div className="rounded-xl border border-teal-100 bg-teal-50 p-4 md:col-span-3">
                             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                 <div>
-                                    <p className="text-sm font-semibold text-teal-950">공식 기본값 조회</p>
+                                    <p className="text-sm font-semibold text-teal-950">공급사 자료 없음 → EU 기본값 채우기</p>
                                     <p className="mt-1 text-xs leading-5 text-teal-800">
-                                        자료 업로드 화면에서 가져온 국가/CN 기본값 파일을 기준으로 직접 SEE와 총 기본값을 적용합니다.
+                                        공급사 measured SEE를 못 받았으면 이 버튼으로 국가/CN 공식 기본값(연도 mark-up 포함)을 자동 입력하고, 데이터 모드·출처·사유까지 채워 빈칸 없이 1차 산정을 끝낼 수 있습니다. (기본값 파일은 [자료 업로드]에서 먼저 가져오세요)
                                     </p>
                                 </div>
                                 <Button type="button" variant="secondary" onClick={applyDefaultValueFromReference}>
-                                    기본값 적용
+                                    기본값 채우기
                                 </Button>
                             </div>
                             {defaultLookupMessage && <p className="mt-3 text-xs font-medium text-teal-900">{defaultLookupMessage}</p>}
