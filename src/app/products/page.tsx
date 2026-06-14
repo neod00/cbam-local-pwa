@@ -17,7 +17,7 @@ import {
 } from '@/lib/local-db';
 import { Term } from '@/components/ux/Term';
 import { FieldHelp } from '@/components/ux/FieldHelp';
-import { AlertTriangle, Boxes, CheckCircle2, FileSpreadsheet, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Boxes, CheckCircle2, Copy, FileSpreadsheet, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 type HsGroup = Product['hs_group'];
@@ -217,6 +217,26 @@ export default function ProductsPage() {
         setEditingProductId(product.id);
         setCnSearch(product.cn_code ?? product.hs_code);
         setShowForm(true);
+    }
+
+    // 다제품(수백 SKU) 대응: 기존 제품을 복제해 변형(강종·치수·표면등급)만 바꿔 빠르게 추가.
+    // editingProductId를 비워 두므로 '저장' 시 새 제품으로 생성된다.
+    function startDuplicateProduct(product: Product) {
+        setDraft({
+            name: `${product.name} (복사본)`,
+            hs_code: product.hs_code,
+            cn_code: product.cn_code ?? '',
+            hs_group: product.hs_group,
+            product_type_enum: product.product_type_enum,
+            unit: product.unit,
+        });
+        setErrors({});
+        setEditingProductId(null);
+        setCnSearch(product.cn_code ?? product.hs_code);
+        setShowForm(true);
+        if (typeof window !== 'undefined') {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     }
 
     function getProductDependencies(productId: string) {
@@ -626,6 +646,16 @@ export default function ProductsPage() {
                                     </Button>
                                     <Button
                                         type="button"
+                                        variant="secondary"
+                                        className="min-h-9 px-3 py-1.5"
+                                        aria-label={`${product.name} 복제`}
+                                        onClick={() => startDuplicateProduct(product)}
+                                    >
+                                        <Copy className="mr-1.5 h-4 w-4" />
+                                        복제
+                                    </Button>
+                                    <Button
+                                        type="button"
                                         variant="danger"
                                         className="min-h-9 px-3 py-1.5"
                                         aria-label={`${product.name} 삭제`}
@@ -718,6 +748,10 @@ export default function ProductsPage() {
                                             <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => startEditProduct(product)}>
                                                 <Pencil className="mr-1.5 h-4 w-4" />
                                                 수정
+                                            </Button>
+                                            <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => startDuplicateProduct(product)}>
+                                                <Copy className="mr-1.5 h-4 w-4" />
+                                                복제
                                             </Button>
                                             <Button type="button" variant="danger" className="min-h-9 px-3 py-1.5" onClick={() => handleDeleteProduct(product)}>
                                                 <Trash2 className="mr-1.5 h-4 w-4" />
