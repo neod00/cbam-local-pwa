@@ -162,8 +162,8 @@ export default function Home() {
       tone: installationCount > 0 ? 'success' as const : 'pending' as const,
     },
     {
-      title: '품목 추가',
-      description: 'EU에 수출하는 제품의 CN 코드를 입력합니다.',
+      title: '제품군·CN 후보',
+      description: '제품군과 세부제품을 고르면 CN 코드 후보를 좁힙니다.',
       href: '/products',
       icon: Package,
       status: productCount > 0 ? '완료' : '입력',
@@ -192,7 +192,7 @@ export default function Home() {
           <StatusBadge tone="pending">처음이라면 여기서 시작</StatusBadge>
           <h2 className="mt-4 break-words text-2xl font-semibold tracking-tight text-slate-950">무엇부터 하면 되나요?</h2>
           <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-slate-600">
-            CBAM 용어를 몰라도 아래 3단계부터 진행하면 됩니다. 기준자료, 시나리오, Export 검토는 품목과 배출량 입력 후 자동으로 안내됩니다.
+            CBAM 용어를 몰라도 아래 3단계부터 진행하면 됩니다. 제품군을 먼저 고르면 앱이 CN 후보와 대상/비대상 주의사항을 좁혀주고, 기준자료·시나리오·Export 검토는 입력 후 자동으로 안내됩니다.
           </p>
           <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
             {beginnerSteps.map((step, index) => {

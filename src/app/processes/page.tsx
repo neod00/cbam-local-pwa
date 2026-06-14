@@ -454,8 +454,8 @@ export default function ProcessesPage() {
         <div className="space-y-6">
             <PageHeader
                 eyebrow="D_Processes"
-                title="생산공정"
-                description="EU 템플릿의 D_Processes 입력 구조에 맞춰 공정별 생산량, 직접귀속배출, 전력 사용량을 관리합니다."
+                title="생산량·전력·직접배출 입력"
+                description="제품을 만들 때의 생산량, 전력 사용량, 연료·공정 직접배출을 입력하는 곳입니다. 제품 화면에서 만든 산정 초안이 있으면 숫자와 증빙만 보완하세요."
                 actions={
                     <Button type="button" onClick={startNewProcess}>
                         <Plus className="mr-2 h-4 w-4" />
@@ -473,7 +473,7 @@ export default function ProcessesPage() {
 
             <SectionCard
                 title="생산공정 다음 작업"
-                description="생산공정은 SEE 계산의 중심입니다. 제품 생산라인 배분과 배출원 자료가 맞아야 Export 경고가 줄어듭니다."
+                description="제품별 생산량 배분과 배출원 근거를 맞추면 제품 1톤당 배출량 계산과 Export 경고가 줄어듭니다."
             >
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                     <ActionItemCard
@@ -518,7 +518,7 @@ export default function ProcessesPage() {
             {showForm && (
                 <SectionCard
                     title={editingProcessId ? '생산공정 정보 수정' : '신규 생산공정'}
-                    description="공정별 생산량과 배출량 데이터를 입력하면 산정결과와 EU Export에 반영됩니다."
+                    description="제품군 초안에서 만든 공정은 생산량, 전력, 직접배출 값을 실제 자료로 채우면 됩니다."
                     actions={
                         <Button type="button" variant="secondary" onClick={resetForm}>
                             <X className="mr-2 h-4 w-4" />

@@ -25,6 +25,10 @@ Completed:
 - Added uploaded-template `Parameters_CNCodes` parsing so CN 8-digit codes resolve against the user's current EU template before Export.
 - Added representative CN 8-digit search/select helpers on the product entry form while keeping final validation tied to the uploaded EU template.
 - Added product-page import of full CN code options from an uploaded EU template, stored locally for reusable product search/selection.
+- Added beginner product-family presets so steel converters can select a product group/detail, narrow CN candidates, and continue through the existing product registration flow.
+- Added second-pass beginner flow handoffs: after product save, the Products page now points users to process setup, purchased material SEE entry, activity-data templates, and product duplication; Export now separates importer package, internal backup, and expert workbook-review purposes.
+- Added third-pass bulk product entry: users can paste Excel-style product lists, preview CN/product-family guesses, skip warning/error rows, and save ready products in one action.
+- Added fourth-pass calculation handoff: product-family selections can create draft production processes, product output lines, and purchased precursor entries, with per-product status badges and more beginner-friendly process/precursor copy.
 - Added product edit/update support so existing products can be corrected after CN code reference import.
 - Added the first-pass Clean Compliance Dashboard redesign with shared layout, sidebar/topbar, UI primitives, and refreshed dashboard/product/result/export/settings screens.
 - Extended the Clean Compliance Dashboard redesign to reporting periods, installations, production processes, purchased precursors, and upload screens, including mobile card-list layouts.
@@ -191,6 +195,7 @@ Completed:
 - Added in-app `mailto:` contact CTAs for usage, license approval, CBAM Export review, consulting support, enterprise installation, paid adoption, and business partnership inquiries through `openbrain.main@gmail.com`, with sensitive-data attachment warnings preserved.
 - Replaced primary `mailto:` contact CTAs with an in-app inquiry modal that reuses free-license registration contact metadata, sends only support metadata and inquiry text by email, keeps a direct `openbrain.main@gmail.com` mail fallback, and does not collect CBAM calculation files or `.cbam` backups.
 - Added the first manual AI-staff operating system for the 1-person CBAM business: `docs/ai-staff`, structured definitions for 9 role-based AI staff, and a protected `/admin/ai-staff` console for prompt/output-template copying without API automation.
+- Added `씨봉이` as a separate novice-usability evaluation object, distinct from expert `씨밤이`, so beginner friction can be captured as product feedback without using customer CBAM calculation data.
 
 Pending product decisions:
 

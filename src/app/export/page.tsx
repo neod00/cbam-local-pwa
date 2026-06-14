@@ -545,36 +545,39 @@ export default function ExportPage() {
                         <StatusBadge tone={exportGate.tone}>{exportGate.badge}</StatusBadge>
                         <h2 className="mt-3 break-words text-2xl font-semibold tracking-tight text-slate-950">{exportGate.title}</h2>
                         <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-slate-600">{exportGate.description}</p>
+                        <p className="mt-3 max-w-3xl break-words text-sm leading-6 text-slate-600">
+                            처음 사용하는 경우에는 오류를 먼저 고친 뒤, 산정근거 요약 보고서·증빙 체크리스트·Excel·내부 백업을 묶은 수입자 전달 패키지를 생성하세요. 세부 EU 템플릿 검토 기능은 아래에서 계속 사용할 수 있습니다.
+                        </p>
                         <div className="mt-5 flex flex-wrap gap-2">
                             {firstBlockingIssueHref && firstBlockingIssue ? (
                                 <Link href={firstBlockingIssueHref}>
                                     <Button type="button">
-                                        첫 번째 항목 수정
+                                        오류 먼저 고치기
                                         <ArrowRight className="ml-2 h-4 w-4" />
                                     </Button>
                                 </Link>
                             ) : (
                                 <Button
                                     type="button"
-                                    onClick={handleDownloadCopy}
-                                    disabled={!validation?.isValid || !readiness.canExportDraft}
+                                    onClick={handleDownloadDeliveryPackage}
+                                    disabled={!validation?.isValid || !readiness.canExportDraft || isPackaging}
                                 >
-                                    <Download className="mr-2 h-4 w-4" />
-                                    수입자 전달용 복사본 생성
+                                    <PackageCheck className="mr-2 h-4 w-4" />
+                                    {isPackaging ? '패키지 생성 중' : '수입자 전달 패키지 만들기'}
                                 </Button>
                             )}
                             <Button
                                 type="button"
                                 variant="secondary"
-                                onClick={handleDownloadDeliveryPackage}
-                                disabled={!validation?.isValid || !readiness.canExportDraft || isPackaging}
+                                onClick={handleDownloadCopy}
+                                disabled={!validation?.isValid || !readiness.canExportDraft}
                             >
-                                <PackageCheck className="mr-2 h-4 w-4" />
-                                {isPackaging ? '패키지 생성 중' : 'DOCX+Excel+.cbam 패키지'}
+                                <Download className="mr-2 h-4 w-4" />
+                                EU 템플릿 복사본만 생성
                             </Button>
                             <Link href="/settings">
                                 <Button type="button" variant="secondary">
-                                    백업 상태 확인
+                                    내부 백업 저장하기
                                 </Button>
                             </Link>
                         </div>
@@ -606,6 +609,44 @@ export default function ExportPage() {
                     </div>
                 </div>
             </section>
+
+            <SectionCard
+                title="파일 용도 한눈에 보기"
+                description="같은 Export 화면에 있어도 쓰임새가 다릅니다. 수입자에게 줄 파일과 회사 내부 보관 파일을 구분해서 사용하세요."
+            >
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                    <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4">
+                        <div className="flex items-center gap-2">
+                            <PackageCheck className="h-5 w-5 text-teal-700" />
+                            <StatusBadge tone="success">수입자 전달용</StatusBadge>
+                        </div>
+                        <h3 className="mt-3 text-sm font-semibold text-slate-950">수입자 전달 패키지</h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-700">
+                            산정근거 요약 보고서, 증빙 체크리스트, Export Excel, 내부 백업을 함께 묶습니다. 실무자가 우선 사용할 기본 Export입니다.
+                        </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center gap-2">
+                            <ShieldCheck className="h-5 w-5 text-slate-700" />
+                            <StatusBadge tone="neutral">내부 보관용</StatusBadge>
+                        </div>
+                        <h3 className="mt-3 text-sm font-semibold text-slate-950">.cbam 프로젝트 백업</h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-700">
+                            제출 파일이 아니라 현재 브라우저의 입력자료를 되살리기 위한 내부 보관 파일입니다. 작업 전후로 별도 보관하세요.
+                        </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center gap-2">
+                            <FileSpreadsheet className="h-5 w-5 text-slate-700" />
+                            <StatusBadge tone="info">전문가 검토용</StatusBadge>
+                        </div>
+                        <h3 className="mt-3 text-sm font-semibold text-slate-950">EU 템플릿 복사본만 생성</h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-700">
+                            공식 워크북 구조와 수식 셀을 검토할 때 사용합니다. 수입자 전달 패키지가 필요하면 왼쪽 기본 버튼을 사용하세요.
+                        </p>
+                    </div>
+                </div>
+            </SectionCard>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard label="제품 수" value={summary.productCount} helper="Export 대상" icon={PackageCheck} tone="pending" />

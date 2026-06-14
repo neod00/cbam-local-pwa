@@ -425,8 +425,8 @@ export default function PrecursorsPage() {
         <div className="space-y-6">
             <PageHeader
                 eyebrow="E_PurchPrec"
-                title="구매 전구물질"
-                description="EU 템플릿의 E_PurchPrec 입력 구조에 맞춰 구매 전구물질의 소비량과 내재배출량(SEE)을 관리합니다."
+                title="매입 강재·전구물질"
+                description="구매한 강재·중간재의 사용량과 공급사 SEE 또는 공식 기본값 근거를 입력하는 곳입니다. 제품 화면에서 만든 산정 초안이 있으면 공급국가, 수량, SEE 출처를 보완하세요."
                 actions={
                     <Button type="button" onClick={startNewPrecursor}>
                         <Plus className="mr-2 h-4 w-4" />
@@ -444,7 +444,7 @@ export default function PrecursorsPage() {
 
             <SectionCard
                 title="전구물질 다음 작업"
-                description="전구물질은 공급업체 회신, 기본값 사용 사유, 검증 상태가 함께 남아야 SEFA와 Export 검토가 쉬워집니다."
+                description="매입 소재별 사용량과 SEE 근거를 맞추면 수입자에게 설명할 산정 근거와 Export 경고가 정리됩니다."
             >
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                     <ActionItemCard
@@ -489,7 +489,7 @@ export default function PrecursorsPage() {
             {showForm && (
                 <SectionCard
                     title={editingPrecursorId ? '전구물질 정보 수정' : '신규 구매 전구물질'}
-                    description="공급업체 회신 또는 기본값 사용 근거를 함께 관리하세요."
+                    description="제품군 초안에서 만든 항목은 공급국가, 매입·소비량, SEE 출처와 기본값 사용 사유를 실제 자료로 채우면 됩니다."
                     actions={
                         <Button type="button" variant="secondary" onClick={resetForm}>
                             <X className="mr-2 h-4 w-4" />
