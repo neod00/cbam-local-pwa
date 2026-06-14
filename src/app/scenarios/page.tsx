@@ -174,6 +174,9 @@ export default function ScenariosPage() {
     const hasAllOfficialReferenceFiles = hasBenchmarkFile && hasDefaultValueFile;
     const missingReferenceFileCount = Number(!hasBenchmarkFile) + Number(!hasDefaultValueFile);
     const hasUnmatchedReferenceRows = hasAllOfficialReferenceFiles && summary.missingOfficialReferenceCount > 0;
+    const unmatchedScenarios = useMemo(() => {
+        return scenarios.filter((scenario) => scenario.data_quality !== 'READY');
+    }, [scenarios]);
 
     const actionItems = useMemo(() => {
         const items: Array<{
@@ -338,6 +341,77 @@ export default function ScenariosPage() {
                                 CN 코드 확인
                             </Link>
                         </div>
+                    </div>
+                </SectionCard>
+            )}
+
+            {hasUnmatchedReferenceRows && unmatchedScenarios.length > 0 && (
+                <SectionCard
+                    title="제품별 매칭 진단"
+                    description="기준자료 파일은 저장되어 있습니다. 아래 항목에서 실패한 쪽을 보고 CN 코드, 생산경로, 원산지/공급국가를 수정하세요."
+                >
+                    <div className="grid grid-cols-1 gap-3">
+                        {unmatchedScenarios.map((scenario) => (
+                            <div key={`${scenario.result_id}-reference-diagnostic`} className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                    <div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h3 className="text-sm font-semibold text-slate-950">{scenario.product_name}</h3>
+                                            {scenario.cn_code ? (
+                                                <StatusBadge tone="neutral">CN {scenario.cn_code}</StatusBadge>
+                                            ) : (
+                                                <StatusBadge tone="danger">CN 없음</StatusBadge>
+                                            )}
+                                        </div>
+                                        <dl className="mt-3 grid grid-cols-1 gap-2 text-xs leading-5 text-slate-700 sm:grid-cols-3">
+                                            <div>
+                                                <dt className="font-semibold text-slate-500">현재 생산경로</dt>
+                                                <dd className="break-words">{scenario.production_route || '미입력'}</dd>
+                                            </div>
+                                            <div>
+                                                <dt className="font-semibold text-slate-500">현재 원산지/공급국가</dt>
+                                                <dd className="break-words">{scenario.origin_country || '미입력'}</dd>
+                                            </div>
+                                            <div>
+                                                <dt className="font-semibold text-slate-500">기본값 연도</dt>
+                                                <dd>{scenario.default_value_year}</dd>
+                                            </div>
+                                        </dl>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        <StatusBadge tone={scenario.benchmark_matched ? 'success' : 'warning'}>
+                                            벤치마크 {scenario.benchmark_matched ? '매칭됨' : '못 찾음'}
+                                        </StatusBadge>
+                                        <StatusBadge tone={scenario.default_value_matched ? 'success' : 'warning'}>
+                                            국가/CN 기본값 {scenario.default_value_matched ? '매칭됨' : '못 찾음'}
+                                        </StatusBadge>
+                                    </div>
+                                </div>
+                                <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-xs leading-5 text-amber-950">
+                                    {!scenario.cn_code
+                                        ? '먼저 제품 관리에서 CN 8자리 코드를 입력하세요.'
+                                        : !scenario.benchmark_matched && !scenario.default_value_matched
+                                            ? 'CN 코드가 기준자료에 없거나 생산경로/원산지 조합이 맞지 않습니다. 제품 CN과 생산공정의 생산경로를 먼저 확인하세요.'
+                                            : !scenario.benchmark_matched
+                                                ? '국가/CN 기본값은 찾았지만 벤치마크를 찾지 못했습니다. 생산공정의 생산경로 또는 제품 CN이 기준자료의 벤치마크 항목과 맞는지 확인하세요.'
+                                                : '벤치마크는 찾았지만 국가/CN 기본값을 찾지 못했습니다. 원산지/공급국가와 제품 CN이 기본값 파일에 있는 조합인지 확인하세요.'}
+                                </div>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    <Link
+                                        href="/products"
+                                        className="inline-flex min-h-9 items-center rounded-xl border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 shadow-sm hover:bg-amber-100"
+                                    >
+                                        제품 CN 수정
+                                    </Link>
+                                    <Link
+                                        href="/processes"
+                                        className="inline-flex min-h-9 items-center rounded-xl border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 shadow-sm hover:bg-amber-100"
+                                    >
+                                        생산경로 수정
+                                    </Link>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </SectionCard>
             )}

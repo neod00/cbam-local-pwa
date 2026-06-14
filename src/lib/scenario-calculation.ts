@@ -47,6 +47,7 @@ export interface ProductScenarioResult {
     result_id: string;
     product_name: string;
     cn_code?: string;
+    production_route?: string;
     output_mass_t: number;
     actual_see: number;
     informational_total_see?: number;
@@ -66,6 +67,10 @@ export interface ProductScenarioResult {
     certificate_cost_delta_eur?: number;
     lower_certificate_basis: 'ACTUAL' | 'DEFAULT' | 'TIE' | 'UNKNOWN';
     data_quality: 'READY' | 'MISSING_REFERENCE' | 'MISSING_CN';
+    benchmark_matched: boolean;
+    default_value_matched: boolean;
+    origin_country: string;
+    default_value_year: ScenarioAssumptions['default_value_year'];
     review_message: string;
 }
 
@@ -171,6 +176,10 @@ export function calculateProductScenarios(
                 informational_total_see: informationalTotalSee,
                 lower_certificate_basis: 'UNKNOWN',
                 data_quality: 'MISSING_CN',
+                benchmark_matched: false,
+                default_value_matched: false,
+                origin_country: assumptions.origin_country,
+                default_value_year: assumptions.default_value_year,
                 review_message: 'CN 코드가 없어 공식 기준값과 비교할 수 없습니다.',
             };
         }
@@ -227,6 +236,7 @@ export function calculateProductScenarios(
             result_id: result.id,
             product_name: result.product_name,
             cn_code: cnCode,
+            production_route: result.production_route,
             output_mass_t: result.output_mass_t,
             actual_see: actualSee,
             informational_total_see: informationalTotalSee,
@@ -246,6 +256,10 @@ export function calculateProductScenarios(
             certificate_cost_delta_eur: certificateCostDelta,
             lower_certificate_basis: lowerCertificateBasis,
             data_quality: benchmark && defaultValue ? 'READY' : 'MISSING_REFERENCE',
+            benchmark_matched: Boolean(benchmark),
+            default_value_matched: Boolean(defaultValue),
+            origin_country: assumptions.origin_country,
+            default_value_year: assumptions.default_value_year,
             review_message: benchmark && defaultValue
                 ? defaultGap !== undefined && defaultGap > 0
                     ? '실측 SEE가 기본값보다 높습니다. 실제자료와 기본값 시나리오의 인증서 지표를 비교하세요.'
