@@ -85,4 +85,46 @@ export const CN_CODE_OPTIONS: CnCodeOption[] = [
         labelKo: '철강제 너트',
         description: 'Nuts of iron or steel',
     },
+    {
+        code: '72131000',
+        goodsCategory: 'Iron or steel products',
+        labelKo: '선재(열연 코일)',
+        description: 'Bars and rods, hot-rolled, in irregularly wound coils (wire rod)',
+    },
+    {
+        code: '72171010',
+        goodsCategory: 'Iron or steel products',
+        labelKo: '강선/솔리드 와이어(비도금)',
+        description: 'Wire of iron or non-alloy steel, not plated (e.g. welding solid wire)',
+    },
+    {
+        code: '72172010',
+        goodsCategory: 'Iron or steel products',
+        labelKo: '아연도금 강선',
+        description: 'Wire of iron or non-alloy steel, zinc plated',
+    },
+    {
+        code: '72230011',
+        goodsCategory: 'Iron or steel products',
+        labelKo: '스테인리스 와이어',
+        description: 'Wire of stainless steel',
+    },
+    {
+        code: '72292000',
+        goodsCategory: 'Iron or steel products',
+        labelKo: '합금강 와이어',
+        description: 'Wire of silico-manganese / other alloy steel',
+    },
+    {
+        code: '72193400',
+        goodsCategory: 'Iron or steel products',
+        labelKo: 'STS 냉연 평판(폭≥600)',
+        description: 'Flat-rolled stainless steel, cold-rolled, width >= 600 mm',
+    },
+    {
+        code: '72202900',
+        goodsCategory: 'Iron or steel products',
+        labelKo: 'STS 냉연 평판(폭<600)',
+        description: 'Flat-rolled stainless steel, cold-rolled, width < 600 mm',
+    },
 ];

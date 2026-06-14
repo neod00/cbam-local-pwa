@@ -17,6 +17,8 @@ import {
     getDefaultValueTotalForYear,
     type ImportedDefaultValueReference,
 } from '@/lib/reference-workbooks';
+import { Term } from '@/components/ux/Term';
+import { FieldHelp } from '@/components/ux/FieldHelp';
 import { AlertTriangle, ArrowRight, Boxes, Factory, Pencil, Plus, Scale, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
@@ -377,6 +379,20 @@ export default function PrecursorsPage() {
     }
 
     function applyDefaultValueFromReference() {
+        // 공급사 자료가 없을 때 빈칸 없이 1차 산정이 끝나도록, 미입수 상태를 먼저 명시한다.
+        if (!defaultValueReference) {
+            setNewItem({
+                ...newItem,
+                data_mode: 'DEFAULT',
+                verification_status: 'UNVERIFIED',
+                default_value_justification:
+                    newItem.default_value_justification ||
+                    `공급사 measured SEE 미입수 — EU 국가/CN 기본값(${newItem.default_value_year}) 적용 예정`,
+            });
+            setDefaultLookupMessage('공식 기본값 파일(DVs as adopted)을 먼저 가져오세요. [자료 업로드] 화면에서 가져온 뒤 다시 "기본값 채우기"를 누르면 국가/CN 기본값(연도 mark-up 포함)이 자동 입력됩니다.');
+            return;
+        }
+
         const match = findDefaultValueReference(
             defaultValueReference,
             newItem.supplier_country,
@@ -385,7 +401,7 @@ export default function PrecursorsPage() {
         );
 
         if (!match) {
-            setDefaultLookupMessage('일치하는 국가/CN 기본값을 찾지 못했습니다. 공식 기본값 파일을 가져왔는지와 전구물질 CN 코드를 확인하세요.');
+            setDefaultLookupMessage('일치하는 국가/CN 기본값을 찾지 못했습니다. 전구물질 CN 코드와 공급국가를 확인하세요. (기본값은 국가/CN/연도 기준으로 조회됩니다)');
             return;
         }
 
@@ -488,7 +504,7 @@ export default function PrecursorsPage() {
                             badge={<StatusBadge tone="warning">필수</StatusBadge>}
                         >
                         <div>
-                            <label htmlFor="precursor-name" className="text-sm font-semibold text-slate-700">전구물질명</label>
+                            <label htmlFor="precursor-name" className="text-sm font-semibold text-slate-700"><Term term="전구물질">전구물질</Term>명</label>
                             <input id="precursor-name" required className={fieldClass} value={newItem.name} onChange={(event) => setNewItem({ ...newItem, name: event.target.value })} />
                             {errors.name && <p className="mt-1 text-xs font-medium text-red-600">{errors.name}</p>}
                         </div>
@@ -610,13 +626,13 @@ export default function PrecursorsPage() {
                         <div className="rounded-xl border border-teal-100 bg-teal-50 p-4 md:col-span-3">
                             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                 <div>
-                                    <p className="text-sm font-semibold text-teal-950">공식 기본값 조회</p>
+                                    <p className="text-sm font-semibold text-teal-950">공급사 자료 없음 → EU 기본값 채우기</p>
                                     <p className="mt-1 text-xs leading-5 text-teal-800">
-                                        자료 업로드 화면에서 가져온 국가/CN 기본값 파일을 기준으로 직접 SEE와 총 기본값을 적용합니다.
+                                        공급사 measured SEE를 못 받았으면 이 버튼으로 국가/CN 공식 기본값(연도 mark-up 포함)을 자동 입력하고, 데이터 모드·출처·사유까지 채워 빈칸 없이 1차 산정을 끝낼 수 있습니다. (기본값 파일은 [자료 업로드]에서 먼저 가져오세요)
                                     </p>
                                 </div>
                                 <Button type="button" variant="secondary" onClick={applyDefaultValueFromReference}>
-                                    기본값 적용
+                                    기본값 채우기
                                 </Button>
                             </div>
                             {defaultLookupMessage && <p className="mt-3 text-xs font-medium text-teal-900">{defaultLookupMessage}</p>}
@@ -644,12 +660,31 @@ export default function PrecursorsPage() {
                             badge={<StatusBadge tone="warning">필수</StatusBadge>}
                         >
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">직접 SEE(tCO2e/t)</label>
+                            <label className="text-sm font-semibold text-slate-700">직접 <Term term="SEE">SEE</Term>(tCO2e/t)</label>{' '}
+                            <FieldHelp
+                                title="원료(전구물질) 직접 SEE는 어디서?"
+                                sources={[
+                                    '공급사가 준 탄소데이터시트(EU Communication Template)의 SEE(direct)',
+                                    '공급사 자료가 없으면 위 "기본값 적용"으로 국가/CN 공식 기본값 사용',
+                                ]}
+                                exampleLabel="예시값 채우기 (3.0)"
+                                onExample={() => setNewItem({ ...newItem, direct_see_tco2e_per_t: 3.0 })}
+                            />
                             <input required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.direct_see_tco2e_per_t} onChange={(event) => setNewItem({ ...newItem, direct_see_tco2e_per_t: toNumber(event.target.value) })} />
                             {errors.direct_see_tco2e_per_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.direct_see_tco2e_per_t}</p>}
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">간접 SEE(tCO2e/t)</label>
+                            <label className="text-sm font-semibold text-slate-700">간접 <Term term="SEE">SEE</Term>(tCO2e/t)</label>{' '}
+                            <FieldHelp
+                                title="원료 간접 SEE는 어디서?"
+                                sources={[
+                                    '공급사 시트의 SEE(indirect) — 이미 tCO₂e/t로 환산된 값',
+                                    '⚠️ 공급사가 "전력 MWh/t"로만 줬다면 전력 배출계수를 곱해 tCO₂e/t로 환산해 입력',
+                                    '없으면 국가/CN 기본값 사용',
+                                ]}
+                                exampleLabel="예시값 채우기 (2.5)"
+                                onExample={() => setNewItem({ ...newItem, indirect_see_tco2e_per_t: 2.5 })}
+                            />
                             <input required type="number" min="0" step="0.0001" className={fieldClass} value={newItem.indirect_see_tco2e_per_t} onChange={(event) => setNewItem({ ...newItem, indirect_see_tco2e_per_t: toNumber(event.target.value) })} />
                             {errors.indirect_see_tco2e_per_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.indirect_see_tco2e_per_t}</p>}
                         </div>

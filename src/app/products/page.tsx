@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, DataTable, EmptyState, PageHeader, SectionCard, StatusBadge } from '@/components/ui';
-import { getCbamGoodsMetadata, getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
+import { getCbamCoverage, getCbamGoodsMetadata, getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
 import { CN_CODE_OPTIONS, type CnCodeOption } from '@/lib/cn-code-options';
 import { parseEuTemplateCnCodeOptions } from '@/lib/eu-template-export';
 import {
@@ -15,7 +15,9 @@ import {
     setLocalSetting,
     updateLocalItem,
 } from '@/lib/local-db';
-import { AlertTriangle, Boxes, CheckCircle2, FileSpreadsheet, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { Term } from '@/components/ux/Term';
+import { FieldHelp } from '@/components/ux/FieldHelp';
+import { AlertTriangle, Boxes, CheckCircle2, Copy, FileSpreadsheet, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 type HsGroup = Product['hs_group'];
@@ -215,6 +217,26 @@ export default function ProductsPage() {
         setEditingProductId(product.id);
         setCnSearch(product.cn_code ?? product.hs_code);
         setShowForm(true);
+    }
+
+    // 다제품(수백 SKU) 대응: 기존 제품을 복제해 변형(강종·치수·표면등급)만 바꿔 빠르게 추가.
+    // editingProductId를 비워 두므로 '저장' 시 새 제품으로 생성된다.
+    function startDuplicateProduct(product: Product) {
+        setDraft({
+            name: `${product.name} (복사본)`,
+            hs_code: product.hs_code,
+            cn_code: product.cn_code ?? '',
+            hs_group: product.hs_group,
+            product_type_enum: product.product_type_enum,
+            unit: product.unit,
+        });
+        setErrors({});
+        setEditingProductId(null);
+        setCnSearch(product.cn_code ?? product.hs_code);
+        setShowForm(true);
+        if (typeof window !== 'undefined') {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     }
 
     function getProductDependencies(productId: string) {
@@ -458,7 +480,17 @@ export default function ProductsPage() {
                             {errors.hs_code && <p className="mt-1 text-xs font-medium text-red-600">{errors.hs_code}</p>}
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-slate-700">CN 8자리 코드</label>
+                            <label className="text-sm font-semibold text-slate-700"><Term term="CN 코드">CN</Term> 8자리 코드</label>{' '}
+                            <FieldHelp
+                                title="CN 코드는 어디서 확인하나요?"
+                                sources={[
+                                    '수출 인보이스·관세사에게 받은 HS코드 앞 6자리 + EU CN 뒤 2자리',
+                                    'EU TARIC 또는 관세청 품목분류 조회',
+                                    '아래 "CN 코드 검색"으로 EU 템플릿 목록에서 찾아 적용',
+                                ]}
+                                exampleLabel="예시값 채우기 (72191310)"
+                                onExample={() => setDraft({ ...draft, cn_code: '72191310' })}
+                            />
                             <input
                                 type="text"
                                 inputMode="numeric"
@@ -474,7 +506,21 @@ export default function ProductsPage() {
                                 }
                                 placeholder="예: 72083900"
                             />
-                            <p className="mt-1 text-xs text-slate-500">EU Communication Template 검증은 CN 8자리 기준으로 수행합니다.</p>
+                            <p className="mt-1 text-xs text-slate-500">EU Communication Template 검증은 CN 8자리 기준으로 수행합니다. 용접 제품: 맨 강철 와이어(7217/7223/7229)는 대상, 피복·플럭스코어드 용접봉(8311)은 비대상입니다.</p>
+                            {(draft.cn_code?.length ?? 0) >= 4 && (() => {
+                                const cov = getCbamCoverage({ cn_code: draft.cn_code, hs_code: draft.hs_code });
+                                const cls = cov.status === 'COVERED'
+                                    ? 'border-teal-200 bg-teal-50 text-teal-900'
+                                    : cov.status === 'NOT_COVERED'
+                                      ? 'border-red-200 bg-red-50 text-red-800'
+                                      : 'border-amber-200 bg-amber-50 text-amber-900';
+                                return (
+                                    <div className={`mt-2 rounded-xl border p-2.5 text-xs leading-5 ${cls}`}>
+                                        <p className="font-semibold">{cov.label}</p>
+                                        <p className="mt-0.5">{cov.reason}</p>
+                                    </div>
+                                );
+                            })()}
                             {errors.cn_code && <p className="mt-1 text-xs font-medium text-red-600">{errors.cn_code}</p>}
                         </div>
                         <div>
@@ -600,6 +646,16 @@ export default function ProductsPage() {
                                     </Button>
                                     <Button
                                         type="button"
+                                        variant="secondary"
+                                        className="min-h-9 px-3 py-1.5"
+                                        aria-label={`${product.name} 복제`}
+                                        onClick={() => startDuplicateProduct(product)}
+                                    >
+                                        <Copy className="mr-1.5 h-4 w-4" />
+                                        복제
+                                    </Button>
+                                    <Button
+                                        type="button"
                                         variant="danger"
                                         className="min-h-9 px-3 py-1.5"
                                         aria-label={`${product.name} 삭제`}
@@ -692,6 +748,10 @@ export default function ProductsPage() {
                                             <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => startEditProduct(product)}>
                                                 <Pencil className="mr-1.5 h-4 w-4" />
                                                 수정
+                                            </Button>
+                                            <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => startDuplicateProduct(product)}>
+                                                <Copy className="mr-1.5 h-4 w-4" />
+                                                복제
                                             </Button>
                                             <Button type="button" variant="danger" className="min-h-9 px-3 py-1.5" onClick={() => handleDeleteProduct(product)}>
                                                 <Trash2 className="mr-1.5 h-4 w-4" />
