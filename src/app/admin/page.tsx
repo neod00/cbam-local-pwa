@@ -240,6 +240,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                                 <input
                                     name="email"
                                     type="email"
+                                    required
                                     disabled={!isLive}
                                     className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
                                 />
@@ -248,6 +249,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                                 <span>회사명 *</span>
                                 <input
                                     name="company_name"
+                                    required
                                     disabled={!isLive}
                                     className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
                                 />
@@ -256,6 +258,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                                 <span>담당자명 *</span>
                                 <input
                                     name="contact_name"
+                                    required
                                     disabled={!isLive}
                                     className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
                                 />
@@ -264,6 +267,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                                 <span>연락처 *</span>
                                 <input
                                     name="contact_phone"
+                                    required
                                     disabled={!isLive}
                                     className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400"
                                 />

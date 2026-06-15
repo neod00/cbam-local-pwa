@@ -6,6 +6,7 @@ import { isAdminLicenseStatus } from '@/lib/admin-license-status';
 import { isAdminUpdatePolicyMode } from '@/lib/admin-update-policy';
 import { isAllowedAdminEmail } from '@/lib/admin-auth';
 import { getAdminSql } from '@/lib/admin-db';
+import { makeLicenseKey } from '@/lib/license-api';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -102,6 +103,7 @@ export async function createLicenseUser(formData: FormData) {
             contact_phone,
             country,
             industry,
+            license_key,
             license_status,
             expires_at,
             accepted_terms_version,
@@ -115,6 +117,7 @@ export async function createLicenseUser(formData: FormData) {
             ${contactPhone},
             ${country},
             ${industry || null},
+            ${makeLicenseKey()},
             ${licenseStatus},
             ${expiresAt},
             ${acceptedTermsVersion},
