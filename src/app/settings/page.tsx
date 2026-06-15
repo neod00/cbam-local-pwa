@@ -271,6 +271,7 @@ export default function SettingsPage() {
             return;
         }
 
+        const currentLicenseRegistration = licenseRegistration;
         const parsed = parseBackupFile(importContent);
         await importLocalBackup(parsed);
         const restoredScenarioSetting = parsed.data.settings.find((item) => item.key === SCENARIO_ASSUMPTIONS_SETTING_KEY);
@@ -278,8 +279,13 @@ export default function SettingsPage() {
         setScenarioAssumptions(normalizeScenarioAssumptions(restoredScenarioSetting?.value as Partial<ScenarioAssumptions> | undefined));
         if (restoredLicenseSetting?.value) {
             setLicenseRegistration({ ...emptyLicenseRegistration(), ...restoredLicenseSetting.value as FreeLicenseRegistration });
+        } else if (currentLicenseRegistration.license_key) {
+            await setLocalSetting(FREE_LICENSE_SETTING_KEY, currentLicenseRegistration);
+            setLicenseRegistration(currentLicenseRegistration);
         }
-        setMessage('백업을 복원했습니다. 시나리오 가정값과 무료 라이선스 로컬 설정도 백업 기준으로 갱신했습니다.');
+        setMessage(restoredLicenseSetting?.value
+            ? '백업을 복원했습니다. 시나리오 가정값과 무료 라이선스 로컬 설정도 백업 기준으로 갱신했습니다.'
+            : '백업을 복원했습니다. 백업 파일에 무료 라이선스 정보가 없어 현재 브라우저의 등록 상태는 유지했습니다.');
         setBackupPreview(null);
         setImportContent('');
     }
