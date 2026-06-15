@@ -361,6 +361,11 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                                 </div>
                             </div>
                         ))}
+                        {data.licenseUsers.length === 0 && (
+                            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
+                                아직 표시할 사용자/라이선스가 없습니다.
+                            </div>
+                        )}
                     </div>
 
                     <DataTable className="hidden md:block">
@@ -398,6 +403,13 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                                         </td>
                                     </tr>
                                 ))}
+                                {data.licenseUsers.length === 0 && (
+                                    <tr>
+                                        <td colSpan={12} className="px-4 py-8 text-center text-sm text-slate-500">
+                                            아직 표시할 사용자/라이선스가 없습니다.
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </DataTable>

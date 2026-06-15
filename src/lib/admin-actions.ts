@@ -133,6 +133,7 @@ export async function createLicenseUser(formData: FormData) {
             license_status = excluded.license_status,
             expires_at = excluded.expires_at,
             accepted_terms_version = excluded.accepted_terms_version,
+            archived_at = null,
             updated_at = now()
     `;
 
