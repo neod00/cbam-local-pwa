@@ -79,7 +79,7 @@ function loadEuExportModule() {
       'const { strFromU8, strToU8, unzipSync, zipSync } = fflate;'
     )
     .replace("import { summarizeProductOutputLines } from './calculation-engine';", '')
-    .replace("import { calculateSourceStreamEmissions } from './source-stream-calculation';", '')
+    .replace("import { calculateSourceStreamEmissions, getSourceStreamEmissionFactorBasis } from './source-stream-calculation';", '')
     .replace("import { getIndirectEmissionsApplicability } from './cbam-product-rules';", '')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
@@ -144,10 +144,14 @@ function loadDeliveryPackageModule() {
       "import { strToU8, zipSync } from 'fflate';",
       'const { strToU8, zipSync } = fflate;'
     )
+    .replace("import { getSourceStreamEmissionFactorBasis } from './source-stream-calculation';", '')
     .replace(/import type[\s\S]*?;\r?\n/gm, '')
     .replace(/^export /gm, '');
   const compiled = ts.transpileModule(
     `${source}
+function getSourceStreamEmissionFactorBasis(sourceStream) {
+  return sourceStream.emission_factor_basis === 'PER_ACTIVITY_UNIT' ? 'PER_ACTIVITY_UNIT' : 'PER_TJ';
+}
 globalThis.deliveryPackage = {
   createCbamBackupFilename,
   createDeliveryPackage,
@@ -407,14 +411,16 @@ const sourceStream = {
   name: 'Natural gas combustion',
   stream_type: 'FUEL',
   method: 'Combustion',
-  activity_data: 250,
+  activity_data: 36.5296803652968,
   activity_unit: 't',
   ncv_gj_per_unit: 45,
   emission_factor_tco2e_per_unit: 73,
+  emission_factor_basis: 'PER_TJ',
   oxidation_factor: 1,
   conversion_factor: 1,
   fossil_fraction: 1,
   biomass_fraction: 0,
+  factor_source_type: 'EU_OR_IPCC_DEFAULT',
   source: 'Monthly fuel invoice',
 };
 const outputLine = {
@@ -465,16 +471,16 @@ assertEqual(String(validation.isValid), 'true', 'synthetic workbook validity');
 assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
 const readiness = euExport.evaluateEuExportReadiness(data, validation.cnCodeMap);
 assertEqual(String(readiness.errorCount), '0', 'readiness error count');
-assertEqual(String(readiness.warningCount), '1', 'readiness warning count');
+assertEqual(String(readiness.warningCount), '0', 'readiness warning count');
 const missingSourceStreamReadiness = euExport.evaluateEuExportReadiness({
   ...data,
   sourceStreams: [],
 }, validation.cnCodeMap);
-assertEqual(String(missingSourceStreamReadiness.warningCount), '1', 'missing source stream warning count');
+assertEqual(String(missingSourceStreamReadiness.errorCount), '1', 'missing source stream error count');
 assertEqual(
   String(missingSourceStreamReadiness.issues.some((issue) => issue.message.includes('연결된 배출원 자료가 없습니다'))),
   'true',
-  'missing source stream basis warning'
+  'missing source stream basis error'
 );
 const precursorEvidenceReadiness = euExport.evaluateEuExportReadiness({
   ...data,
@@ -494,7 +500,7 @@ const precursorEvidenceReadiness = euExport.evaluateEuExportReadiness({
     },
   ],
 }, validation.cnCodeMap);
-assertEqual(String(precursorEvidenceReadiness.warningCount), '3', 'precursor evidence warning count');
+assertEqual(String(precursorEvidenceReadiness.warningCount), '2', 'precursor evidence warning count');
 assertEqual(
   String(precursorEvidenceReadiness.issues.some((issue) => issue.message.includes('기본값을 사용하는 사유'))),
   'true',
@@ -513,8 +519,8 @@ const allocationReadiness = euExport.evaluateEuExportReadiness({
     { ...outputLine, id: 'output-line-2', output_mass_t: 300, allocation_basis: 'MANUAL', manual_allocation_percent: 40 },
   ],
 }, validation.cnCodeMap);
-assertEqual(String(allocationReadiness.errorCount), '0', 'allocation readiness error count');
-assertEqual(String(allocationReadiness.warningCount), '3', 'allocation readiness warning count');
+assertEqual(String(allocationReadiness.errorCount), '1', 'allocation readiness error count');
+assertEqual(String(allocationReadiness.warningCount), '2', 'allocation readiness warning count');
 assertEqual(
   String(allocationReadiness.issues.some((issue) => issue.message.includes('제품 생산라인 합계'))),
   'true',
@@ -526,6 +532,25 @@ assertEqual(
   'mixed allocation basis warning'
 );
 assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '47', 'planned cell writes');
+const activityUnitFuelWrites = euExport.createEuTemplateExportCellWrites(
+  {
+    ...data,
+    sourceStreams: [
+      {
+        ...sourceStream,
+        id: 'source-stream-activity-unit-ef',
+        emission_factor_basis: 'PER_ACTIVITY_UNIT',
+        emission_factor_tco2e_per_unit: 2,
+      },
+    ],
+  },
+  validation.cnCodeMap
+);
+assertEqual(
+  String(activityUnitFuelWrites.find((write) => write.sheetName === 'B_EmInst' && write.cell === 'K17')?.value),
+  'tCO2/t',
+  'B_EmInst K17 activity-unit fuel EF unit'
+);
 const checklist = euExport.createExportChecklist({
   backupStatus: {
     helper: '최근 백업 기록이 있습니다.',
@@ -610,7 +635,7 @@ const incompleteChecklist = euExport.createExportChecklist({
     tone: 'warning',
   },
   plannedCellWriteCount: 47,
-  readiness,
+  readiness: allocationReadiness,
   resultCount: 0,
   scenarioAction: { href: '/upload', label: '기준자료 가져오기' },
   scenarioRiskSummary: {
@@ -729,7 +754,7 @@ assertEqual(readCell(installationSheet, 'F102'), 'South Korea', 'A_InstData F102
 assertEqual(readCell(installationSheet, 'L102'), 'Purchased hot rolled coil', 'A_InstData L102');
 assertEqual(readCell(sourceStreamSheet, 'D17'), 'Combustion', 'B_EmInst D17');
 assertEqual(readCell(sourceStreamSheet, 'E17'), 'Natural gas combustion', 'B_EmInst E17');
-assertEqual(readCell(sourceStreamSheet, 'F17'), '250', 'B_EmInst F17');
+assertEqual(readCell(sourceStreamSheet, 'F17'), '36.5296803652968', 'B_EmInst F17');
 assertEqual(readCell(sourceStreamSheet, 'G17'), 't', 'B_EmInst G17');
 assertEqual(readCell(sourceStreamSheet, 'H17'), '45', 'B_EmInst H17');
 assertEqual(readCell(sourceStreamSheet, 'J17'), '73', 'B_EmInst J17');
@@ -810,9 +835,9 @@ const calculationResult = {
   indirect_emissions_excluded_tco2e: 235,
   indirect_emissions_gross_tco2e: 235,
   source_stream_count: 1,
-  source_stream_emissions_tco2e: 18250,
-  source_stream_energy_tj: 11.25,
-  source_stream_delta_tco2e: 18130,
+  source_stream_emissions_tco2e: 120,
+  source_stream_energy_tj: 1.643835616438356,
+  source_stream_delta_tco2e: 0,
   direct_see: 0.12,
   own_indirect_see: 0.235,
   indirect_see: 0,

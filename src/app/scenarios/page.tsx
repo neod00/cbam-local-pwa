@@ -112,9 +112,10 @@ export default function ScenariosPage() {
     }, []);
 
     async function updateAssumptions(nextAssumptions: ScenarioAssumptions) {
-        setAssumptions(nextAssumptions);
+        const normalizedAssumptions = normalizeScenarioAssumptions(nextAssumptions);
+        setAssumptions(normalizedAssumptions);
         setAssumptionSaveState('saving');
-        await setLocalSetting(SCENARIO_ASSUMPTIONS_SETTING_KEY, nextAssumptions);
+        await setLocalSetting(SCENARIO_ASSUMPTIONS_SETTING_KEY, normalizedAssumptions);
 
         const [processes, precursors, products, periods, sourceStreams, productOutputLines, benchmarks, defaultValues] = await Promise.all([
             listLocalItems('processes'),
@@ -130,14 +131,19 @@ export default function ScenariosPage() {
 
         setBenchmarkReference(benchmarks);
         setDefaultValueReference(defaultValues);
-        setScenarios(calculateProductScenarios(results, nextAssumptions, { benchmarks, defaultValues }));
+        setScenarios(calculateProductScenarios(results, normalizedAssumptions, { benchmarks, defaultValues }));
         setAssumptionSaveState('saved');
     }
 
     const summary = useMemo(() => {
         const totalOutput = scenarios.reduce((sum, scenario) => sum + scenario.output_mass_t, 0);
+        const totalImportMass = scenarios.reduce((sum, scenario) => sum + scenario.import_mass_t, 0);
         const totalCertificateQuantity = scenarios.reduce(
             (sum, scenario) => sum + (scenario.certificate_quantity_indicator ?? 0),
+            0
+        );
+        const totalGrossCertificateQuantity = scenarios.reduce(
+            (sum, scenario) => sum + (scenario.gross_certificate_quantity_indicator ?? 0),
             0
         );
         const totalCost = scenarios.reduce(
@@ -148,6 +154,10 @@ export default function ScenariosPage() {
             (sum, scenario) => sum + (scenario.default_certificate_quantity_indicator ?? 0),
             0
         );
+        const totalGrossDefaultCertificateQuantity = scenarios.reduce(
+            (sum, scenario) => sum + (scenario.gross_default_certificate_quantity_indicator ?? 0),
+            0
+        );
         const totalDefaultCost = scenarios.reduce(
             (sum, scenario) => sum + (scenario.default_certificate_cost_indicator_eur ?? 0),
             0
@@ -156,9 +166,12 @@ export default function ScenariosPage() {
 
         return {
             totalOutput,
+            totalImportMass,
             totalCertificateQuantity,
+            totalGrossCertificateQuantity,
             totalCost,
             totalDefaultCertificateQuantity,
+            totalGrossDefaultCertificateQuantity,
             totalDefaultCost,
             missingReferenceCount: riskSummary.missing_reference_count,
             missingCnCount: riskSummary.missing_cn_count,
@@ -295,8 +308,8 @@ export default function ScenariosPage() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                 <StatCard label="시나리오 품목" value={loading ? '-' : scenarios.length} helper="제품 산정 라인 기준" icon={BarChart3} tone="info" />
-                <StatCard label="총 생산량" value={formatNumber(summary.totalOutput)} helper="tonne" icon={Calculator} tone="pending" />
-                <StatCard label="실제자료 인증서 지표" value={formatNumber(summary.totalCertificateQuantity)} helper={`기본값 ${formatNumber(summary.totalDefaultCertificateQuantity)}`} icon={BadgeEuro} tone="warning" />
+                <StatCard label="EU 수입 예정량" value={formatNumber(summary.totalImportMass)} helper={`생산량 ${formatNumber(summary.totalOutput)}t 기준`} icon={Calculator} tone="pending" />
+                <StatCard label="차감 후 인증서 지표" value={formatNumber(summary.totalCertificateQuantity)} helper={`차감 전 ${formatNumber(summary.totalGrossCertificateQuantity)} tCO2e`} icon={BadgeEuro} tone="warning" />
                 <StatCard label="예상 비용 지표" value={formatCurrency(summary.totalCost)} helper={`기본값 ${formatCurrency(summary.totalDefaultCost)}`} icon={AlertTriangle} tone={summary.missingReferenceCount > 0 ? 'warning' : 'success'} />
             </div>
 
@@ -417,6 +430,59 @@ export default function ScenariosPage() {
             )}
 
             <SectionCard
+                title="철강 소량면제 검토"
+                description="철강 품목의 EU 수입자 기준 연간 순중량이 단일 질량 임계값 이하인지 검토합니다. 최종 면제 판단은 수입자와 최신 규정값으로 확인하세요."
+                actions={
+                    <StatusBadge tone={summary.totalImportMass > 0 && summary.totalImportMass <= assumptions.de_minimis_threshold_t ? 'success' : 'warning'}>
+                        {summary.totalImportMass > 0 && summary.totalImportMass <= assumptions.de_minimis_threshold_t ? '면제 가능성 검토' : '임계값 초과 또는 입력 필요'}
+                    </StatusBadge>
+                }
+            >
+                <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+                    <div className="rounded-xl bg-slate-50 px-4 py-3">
+                        <p className="text-xs font-semibold text-slate-500">EU 수입 예정량</p>
+                        <p className="mt-1 text-2xl font-semibold text-slate-950">{formatNumber(summary.totalImportMass)}t</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 px-4 py-3">
+                        <p className="text-xs font-semibold text-slate-500">소량면제 임계값</p>
+                        <p className="mt-1 text-2xl font-semibold text-slate-950">{formatNumber(assumptions.de_minimis_threshold_t)}t</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 px-4 py-3">
+                        <p className="text-xs font-semibold text-slate-500">판단 기준</p>
+                        <p className="mt-1 text-sm leading-6 text-slate-700">철강만 표시합니다. 알루미늄·시멘트·비료는 이 앱의 타겟 범위에서 제외합니다.</p>
+                    </div>
+                </div>
+            </SectionCard>
+
+            <SectionCard
+                title="검증 준비 체크"
+                description="확정기간 대응 시 검증인에게 설명해야 할 자료를 미리 점검합니다. 이 앱은 공식 검증보고서를 대체하지 않습니다."
+            >
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    <ActionItemCard
+                        title="모니터링 계획"
+                        description="생산량, 전력, 직접배출, 전구물질 데이터를 어떤 담당자와 원천자료로 모으는지 계획을 남기세요."
+                        badge={<StatusBadge tone="warning">작성 필요</StatusBadge>}
+                    />
+                    <ActionItemCard
+                        title="자료 보관 6년"
+                        description="검침표, 구매전표, 생산실적, 공급사 SEE, 기본값 사용 근거를 회사 보안정책에 맞게 장기 보관하세요."
+                        badge={<StatusBadge tone="info">보관</StatusBadge>}
+                    />
+                    <ActionItemCard
+                        title="영문 산정자료"
+                        description="검증인 또는 수입자가 볼 수 있도록 산정근거 요약 보고서와 증빙 체크리스트를 영문 포함 DOCX로 준비하세요."
+                        badge={<StatusBadge tone="success">패키지 제공</StatusBadge>}
+                    />
+                    <ActionItemCard
+                        title="현장방문 가능성"
+                        description="첫 검증 또는 중요 데이터 검증에서는 현장방문이 요구될 수 있으므로 공정·계량기·자료 위치를 설명할 수 있게 정리하세요."
+                        badge={<StatusBadge tone="pending">검토</StatusBadge>}
+                    />
+                </div>
+            </SectionCard>
+
+            <SectionCard
                 title="우선 조치"
                 description="현재 입력값 기준으로 먼저 확인해야 할 항목을 업무 순서대로 정리했습니다."
             >
@@ -442,7 +508,7 @@ export default function ScenariosPage() {
 
             <SectionCard
                 title="시나리오 가정"
-                description="입력자료와 기준자료를 바탕으로 한 사전 검토용 시나리오입니다. 최종 CBAM declaration에는 검증자료, CBAM Registry 입력값, carbon price paid evidence 등이 추가로 반영될 수 있습니다."
+                description="입력자료와 기준자료를 바탕으로 한 사전 검토용 시나리오입니다. 인증서 수량은 EU 수입 예정량 기준으로 계산하고, 기지불 탄소가격은 증빙 확인 전 가정값으로만 반영합니다."
                 actions={
                     <div className="flex items-center gap-2">
                         <StatusBadge tone={assumptionSaveState === 'saving' ? 'pending' : assumptionSaveState === 'saved' ? 'success' : 'neutral'}>
@@ -458,7 +524,7 @@ export default function ScenariosPage() {
                     </div>
                 }
             >
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                     <div>
                         <label className="text-sm font-semibold text-slate-700">원산지/공급국가</label>
                         <input
@@ -466,6 +532,19 @@ export default function ScenariosPage() {
                             value={assumptions.origin_country}
                             onChange={(event) => void updateAssumptions({ ...assumptions, origin_country: event.target.value })}
                         />
+                    </div>
+                    <div>
+                        <label className="text-sm font-semibold text-slate-700">EU 수입 예정 비율(%)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
+                            value={assumptions.eu_import_share_percent}
+                            onChange={(event) => void updateAssumptions({ ...assumptions, eu_import_share_percent: Number(event.target.value) || 0 })}
+                        />
+                        <p className="mt-1 text-xs text-slate-500">제품 생산량 중 EU 수입자에게 넘어갈 물량 비율입니다.</p>
                     </div>
                     <div>
                         <label className="text-sm font-semibold text-slate-700">기본값 연도</label>
@@ -481,9 +560,23 @@ export default function ScenariosPage() {
                         <p className="mt-1 text-xs text-slate-500">기본값(default)에는 연도별 mark-up(보수적 가산)이 포함됩니다. 실측 자료가 있으면 보통 기본값보다 유리합니다.</p>
                     </div>
                     <div>
+                        <label className="text-sm font-semibold text-slate-700">소량면제 임계값(t)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
+                            value={assumptions.de_minimis_threshold_t}
+                            onChange={(event) => void updateAssumptions({ ...assumptions, de_minimis_threshold_t: Number(event.target.value) || 0 })}
+                        />
+                        <p className="mt-1 text-xs text-slate-500">수입자 기준 연간 철강 순중량 임계값입니다. 최신 규정값으로 확인하세요.</p>
+                    </div>
+                    <div>
                         <label className="text-sm font-semibold text-slate-700">CBAM factor</label>
                         <input
                             type="number"
+                            min="0"
+                            max="1"
                             step="0.0001"
                             className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
                             value={assumptions.cbam_factor}
@@ -494,6 +587,8 @@ export default function ScenariosPage() {
                         <label className="text-sm font-semibold text-slate-700">CSCF</label>
                         <input
                             type="number"
+                            min="0"
+                            max="1"
                             step="0.0001"
                             className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
                             value={assumptions.cscf}
@@ -501,9 +596,22 @@ export default function ScenariosPage() {
                         />
                     </div>
                     <div>
+                        <label className="text-sm font-semibold text-slate-700">기지불 탄소가격(EUR/tCO2e)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
+                            value={assumptions.paid_carbon_price_eur_per_tco2e}
+                            onChange={(event) => void updateAssumptions({ ...assumptions, paid_carbon_price_eur_per_tco2e: Number(event.target.value) || 0 })}
+                        />
+                        <p className="mt-1 text-xs text-slate-500">증빙 확인 전 검토용 차감값입니다. 없으면 0으로 두세요.</p>
+                    </div>
+                    <div>
                         <label className="text-sm font-semibold text-slate-700">인증서 가격(EUR)</label>
                         <input
                             type="number"
+                            min="0"
                             step="1"
                             className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
                             value={assumptions.certificate_price_eur}
@@ -528,20 +636,24 @@ export default function ScenariosPage() {
 
             <SectionCard
                 title="검토 요약"
-                description="품목별 기준값 연결 상태와 기본값 대비 차이를 먼저 확인하세요."
+                description="수입량 기준 인증서 수량, 기지불 탄소가격 차감 효과, 기준값 연결 상태를 먼저 확인하세요."
             >
-                <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-4">
+                    <div className="rounded-xl bg-slate-50 px-4 py-3">
+                        <p className="text-xs font-semibold text-slate-500">차감 전 인증서 수량</p>
+                        <p className="mt-1 text-2xl font-semibold text-slate-950">{formatNumber(summary.totalGrossCertificateQuantity)}tCO2e</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 px-4 py-3">
+                        <p className="text-xs font-semibold text-slate-500">차감 후 인증서 수량</p>
+                        <p className="mt-1 text-2xl font-semibold text-slate-950">{formatNumber(summary.totalCertificateQuantity)}tCO2e</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 px-4 py-3">
+                        <p className="text-xs font-semibold text-slate-500">기지불 탄소가격</p>
+                        <p className="mt-1 text-2xl font-semibold text-slate-950">{formatCurrency(assumptions.paid_carbon_price_eur_per_tco2e)}</p>
+                    </div>
                     <div className="rounded-xl bg-slate-50 px-4 py-3">
                         <p className="text-xs font-semibold text-slate-500">기준값 미연결</p>
                         <p className="mt-1 text-2xl font-semibold text-slate-950">{summary.missingReferenceCount}건</p>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 px-4 py-3">
-                        <p className="text-xs font-semibold text-slate-500">CBAM 산정 기준 SEE가 기본값 초과</p>
-                        <p className="mt-1 text-2xl font-semibold text-slate-950">{summary.aboveDefaultCount}건</p>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 px-4 py-3">
-                        <p className="text-xs font-semibold text-slate-500">현재 가격 가정</p>
-                        <p className="mt-1 text-2xl font-semibold text-slate-950">{formatCurrency(assumptions.certificate_price_eur)}</p>
                     </div>
                 </div>
             </SectionCard>
@@ -558,7 +670,7 @@ export default function ScenariosPage() {
                                 <div className="min-w-0">
                                     <h3 className="break-words text-sm font-semibold text-slate-950">{scenario.product_name}</h3>
                                     <p className="mt-1 break-words text-xs text-slate-600">
-                                        {scenario.cn_code ? `CN ${scenario.cn_code}` : 'CN 미입력'} / 생산량 {formatNumber(scenario.output_mass_t)} t
+                                        {scenario.cn_code ? `CN ${scenario.cn_code}` : 'CN 미입력'} / 생산량 {formatNumber(scenario.output_mass_t)} t / EU 수입 {formatNumber(scenario.import_mass_t)} t
                                     </p>
                                 </div>
                                 <div className="flex flex-col items-end gap-2">
@@ -583,12 +695,12 @@ export default function ScenariosPage() {
                                     )}
                                 </div>
                                 <div>
-                                    <dt className="text-xs text-slate-500">CBAM 기준 인증서 비용</dt>
-                                    <dd className="mt-1 text-slate-700">{formatCurrency(scenario.certificate_cost_indicator_eur)}</dd>
+                                    <dt className="text-xs text-slate-500">차감 전 인증서</dt>
+                                    <dd className="mt-1 text-slate-700">{formatNumber(scenario.gross_certificate_quantity_indicator)}</dd>
                                 </div>
                                 <div>
-                                    <dt className="text-xs text-slate-500">기본값 인증서 비용</dt>
-                                    <dd className="mt-1 text-slate-700">{formatCurrency(scenario.default_certificate_cost_indicator_eur)}</dd>
+                                    <dt className="text-xs text-slate-500">차감 후 인증서 비용</dt>
+                                    <dd className="mt-1 text-slate-700">{formatCurrency(scenario.certificate_cost_indicator_eur)}</dd>
                                 </div>
                                 <div className="col-span-2">
                                     <dt className="text-xs text-slate-500">비용 차이</dt>
@@ -608,7 +720,7 @@ export default function ScenariosPage() {
                     <thead className="bg-slate-50">
                         <tr>
                             <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900">제품</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">생산량(t)</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">생산량 / EU 수입량(t)</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 산정 기준 SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">내부 검토용 total SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 SEE</th>
@@ -643,7 +755,10 @@ export default function ScenariosPage() {
                                             {scenario.cn_code ? `CN ${scenario.cn_code}` : 'CN 미입력'}
                                         </div>
                                     </td>
-                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.output_mass_t)}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
+                                        {formatNumber(scenario.output_mass_t)}
+                                        <div className="text-xs text-slate-500">EU {formatNumber(scenario.import_mass_t)}</div>
+                                    </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.actual_see)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.informational_total_see)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
@@ -656,7 +771,12 @@ export default function ScenariosPage() {
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.benchmark_column_a)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.benchmark_column_b)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.sefa_indicator)}</td>
-                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.certificate_quantity_indicator)}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
+                                        {formatNumber(scenario.certificate_quantity_indicator)}
+                                        {scenario.gross_certificate_quantity_indicator !== undefined && (
+                                            <div className="text-xs text-slate-500">차감 전 {formatNumber(scenario.gross_certificate_quantity_indicator)}</div>
+                                        )}
+                                    </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-950">{formatCurrency(scenario.certificate_cost_indicator_eur)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.default_sefa_indicator)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.default_certificate_quantity_indicator)}</td>

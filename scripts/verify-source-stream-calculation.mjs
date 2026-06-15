@@ -13,6 +13,7 @@ globalThis.sourceStreamCalculation = {
   calculateSourceStreamEmissions,
   calculateSourceStreamEnergyBreakdown,
   calculateSourceStreamEnergyContent,
+  getSourceStreamEmissionFactorBasis,
   getSourceStreamUnitWarnings,
 };`,
     {
@@ -45,11 +46,17 @@ const {
   calculateSourceStreamEmissions,
   calculateSourceStreamEnergyBreakdown,
   calculateSourceStreamEnergyContent,
+  getSourceStreamEmissionFactorBasis,
   getSourceStreamUnitWarnings,
 } = loadSourceStreamCalculationModule();
 
 assert.equal(calculateSourceStreamEmissions(createSourceStream()), 821.25);
+assert.equal(getSourceStreamEmissionFactorBasis(createSourceStream()), 'PER_TJ');
 assert.equal(calculateSourceStreamEmissions(createSourceStream({ fossil_fraction: 0.8 })), 657);
+assert.equal(
+  calculateSourceStreamEmissions(createSourceStream({ emission_factor_basis: 'PER_ACTIVITY_UNIT', emission_factor_tco2e_per_unit: 2 })),
+  500
+);
 assert.equal(calculateSourceStreamEnergyContent(createSourceStream()), 11.25);
 const energyBreakdown = calculateSourceStreamEnergyBreakdown(createSourceStream({ fossil_fraction: 0.8, biomass_fraction: 0.2 }));
 assert.equal(energyBreakdown.total, 11.25);

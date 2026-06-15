@@ -24,6 +24,7 @@ import {
     getBackupStatus,
     getLocalSetting,
     listLocalItems,
+    setLocalSetting,
     type Installation,
     type Product,
     type ProductOutputLine,
@@ -44,11 +45,14 @@ import {
 import {
     AlertTriangle,
     ArrowRight,
+    Building2,
     CheckCircle2,
     Circle,
     Download,
     FileCheck2,
+    FileText,
     FileSpreadsheet,
+    Handshake,
     Mail,
     PackageCheck,
     ShieldCheck,
@@ -71,6 +75,58 @@ type LastPackageResult = {
     generatedAt: string;
     files: string[];
 };
+
+type ExportResponseType = 'TYPE_1_DECLARANT_EXPORTER' | 'TYPE_2_EXPORTER' | 'TYPE_3_INDIRECT_EXPORTER';
+
+const EXPORT_RESPONSE_TYPE_SETTING_KEY = 'export:response-type';
+
+const exportResponseTypes: Array<{
+    type: ExportResponseType;
+    label: string;
+    title: string;
+    summary: string;
+    appOutput: string;
+    responsibility: string;
+    icon: typeof Building2;
+    tone: 'success' | 'info' | 'warning';
+}> = [
+    {
+        type: 'TYPE_1_DECLARANT_EXPORTER',
+        label: '유형 1',
+        title: '수출 + EU 수입 통관',
+        summary: 'EU 법인이 수입자 역할까지 맡거나 한국 수출과 EU 수입 통관을 모두 관리하는 경우입니다.',
+        appOutput: '앱은 사업장·제품·공정·배출량 근거와 내부 백업을 준비합니다. 최종 CBAM 신고서와 인증서는 CBAM 등록부/DP 포털에서 별도 처리해야 합니다.',
+        responsibility: '승인된 CBAM 신고인 자격, 검증, 인증서 구매·예치 의무를 별도로 확인하세요.',
+        icon: Building2,
+        tone: 'warning',
+    },
+    {
+        type: 'TYPE_2_EXPORTER',
+        label: '유형 2',
+        title: '일반 수출기업',
+        summary: '별도 EU 수입업자에게 철강 제품을 수출하는 국내 제조기업입니다. 이 앱의 기본 타겟입니다.',
+        appOutput: '수입자 전달용 Communication Template 복사본, 산정근거 요약, 증빙 체크리스트, .cbam 백업 패키지를 준비합니다.',
+        responsibility: 'CN 코드, 연간 수입량, 전구물질 SEE, 검증 일정은 수입자와 확인해야 합니다.',
+        icon: FileText,
+        tone: 'success',
+    },
+    {
+        type: 'TYPE_3_INDIRECT_EXPORTER',
+        label: '유형 3',
+        title: 'EU 간접수출·공급사',
+        summary: 'EU로 수출하는 다른 기업에 철강 제품 또는 전구물질 정보를 제공하는 경우입니다.',
+        appOutput: '정해진 공식 양식이 없을 수 있으므로 사업장 정보, 고유 내재배출량, 기지불 탄소가격 근거를 자유양식 패키지로 정리합니다.',
+        responsibility: '정보 미제공 시 고객사 요청, 거래 지연, 공급망 재검토가 생길 수 있어 요청 범위를 먼저 확인하세요.',
+        icon: Handshake,
+        tone: 'info',
+    },
+];
+
+function normalizeExportResponseType(value: unknown): ExportResponseType {
+    return exportResponseTypes.some((item) => item.type === value)
+        ? value as ExportResponseType
+        : 'TYPE_2_EXPORTER';
+}
 
 function formatNumber(value: number) {
     return new Intl.NumberFormat('ko-KR', {
@@ -146,6 +202,7 @@ export default function ExportPage() {
     const [lastExportResult, setLastExportResult] = useState<LastExportResult | undefined>();
     const [lastPackageResult, setLastPackageResult] = useState<LastPackageResult | undefined>();
     const [lastBackupAt, setLastBackupAt] = useState<string | undefined>();
+    const [exportResponseType, setExportResponseType] = useState<ExportResponseType>('TYPE_2_EXPORTER');
 
     useEffect(() => {
         async function loadPreviewData() {
@@ -162,6 +219,7 @@ export default function ExportPage() {
                 benchmarkData,
                 defaultValueData,
                 savedScenarioAssumptions,
+                savedExportResponseType,
             ] = await Promise.all([
                 listLocalItems('installations'),
                 listLocalItems('periods'),
@@ -173,6 +231,7 @@ export default function ExportPage() {
                 getLocalSetting<ImportedBenchmarkReference>('reference:benchmarks'),
                 getLocalSetting<ImportedDefaultValueReference>('reference:default-values'),
                 getLocalSetting<ScenarioAssumptions>(SCENARIO_ASSUMPTIONS_SETTING_KEY),
+                getLocalSetting<ExportResponseType>(EXPORT_RESPONSE_TYPE_SETTING_KEY),
             ]);
 
             setInstallations(installationData);
@@ -185,6 +244,7 @@ export default function ExportPage() {
             setBenchmarkReference(benchmarkData);
             setDefaultValueReference(defaultValueData);
             setScenarioAssumptions(normalizeScenarioAssumptions(savedScenarioAssumptions));
+            setExportResponseType(normalizeExportResponseType(savedExportResponseType));
             setResults(calculateLocalResults({
                 processes: processData,
                 precursors: precursorData,
@@ -238,6 +298,10 @@ export default function ExportPage() {
     );
 
     const backupStatus = useMemo(() => getBackupStatus(lastBackupAt), [lastBackupAt]);
+    const selectedExportResponseType = useMemo(
+        () => exportResponseTypes.find((item) => item.type === exportResponseType) ?? exportResponseTypes[1],
+        [exportResponseType]
+    );
 
     const exportChecklist = useMemo(
         () => createExportChecklist({
@@ -409,6 +473,11 @@ export default function ExportPage() {
         ],
         [lastExportResult, protectedSummaryProductFormulaOverwriteCount, readiness.canExportDraft, readiness.errorCount, templateFile, validation?.isValid]
     );
+
+    async function handleExportResponseTypeChange(nextType: ExportResponseType) {
+        setExportResponseType(nextType);
+        await setLocalSetting(EXPORT_RESPONSE_TYPE_SETTING_KEY, nextType);
+    }
 
     async function handleTemplateFileChange(file: File | undefined) {
         setTemplateFile(file);
@@ -609,6 +678,50 @@ export default function ExportPage() {
                     </div>
                 </div>
             </section>
+
+            <SectionCard
+                title="수출 유형별 대응 범위"
+                description="국내 철강 제조기업이 CBAM에서 맡는 역할에 따라 준비해야 할 파일과 책임 범위가 달라집니다. 대부분의 중소·중견 수출기업은 유형 2에 해당합니다."
+                actions={<StatusBadge tone={selectedExportResponseType.tone}>현재 선택: {selectedExportResponseType.label}</StatusBadge>}
+            >
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                    {exportResponseTypes.map((item) => {
+                        const Icon = item.icon;
+                        const selected = item.type === exportResponseType;
+
+                        return (
+                            <button
+                                key={item.type}
+                                type="button"
+                                onClick={() => void handleExportResponseTypeChange(item.type)}
+                                className={`min-w-0 rounded-2xl border p-4 text-left transition ${
+                                    selected
+                                        ? 'border-teal-400 bg-teal-50 shadow-[var(--shadow-card)]'
+                                        : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white'
+                                }`}
+                            >
+                                <div className="flex min-w-0 items-start justify-between gap-3">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <span className="rounded-xl bg-white p-2 text-teal-700 ring-1 ring-slate-200">
+                                            <Icon className="h-5 w-5" />
+                                        </span>
+                                        <div className="min-w-0">
+                                            <StatusBadge tone={item.tone}>{item.label}</StatusBadge>
+                                            <h3 className="mt-2 break-words text-sm font-semibold text-slate-950">{item.title}</h3>
+                                        </div>
+                                    </div>
+                                    {selected && <StatusBadge tone="success">선택됨</StatusBadge>}
+                                </div>
+                                <p className="mt-3 break-words text-sm leading-6 text-slate-700">{item.summary}</p>
+                                <div className="mt-3 rounded-xl bg-white/80 p-3 text-xs leading-5 text-slate-600">
+                                    <p><span className="font-semibold text-slate-800">앱 산출물:</span> {item.appOutput}</p>
+                                    <p className="mt-2"><span className="font-semibold text-slate-800">확인할 책임:</span> {item.responsibility}</p>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+            </SectionCard>
 
             <SectionCard
                 title="파일 용도 한눈에 보기"

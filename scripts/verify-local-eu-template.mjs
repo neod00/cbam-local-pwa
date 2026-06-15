@@ -89,7 +89,7 @@ function loadEuExportModule() {
       'const { strFromU8, strToU8, unzipSync, zipSync } = fflate;'
     )
     .replace("import { summarizeProductOutputLines } from './calculation-engine';", '')
-    .replace("import { calculateSourceStreamEmissions } from './source-stream-calculation';", '')
+    .replace("import { calculateSourceStreamEmissions, getSourceStreamEmissionFactorBasis } from './source-stream-calculation';", '')
     .replace("import { getIndirectEmissionsApplicability } from './cbam-product-rules';", '')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
@@ -277,14 +277,16 @@ function makeSampleData() {
     name: 'Natural gas combustion',
     stream_type: 'FUEL',
     method: 'Combustion',
-    activity_data: 250,
+    activity_data: 36.5296803652968,
     activity_unit: 't',
     ncv_gj_per_unit: 45,
     emission_factor_tco2e_per_unit: 73,
+    emission_factor_basis: 'PER_TJ',
     oxidation_factor: 1,
     conversion_factor: 1,
     fossil_fraction: 1,
     biomass_fraction: 0,
+    factor_source_type: 'EU_OR_IPCC_DEFAULT',
     source: 'Monthly fuel invoice',
   };
   const outputLine = {

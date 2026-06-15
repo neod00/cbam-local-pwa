@@ -420,7 +420,9 @@ export function findBenchmarkReference(
 
     const normalizedCnCode = normalizeCode(cnCode);
     const normalizedRoute = productionRoute?.trim().toLowerCase();
-    const candidates = reference.rows.filter((row) => row.cn_code === normalizedCnCode);
+    const candidates = reference.rows
+        .filter((row) => row.cn_code === normalizedCnCode || normalizedCnCode.startsWith(row.cn_code))
+        .sort((a, b) => b.cn_code.length - a.cn_code.length);
 
     if (candidates.length === 0) {
         return undefined;

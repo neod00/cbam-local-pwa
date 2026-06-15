@@ -3,7 +3,7 @@ import type { BackupStatus, Installation, Product, ProductOutputLine, Production
 import type { CnCodeOption } from './cn-code-options';
 import type { ScenarioRiskSummary } from './scenario-calculation';
 import { summarizeProductOutputLines } from './calculation-engine';
-import { calculateSourceStreamEmissions } from './source-stream-calculation';
+import { calculateSourceStreamEmissions, getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
 
 export const REQUIRED_EU_TEMPLATE_SHEETS = [
@@ -181,6 +181,14 @@ const EU_GOODS = [
 ];
 
 const EU_GOODS_SET = new Set(EU_GOODS);
+const STEEL_EU_GOODS_SET = new Set([
+    'Iron or steel products',
+    'Crude steel',
+    'Direct reduced iron',
+    'Pig iron',
+    'Alloys (FeMn, FeCr, FeNi)',
+    'Sintered Ore',
+]);
 const EU_SOURCE_STREAM_METHODS = new Set(['Combustion', 'Process Emissions', 'Mass balance']);
 const EU_SOURCE_STREAM_ACTIVITY_UNITS = new Set(['t', 'Nm3']);
 const STEEL_FINISHED_GOODS_PREFIXES = ['7208', '7209', '7210', '7211', '7212', '7213', '7214', '7215', '7216', '7217', '7218', '7219', '7220', '7221', '7222', '7223', '7224', '7225', '7226', '7227', '7228', '7229', '73'];
@@ -204,11 +212,11 @@ function mapProductToEuGood(product: Product | undefined, cnCodeMap?: EuCnCodeMa
     const hsCode = getProductCnOrHsCode(product);
     const templateGood = cnCodeMap?.get(hsCode);
 
-    if (templateGood) {
+    if (templateGood && STEEL_EU_GOODS_SET.has(templateGood)) {
         return templateGood;
     }
 
-    if (EU_GOODS_SET.has(product.product_type_enum)) {
+    if (EU_GOODS_SET.has(product.product_type_enum) && STEEL_EU_GOODS_SET.has(product.product_type_enum)) {
         return product.product_type_enum;
     }
 
@@ -236,7 +244,7 @@ function mapPrecursorToEuGood(
     product: Product | undefined,
     cnCodeMap?: EuCnCodeMap
 ): string | undefined {
-    if (EU_GOODS_SET.has(precursor.aggregated_goods_category)) {
+    if (EU_GOODS_SET.has(precursor.aggregated_goods_category) && STEEL_EU_GOODS_SET.has(precursor.aggregated_goods_category)) {
         return precursor.aggregated_goods_category;
     }
 
@@ -319,11 +327,29 @@ function validateSourceStreamForEuExport(sourceStream: SourceStream): EuExportRe
         });
     }
 
+    if (sourceStream.stream_type !== 'FUEL' && sourceStream.emission_factor_basis === 'PER_TJ') {
+        issues.push({
+            severity: 'error',
+            area: '템플릿 한계',
+            message: `${sourceStream.name}: tCO2/TJ 배출계수 기준은 연료 연소 배출원에만 사용하세요. 공정 원료는 활동자료 단위 기준으로 수정하세요.`,
+            target,
+        });
+    }
+
     if (!sourceStream.source) {
         issues.push({
             severity: 'warning',
             area: '생산공정',
             message: `${sourceStream.name}: 활동자료 또는 배출계수 출처가 비어 있습니다.`,
+            target,
+        });
+    }
+
+    if ((sourceStream.factor_source_type ?? 'UNCLASSIFIED') === 'UNCLASSIFIED') {
+        issues.push({
+            severity: 'warning',
+            area: '생산공정',
+            message: `${sourceStream.name}: 배출계수 출처 유형이 분류되지 않았습니다. EU/IPCC 기본계수, 국가 인벤토리, 공급사 보증값·시험분석 중 하나로 근거를 정리하세요.`,
             target,
         });
     }
@@ -489,7 +515,7 @@ export function evaluateEuExportReadiness(
 
         if (process.direct_attributable_emissions_tco2e > 0 && processSourceStreams.length === 0) {
             issues.push({
-                severity: 'warning',
+                severity: 'error',
                 area: '생산공정',
                 message: `${process.name}: 직접배출량은 입력되어 있지만 연결된 배출원 자료가 없습니다. B_EmInst 근거 자료를 확인하세요.`,
                 target: { type: 'process', id: process.id },
@@ -506,7 +532,7 @@ export function evaluateEuExportReadiness(
 
             if (Math.abs(delta) > tolerance) {
                 issues.push({
-                    severity: 'warning',
+                    severity: 'error',
                     area: '생산공정',
                     message: `${process.name}: B_EmInst 배출원 합계 ${sourceStreamEmissions.toFixed(4)} tCO2e와 D_Processes 직접배출량 ${process.direct_attributable_emissions_tco2e.toFixed(4)} tCO2e가 ${delta.toFixed(4)} tCO2e 차이납니다.`,
                     target: { type: 'process', id: process.id },
@@ -1113,7 +1139,7 @@ function toEuPercent(value: number): number {
 }
 
 function getEmissionFactorUnit(sourceStream: SourceStream): string {
-    if (sourceStream.stream_type === 'FUEL') {
+    if (sourceStream.stream_type === 'FUEL' && getSourceStreamEmissionFactorBasis(sourceStream) === 'PER_TJ') {
         return 'tCO2/TJ';
     }
 

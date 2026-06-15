@@ -13,6 +13,29 @@ export default function GuidePage() {
                 description="CBAM Local을 처음 여는 기업 담당자가 사업장 등록부터 EU Communication Template 복사본과 .cbam 백업까지 순서대로 진행할 수 있도록 만든 작업 흐름입니다."
             />
 
+            <SectionCard
+                title="초보자 시작 기준"
+                description="이 앱은 고로·전기로·제강까지 직접 운영하는 대형 제철소보다, 강재·코일·선재·후판 등을 사서 강선, 용접재료, 강관, STS 평판, 파스너로 가공하는 중소·중견 철강사를 우선 대상으로 합니다."
+            >
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                    <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
+                        <StatusBadge tone="info">1단계</StatusBadge>
+                        <h2 className="mt-3 text-sm font-semibold text-slate-950">제품군과 CN부터 고르기</h2>
+                        <p className="mt-2 text-xs leading-5 text-slate-600">제품명만 입력하기보다 제품군과 세부제품을 먼저 선택하면 앱이 CN 후보와 대상/비대상 주의사항을 좁혀줍니다.</p>
+                    </div>
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                        <StatusBadge tone="pending">2단계</StatusBadge>
+                        <h2 className="mt-3 text-sm font-semibold text-slate-950">대표 공정 하나로 시작하기</h2>
+                        <p className="mt-2 text-xs leading-5 text-slate-600">처음부터 모든 SKU를 나누지 말고 대표 제품과 대표 공정으로 시작한 뒤, 필요할 때 복제해서 치수·강종만 바꾸세요.</p>
+                    </div>
+                    <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+                        <StatusBadge tone="warning">범위 확인</StatusBadge>
+                        <h2 className="mt-3 text-sm font-semibold text-slate-950">제강 일관공정은 간단 모드 밖</h2>
+                        <p className="mt-2 text-xs leading-5 text-slate-600">용선·제강·전기로·고로 등 다공정 물질수지가 큰 회사는 이 앱의 초보자 흐름보다 전문 산정 검토가 먼저 필요합니다.</p>
+                    </div>
+                </div>
+            </SectionCard>
+
             <SectionCard title="먼저 이것만 하세요" description="처음부터 12단계를 모두 이해할 필요는 없습니다. 아래 3개 묶음만 따라가면 전체 흐름이 자연스럽게 이어집니다.">
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                     <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
@@ -33,6 +56,24 @@ export default function GuidePage() {
                         <p className="mt-2 text-sm leading-6 text-slate-600">산정 결과를 확인하고 수입자 전달용 파일과 .cbam 백업을 만듭니다.</p>
                         <StatusBadge tone="success">Export와 백업</StatusBadge>
                     </div>
+                </div>
+            </SectionCard>
+
+            <SectionCard title="배출량 산정 5단계" description="PDF 산정방법의 큰 흐름은 CN 확인, 경계 설정, 활동자료 수집, 배분, 제품별 배출량 계산입니다. 앱 메뉴도 이 순서로 따라가면 됩니다.">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-5">
+                    {[
+                        ['1', 'CN 코드 확인', '품목 관리에서 제품군과 CN 8자리를 확인합니다.', '/products'],
+                        ['2', '산정경계 설정', '생산공정에서 포함·제외 공정과 생산경로를 정리합니다.', '/processes'],
+                        ['3', '활동자료 수집', '배출원과 전구물질 화면에서 연료, 원료, 전력, 공급사 자료를 입력합니다.', '/source-streams'],
+                        ['4', '제품별 배분', '한 공정에서 여러 제품이 나오면 제품 생산라인 배분 합계를 맞춥니다.', '/processes'],
+                        ['5', 'SEE 확인·전달', '산정 결과를 확인하고 Export 패키지와 백업을 만듭니다.', '/results'],
+                    ].map(([step, title, description, href]) => (
+                        <Link key={step} href={href} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-teal-200 hover:bg-teal-50">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-sm font-semibold text-teal-800 ring-1 ring-teal-100">{step}</div>
+                            <h2 className="mt-3 text-sm font-semibold text-slate-950">{title}</h2>
+                            <p className="mt-2 text-xs leading-5 text-slate-600">{description}</p>
+                        </Link>
+                    ))}
                 </div>
             </SectionCard>
 

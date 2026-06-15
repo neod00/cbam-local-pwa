@@ -222,7 +222,7 @@ function makeBaseData() {
     name: 'Natural gas combustion',
     stream_type: 'FUEL',
     method: 'Combustion',
-    activity_data: 250,
+    activity_data: 36.5296803652968,
     activity_unit: 't',
     ncv_gj_per_unit: 45,
     emission_factor_tco2e_per_unit: 73,

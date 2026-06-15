@@ -121,10 +121,27 @@ includesAll(files.export, [
   'Summary_Products',
   '.cbam',
   'EU',
+  '수출 유형별 대응 범위',
+  '유형 2',
 ], 'Export page');
 
+includesAll(readFileSync('src/app/source-streams/page.tsx', 'utf8'), [
+  'MRV 원칙 체크',
+  '활동자료 산정요소',
+  '배출계수 기준',
+  '공용 배출원 배분',
+  '완전성',
+  '투명성',
+], 'source-stream MRV guidance');
+
+includesAll(readFileSync('src/app/processes/page.tsx', 'utf8'), [
+  '산정경계 포함·제외 검토',
+  '제외 후보',
+  '같은 제품의 여러 생산경로 처리',
+], 'process boundary guidance');
+
 includesAll(files.dashboard, ['WorkflowGuideCard'], 'dashboard');
-includesAll(files.guide, ['Hot Rolled Coil'], 'guide page');
+includesAll(files.guide, ['Hot Rolled Coil', '배출량 산정 5단계', 'CN 코드 확인', 'SEE 확인·전달'], 'guide page');
 includesAll(files.workflowGuide, ['Excel', '.cbam'], 'workflow guide');
 
 for (const [label, source] of Object.entries({

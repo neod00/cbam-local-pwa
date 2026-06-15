@@ -263,6 +263,7 @@ export default function ProcessesPage() {
             direct_attributable_emissions_tco2e: process.direct_attributable_emissions_tco2e,
             electricity_mwh: process.electricity_mwh,
             electricity_ef_tco2e_per_mwh: process.electricity_ef_tco2e_per_mwh,
+            electricity_ef_source: process.electricity_ef_source ?? '',
         });
         setErrors({});
         const existingLines = productOutputLines.filter((line) => line.process_id === process.id);
@@ -470,6 +471,52 @@ export default function ProcessesPage() {
                 <StatCard label="전력 사용량" value={formatNumber(summary.totalElectricity)} helper="MWh" icon={Zap} tone="warning" />
                 <StatCard label="배출원 검토" value={summary.sourceStreamReviewCount} helper="자료 누락 또는 직접배출량 차이" icon={Gauge} tone="warning" />
             </div>
+
+            <SectionCard
+                title="같은 제품의 여러 생산경로 처리"
+                description="동일한 제품이 한 설비 안에서 여러 경로로 만들어지면 먼저 하나의 생산공정으로 통합해 볼 수 있습니다. 공정을 나누려면 제품, 설비, 원가, 판매계약 등 정당한 상업적 사유를 남기세요."
+            >
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                    <ActionItemCard
+                        title="같은 제품이면 우선 통합"
+                        description="고로와 전기로 등 여러 경로가 같은 제품 생산에 함께 쓰이면 모든 경로를 포함하는 단일 공정으로 보는 방식이 기본 검토 출발점입니다."
+                        badge={<StatusBadge tone="info">기본 검토</StatusBadge>}
+                    />
+                    <ActionItemCard
+                        title="분리하려면 사유 기록"
+                        description="별도 제품군, 별도 설비, 별도 고객계약, 품질 차이 등 공정을 나눌 합리적 사유와 자료 보관이 필요합니다."
+                        badge={<StatusBadge tone="warning">근거 필요</StatusBadge>}
+                    />
+                    <ActionItemCard
+                        title="배분 기준 명확화"
+                        description="확정기간에는 몰 비율 또는 질량 비율 등 배분 기준을 명확히 남겨야 하므로 제품 생산라인 배분 합계를 먼저 확인하세요."
+                        badge={<StatusBadge tone="pending">배분 확인</StatusBadge>}
+                    />
+                </div>
+            </SectionCard>
+
+            <SectionCard
+                title="산정경계 포함·제외 검토"
+                description="철강 제품은 생산공정 경계를 먼저 정해야 합니다. 절단·도금·용접·마감처럼 제외 후보가 있어도 자동 제외하지 말고 제품, CN, 전구물질 흐름과 함께 근거를 남기세요."
+            >
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                    <ActionItemCard
+                        title="포함 공정"
+                        description="제품 생산에 필요한 연료 사용, 공정 원료 투입, 전력 사용, 전구물질 소비가 있는 공정은 우선 산정경계에 포함해 검토합니다."
+                        badge={<StatusBadge tone="info">경계 설정</StatusBadge>}
+                    />
+                    <ActionItemCard
+                        title="제외 후보"
+                        description="철강의 절단, 도금, 용접, 마감 등 후단 공정은 제외 후보가 될 수 있으나 최신 기준과 거래 품목을 기준으로 확인해야 합니다."
+                        badge={<StatusBadge tone="warning">근거 필요</StatusBadge>}
+                    />
+                    <ActionItemCard
+                        title="수량은 계속 연결"
+                        description="제외 후보 공정을 거친 제품도 생산량, 시장 출하량, 전구물질 소비량은 Export와 검증 추적을 위해 연결해서 관리하세요."
+                        badge={<StatusBadge tone="pending">수량 추적</StatusBadge>}
+                    />
+                </div>
+            </SectionCard>
 
             <SectionCard
                 title="생산공정 다음 작업"

@@ -23,7 +23,7 @@ The app UI may localize these concepts into Korean, but any EU submission/export
 - `ReportingPeriod`: period lifecycle, currently DRAFT/READY/CALCULATED.
 - `Product`: HS72/HS73 product master data.
 - `ProductionProcess`: early `D_Processes` model for output quantity, direct attributable emissions, electricity, and production route.
-- `SourceStream`: early `B_EmInst`/`C_Emissions&Energy` model for source-stream activity data, units, NCV, emission factors, correction factors, fractions, and evidence source.
+- `SourceStream`: early `B_EmInst`/`C_Emissions&Energy` model for source-stream activity data, units, NCV, emission factors, emission-factor basis (`tCO2e/TJ` vs `tCO2e/activity unit`), correction factors, fractions, factor-source type, and evidence source.
 - `PurchasedPrecursor`: early `E_PurchPrec` model for consumed precursor quantities and direct/indirect SEE values.
 - `CalculationResult`: early direct/indirect/precursor/total SEE shape.
 

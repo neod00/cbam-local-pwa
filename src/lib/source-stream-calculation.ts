@@ -7,11 +7,22 @@ type SourceStreamCalculationInput = Pick<
     | 'activity_data'
     | 'ncv_gj_per_unit'
     | 'emission_factor_tco2e_per_unit'
+    | 'emission_factor_basis'
     | 'oxidation_factor'
     | 'conversion_factor'
     | 'fossil_fraction'
     | 'biomass_fraction'
 >;
+
+export type SourceStreamEmissionFactorBasis = 'PER_TJ' | 'PER_ACTIVITY_UNIT';
+
+export function getSourceStreamEmissionFactorBasis(
+    sourceStream: Pick<SourceStream, 'emission_factor_basis'>
+): SourceStreamEmissionFactorBasis {
+    return sourceStream.emission_factor_basis === 'PER_ACTIVITY_UNIT'
+        ? 'PER_ACTIVITY_UNIT'
+        : 'PER_TJ';
+}
 
 function clampFraction(value: number) {
     if (!Number.isFinite(value)) {
@@ -30,6 +41,10 @@ export function calculateSourceStreamEmissions(sourceStream: SourceStreamCalcula
     if (sourceStream.stream_type === 'FUEL' || sourceStream.method === 'Combustion') {
         const activityData = Math.max(sourceStream.activity_data, 0);
         const netCalorificValue = Math.max(sourceStream.ncv_gj_per_unit, 0);
+
+        if (getSourceStreamEmissionFactorBasis(sourceStream) === 'PER_ACTIVITY_UNIT') {
+            return activityData * emissionFactor * oxidationFactor * conversionFactor * fossilFraction;
+        }
 
         return (
             activityData *
@@ -80,7 +95,8 @@ type SourceStreamUnitCheckInput = Pick<
 >;
 
 // 연소 연료의 활동량 단위(t/Nm³)와 순발열량(NCV, GJ/단위) 기준 불일치를 잡는다.
-// 배출량 = 활동량 × NCV × EF / 1000 이므로, 단위와 NCV 기준이 어긋나면 수백 배 오차가 조용히 발생한다.
+// 에너지 기준 배출계수(tCO2e/TJ)는 활동량 × NCV × EF / 1000으로 계산되므로,
+// 단위와 NCV 기준이 어긋나면 수백 배 오차가 조용히 발생한다.
 // (예: Nm³ 활동량에 t 기준 NCV 48을 입력) — 앱은 '참값'을 모르므로 일반 물성 범위로 정합성을 점검한다.
 export function getSourceStreamUnitWarnings(sourceStream: SourceStreamUnitCheckInput): string[] {
     const warnings: string[] = [];

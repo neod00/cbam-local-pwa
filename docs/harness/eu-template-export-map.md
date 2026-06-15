@@ -85,8 +85,8 @@ Each calculation-based source-stream row starts at row `17 + index`. The app cur
 | `SourceStream.activity_data` | `F{row}` | Activity data. |
 | `SourceStream.activity_unit` | `G{row}` | Activity data unit. |
 | `SourceStream.ncv_gj_per_unit` | `H{row}` | Net calorific value. |
-| `SourceStream.emission_factor_tco2e_per_unit` | `J{row}` | Emission factor. |
-| derived EF unit | `K{row}` | `tCO2/TJ` for fuel source streams; otherwise `tCO2/{activity_unit}`. |
+| `SourceStream.emission_factor_tco2e_per_unit` | `J{row}` | Emission factor. The app stores `emission_factor_basis` so users can distinguish energy-basis factors (`tCO2/TJ`) from activity-unit factors (`tCO2/{activity_unit}`). |
+| derived EF unit | `K{row}` | `tCO2/TJ` for fuel source streams using energy-basis factors; otherwise `tCO2/{activity_unit}`. |
 | `SourceStream.oxidation_factor` | `N{row}` | Written as percent value. |
 | `SourceStream.conversion_factor` | `P{row}` | Written as percent value. |
 | `SourceStream.biomass_fraction` | `R{row}` | Written as percent value. |

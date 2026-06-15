@@ -63,6 +63,9 @@ assert.equal(plan.precursors.length, 1);
 assert.equal(plan.products[0].product_name, 'Hot Rolled Coil');
 assert.equal(plan.processes[0].product_name, 'Hot Rolled Coil');
 assert.equal(plan.sourceStreams[0].process_name, 'Rolling Line A');
+assert.equal(plan.sourceStreams[0].method, 'Combustion');
+assert.equal(plan.sourceStreams[0].emission_factor_basis, 'PER_ACTIVITY_UNIT');
+assert.equal(plan.sourceStreams[0].factor_source_type, 'SUPPLIER_OR_LAB');
 assert.equal(plan.precursors[0].data_mode, 'DEFAULT');
 assert.equal(plan.warnings.length, 0);
 

@@ -233,10 +233,12 @@ async function applyActivityImportPlan(plan: ActivityTemplateImportPlan): Promis
             activity_unit: row.activity_unit,
             ncv_gj_per_unit: row.ncv_gj_per_unit,
             emission_factor_tco2e_per_unit: row.emission_factor_tco2e_per_unit,
+            emission_factor_basis: row.emission_factor_basis,
             oxidation_factor: row.oxidation_factor,
             conversion_factor: row.conversion_factor,
             fossil_fraction: row.fossil_fraction,
             biomass_fraction: row.biomass_fraction,
+            factor_source_type: row.factor_source_type,
             source: row.source,
         });
 

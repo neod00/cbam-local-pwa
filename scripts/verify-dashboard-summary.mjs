@@ -19,7 +19,11 @@ function loadDashboardModule() {
   const compiled = ts.transpileModule(
     `
 function findBenchmarkReference(references, cnCode, productionRoute) {
-  return references?.rows?.find((row) => row.cn_code === cnCode && (!productionRoute || row.production_route === productionRoute));
+  const candidates = references?.rows
+    ?.filter((row) => row.cn_code === cnCode || cnCode.startsWith(row.cn_code))
+    .sort((a, b) => b.cn_code.length - a.cn_code.length) ?? [];
+
+  return candidates.find((row) => !productionRoute || row.production_route === productionRoute) ?? candidates[0];
 }
 
 function findDefaultValueReference(references, originCountry, cnCode) {

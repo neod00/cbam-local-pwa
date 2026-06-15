@@ -46,10 +46,12 @@ export interface ActivityTemplateSourceStreamRow {
     activity_unit: string;
     ncv_gj_per_unit: number;
     emission_factor_tco2e_per_unit: number;
+    emission_factor_basis: SourceStream['emission_factor_basis'];
     oxidation_factor: number;
     conversion_factor: number;
     fossil_fraction: number;
     biomass_fraction: number;
+    factor_source_type: SourceStream['factor_source_type'];
     source: string;
 }
 
@@ -140,13 +142,15 @@ const templateSheets: SheetDefinition[] = [
                 'activity_unit',
                 'ncv_gj_per_unit',
                 'emission_factor_tco2e_per_unit',
+                'emission_factor_basis',
                 'oxidation_factor',
                 'conversion_factor',
                 'fossil_fraction',
                 'biomass_fraction',
+                'factor_source_type',
                 'source',
             ],
-            ['Natural gas for reheating', 'Rolling Line A', 'FUEL', 'STANDARD', 48200, 'Nm3', 0.039, 0.00217, 1, 1, 1, 0, 'ERP fuel ledger / utility invoice'],
+            ['Natural gas for reheating', 'Rolling Line A', 'FUEL', 'Combustion', 48200, 'Nm3', 0.039, 0.00217, 'PER_ACTIVITY_UNIT', 1, 1, 1, 0, 'SUPPLIER_OR_LAB', 'ERP fuel ledger / utility invoice'],
         ],
     },
     {
@@ -503,15 +507,21 @@ export async function parseActivityDataTemplate(file: File): Promise<ActivityTem
                 source_stream_name: sourceStreamName,
                 process_name: text(row, 'process_name'),
                 stream_type: choice(text(row, 'stream_type'), ['FUEL', 'PROCESS_MATERIAL', 'OTHER'] as const, 'FUEL'),
-                method: text(row, 'method') || 'STANDARD',
+                method: text(row, 'method') || 'Combustion',
                 activity_data: numberValue(row, 'activity_data'),
                 activity_unit: text(row, 'activity_unit') || 't',
                 ncv_gj_per_unit: numberValue(row, 'ncv_gj_per_unit'),
                 emission_factor_tco2e_per_unit: numberValue(row, 'emission_factor_tco2e_per_unit'),
+                emission_factor_basis: choice(text(row, 'emission_factor_basis'), ['PER_TJ', 'PER_ACTIVITY_UNIT'] as const, 'PER_TJ'),
                 oxidation_factor: numberValue(row, 'oxidation_factor', 1),
                 conversion_factor: numberValue(row, 'conversion_factor', 1),
                 fossil_fraction: numberValue(row, 'fossil_fraction', 1),
                 biomass_fraction: numberValue(row, 'biomass_fraction'),
+                factor_source_type: choice(
+                    text(row, 'factor_source_type'),
+                    ['EU_OR_IPCC_DEFAULT', 'NATIONAL_INVENTORY', 'SUPPLIER_OR_LAB', 'UNCLASSIFIED'] as const,
+                    'UNCLASSIFIED'
+                ),
                 source: text(row, 'source'),
             };
         })

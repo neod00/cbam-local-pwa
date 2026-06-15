@@ -25,6 +25,7 @@ export interface CbamGoodsMetadata {
     sector: CbamGoodsSector;
     sector_label: string;
     annex_i_candidate: boolean;
+    steel_app_supported: boolean;
     annex_ii_direct_only: boolean;
     direct_only_label: string;
     precursor_review_recommended: boolean;
@@ -106,11 +107,19 @@ export function getCbamCoverage(product?: Pick<Product, 'cn_code' | 'hs_code'>):
     }
 
     const meta = getCbamGoodsMetadata(product);
-    if (meta.annex_i_candidate) {
+    if (meta.annex_i_candidate && meta.steel_app_supported) {
         return {
             status: 'COVERED',
             label: `CBAM 대상 · ${meta.sector_label}`,
             reason: 'CBAM Annex I 대상 품목군으로 확인됩니다. 정확한 포함 여부는 최신 EU 템플릿 CN 목록으로 교차확인하세요.',
+        };
+    }
+
+    if (meta.annex_i_candidate && !meta.steel_app_supported) {
+        return {
+            status: 'NOT_COVERED',
+            label: `앱 범위 밖 · ${meta.sector_label}`,
+            reason: '현재 씨밤이는 철강 분야 전용 앱입니다. 이 CN은 CBAM Annex I 후보일 수 있지만, 이 앱에서는 산정/Export 대상으로 처리하지 않습니다.',
         };
     }
 
@@ -131,6 +140,7 @@ export function getCbamGoodsMetadata(product?: Pick<Product, 'cn_code' | 'hs_cod
             sector: 'iron_steel',
             sector_label: 'Iron and steel',
             annex_i_candidate: true,
+            steel_app_supported: true,
             annex_ii_direct_only: annexIiDirectOnly,
             direct_only_label: annexIiDirectOnly ? 'Annex II direct-only' : 'Indirect 포함',
             precursor_review_recommended: true,
@@ -145,6 +155,7 @@ export function getCbamGoodsMetadata(product?: Pick<Product, 'cn_code' | 'hs_cod
             sector: 'aluminium',
             sector_label: 'Aluminium',
             annex_i_candidate: true,
+            steel_app_supported: false,
             annex_ii_direct_only: false,
             direct_only_label: 'Indirect 포함',
             precursor_review_recommended: true,
@@ -157,6 +168,7 @@ export function getCbamGoodsMetadata(product?: Pick<Product, 'cn_code' | 'hs_cod
             sector: 'cement',
             sector_label: 'Cement',
             annex_i_candidate: true,
+            steel_app_supported: false,
             annex_ii_direct_only: false,
             direct_only_label: 'Indirect 포함',
             precursor_review_recommended: false,
@@ -169,6 +181,7 @@ export function getCbamGoodsMetadata(product?: Pick<Product, 'cn_code' | 'hs_cod
             sector: 'fertilisers',
             sector_label: 'Fertilisers',
             annex_i_candidate: true,
+            steel_app_supported: false,
             annex_ii_direct_only: false,
             direct_only_label: 'Indirect 포함',
             precursor_review_recommended: true,
@@ -181,6 +194,7 @@ export function getCbamGoodsMetadata(product?: Pick<Product, 'cn_code' | 'hs_cod
             sector: 'hydrogen',
             sector_label: 'Hydrogen',
             annex_i_candidate: true,
+            steel_app_supported: false,
             annex_ii_direct_only: false,
             direct_only_label: 'Indirect 포함',
             precursor_review_recommended: false,
@@ -192,6 +206,7 @@ export function getCbamGoodsMetadata(product?: Pick<Product, 'cn_code' | 'hs_cod
         sector: 'other',
         sector_label: '확인 필요',
         annex_i_candidate: false,
+        steel_app_supported: false,
         annex_ii_direct_only: false,
         direct_only_label: '확인 필요',
         precursor_review_recommended: false,

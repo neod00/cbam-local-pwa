@@ -177,16 +177,23 @@ function createBulkPreviewRows(text: string, cnOptions: CnCodeOption[]): BulkPro
 
 function GoodsRuleBadges({ product }: { product: Product }) {
     const metadata = getCbamGoodsMetadata(product);
+    const scopeLabel = metadata.steel_app_supported
+        ? '철강 앱 대상'
+        : metadata.annex_i_candidate
+            ? '앱 범위 밖'
+            : 'CBAM 대상 확인 필요';
 
     return (
         <div className="mt-2 flex flex-wrap gap-1.5">
-            <StatusBadge tone={metadata.annex_i_candidate ? 'info' : 'warning'}>
-                {metadata.annex_i_candidate ? 'CBAM 대상 가능 품목' : 'CBAM 대상 확인 필요'}
+            <StatusBadge tone={metadata.steel_app_supported ? 'info' : 'warning'}>
+                {scopeLabel}
             </StatusBadge>
-            <StatusBadge tone={metadata.annex_ii_direct_only ? 'warning' : 'neutral'}>
-                {metadata.annex_ii_direct_only ? '직접배출 중심 계산 품목' : '간접배출 포함 검토'}
-            </StatusBadge>
-            {metadata.precursor_review_recommended && (
+            {metadata.steel_app_supported && (
+                <StatusBadge tone={metadata.annex_ii_direct_only ? 'warning' : 'neutral'}>
+                    {metadata.annex_ii_direct_only ? '직접배출 중심 계산 품목' : '간접배출 포함 검토'}
+                </StatusBadge>
+            )}
+            {metadata.steel_app_supported && metadata.precursor_review_recommended && (
                 <StatusBadge tone="pending">원재료·중간재 배출자료 확인</StatusBadge>
             )}
         </div>
@@ -469,7 +476,7 @@ export default function ProductsPage() {
 
     const productSummary = useMemo(() => {
         const cnReadyCount = products.filter((product) => product.cn_code?.length === 8).length;
-        const annexCandidateCount = products.filter((product) => getCbamGoodsMetadata(product).annex_i_candidate).length;
+        const annexCandidateCount = products.filter((product) => getCbamGoodsMetadata(product).steel_app_supported).length;
         const directOnlyCount = products.filter((product) => getCbamGoodsMetadata(product).annex_ii_direct_only).length;
         const precursorReviewCount = products.filter((product) => getCbamGoodsMetadata(product).precursor_review_recommended).length;
 

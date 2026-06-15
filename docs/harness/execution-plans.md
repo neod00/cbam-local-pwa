@@ -196,6 +196,10 @@ Completed:
 - Replaced primary `mailto:` contact CTAs with an in-app inquiry modal that reuses free-license registration contact metadata, sends only support metadata and inquiry text by email, keeps a direct `openbrain.main@gmail.com` mail fallback, and does not collect CBAM calculation files or `.cbam` backups.
 - Added the first manual AI-staff operating system for the 1-person CBAM business: `docs/ai-staff`, structured definitions for 9 role-based AI staff, and a protected `/admin/ai-staff` console for prompt/output-template copying without API automation.
 - Added `씨봉이` as a separate novice-usability evaluation object, distinct from expert `씨밤이`, so beginner friction can be captured as product feedback without using customer CBAM calculation data.
+- Added definitive-period certificate scenario refinements for steel-only users: EU import quantity basis, de minimis review threshold, paid-carbon-price adjustment, verifier-prep checklist items, and multi-route process guidance.
+- Added export-response-type and MRV guidance from the 2026 CBAM briefing materials: Type 1/2/3 role cards on Export and MRV principle/activity-data check cards on source-stream entry.
+- Added detailed PDF calculation-method refinements for steel users: visible 5-step calculation flow, process boundary include/exclude guidance, shared-source allocation guidance, source-stream emission-factor basis selection, and factor-source classification.
+- Tightened beginner/export guardrails for steel users: missing or mismatched source-stream evidence now blocks EU Export, benchmark lookup supports CN prefix rows, non-steel CBAM goods are marked outside app scope, scenario assumptions are clamped to realistic ranges, and source-stream entry has business-document presets.
 
 Pending product decisions:
 

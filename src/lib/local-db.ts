@@ -85,10 +85,14 @@ export interface SourceStream extends LocalEntity {
   activity_unit: string;
   ncv_gj_per_unit: number;
   emission_factor_tco2e_per_unit: number;
+  // Optional for backward compatibility with existing .cbam backups.
+  // Missing fuel records are interpreted as energy-basis factors (tCO2e/TJ), matching the original app formula.
+  emission_factor_basis?: "PER_TJ" | "PER_ACTIVITY_UNIT";
   oxidation_factor: number;
   conversion_factor: number;
   fossil_fraction: number;
   biomass_fraction: number;
+  factor_source_type?: "EU_OR_IPCC_DEFAULT" | "NATIONAL_INVENTORY" | "SUPPLIER_OR_LAB" | "UNCLASSIFIED";
   source: string;
 }
 
@@ -577,14 +581,16 @@ export async function seedLocalData(): Promise<void> {
         name: "Natural gas combustion",
         stream_type: "FUEL",
         method: "Combustion",
-        activity_data: 250,
+        activity_data: 36.5296803652968,
         activity_unit: "t",
         ncv_gj_per_unit: 45,
         emission_factor_tco2e_per_unit: 73,
+        emission_factor_basis: "PER_TJ",
         oxidation_factor: 1,
         conversion_factor: 1,
         fossil_fraction: 1,
         biomass_fraction: 0,
+        factor_source_type: "EU_OR_IPCC_DEFAULT",
         source: "Monthly fuel invoice",
       });
     }
@@ -675,10 +681,12 @@ export async function seedLocalData(): Promise<void> {
       activity_unit: "t",
       ncv_gj_per_unit: 45,
       emission_factor_tco2e_per_unit: 73,
+      emission_factor_basis: "PER_TJ",
       oxidation_factor: 1,
       conversion_factor: 1,
       fossil_fraction: 1,
       biomass_fraction: 0,
+      factor_source_type: "EU_OR_IPCC_DEFAULT",
       source: "Monthly fuel invoice",
     });
   }

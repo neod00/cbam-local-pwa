@@ -1,6 +1,7 @@
 import { strToU8, zipSync } from 'fflate';
 import type { LocalCalculationResult } from './calculation-engine';
 import type { ExportChecklistSummary, EuExportReadinessResult, EuTemplateExportVerificationResult } from './eu-template-export';
+import { getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
 import type {
     CbamBackupFile,
     Installation,
@@ -10,6 +11,12 @@ import type {
     ReportingPeriod,
     SourceStream,
 } from './local-db';
+
+function formatSourceStreamFactorBasis(sourceStream: SourceStream) {
+    return sourceStream.stream_type === 'FUEL' && getSourceStreamEmissionFactorBasis(sourceStream) === 'PER_TJ'
+        ? 'tCO2e/TJ'
+        : `tCO2e/${sourceStream.activity_unit || 'unit'}`;
+}
 
 type EvidenceTone = 'ready' | 'review' | 'missing' | 'optional';
 
@@ -342,6 +349,30 @@ function buildEvidenceRows(input: DeliveryPackageInput): EvidenceChecklistRow[] 
             tone: 'optional',
             note: 'Add company approval record before external sharing. / 외부 공유 전 사내 승인 기록을 추가하세요.',
         },
+        {
+            area: 'Monitoring plan / 모니터링 계획',
+            evidence: 'Data collection owner, source documents, calculation method / 담당자, 원천자료, 산정방법',
+            appRecord: 'Working checklist only / 실무 체크 항목',
+            status: statusFromTone('review'),
+            tone: 'review',
+            note: 'Keep the monitoring plan and update it when process boundaries or source data change. / 공정경계나 원천자료가 바뀌면 모니터링 계획을 갱신하세요.',
+        },
+        {
+            area: 'Data retention / 자료 보관',
+            evidence: 'Six-year retention file or company archive policy / 6년 보관 파일 또는 회사 문서보존 정책',
+            appRecord: 'Not stored in CBAM Local / 앱에 별도 저장하지 않음',
+            status: statusFromTone('review'),
+            tone: 'review',
+            note: 'Keep production, electricity, direct-emissions, precursor, and default-value evidence under company security policy. / 생산량, 전력, 직접배출, 전구물질, 기본값 근거를 회사 보안정책에 따라 보관하세요.',
+        },
+        {
+            area: 'Verifier preparation / 검증 준비',
+            evidence: 'English calculation basis, evidence checklist, site-visit contact / 영문 산정근거, 증빙 체크리스트, 현장방문 담당자',
+            appRecord: 'Calculation summary and checklist DOCX included / 산정근거 요약 및 체크리스트 DOCX 포함',
+            status: statusFromTone('review'),
+            tone: 'review',
+            note: 'These files are working materials, not an official verifier report. / 이 파일은 실무 자료이며 공식 검증보고서가 아닙니다.',
+        },
     ];
 
     for (const product of input.products) {
@@ -379,7 +410,7 @@ function buildEvidenceRows(input: DeliveryPackageInput): EvidenceChecklistRow[] 
         rows.push({
             area: `Direct emissions source stream / 직접배출 배출원: ${sourceStream.name}`,
             evidence: 'Activity data, NCV, emission factor, oxidation/conversion factor / 활동자료, 순발열량, 배출계수, 산화·전환계수',
-            appRecord: `${formatNumber(sourceStream.activity_data)} ${sourceStream.activity_unit}, EF ${formatNumber(sourceStream.emission_factor_tco2e_per_unit)}, source ${sourceStream.source || '-'}`,
+            appRecord: `${formatNumber(sourceStream.activity_data)} ${sourceStream.activity_unit}, EF ${formatNumber(sourceStream.emission_factor_tco2e_per_unit)} ${formatSourceStreamFactorBasis(sourceStream)}, source type ${sourceStream.factor_source_type || 'UNCLASSIFIED'}, source ${sourceStream.source || '-'}`,
             status: statusFromTone(sourceStream.source ? 'ready' : 'missing'),
             tone: sourceStream.source ? 'ready' : 'missing',
             note: 'Keep invoices, meter readings, lab data, or factor references. / 고지서, 검침표, 시험성적서, 계수 근거를 보관하세요.',
