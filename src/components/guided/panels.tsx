@@ -34,7 +34,7 @@ import {
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import type { SeeFlowBinding } from '@/lib/see-flow';
 import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
-import { AlertTriangle, ArrowRight, CheckCircle2, ExternalLink, Plus, Sparkles, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ExternalLink, Lock, Plus, Sparkles, Trash2, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState, type ReactNode } from 'react';
 
@@ -702,7 +702,7 @@ function ElectricityPanel({ data, steps, selectedProcessId, onSaved, onSelectSte
             return;
         }
         if (electricityEf <= 0) {
-            setMessage('전력 배출계수를 입력하세요. 잘 모르면 0.47을 그대로 두세요.');
+            setMessage('전력 배출계수를 입력하세요. 모르면 국가 기본계수를 쓰되 출처·연도를 확인하세요(임의로 낮추지 마세요).');
             return;
         }
         await updateLocalItem('processes', {
@@ -727,6 +727,9 @@ function ElectricityPanel({ data, steps, selectedProcessId, onSaved, onSelectSte
                 <Field label="전력 배출계수 (tCO₂e/MWh)" hint="국가 기본계수 또는 PPA·직접연결 실측만 인정됩니다. 녹색프리미엄으로 낮출 수 없습니다.">
                     <input className={fieldClass} inputMode="decimal" value={ef} onChange={(event) => setEf(event.target.value)} />
                 </Field>
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                    미리 채워진 0.47은 임시 국가계수 자리값입니다. 실제 적용할 계수의 공식 출처·연도(국가 기본계수 워크북 또는 PPA·직접연결 실측)를 확인해 입력하세요.
+                </p>
                 <Field label="계수 출처">
                     <select className={fieldClass} value={efSource} onChange={(event) => setEfSource(event.target.value)}>
                         {ELECTRICITY_EF_SOURCES.map((option) => (
@@ -789,14 +792,25 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
             setMessage(`CN ${cnDigits || '미입력'}에 맞는 기본값을 찾지 못했습니다. CN 코드를 확인하세요.`);
             return;
         }
-        const direct = match.direct_default ?? 0;
-        const total = getDefaultValueTotalForYear(match, '2026') ?? match.total_default ?? 0;
+        // 공식 DV의 간접값이 없으면(철강 DV는 대개 null) 없는 값을 markup 총액 − raw 직접으로
+        // 만들어내지 않는다(허위 간접 방지). null이면 간접 0으로 두고 그 사실을 명시한다.
+        const hasIndirect = match.indirect_default != null;
+        const markedUpTotal = getDefaultValueTotalForYear(match, '2026') ?? match.total_default ?? match.direct_default ?? 0;
+        const direct = hasIndirect ? (match.direct_default ?? 0) : markedUpTotal;
+        const indirect = match.indirect_default ?? 0;
         setDirectSee(String(direct));
-        setIndirectSee(String(Math.max(0, total - direct)));
+        setIndirectSee(String(indirect));
         setDataMode('DEFAULT');
-        setJustification('공급사 measured SEE 미입수 — EU 국가/CN 기본값(2026) 적용');
+        setJustification(
+            `공급사 measured SEE 미입수 — EU 국가/CN 기본값(2026, markup 포함) 적용. 직접 ${direct}`
+            + (hasIndirect ? ` · 간접 ${indirect}` : ' · 이 CN의 공식 DV는 간접값 미제공(간접 0)')
+        );
         setSource(`${reference.summary.filename} / ${match.country} / ${match.cn_code}`);
-        setMessage('EU 기본값을 채웠습니다. 공급사 실측자료를 받으면 교체하세요.');
+        setMessage(
+            hasIndirect
+                ? 'EU 기본값을 채웠습니다. 공급사 실측자료를 받으면 교체하세요.'
+                : '이 CN의 공식 DV는 간접값을 제공하지 않아 간접을 0으로 두었습니다(직접값은 2026 markup 포함). 공급사 실측자료를 받으면 교체하세요.'
+        );
     };
 
     const addPrecursor = async () => {
@@ -919,6 +933,18 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                     <Sparkles className="mr-2 h-4 w-4" />
                     공급사 자료 없음 — EU 기본값 채우기
                 </Button>
+                <Field label="자료 종류 (data mode)" hint="입력한 SEE가 실측인지 기본값인지 명시합니다 — 추적성에 중요합니다.">
+                    <select className={fieldClass} value={dataMode} onChange={(event) => setDataMode(event.target.value as PurchasedPrecursor['data_mode'])}>
+                        <option value="ACTUAL">공급사 실측 (actual)</option>
+                        <option value="SEMI_ACTUAL">혼합 (semi-actual)</option>
+                        <option value="DEFAULT">공식 기본값 (default)</option>
+                    </select>
+                </Field>
+                {dataMode === 'ACTUAL' && (
+                    <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                        실측(actual)으로 저장됩니다 — 공급사 회신 자료의 출처·날짜를 아래 &lsquo;SEE 출처&rsquo;에 꼭 남기세요.
+                    </p>
+                )}
                 <Field label="SEE 출처" hint="예: 공급사 회신 메일(날짜), EU 기본값 파일">
                     <input className={fieldClass} value={source} onChange={(event) => setSource(event.target.value)} placeholder="공급사 회신 메일 2026-05-02" />
                 </Field>
@@ -938,6 +964,15 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
 
 // ── 7단계: 검증·결과 ─────────────────────────────────────────────────
 function ResultsPanel({ data, binding, selectedProcessId, onSelectStep }: PanelProps) {
+    // 실데이터가 없으면 예시 수치를 결과처럼 보여주지 않고 빈 상태를 렌더한다.
+    if (binding.isExample) {
+        return (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-600">
+                아직 계산할 데이터가 없습니다. ①②③ 단계를 입력하면 여기에 우리 회사 결과가 표시됩니다.
+            </div>
+        );
+    }
+
     const scopedResults = selectedProcessId === 'ALL'
         ? data.results
         : data.results.filter((result) => result.process_id === selectedProcessId);
@@ -1161,6 +1196,26 @@ export function GuidedStepPanel({
     }
 
     const meta = PANEL_META[step];
+
+    // 잠긴 단계는 패널을 열지 않고 안내만 표시한다(예시 수치를 결과처럼 보여주는 오인 방지).
+    if (stepState.status === 'locked') {
+        const goTo = steps.find((item) => item.status === 'current')?.id ?? 'setup';
+        return (
+            <PanelShell step={stepState} description={meta.description} backstage={meta.backstage}>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-600">
+                    <p className="flex items-center gap-2 font-semibold text-slate-700">
+                        <Lock className="h-4 w-4 text-slate-400" /> 아직 잠긴 단계입니다
+                    </p>
+                    <p className="mt-2">{stepState.summary.replace(/^잠김 — /, '')}. 앞 단계를 먼저 채우면 여기에 우리 회사 값이 표시됩니다.</p>
+                    <Button type="button" variant="secondary" className="mt-3 min-h-9 px-3 py-1.5" onClick={() => onSelectStep(goTo)}>
+                        지금 할 단계로 이동
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                </div>
+            </PanelShell>
+        );
+    }
+
     const props: PanelProps = { data, steps, selectedProcessId, binding, onSaved, onSelectStep };
     const panel = step === 'setup'
         ? <SetupPanel {...props} />
