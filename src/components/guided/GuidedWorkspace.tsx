@@ -8,8 +8,17 @@ import { deriveGuidedSteps, getGuidedProgress, type GuidedStepId } from '@/lib/g
 import { listLocalItems } from '@/lib/local-db';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { buildSeeFlowBinding } from '@/lib/see-flow';
-import { Map as MapIcon } from 'lucide-react';
+import { BarChart3, CircleHelp, Map as MapIcon, ShieldCheck, Upload } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+// 지도에 없는 유틸 화면으로 가는 통로(백스테이지 슬림 헤더로 열림).
+const UTILITY_LINKS = [
+    { href: '/settings', label: '데이터 안전·백업', icon: ShieldCheck },
+    { href: '/scenarios', label: '인증서 비용 시나리오', icon: BarChart3 },
+    { href: '/upload', label: '자료 업로드', icon: Upload },
+    { href: '/guide', label: '시작 가이드', icon: CircleHelp },
+] as const;
 
 const EMPTY_DATA: GuidedData = {
     loaded: false,
@@ -211,6 +220,23 @@ export function GuidedWorkspace() {
                     />
                 </div>
             </div>
+
+            <footer className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3" aria-label="유틸 화면">
+                <span className="text-xs font-semibold text-slate-500">더 필요할 때:</span>
+                {UTILITY_LINKS.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-600 transition hover:border-teal-200 hover:bg-white hover:text-teal-800"
+                        >
+                            <Icon className="h-3.5 w-3.5" />
+                            {item.label}
+                        </Link>
+                    );
+                })}
+            </footer>
         </div>
     );
 }
