@@ -1,7 +1,7 @@
 'use client';
 
-import type { GuidedStepId, GuidedStepState } from '@/lib/guided-map';
-import type { ReactNode } from 'react';
+import type { GuidedStepId, GuidedStepStatus, GuidedStepState } from '@/lib/guided-map';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 // 단계 상태별 지도 색상. 완료=에메랄드, 지금 여기=블루, 대기=점선, 잠김=흐림.
 const STATUS_STYLE = {
@@ -50,11 +50,13 @@ function GuidedNode({
 
     return (
         <g
-            className="guided-node"
+            className={`guided-node guided-node--${step.status}`}
+            data-step={step.id}
             role="button"
             tabIndex={0}
             aria-label={label}
             aria-pressed={selected}
+            aria-disabled={step.status === 'locked'}
             onClick={() => onSelect(step.id)}
             onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
@@ -96,6 +98,12 @@ function GuidedNode({
                 {step.status === 'current' ? '← 지금 여기 · ' : ''}
                 {step.summary}
             </text>
+            {step.status === 'locked' && (
+                <g transform={`translate(${geo.x + geo.w - 21}, ${geo.y + 7})`} aria-hidden="true">
+                    <path d="M3 5 v-1.5 a3 3 0 0 1 6 0 V5" fill="none" stroke="#94a3b8" strokeWidth="1.4" />
+                    <rect x="1.5" y="5" width="9" height="7" rx="1.5" fill="#cbd5e1" />
+                </g>
+            )}
             {children}
         </g>
     );
@@ -113,6 +121,29 @@ export function GuidedMap({
     onSelect: (id: GuidedStepId) => void;
     outputLabel: string;
 }) {
+    const svgRef = useRef<SVGSVGElement>(null);
+    const prevStatuses = useRef<Map<GuidedStepId, GuidedStepStatus>>(new Map());
+
+    // 단계가 방금 '완료'로 바뀐 순간에만 팝 애니메이션을 건다(DOM 클래스 직접 조작 — 리렌더 불필요).
+    useEffect(() => {
+        const prev = prevStatuses.current;
+        const timers: number[] = [];
+        for (const step of steps) {
+            const before = prev.get(step.id);
+            if (before && before !== 'done' && step.status === 'done') {
+                const node = svgRef.current?.querySelector(`[data-step="${step.id}"]`);
+                if (node) {
+                    node.classList.add('guided-node--pop');
+                    timers.push(window.setTimeout(() => node.classList.remove('guided-node--pop'), 800));
+                }
+            }
+        }
+        prevStatuses.current = new Map(steps.map((step) => [step.id, step.status]));
+        return () => {
+            timers.forEach((timer) => window.clearTimeout(timer));
+        };
+    }, [steps]);
+
     const byId = new Map(steps.map((step) => [step.id, step]));
     const node = (id: GuidedStepId) => {
         const step = byId.get(id);
@@ -124,6 +155,7 @@ export function GuidedMap({
 
     return (
         <svg
+            ref={svgRef}
             width="100%"
             viewBox="0 0 680 556"
             role="img"
@@ -132,12 +164,23 @@ export function GuidedMap({
             xmlns="http://www.w3.org/2000/svg"
         >
             <title>CBAM 산정 지도</title>
-            <desc>사업장 등록부터 EU 문서 생성까지 8단계의 진행 상태를 지도로 보여줍니다. 각 상자를 누르면 해당 단계의 입력 패널이 열립니다.</desc>
+            <desc>사업장 등록부터 EU 문서 생성까지 8단계의 진행 상태를 지도로 보여줍니다. 각 상자를 누르면 해당 단계의 입력 패널이 열립니다. 잠긴 단계는 앞 단계를 채우면 열립니다.</desc>
             <style>{`
                 .guided-node { cursor: pointer; }
+                .guided-node .guided-rect { transition: fill 0.4s ease, stroke 0.4s ease, stroke-width 0.15s ease; }
                 .guided-node:hover .guided-rect { stroke-width: 2.5; }
                 .guided-node:focus { outline: none; }
                 .guided-node:focus .guided-rect { stroke-width: 2.5; }
+                .guided-node--locked { cursor: default; opacity: 0.72; }
+                .guided-node--locked:hover .guided-rect, .guided-node--locked:focus .guided-rect { stroke-width: 1; }
+                .guided-node--current .guided-rect { animation: guided-pulse 2.4s ease-in-out infinite; }
+                .guided-node--pop { transform-box: fill-box; transform-origin: center; animation: guided-pop 0.7s ease-out; }
+                @keyframes guided-pulse { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.4; } }
+                @keyframes guided-pop { 0% { transform: scale(1); } 35% { transform: scale(1.06); } 100% { transform: scale(1); } }
+                @media (prefers-reduced-motion: reduce) {
+                    .guided-node .guided-rect { transition: none; }
+                    .guided-node--current .guided-rect, .guided-node--pop { animation: none; }
+                }
             `}</style>
             <defs>
                 <marker id="guided-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">

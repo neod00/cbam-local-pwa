@@ -24,6 +24,7 @@ import {
     FileText,
     Home,
     LockKeyhole,
+    Map as MapIcon,
     Package,
     RotateCcw,
     Settings,
@@ -202,6 +203,14 @@ function ModernAppShell({ children, title }: { children: ReactNode; title: strin
                             </Link>
                             <button
                                 type="button"
+                                onClick={() => setUiMode('guided')}
+                                className="hidden min-h-10 items-center rounded-xl border border-teal-200 bg-teal-50 px-3 text-xs font-bold text-teal-800 shadow-sm transition hover:bg-teal-100 md:inline-flex"
+                            >
+                                <MapIcon className="mr-2 h-4 w-4" />
+                                지도 화면
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => setUiMode('modern')}
                                 className="hidden min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 md:inline-flex"
                             >
@@ -314,8 +323,16 @@ function LegacyShell({ children, title }: { children: ReactNode; title: string }
                             </div>
                             <button
                                 type="button"
-                                onClick={() => setUiMode('modern')}
+                                onClick={() => setUiMode('guided')}
                                 className="hidden min-h-10 items-center rounded-xl border border-teal-200 bg-teal-50 px-3 text-xs font-bold text-teal-800 shadow-sm transition hover:bg-teal-100 md:inline-flex"
+                            >
+                                <MapIcon className="mr-2 h-4 w-4" />
+                                지도 화면
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setUiMode('modern')}
+                                className="hidden min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 md:inline-flex"
                             >
                                 <Sparkles className="mr-2 h-4 w-4" />
                                 새 UI
@@ -384,7 +401,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
     if (uiMode === 'modern') {
         return (
             <Suspense fallback={null}>
-                <BeginnerAppShell onUsePrevious={() => setUiMode('previous')}>{children}</BeginnerAppShell>
+                <BeginnerAppShell onUsePrevious={() => setUiMode('previous')} onUseGuided={() => setUiMode('guided')}>
+                    {children}
+                </BeginnerAppShell>
             </Suspense>
         );
     }

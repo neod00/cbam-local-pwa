@@ -18,6 +18,7 @@ import {
     FileSpreadsheet,
     Home,
     ListChecks,
+    Map as MapIcon,
     RotateCcw,
     Settings,
     ShieldCheck,
@@ -143,9 +144,11 @@ function MobileNavigation({ pathname }: { pathname: string }) {
 export default function BeginnerAppShell({
     children,
     onUsePrevious,
+    onUseGuided,
 }: {
     children: ReactNode;
     onUsePrevious: () => void;
+    onUseGuided?: () => void;
 }) {
     const pathname = usePathname();
     const searchParams = useSearchParams();
@@ -183,6 +186,16 @@ export default function BeginnerAppShell({
                                 <ShieldCheck className="h-4 w-4" />
                                 로컬 저장 · 오프라인 모드
                             </div>
+                            {onUseGuided && (
+                                <button
+                                    type="button"
+                                    onClick={onUseGuided}
+                                    className="hidden min-h-10 items-center rounded-md border border-teal-200 bg-teal-50 px-3 text-xs font-semibold text-teal-800 shadow-sm hover:bg-teal-100 sm:inline-flex"
+                                >
+                                    <MapIcon className="mr-2 h-4 w-4" />
+                                    지도 화면
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 onClick={onUsePrevious}
