@@ -16,6 +16,7 @@ import {
 import { summarizeProductOutputLines } from '@/lib/calculation-engine';
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from '@/lib/source-stream-calculation';
 import { getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
+import { getProductReportingScope } from '@/lib/reporting-scope';
 import { Term } from '@/components/ux/Term';
 import { FieldHelp } from '@/components/ux/FieldHelp';
 import { AlertTriangle, ArrowRight, Factory, Gauge, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
@@ -297,6 +298,7 @@ export default function ProcessesPage() {
                     allocation_basis: line.allocation_basis,
                     manual_allocation_percent: line.manual_allocation_percent,
                     note: line.note.trim(),
+                    reporting_scope: getProductReportingScope(products.find((product) => product.id === line.product_id), line),
                 })
             )
         );

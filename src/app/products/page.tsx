@@ -29,6 +29,7 @@ import {
     setLocalSetting,
     updateLocalItem,
 } from '@/lib/local-db';
+import { PRODUCT_REPORTING_SCOPE_OPTIONS, getProductReportingScope, getProductReportingScopeLabel } from '@/lib/reporting-scope';
 import { Term } from '@/components/ux/Term';
 import { FieldHelp } from '@/components/ux/FieldHelp';
 import { AlertTriangle, ArrowRight, Boxes, CheckCircle2, ClipboardList, Copy, FileSpreadsheet, Pencil, Plus, Search, Table2, Trash2, Upload, Workflow, X } from 'lucide-react';
@@ -36,7 +37,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 type HsGroup = Product['hs_group'];
-type ProductDraft = Pick<Product, 'name' | 'hs_code' | 'cn_code' | 'hs_group' | 'product_type_enum' | 'unit'>;
+type ProductDraft = Pick<Product, 'name' | 'hs_code' | 'cn_code' | 'hs_group' | 'product_type_enum' | 'unit' | 'reporting_scope'>;
 type ProductErrors = Partial<Record<keyof ProductDraft, string>>;
 
 const EMPTY_PRODUCT_DRAFT: ProductDraft = {
@@ -46,6 +47,7 @@ const EMPTY_PRODUCT_DRAFT: ProductDraft = {
     hs_group: '72',
     product_type_enum: 'HS72_PLATE_SHEET',
     unit: 'tonne',
+    reporting_scope: 'CBAM_GOOD',
 };
 
 const fieldClass =
@@ -134,9 +136,10 @@ function createBulkPreviewRows(text: string, cnOptions: CnCodeOption[]): BulkPro
             : detailFromText;
         const cnCode = resolveCnCodeFromBulk(rawCode, detail, cnOptions);
         const hsCode = (cnCode || codeForLookup).slice(0, 4);
-        const hsGroup: HsGroup = cnCode.startsWith('73') || hsCode.startsWith('73') ? '73' : '72';
+        const hsGroup: HsGroup = (cnCode || hsCode).slice(0, 2) || '72';
         const coverage = getCbamCoverage({ cn_code: cnCode, hs_code: hsCode });
-        const productTypeEnum = detail?.productTypeEnum ?? (hsGroup === '73' ? 'HS73_OTHER' : 'HS72_PLATE_SHEET');
+        const productTypeEnum = detail?.productTypeEnum
+            ?? (hsGroup === '73' ? 'HS73_OTHER' : hsGroup === '72' ? 'HS72_PLATE_SHEET' : 'UNKNOWN_PRODUCT');
         let status: BulkProductStatus = 'ready';
         let message = rawCode && cnCode !== normalizeBulkCode(rawCode)
             ? `CN ${rawCode} 기준으로 검색 목록의 ${cnCode} 후보를 적용합니다.`
@@ -433,6 +436,7 @@ export default function ProductsPage() {
                     hs_group: editProduct.hs_group,
                     product_type_enum: editProduct.product_type_enum,
                     unit: editProduct.unit,
+                    reporting_scope: getProductReportingScope(editProduct),
                 });
                 setEditingProductId(editProduct.id);
                 setCnSearch(editProduct.cn_code ?? editProduct.hs_code);
@@ -521,6 +525,7 @@ export default function ProductsPage() {
             hs_group: product.hs_group,
             product_type_enum: product.product_type_enum,
             unit: product.unit,
+            reporting_scope: getProductReportingScope(product),
         });
         setErrors({});
         setEditingProductId(product.id);
@@ -538,6 +543,7 @@ export default function ProductsPage() {
             hs_group: product.hs_group,
             product_type_enum: product.product_type_enum,
             unit: product.unit,
+            reporting_scope: getProductReportingScope(product),
         });
         setErrors({});
         setEditingProductId(null);
@@ -674,6 +680,7 @@ export default function ProductsPage() {
                     hs_group: row.hsGroup,
                     product_type_enum: row.productTypeEnum,
                     unit: row.unit,
+                    reporting_scope: 'CBAM_GOOD',
                 })
             )
         );
@@ -720,9 +727,9 @@ export default function ProductsPage() {
             createdProcessCount = 1;
         }
 
-        const existingOutputLine = productOutputLines.some((line) => line.process_id === process.id && line.product_id === product.id);
-        if (!existingOutputLine) {
-            const outputLine = await createLocalItem('product_output_lines', {
+        let outputLine = productOutputLines.find((line) => line.process_id === process.id && line.product_id === product.id);
+        if (!outputLine) {
+            const createdOutputLine = await createLocalItem('product_output_lines', {
                 process_id: process.id,
                 product_id: product.id,
                 name: product.name,
@@ -730,8 +737,10 @@ export default function ProductsPage() {
                 allocation_basis: 'MASS',
                 manual_allocation_percent: 100,
                 note: '제품군 산정 초안에서 생성',
+                reporting_scope: getProductReportingScope(product),
             });
-            setProductOutputLines((current) => [outputLine, ...current]);
+            outputLine = createdOutputLine;
+            setProductOutputLines((current) => [createdOutputLine, ...current]);
             createdOutputLineCount = 1;
         }
 
@@ -765,6 +774,13 @@ export default function ProductsPage() {
                     indirect_see_tco2e_per_t: 0,
                     source: '제품군 산정 초안',
                     default_value_justification: '초안: 공급사 SEE 자료가 없으면 공식 기본값 조회 후 사유를 보완하세요.',
+                    output_allocations: [{
+                        product_output_line_id: outputLine.id,
+                        product_id: product.id,
+                        allocated_mass_t: 0,
+                        allocation_percent: 100,
+                        note: '제품군 산정 초안에서 자동 귀속',
+                    }],
                 })
             )
         );
@@ -803,7 +819,7 @@ export default function ProductsPage() {
             ...draft,
             cn_code: option.code,
             hs_code: option.code.slice(0, 4),
-            hs_group: option.code.startsWith('73') ? '73' : '72',
+            hs_group: option.code.slice(0, 2) || '72',
             product_type_enum: option.goodsCategory,
         });
     }
@@ -1302,12 +1318,23 @@ export default function ProductsPage() {
                         </div>
 
                         <div>
+                            <label className="text-sm font-semibold text-slate-700">품목 용도</label>
+                            <select
+                                className={fieldClass}
+                                value={draft.reporting_scope ?? 'CBAM_GOOD'}
+                                onChange={(e) => setDraft({ ...draft, reporting_scope: e.target.value as Product['reporting_scope'] })}
+                            >
+                                {PRODUCT_REPORTING_SCOPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                            </select>
+                        </div>
+                        <div>
                             <label className="text-sm font-semibold text-slate-700">HS 그룹</label>
                             <select
                                 className={fieldClass}
                                 value={draft.hs_group}
                                 onChange={(e) => setDraft({ ...draft, hs_group: e.target.value as HsGroup })}
                             >
+                                {!['72', '73'].includes(draft.hs_group) && <option value={draft.hs_group}>HS {draft.hs_group} (기타)</option>}
                                 <option value="72">HS 72 (철강)</option>
                                 <option value="73">HS 73 (철강 제품)</option>
                             </select>
@@ -1327,6 +1354,7 @@ export default function ProductsPage() {
                                 <option value="HS73_TANK">HS73_TANK</option>
                                 <option value="HS73_FASTENER">HS73_FASTENER</option>
                                 <option value="HS73_OTHER">HS73_OTHER</option>
+                                <option value="UNKNOWN_PRODUCT">UNKNOWN_PRODUCT</option>
                             </select>
                         </div>
                         <div className="md:col-span-2">
@@ -1362,6 +1390,7 @@ export default function ProductsPage() {
                                     <StatusBadge tone={product.cn_code?.length === 8 ? 'success' : 'warning'}>
                                         {product.cn_code?.length === 8 ? '산정 준비' : 'CN 확인 필요'}
                                     </StatusBadge>
+                                    <StatusBadge tone="neutral">{getProductReportingScopeLabel(getProductReportingScope(product))}</StatusBadge>
                                     <h2 className="mt-3 text-base font-semibold text-slate-950">{product.name}</h2>
                                     <p className="mt-1 text-sm text-slate-500">
                                         {product.cn_code ? `CN ${product.cn_code}` : 'CN 미입력'} · HS {product.hs_code}
@@ -1476,6 +1505,7 @@ export default function ProductsPage() {
                                         <StatusBadge tone={product.cn_code?.length === 8 ? 'success' : 'warning'}>
                                             {product.cn_code?.length === 8 ? '산정 준비' : 'CN 확인 필요'}
                                         </StatusBadge>
+                                        <StatusBadge tone="neutral">{getProductReportingScopeLabel(getProductReportingScope(product))}</StatusBadge>
                                     </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-slate-950">
                                         {product.cn_code || '미입력'}

@@ -257,19 +257,20 @@ export default function ExportPage() {
 
         loadPreviewData();
     }, []);
+    const reportableResults = useMemo(() => results.filter((result) => result.is_cbam_reportable && result.see_cbam_basis !== null), [results]);
 
     const summary = useMemo(() => {
-        const productNames = new Set(results.map((result) => result.product_name));
-        const totalOutput = results.reduce((sum, result) => sum + result.output_mass_t, 0);
-        const warningCount = results.reduce((sum, result) => sum + result.warnings.length, 0);
+        const productNames = new Set(reportableResults.map((result) => result.product_name));
+        const totalOutput = reportableResults.reduce((sum, result) => sum + result.output_mass_t, 0);
+        const warningCount = reportableResults.reduce((sum, result) => sum + result.warnings.length, 0);
 
         return {
             productCount: productNames.size,
-            processCount: results.length,
+            processCount: reportableResults.length,
             totalOutput,
             warningCount,
         };
-    }, [results]);
+    }, [reportableResults]);
 
     const readiness = useMemo(
         () => evaluateEuExportReadiness({ processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
@@ -277,13 +278,13 @@ export default function ExportPage() {
     );
 
     const scenarioRiskSummary = useMemo(() => {
-        const scenarios = calculateProductScenarios(results, normalizeScenarioAssumptions(scenarioAssumptions), {
+        const scenarios = calculateProductScenarios(reportableResults, normalizeScenarioAssumptions(scenarioAssumptions), {
             benchmarks: benchmarkReference,
             defaultValues: defaultValueReference,
         });
 
         return summarizeScenarioRisks(scenarios);
-    }, [benchmarkReference, defaultValueReference, results, scenarioAssumptions]);
+    }, [benchmarkReference, defaultValueReference, reportableResults, scenarioAssumptions]);
 
     const scenarioChecklistAction = useMemo(() => {
         return getScenarioReviewAction(
@@ -309,7 +310,7 @@ export default function ExportPage() {
             lastExportResult,
             plannedCellWriteCount: plannedCellWrites.length,
             readiness,
-            resultCount: results.length,
+            resultCount: reportableResults.length,
             scenarioAction: scenarioChecklistAction,
             scenarioRiskSummary,
             templateFileName: templateFile?.name,
@@ -320,7 +321,7 @@ export default function ExportPage() {
             lastExportResult,
             plannedCellWrites.length,
             readiness,
-            results.length,
+            reportableResults.length,
             scenarioChecklistAction,
             scenarioRiskSummary,
             templateFile,
@@ -406,7 +407,7 @@ export default function ExportPage() {
     }, [exportChecklist.isComplete, readiness.errorCount, readiness.warningCount, templateFile, validation?.isValid]);
 
     const summaryProductPreviewRows = useMemo(
-        () => results.slice(0, 100).map((result, index) => ({
+        () => reportableResults.slice(0, 100).map((result, index) => ({
             rowNumber: 10 + index,
             processName: result.process_name,
             productCode: result.cn_code || result.hs_code || '-',
@@ -416,11 +417,11 @@ export default function ExportPage() {
             indirectSee: result.indirect_see,
             reportingDirectSee: result.see_direct_incl_precursor,
             reportingIndirectSee: result.see_indirect_incl_precursor,
-            cbamBasisSee: result.see_cbam_basis,
+            cbamBasisSee: result.see_cbam_basis ?? 0,
             informationalTotalSee: result.see_informational_total,
             isIndirectIncluded: result.indirect_emissions_applicable,
         })),
-        [results]
+        [reportableResults]
     );
 
     const summaryProductsWriteCount = useMemo(
@@ -571,7 +572,7 @@ export default function ExportPage() {
                 processes,
                 products,
                 readiness,
-                results,
+                results: reportableResults,
                 sourceStreams,
                 templateFilename: templateFile.name,
                 writtenCellCount: exportResult.writtenCellCount,
@@ -1376,12 +1377,12 @@ export default function ExportPage() {
             </SectionCard>
 
             <div className="grid grid-cols-1 gap-3 md:hidden">
-                {results.length === 0 ? (
+                {reportableResults.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm text-slate-500">
                         Export 미리보기에 표시할 산정 결과가 없습니다.
                     </div>
                 ) : (
-                    results.map((result) => (
+                    reportableResults.map((result) => (
                         <div key={`${result.id}-mobile`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                             <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
@@ -1399,7 +1400,7 @@ export default function ExportPage() {
                                 </div>
                                 <div>
                                     <dt className="text-xs text-slate-500">CBAM 산정 기준 SEE</dt>
-                                    <dd className="mt-1 font-semibold text-slate-900">{formatNumber(result.see_cbam_basis)}</dd>
+                                    <dd className="mt-1 font-semibold text-slate-900">{formatNumber(result.see_cbam_basis ?? 0)}</dd>
                                 </div>
                                 <div>
                                     <dt className="text-xs text-slate-500">직접 SEE</dt>
@@ -1433,14 +1434,14 @@ export default function ExportPage() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white">
-                        {results.length === 0 ? (
+                        {reportableResults.length === 0 ? (
                             <tr>
                                 <td colSpan={7} className="p-4 text-center text-sm text-gray-500">
                                     Export 미리보기에 표시할 산정 결과가 없습니다.
                                 </td>
                             </tr>
                         ) : (
-                            results.map((result) => (
+                            reportableResults.map((result) => (
                                 <tr key={result.id}>
                                     <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-900">{result.process_name}</td>
                                     <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{result.product_name}</td>
@@ -1452,7 +1453,7 @@ export default function ExportPage() {
                                             {result.indirect_emissions_applicable ? '간접 포함' : '인증서 산정 제외'}
                                         </div>
                                     </td>
-                                    <td className="whitespace-nowrap px-3 py-4 text-right text-sm font-semibold text-gray-900">{formatNumber(result.see_cbam_basis)}</td>
+                                    <td className="whitespace-nowrap px-3 py-4 text-right text-sm font-semibold text-gray-900">{formatNumber(result.see_cbam_basis ?? 0)}</td>
                                     <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">{formatNumber(result.see_informational_total)}</td>
                                 </tr>
                             ))

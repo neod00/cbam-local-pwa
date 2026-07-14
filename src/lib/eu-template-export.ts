@@ -5,6 +5,7 @@ import type { ScenarioRiskSummary } from './scenario-calculation';
 import { summarizeProductOutputLines } from './calculation-engine';
 import { calculateSourceStreamEmissions, getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
+import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';
 
 export const REQUIRED_EU_TEMPLATE_SHEETS = [
     '0_Versions',
@@ -45,6 +46,54 @@ export interface EuTemplateExportData {
     precursors: PurchasedPrecursor[];
     products: Product[];
 }
+type ReportableExportScope = {
+    products: Product[];
+    processes: ProductionProcess[];
+    productOutputLines: ProductOutputLine[];
+    sourceStreams: SourceStream[];
+    precursors: PurchasedPrecursor[];
+};
+
+function createReportableExportScope(data: EuTemplateExportData): ReportableExportScope {
+    const productById = new Map(data.products.map((product) => [product.id, product]));
+    const products = data.products.filter((product) => isCbamReportingScope(getProductReportingScope(product)));
+    const productIds = new Set(products.map((product) => product.id));
+    const productOutputLines = (data.productOutputLines ?? []).filter((line) =>
+        isCbamReportingScope(getProductReportingScope(line.product_id ? productById.get(line.product_id) : undefined, line))
+    );
+    const outputLineIds = new Set(productOutputLines.map((line) => line.id));
+    const processIds = new Set(productOutputLines.map((line) => line.process_id));
+
+    for (const process of data.processes) {
+        if (process.product_id && productIds.has(process.product_id)) {
+            processIds.add(process.id);
+        }
+    }
+
+    const processes = data.processes.filter((process) => processIds.has(process.id));
+    const sourceStreams = (data.sourceStreams ?? []).filter((sourceStream) =>
+        Boolean(sourceStream.process_id && processIds.has(sourceStream.process_id))
+    );
+    const precursors = data.precursors.filter((precursor) => {
+        const allocations = precursor.output_allocations ?? [];
+
+        if (allocations.length > 0) {
+            return allocations.some((allocation) => {
+                if (allocation.product_output_line_id) return outputLineIds.has(allocation.product_output_line_id);
+                if (allocation.product_id) return productIds.has(allocation.product_id);
+                return Boolean(precursor.process_id && processIds.has(precursor.process_id));
+            });
+        }
+
+        return Boolean(
+            (precursor.product_id && productIds.has(precursor.product_id))
+            || (precursor.process_id && processIds.has(precursor.process_id))
+        );
+    });
+
+    return { products, processes, productOutputLines, sourceStreams, precursors };
+}
+
 
 type EuCnCodeMap = Map<string, string>;
 type EuExportSheetName =
@@ -362,11 +411,12 @@ export function evaluateEuExportReadiness(
     cnCodeMap?: EuCnCodeMap
 ): EuExportReadinessResult {
     const issues: EuExportReadinessIssue[] = [];
+    const exportScope = createReportableExportScope(data);
     const productById = new Map(data.products.map((product) => [product.id, product]));
     const sourceStreamsByProcess = new Map<string, SourceStream[]>();
     const outputLinesByProcess = new Map<string, ProductOutputLine[]>();
 
-    for (const sourceStream of data.sourceStreams ?? []) {
+    for (const sourceStream of exportScope.sourceStreams) {
         if (!sourceStream.process_id) {
             continue;
         }
@@ -386,31 +436,31 @@ export function evaluateEuExportReadiness(
         outputLinesByProcess.set(outputLine.process_id, group);
     }
 
-    if (data.processes.length > 10) {
+    if (exportScope.processes.length > 10) {
         issues.push({
             severity: 'error',
             area: '템플릿 한계',
-            message: `현재 Export MVP는 생산공정 10개까지 지원합니다. 현재 ${data.processes.length}개입니다.`,
+            message: `현재 Export MVP는 생산공정 10개까지 지원합니다. 현재 ${exportScope.processes.length}개입니다.`,
         });
     }
 
-    if (data.precursors.length > 20) {
+    if (exportScope.precursors.length > 20) {
         issues.push({
             severity: 'error',
             area: '템플릿 한계',
-            message: `현재 Export MVP는 구매 전구물질 20개까지 지원합니다. 현재 ${data.precursors.length}개입니다.`,
+            message: `현재 Export MVP는 구매 전구물질 20개까지 지원합니다. 현재 ${exportScope.precursors.length}개입니다.`,
         });
     }
 
-    if ((data.sourceStreams?.length ?? 0) > 75) {
+    if (exportScope.sourceStreams.length > 75) {
         issues.push({
             severity: 'error',
             area: '템플릿 한계',
-            message: `현재 Export MVP는 배출원 자료 75개까지 지원합니다. 현재 ${data.sourceStreams?.length ?? 0}개입니다.`,
+            message: `현재 Export MVP는 배출원 자료 75개까지 지원합니다. 현재 ${exportScope.sourceStreams.length}개입니다.`,
         });
     }
 
-    const summaryProductLineCount = createSummaryProductRows(data).length;
+    const summaryProductLineCount = createSummaryProductRows({ ...data, ...exportScope }).length;
 
     if (summaryProductLineCount > 100) {
         issues.push({
@@ -420,7 +470,7 @@ export function evaluateEuExportReadiness(
         });
     }
 
-    for (const product of data.products) {
+    for (const product of exportScope.products) {
         const hsCode = getProductCnOrHsCode(product);
 
         if (hsCode.length < 8) {
@@ -451,10 +501,15 @@ export function evaluateEuExportReadiness(
         }
     }
 
-    for (const process of data.processes) {
-        const product = process.product_id ? productById.get(process.product_id) : undefined;
+    for (const process of exportScope.processes) {
+        const processOutputLines = outputLinesByProcess.get(process.id) ?? [];
+        const reportableOutputLine = processOutputLines.find((line) =>
+            isCbamReportingScope(getProductReportingScope(line.product_id ? productById.get(line.product_id) : undefined, line))
+        );
+        const processProduct = process.product_id ? productById.get(process.product_id) : undefined;
+        const product = reportableOutputLine?.product_id ? productById.get(reportableOutputLine.product_id) : processProduct;
         const processSourceStreams = sourceStreamsByProcess.get(process.id) ?? [];
-        const outputLineSummary = summarizeProductOutputLines(process.output_mass_t, outputLinesByProcess.get(process.id) ?? []);
+        const outputLineSummary = summarizeProductOutputLines(process.output_mass_t, processOutputLines);
 
         if (!product) {
             issues.push({
@@ -541,11 +596,11 @@ export function evaluateEuExportReadiness(
         }
     }
 
-    for (const sourceStream of data.sourceStreams ?? []) {
+    for (const sourceStream of exportScope.sourceStreams) {
         issues.push(...validateSourceStreamForEuExport(sourceStream));
     }
 
-    for (const precursor of data.precursors) {
+    for (const precursor of exportScope.precursors) {
         const product = precursor.product_id ? productById.get(precursor.product_id) : undefined;
 
         if (!mapPrecursorToEuGood(precursor, product, cnCodeMap)) {
@@ -1380,7 +1435,9 @@ function createAggregatedGoodsAndBoundaryCellWrites(
     });
 
     data.processes.slice(0, 10).forEach((process, index) => {
-        const product = process.product_id ? productById.get(process.product_id) : undefined;
+        const outputLines = outputLinesByProcess.get(process.id) ?? [];
+        const outputProduct = outputLines[0]?.product_id ? productById.get(outputLines[0].product_id) : undefined;
+        const product = (process.product_id ? productById.get(process.product_id) : undefined) ?? outputProduct;
         const euGood = mapProductToEuGood(product, cnCodeMap);
 
         if (!euGood) {
@@ -1388,7 +1445,6 @@ function createAggregatedGoodsAndBoundaryCellWrites(
         }
 
         const sheetRow = 83 + index;
-        const outputLines = outputLinesByProcess.get(process.id) ?? [];
         const includedGoods = uniqueNonEmpty(
             outputLines
                 .map((line) => (line.product_id ? productById.get(line.product_id) : undefined))
@@ -1595,14 +1651,16 @@ export function createEuTemplateExportCellWrites(
     data: EuTemplateExportData,
     cnCodeMap?: EuCnCodeMap
 ): EuTemplateExportCellWrite[] {
+    const exportScope = createReportableExportScope(data);
+    const exportData: EuTemplateExportData = { ...data, ...exportScope };
     return [
         ...createInstallationCellWrites(data.installations, data.periods),
-        ...createAggregatedGoodsAndBoundaryCellWrites(data, cnCodeMap),
-        ...createSourceStreamCellWrites(data.sourceStreams),
-        ...createEmissionsEnergyCellWrites(data.processes, data.products),
-        ...createProcessCellWrites(data.processes),
-        ...createPrecursorCellWrites(data.precursors),
-        ...createSummaryProductCellWrites(data),
+        ...createAggregatedGoodsAndBoundaryCellWrites(exportData, cnCodeMap),
+        ...createSourceStreamCellWrites(exportScope.sourceStreams),
+        ...createEmissionsEnergyCellWrites(exportScope.processes, exportScope.products),
+        ...createProcessCellWrites(exportScope.processes),
+        ...createPrecursorCellWrites(exportScope.precursors),
+        ...createSummaryProductCellWrites(exportData),
     ];
 }
 

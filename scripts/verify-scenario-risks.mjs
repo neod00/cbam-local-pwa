@@ -75,6 +75,8 @@ const baseResult = {
   production_route: 'Flat steel processing',
   output_mass_t: 100,
   see_cbam_basis: 1.6,
+  reporting_scope: 'CBAM_GOOD',
+  is_cbam_reportable: true,
   see_informational_total: 2.4,
   total_see: 2.4,
 };
@@ -125,6 +127,13 @@ const references = {
 
 const readyScenarios = calculateProductScenarios([baseResult], assumptions, references);
 assert.equal(readyScenarios.length, 1);
+const scenariosWithNonCbamCoproduct = calculateProductScenarios([
+  baseResult,
+  { ...baseResult, id: 'result-scale', product_name: 'Mill scale', reporting_scope: 'NON_CBAM_COPRODUCT', is_cbam_reportable: false, see_cbam_basis: null },
+], assumptions, references);
+assert.equal(scenariosWithNonCbamCoproduct.length, 1);
+assert.equal(scenariosWithNonCbamCoproduct[0].result_id, baseResult.id);
+
 assert.equal(readyScenarios[0].data_quality, 'READY');
 assert.equal(readyScenarios[0].default_see, 2);
 assertClose(readyScenarios[0].default_gap, -0.4);

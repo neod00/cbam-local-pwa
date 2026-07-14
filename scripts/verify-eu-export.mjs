@@ -73,6 +73,9 @@ function loadEuExportModule() {
   const productRulesSource = readFileSync('src/lib/cbam-product-rules.ts', 'utf8')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
+  const reportingScopeSource = readFileSync('src/lib/reporting-scope.ts', 'utf8')
+    .replace(/^import type .*;\r?\n/gm, '')
+    .replace(/^export /gm, '');
   const source = readFileSync('src/lib/eu-template-export.ts', 'utf8')
     .replace(
       "import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';",
@@ -81,11 +84,13 @@ function loadEuExportModule() {
     .replace("import { summarizeProductOutputLines } from './calculation-engine';", '')
     .replace("import { calculateSourceStreamEmissions, getSourceStreamEmissionFactorBasis } from './source-stream-calculation';", '')
     .replace("import { getIndirectEmissionsApplicability } from './cbam-product-rules';", '')
+    .replace("import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';", '')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
   const compiled = ts.transpileModule(
     `${sourceStreamCalculationSource}
 ${productRulesSource}
+${reportingScopeSource}
 function summarizeProductOutputLines(processOutputMassT, outputLines) {
   const activeLines = outputLines.filter((line) => line.output_mass_t > 0);
   const totalOutput = activeLines.reduce((sum, line) => sum + line.output_mass_t, 0);
@@ -464,6 +469,44 @@ const data = {
   sourceStreams: [sourceStream],
   precursors: [precursor],
 };
+const nonCbamProduct = {
+  ...product,
+  id: 'product-scale',
+  name: 'Mill scale',
+  hs_code: '2619',
+  cn_code: '26190090',
+  hs_group: '26',
+  product_type_enum: 'UNKNOWN_PRODUCT',
+  reporting_scope: 'NON_CBAM_COPRODUCT',
+};
+const nonCbamOutputLine = {
+  ...outputLine,
+  id: 'output-line-scale',
+  product_id: nonCbamProduct.id,
+  name: 'Mill scale output',
+  output_mass_t: 100,
+  reporting_scope: 'NON_CBAM_COPRODUCT',
+};
+const nonCbamPrecursor = {
+  ...precursor,
+  id: 'precursor-scale-only',
+  product_id: nonCbamProduct.id,
+  name: 'Scale-only additive',
+  source: '',
+  data_mode: 'DEFAULT',
+  default_value_justification: '',
+  output_allocations: [{
+    product_output_line_id: nonCbamOutputLine.id,
+    product_id: nonCbamProduct.id,
+    allocated_mass_t: precursor.consumed_mass_t,
+  }],
+};
+const scopedData = {
+  ...data,
+  products: [product, nonCbamProduct],
+  productOutputLines: [{ ...outputLine, output_mass_t: 900, reporting_scope: 'CBAM_GOOD' }, nonCbamOutputLine],
+  precursors: [precursor, nonCbamPrecursor],
+};
 const file = createSyntheticWorkbook(euExport.REQUIRED_EU_TEMPLATE_SHEETS);
 const validation = await euExport.validateEuTemplateFile(file);
 
@@ -472,6 +515,16 @@ assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
 const readiness = euExport.evaluateEuExportReadiness(data, validation.cnCodeMap);
 assertEqual(String(readiness.errorCount), '0', 'readiness error count');
 assertEqual(String(readiness.warningCount), '0', 'readiness warning count');
+const scopedReadiness = euExport.evaluateEuExportReadiness(scopedData, validation.cnCodeMap);
+assertEqual(String(scopedReadiness.errorCount), '0', 'non-CBAM coproduct readiness error count');
+assertEqual(String(scopedReadiness.warningCount), '0', 'non-CBAM coproduct readiness warning count');
+const scopedWrites = euExport.createEuTemplateExportCellWrites(scopedData, validation.cnCodeMap);
+assertEqual(String(scopedWrites.filter((write) => write.sheetName === 'Summary_Products').length), '3', 'only one reportable Summary_Products row');
+assertEqual(
+  String(scopedWrites.some((write) => write.sourceId === nonCbamProduct.id || write.sourceId === nonCbamOutputLine.id || write.sourceId === nonCbamPrecursor.id)),
+  'false',
+  'non-CBAM product, output line, and precursor are excluded from export writes'
+);
 const missingSourceStreamReadiness = euExport.evaluateEuExportReadiness({
   ...data,
   sourceStreams: [],
@@ -825,6 +878,8 @@ const calculationResult = {
   allocation_share: 1,
   product_id: product.id,
   product_name: product.name,
+  reporting_scope: 'CBAM_GOOD',
+  is_cbam_reportable: true,
   hs_code: product.hs_code,
   cn_code: product.cn_code,
   production_route: process.production_route,

@@ -1,6 +1,7 @@
 'use client';
 
 import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummary';
+import { SeeFlowDiagram } from '@/components/SeeFlowDiagram';
 import { WorkflowGuideCard } from '@/components/WorkflowGuideCard';
 import { ActionItemCard, Button, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
@@ -148,10 +149,12 @@ export default function Home() {
     : dashboard.warningCount > 0
       ? `${dashboard.warningCount}개 항목을 확인하면 신고 지원자료 준비율이 올라갑니다.`
       : '수입자 전달용 Communication Template 복사본 생성 전 최종 검토 단계입니다.';
-  const weightedCbamBasisSee = dashboard.totalOutput > 0
-    ? results.reduce((sum, result) => sum + result.see_cbam_basis * result.output_mass_t, 0) / dashboard.totalOutput
+  const reportableResults = results.filter((result) => result.is_cbam_reportable && result.see_cbam_basis !== null);
+  const reportableOutput = reportableResults.reduce((sum, result) => sum + result.output_mass_t, 0);
+  const weightedCbamBasisSee = reportableOutput > 0
+    ? reportableResults.reduce((sum, result) => sum + (result.see_cbam_basis ?? 0) * result.output_mass_t, 0) / reportableOutput
     : 0;
-  const primaryProduct = results[0];
+  const primaryProduct = reportableResults[0];
   const beginnerSteps = [
     {
       title: '사업장 등록',
@@ -261,6 +264,13 @@ export default function Home() {
           </dl>
         </div>
       </section>
+
+      <SectionCard
+        title="우리 회사 배출량이 어떻게 계산되나요?"
+        description="제품 1톤당 배출량(SEE)이 만들어지는 3가지 길입니다. 상자를 누르면 해당 입력·결과 화면으로 이동합니다."
+      >
+        <SeeFlowDiagram results={results} />
+      </SectionCard>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="CBAM 대상 품목" value={loading ? '-' : `${productCount}개`} helper="CN 8자리 기준 관리" icon={Package} tone="pending" />

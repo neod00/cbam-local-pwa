@@ -514,7 +514,7 @@ export default function SourceStreamsPage() {
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-5">
                     <ActionItemCard
                         title="완전성"
-                        description="조직경계 안의 주요 배출원과 공정 투입물이 빠지지 않았는지 확인합니다. 직접배출이 있는 공정은 배출원 자료와 연결되어야 합니다."
+                        description="산정 경계(우리 공장) 안의 주요 배출원과 공정 투입물이 빠지지 않았는지 확인합니다. 직접배출이 있는 공정은 배출원 자료와 연결되어야 합니다."
                         badge={<StatusBadge tone={summary.unlinkedCount > 0 || summary.unsupportedTypeCount > 0 ? 'warning' : 'success'}>{summary.unlinkedCount + summary.unsupportedTypeCount > 0 ? '확인 필요' : '양호'}</StatusBadge>}
                     />
                     <ActionItemCard
@@ -542,11 +542,11 @@ export default function SourceStreamsPage() {
 
             <SectionCard
                 title="활동자료 산정요소"
-                description="배출량 산정에는 조직경계, 배출원, 활동자료, 배출계수, 활동수준이 함께 필요합니다. 이 화면은 그중 배출원별 활동자료와 계수를 모아 생산공정에 연결하는 곳입니다."
+                description="배출량 산정에는 산정 경계, 배출원, 활동자료, 배출계수, 활동수준이 함께 필요합니다. 이 화면은 그중 배출원별 활동자료와 계수를 모아 생산공정에 연결하는 곳입니다."
             >
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
                     <ActionItemCard
-                        title="조직경계·배출원"
+                        title="산정 경계·배출원"
                         description="같은 품목군 제품의 내재배출량 산정에 포함되는 물리적·화학적 공정과 온실가스 배출 영역을 정합니다."
                         badge={<StatusBadge tone="info">경계 확인</StatusBadge>}
                     />

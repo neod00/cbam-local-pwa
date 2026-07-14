@@ -153,7 +153,7 @@ function LockedLicensePanel({ reason, registration }: { reason: 'unregistered' |
     );
 }
 
-export default function LicenseGate({ children }: { children: ReactNode }) {
+function EnforcedLicenseGate({ children }: { children: ReactNode }) {
     const pathname = usePathname();
     const [gateState, setGateState] = useState<GateState>({ status: 'loading' });
 
@@ -201,4 +201,18 @@ export default function LicenseGate({ children }: { children: ReactNode }) {
     }
 
     return children;
+}
+
+export default function LicenseGate({
+    children,
+    enforce = false,
+}: {
+    children: ReactNode;
+    enforce?: boolean;
+}) {
+    if (!enforce) {
+        return children;
+    }
+
+    return <EnforcedLicenseGate>{children}</EnforcedLicenseGate>;
 }

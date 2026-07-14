@@ -195,9 +195,11 @@ export function calculateProductScenarios(
         defaultValues?: ImportedDefaultValueReference;
     }
 ): ProductScenarioResult[] {
-    return results.map((result) => {
+    return results
+        .filter((result) => result.is_cbam_reportable && result.see_cbam_basis !== null)
+        .map((result) => {
         const cnCode = result.cn_code || result.hs_code;
-        const actualSee = result.see_cbam_basis ?? result.total_see;
+        const actualSee = result.see_cbam_basis ?? 0;
         const informationalTotalSee = result.see_informational_total ?? result.total_see;
         const importMass = result.output_mass_t * assumptions.eu_import_share_percent / 100;
 

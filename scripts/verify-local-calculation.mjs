@@ -10,15 +10,20 @@ function loadLocalCalculationModule() {
   const productRulesSource = readFileSync('src/lib/cbam-product-rules.ts', 'utf8')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
+  const reportingScopeSource = readFileSync('src/lib/reporting-scope.ts', 'utf8')
+    .replace(/^import type .*;\r?\n/gm, '')
+    .replace(/^export /gm, '');
   const calculationEngineSource = readFileSync('src/lib/calculation-engine.ts', 'utf8')
     .replace(/^import type .* from '\.\/local-db';\r?\n/gm, '')
     .replace("import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';", '')
     .replace("import { getIndirectEmissionsApplicability } from './cbam-product-rules';", '')
+    .replace("import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';", '')
     .replace(/^export /gm, '');
 
   const compiled = ts.transpileModule(
     `${sourceStreamCalculationSource}
 ${productRulesSource}
+${reportingScopeSource}
 ${calculationEngineSource}
 globalThis.localCalculation = {
   calculateLocalResults,
@@ -294,4 +299,140 @@ assert.ok(
   '소비량이 구매량을 초과하면 경고가 발생해야 합니다.'
 );
 
+// --- 복합 철강 회귀: 공용 공정의 CBAM/비CBAM 산출물 + 서로 다른 전구물질 생산경로 ---
+const complexPeriod = { id: 'complex-period', name: '2026 complex', start_date: '2026-01-01', end_date: '2026-12-31', status: 'READY' };
+const complexProducts = [
+  { id: 'complex-hrc', name: '열연강판', hs_code: '7208', cn_code: '72083900', hs_group: '72', product_type_enum: 'HS72_IRON_STEEL', unit: 'tonne', reporting_scope: 'CBAM_GOOD' },
+  { id: 'complex-scale', name: '밀스케일', hs_code: '2619', cn_code: '26190090', hs_group: '26', product_type_enum: 'UNKNOWN_PRODUCT', unit: 'tonne', reporting_scope: 'NON_CBAM_COPRODUCT' },
+];
+const complexProcess = {
+  id: 'complex-process',
+  period_id: complexPeriod.id,
+  product_id: 'complex-hrc',
+  name: '공용 열연 압연 공정',
+  production_route: 'Hot rolling with mixed slab routes',
+  output_mass_t: 8200,
+  market_output_mass_t: 8000,
+  internal_consumption_mass_t: 200,
+  direct_attributable_emissions_tco2e: 830.28,
+  electricity_mwh: 4500,
+  electricity_ef_tco2e_per_mwh: 0.466,
+};
+const complexOutputLines = [
+  { id: 'complex-line-hrc', process_id: complexProcess.id, product_id: 'complex-hrc', name: '열연강판', output_mass_t: 8000, allocation_basis: 'MASS', manual_allocation_percent: 0, note: '', reporting_scope: 'CBAM_GOOD' },
+  { id: 'complex-line-scale', process_id: complexProcess.id, product_id: 'complex-scale', name: '밀스케일', output_mass_t: 200, allocation_basis: 'MASS', manual_allocation_percent: 0, note: '', reporting_scope: 'NON_CBAM_COPRODUCT' },
+];
+const complexSourceStreams = [{
+  id: 'complex-gas',
+  period_id: complexPeriod.id,
+  process_id: complexProcess.id,
+  name: '공용 가열로 도시가스',
+  stream_type: 'FUEL',
+  method: 'Combustion',
+  activity_data: 400000,
+  activity_unit: 'Nm3',
+  ncv_gj_per_unit: 0.037,
+  emission_factor_tco2e_per_unit: 56.1,
+  emission_factor_basis: 'PER_TJ',
+  oxidation_factor: 1,
+  conversion_factor: 1,
+  fossil_fraction: 1,
+  biomass_fraction: 0,
+  source: 'test',
+}];
+const complexPrecursors = [
+  {
+    id: 'complex-precursor-eaf',
+    process_id: complexProcess.id,
+    product_id: 'complex-hrc',
+    name: '구매 슬래브 A',
+    production_route: 'Electric arc furnace',
+    purchased_mass_t: 5000,
+    consumed_mass_t: 5000,
+    consumed_for_non_cbam_mass_t: 0,
+    direct_see_tco2e_per_t: 0.55,
+    indirect_see_tco2e_per_t: 0.35,
+    source: 'supplier A',
+  },
+  {
+    id: 'complex-precursor-bf',
+    process_id: complexProcess.id,
+    product_id: 'complex-hrc',
+    name: '구매 슬래브 B',
+    production_route: 'Blast furnace-basic oxygen furnace',
+    purchased_mass_t: 3500,
+    consumed_mass_t: 3500,
+    consumed_for_non_cbam_mass_t: 0,
+    direct_see_tco2e_per_t: 1.85,
+    indirect_see_tco2e_per_t: 0.18,
+    source: 'supplier B',
+  },
+];
+const complexResults = calculateLocalResults({
+  processes: [complexProcess],
+  precursors: complexPrecursors,
+  products: complexProducts,
+  periods: [complexPeriod],
+  sourceStreams: complexSourceStreams,
+  productOutputLines: complexOutputLines,
+});
+assert.equal(complexResults.length, 2);
+const complexHrcResult = complexResults.find((result) => result.product_id === 'complex-hrc');
+const complexScaleResult = complexResults.find((result) => result.product_id === 'complex-scale');
+assert.ok(complexHrcResult);
+assert.ok(complexScaleResult);
+assertClose(complexHrcResult.allocation_share, 8000 / 8200);
+assertClose(complexScaleResult.allocation_share, 200 / 8200);
+assertClose(complexHrcResult.direct_see, 830.28 / 8200);
+assertClose(complexHrcResult.precursor_direct_see, 9225 / 8200);
+assertClose(complexHrcResult.precursor_indirect_see, 2380 / 8200);
+assertClose(complexHrcResult.see_cbam_basis, (830.28 + 9225) / 8200);
+assertClose(complexHrcResult.see_informational_total, (830.28 + 2097 + 9225 + 2380) / 8200);
+assert.equal(complexHrcResult.is_cbam_reportable, true);
+assert.equal(complexHrcResult.indirect_emissions_applicable, false);
+assert.equal(complexScaleResult.indirect_emissions_applicable, true);
+assert.equal(complexScaleResult.is_cbam_reportable, false);
+assert.equal(complexScaleResult.see_cbam_basis, null);
+assertClose(
+  complexResults.reduce((sum, result) => sum + (result.see_cbam_basis ?? 0) * result.output_mass_t, 0),
+  ((830.28 + 9225) / 8200) * 8000
+);
+assert.equal(new Set(complexPrecursors.map((item) => item.production_route)).size, 2);
+// 명시적 전구물질 귀속: 두 슬래브 경로는 CBAM 열연강판에만 투입되고 밀스케일에는 귀속되지 않는다.
+const explicitlyAllocatedPrecursors = complexPrecursors.map((item) => ({
+  ...item,
+  output_allocations: [{
+    product_output_line_id: 'complex-line-hrc',
+    product_id: 'complex-hrc',
+    allocated_mass_t: item.consumed_mass_t,
+  }],
+}));
+const explicitlyAllocatedResults = calculateLocalResults({
+  processes: [complexProcess],
+  precursors: explicitlyAllocatedPrecursors,
+  products: complexProducts,
+  periods: [complexPeriod],
+  sourceStreams: complexSourceStreams,
+  productOutputLines: complexOutputLines,
+});
+const explicitlyAllocatedHrc = explicitlyAllocatedResults.find((result) => result.product_id === 'complex-hrc');
+const explicitlyAllocatedScale = explicitlyAllocatedResults.find((result) => result.product_id === 'complex-scale');
+assert.ok(explicitlyAllocatedHrc);
+assert.ok(explicitlyAllocatedScale);
+assertClose(explicitlyAllocatedHrc.precursor_direct_see, 9225 / 8000);
+assertClose(explicitlyAllocatedHrc.precursor_indirect_see, 2380 / 8000);
+assertClose(
+  explicitlyAllocatedHrc.see_cbam_basis,
+  ((830.28 * 8000 / 8200) + 9225) / 8000
+);
+assertClose(explicitlyAllocatedScale.precursor_direct_see, 0);
+assertClose(explicitlyAllocatedScale.precursor_indirect_see, 0);
+assert.equal(explicitlyAllocatedScale.see_cbam_basis, null);
+assertClose(
+  explicitlyAllocatedResults.reduce(
+    (sum, result) => sum + (result.see_cbam_basis ?? 0) * result.output_mass_t,
+    0
+  ),
+  (830.28 * 8000 / 8200) + 9225
+);
 console.log('Local calculation verification passed.');

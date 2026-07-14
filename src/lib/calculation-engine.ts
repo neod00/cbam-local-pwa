@@ -1,6 +1,7 @@
-import type { Product, ProductOutputLine, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
+import type { Product, ProductOutputLine, ProductReportingScope, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
+import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';
 
 export type ActivityData = Record<string, number>;
 
@@ -47,6 +48,8 @@ export interface LocalCalculationResult {
     allocation_share: number;
     product_id?: string;
     product_name: string;
+    reporting_scope: ProductReportingScope;
+    is_cbam_reportable: boolean;
     hs_code?: string;
     cn_code?: string;
     production_route: string;
@@ -69,7 +72,7 @@ export interface LocalCalculationResult {
     precursor_indirect_see: number;
     see_direct_incl_precursor: number;
     see_indirect_incl_precursor: number;
-    see_cbam_basis: number;
+    see_cbam_basis: number | null;
     see_informational_total: number;
     total_see: number;
     warnings: string[];
@@ -137,6 +140,65 @@ export function summarizeProductOutputLines(
     };
 }
 
+function resolvePrecursorAllocationMass(
+    precursor: PurchasedPrecursor,
+    allocation: NonNullable<PurchasedPrecursor['output_allocations']>[number]
+) {
+    const allocatedMass = Number.isFinite(allocation.allocated_mass_t)
+        ? Math.max(allocation.allocated_mass_t, 0)
+        : 0;
+
+    if (allocatedMass > 0) {
+        return allocatedMass;
+    }
+
+    const allocationPercent = Number.isFinite(allocation.allocation_percent)
+        ? Math.max(allocation.allocation_percent ?? 0, 0)
+        : 0;
+
+    return precursor.consumed_mass_t * allocationPercent / 100;
+}
+
+function getPrecursorAllocatedMassForLine(
+    precursor: PurchasedPrecursor,
+    line: ProductOutputLine,
+    outputLines: ProductOutputLine[],
+    legacyProcessShare: number
+) {
+    const allocations = precursor.output_allocations ?? [];
+
+    if (allocations.length === 0) {
+        return precursor.consumed_mass_t * legacyProcessShare;
+    }
+
+    const exactMass = allocations
+        .filter((allocation) => allocation.product_output_line_id === line.id)
+        .reduce((sum, allocation) => sum + resolvePrecursorAllocationMass(precursor, allocation), 0);
+    const productAllocations = allocations.filter(
+        (allocation) =>
+            !allocation.product_output_line_id &&
+            allocation.product_id &&
+            allocation.product_id === line.product_id
+    );
+    const matchingProductLines = outputLines.filter(
+        (candidate) => candidate.product_id === line.product_id && candidate.output_mass_t > 0
+    );
+    const matchingOutputMass = matchingProductLines.reduce((sum, candidate) => sum + candidate.output_mass_t, 0);
+    const productLineShare = matchingOutputMass > 0 ? line.output_mass_t / matchingOutputMass : 0;
+    const productMass = productAllocations.reduce(
+        (sum, allocation) => sum + resolvePrecursorAllocationMass(precursor, allocation) * productLineShare,
+        0
+    );
+
+    return exactMass + productMass;
+}
+
+function getPrecursorExplicitAllocationMass(precursor: PurchasedPrecursor) {
+    return (precursor.output_allocations ?? []).reduce(
+        (sum, allocation) => sum + resolvePrecursorAllocationMass(precursor, allocation),
+        0
+    );
+}
 export function calculateEmission(input: CalcInput): CalcResult {
     const { output_mass_t, electricity_mwh, electricity_ef, fuel_usage, precursors, input_mass_t } = input;
 
@@ -251,6 +313,8 @@ export function calculateLocalResults(input: {
         const warnings: string[] = [];
         const warningDetails: LocalCalculationWarning[] = [];
         const product = process.product_id ? productById.get(process.product_id) : undefined;
+        const processReportingScope = getProductReportingScope(product);
+        const processIsCbamReportable = isCbamReportingScope(processReportingScope);
         const period = process.period_id ? periodById.get(process.period_id) : undefined;
         const processPrecursors = precursorsByProcess.get(process.id) ?? [];
         const processSourceStreams = sourceStreamsByProcess.get(process.id) ?? [];
@@ -307,6 +371,18 @@ export function calculateLocalResults(input: {
             if (!precursor.source) {
                 addWarning(`${precursor.name}의 SEE 출처가 비어 있습니다.`, { type: 'precursor', id: precursor.id });
             }
+
+            if ((precursor.output_allocations?.length ?? 0) > 0) {
+                const allocatedMass = getPrecursorExplicitAllocationMass(precursor);
+                const allocationTolerance = Math.max(0.01, precursor.consumed_mass_t * 0.01);
+
+                if (Math.abs(allocatedMass - precursor.consumed_mass_t) > allocationTolerance) {
+                    addWarning(
+                        `${precursor.name}의 산출물 귀속량 ${allocatedMass.toFixed(4)} t와 총 소비량 ${precursor.consumed_mass_t.toFixed(4)} t가 일치하지 않습니다.`,
+                        { type: 'precursor', id: precursor.id }
+                    );
+                }
+            }
         }
 
         if (directEmissions > 0 && processSourceStreams.length === 0) {
@@ -328,9 +404,10 @@ export function calculateLocalResults(input: {
         const see_direct_incl_precursor = direct_see + precursor_direct_see;
         const see_indirect_incl_precursor = own_indirect_see + precursor_indirect_see;
         // 인증서 산정 기준: Annex II direct-only 품목은 자체 indirect뿐 아니라 전구물질 indirect도 제외
-        const see_cbam_basis = processIndirectApplicability.applicable
+        const calculatedProcessCbamBasis = processIndirectApplicability.applicable
             ? see_direct_incl_precursor + see_indirect_incl_precursor
             : see_direct_incl_precursor;
+        const see_cbam_basis = processIsCbamReportable ? calculatedProcessCbamBasis : null;
         const see_informational_total = direct_see + own_indirect_see + precursor_see;
         const total_see = see_informational_total;
         const outputLines = outputLinesByProcess.get(process.id) ?? [];
@@ -361,6 +438,8 @@ export function calculateLocalResults(input: {
                 allocation_share: 1,
                 product_id: process.product_id,
                 product_name: product?.name ?? '미지정 제품',
+                reporting_scope: processReportingScope,
+                is_cbam_reportable: processIsCbamReportable,
                 hs_code: product?.hs_code,
                 cn_code: product?.cn_code,
                 production_route: process.production_route,
@@ -393,6 +472,8 @@ export function calculateLocalResults(input: {
 
         const lineResults = validOutputLines.map((line) => {
             const lineProduct = line.product_id ? productById.get(line.product_id) : product;
+            const lineReportingScope = getProductReportingScope(lineProduct, line);
+            const lineIsCbamReportable = isCbamReportingScope(lineReportingScope);
             const allocationShare = line.allocation_basis === 'MANUAL'
                 ? (manualTotal > 0 ? line.manual_allocation_percent / manualTotal : 0)
                 : (massTotal > 0 ? line.output_mass_t / massTotal : 0);
@@ -401,9 +482,26 @@ export function calculateLocalResults(input: {
             const allocatedIndirectEmissions = lineIndirectApplicability.applicable ? lineGrossIndirectEmissions : 0;
             const allocatedExcludedIndirectEmissions = lineIndirectApplicability.applicable ? 0 : lineGrossIndirectEmissions;
             const allocatedDirectEmissions = directEmissions * allocationShare;
-            const allocatedPrecursorEmissions = precursorEmissions * allocationShare;
-            const allocatedPrecursorDirectEmissions = precursorDirectEmissions * allocationShare;
-            const allocatedPrecursorIndirectEmissions = precursorIndirectEmissions * allocationShare;
+            const allocatedPrecursorDirectEmissions = processPrecursors.reduce((sum, precursor) => {
+                const allocatedMass = getPrecursorAllocatedMassForLine(
+                    precursor,
+                    line,
+                    validOutputLines,
+                    allocationShare
+                );
+                return sum + allocatedMass * precursor.direct_see_tco2e_per_t;
+            }, 0);
+            const allocatedPrecursorIndirectEmissions = processPrecursors.reduce((sum, precursor) => {
+                const allocatedMass = getPrecursorAllocatedMassForLine(
+                    precursor,
+                    line,
+                    validOutputLines,
+                    allocationShare
+                );
+                return sum + allocatedMass * precursor.indirect_see_tco2e_per_t;
+            }, 0);
+            const allocatedPrecursorEmissions =
+                allocatedPrecursorDirectEmissions + allocatedPrecursorIndirectEmissions;
             const lineDirectSee = line.output_mass_t > 0 ? allocatedDirectEmissions / line.output_mass_t : 0;
             const lineOwnIndirectSee = line.output_mass_t > 0 ? lineGrossIndirectEmissions / line.output_mass_t : 0;
             const lineIndirectSee = line.output_mass_t > 0 ? allocatedIndirectEmissions / line.output_mass_t : 0;
@@ -413,9 +511,10 @@ export function calculateLocalResults(input: {
             const linePrecursorIndirectSee = line.output_mass_t > 0 ? allocatedPrecursorIndirectEmissions / line.output_mass_t : 0;
             const lineSeeDirectInclPrecursor = lineDirectSee + linePrecursorDirectSee;
             const lineSeeIndirectInclPrecursor = lineOwnIndirectSee + linePrecursorIndirectSee;
-            const lineSeeCbamBasis = lineIndirectApplicability.applicable
+            const calculatedLineCbamBasis = lineIndirectApplicability.applicable
                 ? lineSeeDirectInclPrecursor + lineSeeIndirectInclPrecursor
                 : lineSeeDirectInclPrecursor;
+            const lineSeeCbamBasis = lineIsCbamReportable ? calculatedLineCbamBasis : null;
             const lineSeeInformationalTotal = lineDirectSee + lineOwnIndirectSee + linePrecursorSee;
 
             return {
@@ -428,6 +527,8 @@ export function calculateLocalResults(input: {
                 allocation_basis: line.allocation_basis,
                 allocation_share: allocationShare,
                 product_id: line.product_id ?? process.product_id,
+                reporting_scope: lineReportingScope,
+                is_cbam_reportable: lineIsCbamReportable,
                 product_name: lineProduct?.name ?? line.name,
                 hs_code: lineProduct?.hs_code,
                 cn_code: lineProduct?.cn_code,

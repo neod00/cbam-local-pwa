@@ -184,6 +184,7 @@ async function applyActivityImportPlan(plan: ActivityTemplateImportPlan): Promis
             hs_group: row.hs_group,
             product_type_enum: row.product_type_enum,
             unit: row.unit,
+            reporting_scope: row.reporting_scope ?? 'CBAM_GOOD',
         });
 
         productByName.set(key, product);
