@@ -767,6 +767,10 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         { supplier: '', mass: '', direct: '', indirect: '' },
         { supplier: '', mass: '', direct: '', indirect: '' },
     ]);
+    const [detailOpen, setDetailOpen] = useState(false);
+    const [supplierInstallation, setSupplierInstallation] = useState('');
+    const [supplierRoute, setSupplierRoute] = useState('');
+    const [supplierPeriod, setSupplierPeriod] = useState('');
     const [message, setMessage] = useState('');
     const [saved, setSaved] = useState(false);
     const processPrecursors = useMemo(
@@ -807,11 +811,15 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
             setMessage('공급사별 소비량을 입력하세요.');
             return;
         }
-        const suppliers = mixRows.filter((row) => num(row.mass) > 0).map((row) => row.supplier.trim() || '공급사').join(', ');
+        // 설비별 추적성 보존: 각 공급사의 소비량·직접/간접 SEE를 출처에 함께 남긴다(Guidance는 설비별 상세 요구).
+        const breakdown = mixRows
+            .filter((row) => num(row.mass) > 0)
+            .map((row) => `${row.supplier.trim() || '공급사'} ${fmt(num(row.mass), 1)}t(직접 ${row.direct || 0}·간접 ${row.indirect || 0})`)
+            .join('; ');
         setConsumed(String(Math.round(mixTotalMass * 1000) / 1000));
         setDirectSee(String(Math.round(mixWeightedDirect * 1e6) / 1e6));
         setIndirectSee(String(Math.round(mixWeightedIndirect * 1e6) / 1e6));
-        setSource(`공급사 믹스(${suppliers}) — 소비량 가중평균`);
+        setSource(`공급사 믹스(소비량 가중평균) — ${breakdown}`);
         setMixOpen(false);
         setMessage('공급사 믹스를 소비량 가중평균해 위 칸에 채웠습니다. 값을 확인하고 저장하세요.');
     };
@@ -917,9 +925,10 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
             name: name.trim(),
             precursor_cn_code: cnDigits,
             aggregated_goods_category: 'Iron or steel products',
-            production_route: '',
+            production_route: supplierRoute.trim(),
             supplier_country: 'South Korea',
-            supplier_installation: '',
+            supplier_installation: supplierInstallation.trim(),
+            supplier_reporting_period: supplierPeriod.trim() || undefined,
             data_mode: dataMode,
             verification_status: 'UNVERIFIED' as const,
             default_value_year: '2026' as const,
@@ -945,6 +954,10 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         setAllocMasses({});
         setMixOpen(false);
         setMixRows([{ supplier: '', mass: '', direct: '', indirect: '' }, { supplier: '', mass: '', direct: '', indirect: '' }]);
+        setDetailOpen(false);
+        setSupplierInstallation('');
+        setSupplierRoute('');
+        setSupplierPeriod('');
         setMessage('');
         setSaved(true);
         await onSaved();
@@ -1117,6 +1130,36 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                         <input className={fieldClass} value={justification} onChange={(event) => setJustification(event.target.value)} />
                     </Field>
                 )}
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                    <button
+                        type="button"
+                        onClick={() => setDetailOpen((open) => !open)}
+                        aria-expanded={detailOpen}
+                        className="flex w-full items-center justify-between text-sm font-semibold text-slate-800"
+                    >
+                        공급사 상세 (검증·제출용, 선택)
+                        <ChevronDown className={`h-4 w-4 flex-none text-slate-400 transition ${detailOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {detailOpen && (
+                        <div className="mt-3 space-y-3">
+                            <p className="text-xs leading-5 text-slate-500">
+                                제3자 검증·수입자 통신 단계에서 EU는 전구물질을 공급사(설비)별로 상세히 요구합니다. 초기 산정엔 선택이지만 채워두면 추적성이 강해집니다.
+                            </p>
+                            <Field label="공급사 설비명·식별정보">
+                                <input className={fieldClass} value={supplierInstallation} onChange={(event) => setSupplierInstallation(event.target.value)} placeholder="예: OO제철 △△공장" />
+                            </Field>
+                            <Field label="공급사 생산경로">
+                                <input className={fieldClass} value={supplierRoute} onChange={(event) => setSupplierRoute(event.target.value)} placeholder="예: BF-BOF / EAF / (C)" />
+                            </Field>
+                            <Field label="공급사 보고기간" hint="기본은 유럽 역년(2026-01-01~12-31). 공급사 기간이 다르면 적으세요.">
+                                <input className={fieldClass} value={supplierPeriod} onChange={(event) => setSupplierPeriod(event.target.value)} placeholder="2026-01-01 ~ 2026-12-31" />
+                            </Field>
+                            <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">
+                                지불 탄소가격은 EU 수입자(신고인)가 정산 단계에서 반영합니다 — 이 앱(가공사)의 범위 밖이라 여기서 입력하지 않습니다.
+                            </p>
+                        </div>
+                    )}
+                </div>
                 <Button type="button" onClick={addPrecursor}>원료 저장</Button>
             </div>
 
