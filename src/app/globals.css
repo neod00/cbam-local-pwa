@@ -30,6 +30,10 @@
   --color-teal-800: #0a52a3;
   --color-teal-900: #0d3f79;
   --color-teal-950: #0a2a52;
+
+  /* Apple 롤아웃: 카드 표준 라운드를 18px로 통일(기본 16px). flagship(scenarios)의
+     rounded-[18px]와 앱 전체 rounded-2xl 카드를 한 값으로 정렬해 인접 카드 간 불일치 제거. */
+  --radius-2xl: 1.125rem;
 }
 
 body {
