@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatusBadge } from '@/components/ui';
+import { ActionItemCard, Button, DataTable, SectionCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults } from '@/lib/calculation-engine';
 import { getLocalSetting, listLocalItems, setLocalSetting } from '@/lib/local-db';
 import {
@@ -14,9 +14,49 @@ import {
     type ScenarioAssumptions,
 } from '@/lib/scenario-calculation';
 import type { ImportedBenchmarkReference, ImportedDefaultValueReference } from '@/lib/reference-workbooks';
-import { ChevronDown, Database } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, Database, FileText, Share2, Truck } from 'lucide-react';
+import { Inter } from 'next/font/google';
 import Link from 'next/link';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+
+// 시범 디자인(getdesign.md · Apple 계열): SF Pro 대체로 Inter(ss03)를 이 페이지에만 로드.
+const pageFont = Inter({ subsets: ['latin'], weight: ['300', '400', '600', '700'], display: 'swap' });
+
+// Apple DESIGN.md 토큰(근검정 잉크 · 단일 블루 액센트 · 파치먼트 · 그림자 없음).
+// 키 이름은 구조 재사용을 위해 유지하되 값만 Apple로 매핑한다.
+const S = {
+    ink: '#1d1d1f',            // 근검정(순수 검정 아님) — 헤드라인·본문·큰 숫자
+    inkSec: '#333333',
+    inkMute: '#6e6e73',        // Apple 회색 보조
+    primary: '#0066cc',        // Action Blue — 모든 인터랙티브(단일 액센트)
+    primaryDeep: '#0071e3',    // Focus Blue
+    primarySubdued: '#eaf2fd', // 옅은 블루 칩 배경
+    navy: '#f5f5f7',           // (다크 히어로 미사용) 파치먼트로 대체
+    canvas: '#ffffff',
+    canvasSoft: '#f5f5f7',     // 파치먼트
+    hairline: '#e5e5e7',
+    ruby: '#d70015',           // Apple red
+    emerald: '#1d7a4d',        // 유리 — 절제된 그린
+    emeraldSoft: '#e7f4ec',
+    amber: '#9a5b00',          // 주의 — 절제된 오렌지
+    amberSoft: '#fbf0e2',
+    onNavy: '#1d1d1f',
+    onNavyBright: '#1d7a4d',
+    onNavyWarm: '#9a5b00',
+};
+// Apple: 카드 그림자 없음(헤어라인·표면색으로만 구분). 유일한 드롭섀도는 제품 이미지 전용이라 미사용.
+const TNUM = { fontFeatureSettings: "'tnum'" } as const;
+
+// 시범 디자인 전용 패널(그림자 없는 헤어라인 카드, Apple 타이트 제목). SectionCard는 드문 경고 섹션에만.
+function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+    return (
+        <section className="rounded-[18px] p-6 sm:p-7" style={{ backgroundColor: S.canvas, border: `1px solid ${S.hairline}` }}>
+            <h2 className="text-[21px] font-semibold tracking-[-0.014em]" style={{ color: S.ink }}>{title}</h2>
+            {subtitle && <p className="mt-1.5 text-[15px] font-normal leading-[1.47]" style={{ color: S.inkMute, letterSpacing: '-0.2px' }}>{subtitle}</p>}
+            <div className="mt-5">{children}</div>
+        </section>
+    );
+}
 
 function formatNumber(value?: number) {
     if (value === undefined) {
@@ -57,20 +97,20 @@ function CollapsibleSection({ title, summary, defaultOpen = false, children }: {
     const [open, setOpen] = useState(defaultOpen);
 
     return (
-        <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <section className="overflow-hidden rounded-[18px]" style={{ backgroundColor: S.canvas, border: `1px solid ${S.hairline}` }}>
             <button
                 type="button"
                 onClick={() => setOpen((current) => !current)}
                 aria-expanded={open}
-                className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
+                className="flex w-full items-center justify-between gap-3 px-6 py-4 text-left"
             >
                 <span className="min-w-0">
-                    <span className="text-base font-semibold text-slate-950">{title}</span>
-                    {summary && <span className="ml-2 text-xs text-slate-500">{summary}</span>}
+                    <span className="text-[16px] font-semibold tracking-[-0.01em]" style={{ color: S.ink }}>{title}</span>
+                    {summary && <span className="ml-2 text-[13px] font-normal" style={{ color: S.inkMute }}>{summary}</span>}
                 </span>
-                <ChevronDown className={`h-4 w-4 flex-none text-slate-400 transition ${open ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`h-4 w-4 flex-none transition ${open ? 'rotate-180' : ''}`} style={{ color: S.inkMute }} />
             </button>
-            {open && <div className="border-t border-slate-100 px-5 py-5">{children}</div>}
+            {open && <div className="px-6 py-5" style={{ borderTop: `1px solid ${S.hairline}` }}>{children}</div>}
         </section>
     );
 }
@@ -333,72 +373,82 @@ export default function ScenariosPage() {
     const isDeMinimisCandidate = summary.totalImportMass > 0 && summary.totalImportMass <= assumptions.de_minimis_threshold_t;
 
     return (
-        <div className="space-y-6">
-            <PageHeader
-                eyebrow="고급 검토"
-                title="인증서 비용 시나리오"
-                description="이 화면은 비용을 대략 검토하는 고급 단계입니다. 먼저 품목, 생산공정, 배출량 입력을 완료하세요. SEFA와 CBAM 인증서 지표는 사전 검토용으로 사용합니다."
-            />
+        <div className={`${pageFont.className} space-y-8`} style={{ fontFeatureSettings: "'ss03'", color: S.ink }}>
+            <div>
+                <p className="text-[12px] font-semibold" style={{ color: S.primary, letterSpacing: '-0.08px' }}>고급 검토</p>
+                <h1 className="mt-2 text-[38px] font-semibold leading-[1.08] tracking-[-0.016em]" style={{ color: S.ink }}>인증서 비용 시나리오</h1>
+                <p className="mt-3 max-w-2xl text-[17px] font-normal leading-[1.47]" style={{ color: S.inkMute, letterSpacing: '-0.374px' }}>
+                    비용을 대략 검토하는 고급 단계입니다. 품목·생산공정·배출량 입력을 완료한 뒤, SEFA와 CBAM 인증서 지표를 사전 검토용으로 봅니다.
+                </p>
+            </div>
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-base font-semibold text-slate-950">이번 시나리오 결론</h2>
-                    <StatusBadge tone={summary.totalImportMass === 0 ? 'pending' : isDeMinimisCandidate ? 'success' : 'warning'}>
+            <section className="overflow-hidden rounded-[18px] px-7 py-9 sm:px-10 sm:py-11" style={{ backgroundColor: S.canvasSoft }}>
+                <div className="flex flex-wrap items-center gap-3">
+                    <h2 className="text-[22px] font-semibold tracking-[-0.014em]" style={{ color: S.ink }}>이번 시나리오 결론</h2>
+                    <span
+                        className="rounded-full px-3 py-1 text-[12px] font-semibold"
+                        style={
+                            summary.totalImportMass === 0
+                                ? { backgroundColor: '#e8e8ed', color: S.inkMute }
+                                : isDeMinimisCandidate
+                                    ? { backgroundColor: S.emeraldSoft, color: S.emerald }
+                                    : { backgroundColor: S.amberSoft, color: S.amber }
+                        }
+                    >
                         {summary.totalImportMass === 0
                             ? '수입량 입력 필요'
                             : isDeMinimisCandidate
-                                ? `소량면제 가능성 (≤ ${formatInteger(assumptions.de_minimis_threshold_t)}t) — 수입자 확인`
-                                : `소량면제 아님 (${formatInteger(summary.totalImportMass)}t ≥ ${formatInteger(assumptions.de_minimis_threshold_t)}t)`}
-                    </StatusBadge>
+                                ? `소량면제 가능성 · ≤ ${formatInteger(assumptions.de_minimis_threshold_t)}t`
+                                : `소량면제 아님 · ${formatInteger(summary.totalImportMass)}t ≥ ${formatInteger(assumptions.de_minimis_threshold_t)}t`}
+                    </span>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                    이 비용은 <strong className="font-semibold text-slate-900">EU 수입자(신고인)가 부담</strong>합니다 — 수입자와의 가격 협상, 실측 자료 확보의 가치 판단에 쓰는 사전 검토 지표입니다.
-                    철강만 검토하며, 최종 면제 판단은 수입자·최신 규정값으로 확인하세요.
+                <p className="mt-3 max-w-3xl text-[17px] font-normal leading-[1.47]" style={{ color: S.inkMute, letterSpacing: '-0.374px' }}>
+                    이 비용은 <span className="font-semibold" style={{ color: S.ink }}>EU 수입자(신고인)가 부담</span>합니다 — 수입자와의 가격 협상, 실측 자료 확보의 가치 판단에 쓰는 사전 검토 지표입니다. 철강만 검토하며, 최종 면제 판단은 수입자·최신 규정값으로 확인하세요.
                 </p>
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl bg-slate-50 p-4">
-                        <p className="text-xs font-semibold text-slate-500">예상 인증서 수량</p>
-                        <p className="mt-1 text-xl font-bold text-slate-900">
-                            {loading ? '-' : formatInteger(summary.totalCertificateQuantity)} <span className="text-xs font-normal text-slate-500">tCO₂e</span>
+                <div className="mt-9 grid grid-cols-1 gap-x-8 gap-y-8 sm:grid-cols-3">
+                    <div>
+                        <p className="text-[13px] font-normal" style={{ color: S.inkMute }}>예상 인증서 수량</p>
+                        <p className="mt-2.5 text-[40px] font-semibold leading-[1.02] tracking-[-0.02em]" style={{ color: S.ink, ...TNUM }}>
+                            {loading ? '—' : formatInteger(summary.totalCertificateQuantity)} <span className="text-[15px] font-normal" style={{ color: S.inkMute }}>tCO₂e</span>
                         </p>
-                        <p className="mt-0.5 text-xs leading-5 text-slate-500">
-                            차감 전 {formatInteger(summary.totalGrossCertificateQuantity)} · 기지불 탄소가격 {formatCurrency(assumptions.paid_carbon_price_eur_per_tco2e)}/tCO₂e 가정
+                        <p className="mt-2.5 text-[13px] font-normal leading-[1.5]" style={{ color: S.inkMute }}>
+                            차감 전 {formatInteger(summary.totalGrossCertificateQuantity)} · 기지불 {formatCurrency(assumptions.paid_carbon_price_eur_per_tco2e)}/tCO₂e 가정
                         </p>
                     </div>
-                    <div className="rounded-xl bg-slate-50 p-4">
-                        <p className="text-xs font-semibold text-slate-500">수입자 부담 지표 (현재 자료)</p>
-                        <p className="mt-1 text-xl font-bold text-slate-900">{loading ? '-' : formatCurrency(summary.totalCost)}</p>
-                        <p className="mt-0.5 text-xs leading-5 text-slate-500">
+                    <div className="sm:border-l sm:pl-8" style={{ borderColor: S.hairline }}>
+                        <p className="text-[13px] font-normal" style={{ color: S.inkMute }}>수입자 부담 지표 (현재 자료)</p>
+                        <p className="mt-2.5 text-[40px] font-semibold leading-[1.02] tracking-[-0.02em]" style={{ color: S.ink, ...TNUM }}>{loading ? '—' : formatCurrency(summary.totalCost)}</p>
+                        <p className="mt-2.5 text-[13px] font-normal leading-[1.5]" style={{ color: S.inkMute }}>
                             {perTonneCost !== undefined
-                                ? `≈ ${formatCurrency(perTonneCost)} /t · EU 수입 ${formatInteger(summary.totalImportMass)}t (생산 ${formatInteger(summary.totalOutput)}t) 기준`
+                                ? `≈ ${formatCurrency(perTonneCost)} /t · EU 수입 ${formatInteger(summary.totalImportMass)}t (생산 ${formatInteger(summary.totalOutput)}t)`
                                 : 'EU 수입 예정량이 없어 톤당 환산을 표시할 수 없습니다.'}
                         </p>
                     </div>
                     {!hasDefaultComparison ? (
-                        <div className="rounded-xl bg-slate-100 p-4">
-                            <p className="text-xs font-semibold text-slate-500">실측 vs 기본값</p>
-                            <p className="mt-1 text-xl font-bold text-slate-700">비교 불가</p>
-                            <p className="mt-0.5 text-xs leading-5 text-slate-500">기준자료(기본값 파일)를 연결하면 유리한 쪽을 판정합니다.</p>
+                        <div className="sm:border-l sm:pl-8" style={{ borderColor: S.hairline }}>
+                            <p className="text-[13px] font-normal" style={{ color: S.inkMute }}>실측 vs 기본값</p>
+                            <p className="mt-2.5 text-[40px] font-semibold leading-[1.02] tracking-[-0.02em]" style={{ color: S.ink }}>비교 불가</p>
+                            <p className="mt-2.5 text-[13px] font-normal leading-[1.5]" style={{ color: S.inkMute }}>기준자료(기본값 파일)를 연결하면 유리한 쪽을 판정합니다.</p>
                         </div>
                     ) : costDelta > 0.5 ? (
-                        <div className="rounded-xl bg-amber-50 p-4">
-                            <p className="text-xs font-semibold text-amber-800">기본값 사용 시</p>
-                            <p className="mt-1 text-xl font-bold text-amber-900">{formatCurrency(summary.totalDefaultCost)}</p>
-                            <p className="mt-0.5 text-xs leading-5 text-amber-800">
-                                총 {formatCurrency(costDelta)} 절감 여지{perTonneDefaultCost !== undefined ? ` · ≈ ${formatCurrency(perTonneDefaultCost)} /t` : ''} — 기본값이 유리
+                        <div className="sm:border-l sm:pl-8" style={{ borderColor: S.hairline }}>
+                            <p className="text-[13px] font-semibold" style={{ color: S.amber }}>기본값이 유리</p>
+                            <p className="mt-2.5 text-[40px] font-semibold leading-[1.02] tracking-[-0.02em]" style={{ color: S.amber, ...TNUM }}>−{formatCurrency(costDelta)}</p>
+                            <p className="mt-2.5 text-[13px] font-normal leading-[1.5]" style={{ color: S.inkMute }}>
+                                기본값 시 {formatCurrency(summary.totalDefaultCost)}{perTonneDefaultCost !== undefined ? ` · ≈ ${formatCurrency(perTonneDefaultCost)} /t` : ''} — 근거 기록 후 사용 검토
                             </p>
                         </div>
                     ) : costDelta < -0.5 ? (
-                        <div className="rounded-xl bg-emerald-50 p-4">
-                            <p className="text-xs font-semibold text-emerald-800">실측 유지가 유리</p>
-                            <p className="mt-1 text-xl font-bold text-emerald-900">{formatCurrency(Math.abs(costDelta))} 절감 중</p>
-                            <p className="mt-0.5 text-xs leading-5 text-emerald-700">기본값 시나리오({formatCurrency(summary.totalDefaultCost)})보다 낮습니다 — 실측 자료를 유지·보강하세요.</p>
+                        <div className="sm:border-l sm:pl-8" style={{ borderColor: S.hairline }}>
+                            <p className="text-[13px] font-semibold" style={{ color: S.emerald }}>실측 유지가 유리</p>
+                            <p className="mt-2.5 text-[40px] font-semibold leading-[1.02] tracking-[-0.02em]" style={{ color: S.emerald, ...TNUM }}>−{formatCurrency(Math.abs(costDelta))}</p>
+                            <p className="mt-2.5 text-[13px] font-normal leading-[1.5]" style={{ color: S.inkMute }}>기본값({formatCurrency(summary.totalDefaultCost)})보다 낮습니다 — 실측 자료를 유지·보강하세요.</p>
                         </div>
                     ) : (
-                        <div className="rounded-xl bg-slate-100 p-4">
-                            <p className="text-xs font-semibold text-slate-500">실측 vs 기본값</p>
-                            <p className="mt-1 text-xl font-bold text-slate-700">차이 거의 없음</p>
-                            <p className="mt-0.5 text-xs leading-5 text-slate-500">증빙이 쉬운 쪽을 선택하세요.</p>
+                        <div className="sm:border-l sm:pl-8" style={{ borderColor: S.hairline }}>
+                            <p className="text-[13px] font-normal" style={{ color: S.inkMute }}>실측 vs 기본값</p>
+                            <p className="mt-2.5 text-[40px] font-semibold leading-[1.02] tracking-[-0.02em]" style={{ color: S.ink }}>차이 거의 없음</p>
+                            <p className="mt-2.5 text-[13px] font-normal leading-[1.5]" style={{ color: S.inkMute }}>증빙이 쉬운 쪽을 선택하세요.</p>
                         </div>
                     )}
                 </div>
@@ -520,48 +570,59 @@ export default function ScenariosPage() {
                 </SectionCard>
             )}
 
-            <SectionCard
-                title={`품목별 판정${scenarios.length > 0 ? ` (${scenarios.length}건)` : ''}`}
-                description="실측(현재 자료)과 기본값 중 어느 쪽이 인증서 비용이 낮은지 품목별로 판정합니다. 자세한 수치는 아래 '상세 분석 표'에 있습니다."
+            <Panel
+                title={`품목별 판정${scenarios.length > 0 ? ` · ${scenarios.length}건` : ''}`}
+                subtitle="실측(현재 자료)과 기본값 중 어느 쪽이 인증서 비용이 낮은지 품목별로 판정합니다. 자세한 수치는 아래 ‘상세 분석 표’에 있습니다."
             >
                 {scenarios.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm text-slate-500">
+                    <div className="rounded-xl p-5 text-center text-[13px] font-normal" style={{ border: `1px dashed ${S.hairline}`, color: S.inkMute }}>
                         산정 결과가 없습니다. 지도에서 제품·공정·배출량 입력을 완료하세요.
                     </div>
                 ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                         {scenarios.map((scenario) => {
                             const delta = scenario.certificate_cost_delta_eur;
                             const isDefaultBetter = scenario.lower_certificate_basis === 'DEFAULT';
                             const isActualBetter = scenario.lower_certificate_basis === 'ACTUAL';
+                            const pill = isActualBetter
+                                ? { label: '실측 유리', bg: S.emeraldSoft, fg: S.emerald }
+                                : isDefaultBetter
+                                    ? { label: '기본값 유리', bg: S.amberSoft, fg: S.amber }
+                                    : scenario.lower_certificate_basis === 'TIE'
+                                        ? { label: '동일', bg: '#eef1f6', fg: S.inkSec }
+                                        : { label: '판단 전', bg: S.primarySubdued, fg: S.primaryDeep };
                             return (
-                                <div key={`${scenario.result_id}-verdict`} className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-200 px-4 py-3">
+                                <div key={`${scenario.result_id}-verdict`} className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl px-4 py-3.5" style={{ border: `1px solid ${S.hairline}`, backgroundColor: S.canvas }}>
                                     <div className="min-w-40">
-                                        <p className="text-sm font-semibold text-slate-950">{scenario.product_name}</p>
-                                        <p className="mt-0.5 text-xs text-slate-500">
+                                        <p className="text-[14px] font-semibold" style={{ color: S.ink }}>{scenario.product_name}</p>
+                                        <p className="mt-0.5 text-[12px] font-normal" style={{ color: S.inkMute, ...TNUM }}>
                                             {scenario.cn_code ? `CN ${scenario.cn_code}` : 'CN 미입력'} · EU {formatInteger(scenario.import_mass_t)}t
                                         </p>
                                     </div>
-                                    <p className="text-sm text-slate-600">
+                                    <p className="text-[13px] font-normal" style={{ color: S.inkSec, ...TNUM }}>
                                         우리 SEE {formatNumber(scenario.actual_see)} vs 기본값 {scenario.default_see !== undefined ? formatNumber(scenario.default_see) : '—'}
                                     </p>
-                                    {getBasisBadge(scenario)}
-                                    {scenario.data_quality !== 'READY' && getQualityBadge(scenario)}
+                                    <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ backgroundColor: pill.bg, color: pill.fg }}>{pill.label}</span>
+                                    {scenario.data_quality !== 'READY' && (
+                                        <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ backgroundColor: '#fbeaf0', color: S.ruby }}>
+                                            {scenario.data_quality === 'MISSING_CN' ? 'CN 확인' : '기준값 필요'}
+                                        </span>
+                                    )}
                                     <div className="ml-auto text-right">
                                         {isDefaultBetter && delta !== undefined ? (
                                             <>
-                                                <p className="text-sm font-semibold text-amber-700">−{formatCurrency(Math.abs(delta))} 절감 여지</p>
-                                                <p className="text-xs text-slate-500">기본값 근거 기록 후 사용 검토</p>
+                                                <p className="text-[14px] font-normal" style={{ color: S.amber, ...TNUM }}>−{formatCurrency(Math.abs(delta))} 절감 여지</p>
+                                                <p className="text-[12px] font-normal" style={{ color: S.inkMute }}>기본값 근거 기록 후 사용 검토</p>
                                             </>
                                         ) : isActualBetter && delta !== undefined ? (
                                             <>
-                                                <p className="text-sm font-semibold text-emerald-700">기본값 대비 −{formatCurrency(Math.abs(delta))}</p>
-                                                <p className="text-xs text-slate-500">공급사 실측 유지 · 검증 대비</p>
+                                                <p className="text-[14px] font-normal" style={{ color: S.emerald, ...TNUM }}>기본값 대비 −{formatCurrency(Math.abs(delta))}</p>
+                                                <p className="text-[12px] font-normal" style={{ color: S.inkMute }}>공급사 실측 유지 · 검증 대비</p>
                                             </>
                                         ) : scenario.lower_certificate_basis === 'TIE' ? (
-                                            <p className="text-xs text-slate-500">실측·기본값 차이 없음 — 증빙 쉬운 쪽 선택</p>
+                                            <p className="text-[12px] font-normal" style={{ color: S.inkMute }}>실측·기본값 차이 없음 — 증빙 쉬운 쪽 선택</p>
                                         ) : (
-                                            <p className="text-xs text-slate-500">기준자료 연결 후 판정됩니다</p>
+                                            <p className="text-[12px] font-normal" style={{ color: S.inkMute }}>기준자료 연결 후 판정됩니다</p>
                                         )}
                                     </div>
                                 </div>
@@ -569,31 +630,33 @@ export default function ScenariosPage() {
                         })}
                     </div>
                 )}
-            </SectionCard>
+            </Panel>
 
-            <SectionCard
-                title="다음 행동"
-                description="결론을 행동으로 옮기는 순서입니다."
-            >
+            <Panel title="다음 행동" subtitle="결론을 행동으로 옮기는 순서입니다.">
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                    {actionItems.map((item) => (
-                        <ActionItemCard
-                            key={item.key}
-                            title={item.title}
-                            description={item.description}
-                            badge={<StatusBadge tone={item.tone}>{formatNumber(item.count)}{item.unit}</StatusBadge>}
-                            action={item.href && item.cta ? (
-                                <Link
-                                    href={item.href}
-                                    className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-100"
-                                >
-                                    {item.cta}
-                                </Link>
-                            ) : undefined}
-                        />
-                    ))}
+                    {actionItems.map((item) => {
+                        const Icon = item.key === 'default-lower' ? FileText : item.key === 'actual-lower' ? Truck : item.key === 'share-importer' ? Share2 : ArrowUpRight;
+                        return (
+                            <div key={item.key} className="rounded-xl p-4" style={{ border: `1px solid ${S.hairline}`, backgroundColor: S.canvasSoft }}>
+                                <div className="flex items-start gap-3">
+                                    <span className="grid h-8 w-8 flex-none place-items-center rounded-lg" style={{ backgroundColor: S.primarySubdued, color: S.primaryDeep }}>
+                                        <Icon className="h-4 w-4" />
+                                    </span>
+                                    <div className="min-w-0">
+                                        <p className="text-[14px] font-semibold" style={{ color: S.ink }}>{item.title}</p>
+                                        <p className="mt-1 text-[13px] font-normal leading-6" style={{ color: S.inkMute }}>{item.description}</p>
+                                        {item.href && item.cta && (
+                                            <Link href={item.href} className="mt-2.5 inline-flex items-center gap-1 text-[13px] font-semibold" style={{ color: S.primary }}>
+                                                {item.cta} <ArrowUpRight className="h-3.5 w-3.5" />
+                                            </Link>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
-            </SectionCard>
+            </Panel>
 
             <CollapsibleSection
                 title="시나리오 가정"
