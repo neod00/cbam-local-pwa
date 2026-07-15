@@ -179,6 +179,16 @@ function createBulkPreviewRows(text: string, cnOptions: CnCodeOption[]): BulkPro
 }
 
 function GoodsRuleBadges({ product }: { product: Product }) {
+    // CBAM 비대상(스크랩 CN 7204·용접봉 8311 등)은 대상 배지 대신 비대상임을 카드에서 바로 알린다.
+    const coverage = getCbamCoverage(product);
+    if (coverage.status === 'NOT_COVERED') {
+        return (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+                <StatusBadge tone="danger">{coverage.label}</StatusBadge>
+            </div>
+        );
+    }
+
     const metadata = getCbamGoodsMetadata(product);
     const scopeLabel = metadata.steel_app_supported
         ? '철강 앱 대상'
