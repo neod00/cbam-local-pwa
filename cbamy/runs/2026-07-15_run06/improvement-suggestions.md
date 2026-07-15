@@ -31,6 +31,12 @@
 **제안**: EU 템플릿의 E_PurchPrec에 설비ID·보고기간에 대응하는 입력 셀이 있는지 확인 후(있다면) `createPrecursorCellWrites`에 매핑 추가. 셀이 없으면 현행(레코드 보존)이 최선. **확인 필요**(템플릿 셀 존재 여부).
 **우선순위**: P2
 
+> **✅ 해소 (2026-07-15 조사, 공식 템플릿 `CBAM Communication template for installations_en_20241213.xlsx` 직접 확인)**
+> 결론: **템플릿에 설비ID·공급사 보고기간에 대응하는 입력 셀이 없다** → 결함 아님(설계상 레코드 보존이 최선).
+> - **A_InstData 전구물질 등록(행 102+)** 컬럼은 정확히: `ID · 품목군(E) · Country code(F) · Route 1–5(G–K) · Name(L)`. export가 이 전부(E=품목군, F=supplier_country, L=name, G–K=production_route)를 **이미 채운다**. 설비ID·보고기간 컬럼은 존재하지 않음.
+> - **E_PurchPrec 상세 블록(44행/전구물질)**: 이름·소비량 표(a/b/c/d)·SEE 파라미터(직접 SEE, 전력사용량, 전력계수, 간접 SEE, Source, 기본값 근거)뿐. 설비ID·보고기간 행 없음. (Source(M48)는 SEE 값의 출처이지 설비ID 칸이 아님.)
+> - Guidance Step 2가 요구하는 설비ID·보고기간은 **담당자가 자체 기록·검증용으로 수집**하는 항목이며 이 통신 템플릿으로 전송되지 않는다. → `supplier_installation`·`supplier_reporting_period`를 앱 추적성 메타데이터로 보존하는 현행이 정확·완전. **코드 변경 불필요.**
+
 ---
 
 ## 기존 미수정 이슈 (이관 유지)
