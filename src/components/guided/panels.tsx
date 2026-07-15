@@ -1042,10 +1042,12 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
     // ③ SAD 비교 파생값(compareResult 있을 때만 의미): 실측 총 vs 기본값 총, t당·소비량 기준 차이.
     const compareActualTotal = num(directSee) + num(indirectSee);
     const compareDefaultTotal = compareResult ? compareResult.defaultDirect + compareResult.defaultIndirect : 0;
-    const comparePerT = compareActualTotal - compareDefaultTotal; // 음수 = 실측이 낮음 = 유리
+    const comparePerT = compareActualTotal - compareDefaultTotal; // 음수 = 입력값이 낮음 = 유리
     const compareTotalDelta = comparePerT * num(consumed);
     const compareFavorable = comparePerT < -1e-9;
     const compareWorse = comparePerT > 1e-9;
+    // P3-run07-01: 라벨 중립화 — 실측 모드일 때만 "실측", 그 외(혼합·기본값)엔 "입력값"으로 표기.
+    const compareEntryNoun = dataMode === 'ACTUAL' ? '실측' : '입력값';
 
     return (
         <>
@@ -1248,7 +1250,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                     {compareOpen && (
                         <div className="mt-3 space-y-3">
                             <p className="text-xs leading-5 text-slate-500">
-                                지금 입력한 실측값이 EU 공식 기본값보다 유리한지(내재배출=CBAM 비용이 낮은지) 비교합니다. 기본값은 보수적으로 높게 잡히므로 실측이 유리한 경우가 많습니다.
+                                지금 입력한 값이 EU 공식 기본값보다 유리한지(내재배출=CBAM 비용이 낮은지) 비교합니다. 기본값은 보수적으로 높게 잡히므로 실측이 유리한 경우가 많습니다.
                             </p>
                             <Button type="button" variant="secondary" onClick={runCompare}>기본값과 비교</Button>
                             {compareMessage && <p className="text-xs text-amber-700">{compareMessage}</p>}
@@ -1256,7 +1258,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                                 <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5">
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="rounded-md bg-white p-2">
-                                            <p className="font-semibold text-slate-700">지금 실측</p>
+                                            <p className="font-semibold text-slate-700">지금 {compareEntryNoun}</p>
                                             <p className="text-slate-500">직접 {fmt(num(directSee), 3)} · 간접 {fmt(num(indirectSee), 3)}</p>
                                             <p className="font-bold text-slate-900">총 {fmt(compareActualTotal, 3)}</p>
                                         </div>
@@ -1272,12 +1274,12 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                                     <p className="text-[11px] text-slate-400">기본값 출처: {compareResult.matchLabel} (2026, markup 포함)</p>
                                     <p className={`rounded-md px-2 py-1.5 font-semibold ${compareFavorable ? 'bg-emerald-50 text-emerald-800' : compareWorse ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
                                         {compareFavorable
-                                            ? `실측이 t당 ${fmt(Math.abs(comparePerT), 3)} 낮습니다 — 유리. 실측 자료를 확보·유지하세요`
+                                            ? `${compareEntryNoun}이 t당 ${fmt(Math.abs(comparePerT), 3)} 낮습니다 — 유리. 실측 자료를 확보·유지하세요`
                                                 + (num(consumed) > 0 ? ` (소비량 ${fmt(num(consumed), 1)}t 기준 총 ${fmt(Math.abs(compareTotalDelta), 2)} tCO₂e 절감).` : '.')
                                             : compareWorse
-                                            ? `실측이 t당 ${fmt(comparePerT, 3)} 높습니다 — 기본값이 유리. 기본값 사용을 고려하세요`
+                                            ? `${compareEntryNoun}이 t당 ${fmt(comparePerT, 3)} 높습니다 — 기본값이 유리. 기본값 사용을 고려하세요`
                                                 + (num(consumed) > 0 ? ` (총 ${fmt(Math.abs(compareTotalDelta), 2)} tCO₂e 차이).` : '.')
-                                            : '실측과 기본값 차이가 거의 없습니다.'}
+                                            : `${compareEntryNoun}과 기본값 차이가 거의 없습니다.`}
                                     </p>
                                 </div>
                             )}
