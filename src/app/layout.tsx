@@ -1,7 +1,16 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import AppShell from '@/components/AppShell';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
+
+// Apple 롤아웃: SF Pro 대체로 Inter를 앱 전체에 로드(가변 웨이트 300/400/600/700). --font-inter로 노출.
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['300', '400', '600', '700'],
+  variable: '--font-inter',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'CBAM Local',
@@ -15,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className="h-full bg-[#F6F8F7]">
+    <html lang="ko" className={`${inter.variable} h-full bg-[#f5f5f7]`}>
       <body className="min-h-full">
         <ServiceWorkerRegistration />
         <AppShell>{children}</AppShell>
