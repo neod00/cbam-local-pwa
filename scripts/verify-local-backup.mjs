@@ -62,15 +62,55 @@ const generatedBackup = createLocalBackup({
       hs_group: '72',
       product_type_enum: 'HS72_PLATE_SHEET',
       unit: 'tonne',
+      reporting_scope: 'CBAM_GOOD',
       created_at: '2026-05-30T00:00:00.000Z',
       updated_at: '2026-05-30T00:00:00.000Z',
     },
   ],
   periods: [],
   processes: [],
-  product_output_lines: [],
+  product_output_lines: [
+    {
+      id: 'output-line-1',
+      process_id: 'process-1',
+      product_id: 'product-1',
+      name: 'Hot Rolled Coil output',
+      output_mass_t: 1000,
+      allocation_basis: 'MASS',
+      manual_allocation_percent: 100,
+      note: '',
+      reporting_scope: 'CBAM_GOOD',
+      created_at: '2026-05-30T00:00:00.000Z',
+      updated_at: '2026-05-30T00:00:00.000Z',
+    },
+  ],
   source_streams: [],
-  precursors: [],
+  precursors: [
+    {
+      id: 'precursor-1',
+      process_id: 'process-1',
+      product_id: 'product-1',
+      name: 'Purchased slab',
+      aggregated_goods_category: 'Crude steel',
+      production_route: 'Electric arc furnace',
+      supplier_country: 'South Korea',
+      purchased_mass_t: 1100,
+      consumed_mass_t: 1000,
+      consumed_for_non_cbam_mass_t: 0,
+      direct_see_tco2e_per_t: 0.55,
+      indirect_see_tco2e_per_t: 0.35,
+      source: 'Supplier communication template',
+      default_value_justification: '',
+      output_allocations: [{
+        product_output_line_id: 'output-line-1',
+        product_id: 'product-1',
+        allocated_mass_t: 1000,
+        allocation_percent: 100,
+      }],
+      created_at: '2026-05-30T00:00:00.000Z',
+      updated_at: '2026-05-30T00:00:00.000Z',
+    },
+  ],
   settings: [
     {
       id: 'setting-1',
@@ -87,6 +127,12 @@ assert.equal(generatedBackup.manifest.app_name, CBAM_LOCAL_APP_NAME);
 assert.equal(generatedBackup.manifest.app_version, CBAM_LOCAL_APP_VERSION);
 assert.equal(getBackupCompatibilityMessage(generatedBackup.manifest), '');
 assert.equal(generatedBackup.manifest.counts.products, 1);
+assert.equal(generatedBackup.manifest.counts.product_output_lines, 1);
+assert.equal(generatedBackup.manifest.counts.precursors, 1);
+assert.equal(generatedBackup.data.products[0].reporting_scope, 'CBAM_GOOD');
+assert.equal(generatedBackup.data.product_output_lines[0].reporting_scope, 'CBAM_GOOD');
+assert.equal(generatedBackup.data.precursors[0].production_route, 'Electric arc furnace');
+assert.equal(generatedBackup.data.precursors[0].output_allocations?.[0].product_output_line_id, 'output-line-1');
 assert.equal(generatedBackup.manifest.counts.settings, 1);
 assert.equal(generatedBackup.data.settings[0].key, 'scenario:assumptions');
 assert.equal(JSON.stringify(generatedBackup.data.settings[0].value), JSON.stringify(scenarioAssumptions));

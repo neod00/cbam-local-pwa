@@ -32,14 +32,21 @@ export interface Installation extends LocalEntity {
   boundary_json?: Record<string, unknown>;
 }
 
+export type ProductReportingScope =
+  | "CBAM_GOOD"
+  | "NON_CBAM_COPRODUCT"
+  | "WASTE_RECYCLE"
+  | "INTERNAL_ONLY";
+
 export interface Product extends LocalEntity {
   installation_id?: string;
   name: string;
   hs_code: string;
   cn_code?: string;
-  hs_group: "72" | "73";
+  hs_group: string;
   product_type_enum: string;
   unit: string;
+  reporting_scope?: ProductReportingScope;
 }
 
 export interface ReportingPeriod extends LocalEntity {
@@ -73,6 +80,7 @@ export interface ProductOutputLine extends LocalEntity {
   allocation_basis: "MASS" | "MANUAL";
   manual_allocation_percent: number;
   note: string;
+  reporting_scope?: ProductReportingScope;
 }
 
 export interface SourceStream extends LocalEntity {
@@ -96,6 +104,14 @@ export interface SourceStream extends LocalEntity {
   source: string;
 }
 
+export interface PrecursorOutputAllocation {
+  product_output_line_id?: string;
+  product_id?: string;
+  allocated_mass_t: number;
+  allocation_percent?: number;
+  note?: string;
+}
+
 export interface PurchasedPrecursor extends LocalEntity {
   period_id?: string;
   process_id?: string;
@@ -116,6 +132,7 @@ export interface PurchasedPrecursor extends LocalEntity {
   indirect_see_tco2e_per_t: number;
   source: string;
   default_value_justification: string;
+  output_allocations?: PrecursorOutputAllocation[];
 }
 
 export interface AppSetting extends LocalEntity {
@@ -494,6 +511,7 @@ export async function seedLocalData(): Promise<void> {
         hs_group: "72",
         product_type_enum: "HS72_PLATE_SHEET",
         unit: "tonne",
+        reporting_scope: "CBAM_GOOD",
       });
       defaultProductId = hotRolledCoil.id;
       await createLocalItem("products", {
@@ -504,6 +522,7 @@ export async function seedLocalData(): Promise<void> {
         hs_group: "73",
         product_type_enum: "HS73_PIPE_TUBE",
         unit: "tonne",
+        reporting_scope: "CBAM_GOOD",
       });
     }
 

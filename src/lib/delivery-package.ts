@@ -245,7 +245,9 @@ function createCalculationBasisSummaryDocx(input: DeliveryPackageInput) {
         ['Purchased precursors / 구매 전구물질 수', formatNumber(input.precursors.length, 0)],
         ['Export readiness / Export 준비상태', `${input.readiness.errorCount} error(s), ${input.readiness.warningCount} warning(s)`],
     ];
-    const productRows = input.results.map((result) => [
+    const productRows = input.results
+        .filter((result) => result.is_cbam_reportable && result.see_cbam_basis !== null)
+        .map((result) => [
         result.product_name,
         result.cn_code || result.hs_code || '-',
         result.process_name,
@@ -253,7 +255,7 @@ function createCalculationBasisSummaryDocx(input: DeliveryPackageInput) {
         formatPercent(result.allocation_share),
         formatNumber(result.see_direct_incl_precursor),
         formatNumber(result.see_indirect_incl_precursor),
-        formatNumber(result.see_cbam_basis),
+        formatNumber(result.see_cbam_basis ?? 0),
         formatNumber(result.see_informational_total),
         result.warnings.length > 0 ? result.warnings.join('\n') : 'None / 없음',
     ]);

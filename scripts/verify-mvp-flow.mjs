@@ -141,7 +141,7 @@ includesAll(readFileSync('src/app/processes/page.tsx', 'utf8'), [
 ], 'process boundary guidance');
 
 includesAll(files.dashboard, ['WorkflowGuideCard'], 'dashboard');
-includesAll(files.guide, ['Hot Rolled Coil', '배출량 산정 5단계', 'CN 코드 확인', 'SEE 확인·전달'], 'guide page');
+includesAll(files.guide, ['대표 품목', 'CN 코드', '고지서/배출량 입력', '검증 후 보고서'], 'guide page');
 includesAll(files.workflowGuide, ['Excel', '.cbam'], 'workflow guide');
 
 for (const [label, source] of Object.entries({

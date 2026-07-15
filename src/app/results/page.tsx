@@ -4,11 +4,13 @@ import { ActionItemCard, DataTable, PageHeader, SectionCard, StatCard, StatusBad
 import { calculateLocalResults, getLocalCalculationWarningHref } from '@/lib/calculation-engine';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
 import { listLocalItems } from '@/lib/local-db';
+import { getProductReportingScopeLabel } from '@/lib/reporting-scope';
 import { AlertTriangle, ArrowRight, Factory, Gauge, Percent, Scale, Split, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
-function formatNumber(value: number) {
+function formatNumber(value: number | null) {
+    if (value === null) return '해당 없음';
     return new Intl.NumberFormat('ko-KR', {
         maximumFractionDigits: 4,
     }).format(value);
@@ -81,12 +83,14 @@ export default function ResultsPage() {
     }, []);
 
     const summary = useMemo(() => {
-        const totalOutput = results.reduce((sum, result) => sum + result.output_mass_t, 0);
-        const allocatedEmissions = results.reduce(
-            (sum, result) => sum + result.see_cbam_basis * result.output_mass_t,
+        const reportableResults = results.filter((result) => result.is_cbam_reportable && result.see_cbam_basis !== null);
+        const allocationOnlyResults = results.filter((result) => !result.is_cbam_reportable);
+        const totalOutput = reportableResults.reduce((sum, result) => sum + result.output_mass_t, 0);
+        const allocatedEmissions = reportableResults.reduce(
+            (sum, result) => sum + (result.see_cbam_basis ?? 0) * result.output_mass_t,
             0
         );
-        const productLineCount = results.filter((result) => result.product_output_line_id).length;
+        const productLineCount = reportableResults.filter((result) => result.product_output_line_id).length;
         const allWarnings = results.flatMap((result) =>
             result.warningDetails.map((warning) => ({
                 resultId: result.id,
@@ -97,17 +101,18 @@ export default function ResultsPage() {
         );
 
         return {
-            lineCount: results.length,
+            lineCount: reportableResults.length,
+            allocationOnlyCount: allocationOnlyResults.length,
             productLineCount,
             totalOutput,
             allocatedEmissions,
-            averageCbamBasisSee: average(results.map((result) => result.see_cbam_basis)),
-            averageInformationalTotalSee: average(results.map((result) => result.see_informational_total)),
+            averageCbamBasisSee: average(reportableResults.map((result) => result.see_cbam_basis ?? 0)),
+            averageInformationalTotalSee: average(reportableResults.map((result) => result.see_informational_total)),
             weightedCbamBasisSee: totalOutput > 0 ? allocatedEmissions / totalOutput : 0,
             weightedInformationalTotalSee: totalOutput > 0
-                ? results.reduce((sum, result) => sum + result.see_informational_total * result.output_mass_t, 0) / totalOutput
+                ? reportableResults.reduce((sum, result) => sum + result.see_informational_total * result.output_mass_t, 0) / totalOutput
                 : 0,
-            indirectExcludedCount: results.filter((result) => !result.indirect_emissions_applicable).length,
+            indirectExcludedCount: reportableResults.filter((result) => !result.indirect_emissions_applicable).length,
             warningCount: allWarnings.length,
             warnings: allWarnings,
         };
@@ -122,7 +127,7 @@ export default function ResultsPage() {
             />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <StatCard label="산정 라인 수" value={summary.lineCount} helper={`제품라인 ${summary.productLineCount}개`} icon={Factory} tone="info" />
+                <StatCard label="CBAM 신고 라인" value={summary.lineCount} helper={`제품라인 ${summary.productLineCount}개 · 배분 참고 ${summary.allocationOnlyCount}개`} icon={Factory} tone="info" />
                 <StatCard label="총 생산량" value={formatNumber(summary.totalOutput)} helper="tonne" icon={Scale} tone="pending" />
                 <StatCard label="CBAM 기준 배출량" value={formatNumber(summary.allocatedEmissions)} helper="tCO2e" icon={Gauge} tone="success" />
                 <StatCard label="확인 필요" value={summary.warningCount} helper="경고 항목" icon={AlertTriangle} tone="warning" />
@@ -231,6 +236,7 @@ export default function ResultsPage() {
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">
                                             {result.product_name}
+                                            <div className="mt-1 text-xs font-semibold text-slate-500">{getProductReportingScopeLabel(result.reporting_scope)}</div>
                                             {(result.cn_code || result.hs_code) && (
                                                 <div className="text-xs text-slate-400">
                                                     {result.cn_code ? `CN ${result.cn_code}` : `HS ${result.hs_code}`}
@@ -302,6 +308,7 @@ export default function ResultsPage() {
                                         {result.product_name}
                                         {result.cn_code ? ` / CN ${result.cn_code}` : result.hs_code ? ` / HS ${result.hs_code}` : ''}
                                     </p>
+                                    <p className="mt-1 text-xs font-semibold text-slate-500">{getProductReportingScopeLabel(result.reporting_scope)}</p>
                                 </div>
                                 <StatusBadge tone={getAllocationTone(result)}>{getAllocationLabel(result)}</StatusBadge>
                             </div>

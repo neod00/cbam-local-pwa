@@ -22,6 +22,7 @@ export interface ActivityTemplateProductRow {
     hs_group: Product['hs_group'];
     product_type_enum: string;
     unit: string;
+    reporting_scope: Product['reporting_scope'];
 }
 
 export interface ActivityTemplateProcessRow {
@@ -107,9 +108,9 @@ const templateSheets: SheetDefinition[] = [
     {
         name: 'Products',
         rows: [
-            ['product_name', 'hs_code', 'cn_code', 'hs_group', 'product_type_enum', 'unit'],
-            ['Hot Rolled Coil', '7208', '72083900', '72', 'HS72_PLATE_SHEET', 'tonne'],
-            ['Steel Pipe', '7306', '73063080', '73', 'HS73_PIPE_TUBE', 'tonne'],
+            ['product_name', 'hs_code', 'cn_code', 'hs_group', 'product_type_enum', 'unit', 'reporting_scope'],
+            ['Hot Rolled Coil', '7208', '72083900', '72', 'HS72_PLATE_SHEET', 'tonne', 'CBAM_GOOD'],
+            ['Steel Pipe', '7306', '73063080', '73', 'HS73_PIPE_TUBE', 'tonne', 'CBAM_GOOD'],
         ],
     },
     {
@@ -463,9 +464,10 @@ export async function parseActivityDataTemplate(file: File): Promise<ActivityTem
                 product_name: productName,
                 hs_code: text(row, 'hs_code') || text(row, 'cn_code').slice(0, 4),
                 cn_code: text(row, 'cn_code'),
-                hs_group: choice(text(row, 'hs_group'), ['72', '73'] as const, '72'),
+                hs_group: text(row, 'hs_group') || text(row, 'cn_code').slice(0, 2) || text(row, 'hs_code').slice(0, 2) || '72',
                 product_type_enum: text(row, 'product_type_enum') || 'HS72_OTHER',
                 unit: text(row, 'unit') || 'tonne',
+                reporting_scope: choice(text(row, 'reporting_scope'), ['CBAM_GOOD', 'NON_CBAM_COPRODUCT', 'WASTE_RECYCLE', 'INTERNAL_ONLY'] as const, 'CBAM_GOOD'),
             };
         })
         .filter((row): row is ActivityTemplateProductRow => Boolean(row));

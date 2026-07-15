@@ -200,6 +200,14 @@ Completed:
 - Added export-response-type and MRV guidance from the 2026 CBAM briefing materials: Type 1/2/3 role cards on Export and MRV principle/activity-data check cards on source-stream entry.
 - Added detailed PDF calculation-method refinements for steel users: visible 5-step calculation flow, process boundary include/exclude guidance, shared-source allocation guidance, source-stream emission-factor basis selection, and factor-source classification.
 - Tightened beginner/export guardrails for steel users: missing or mismatched source-stream evidence now blocks EU Export, benchmark lookup supports CN prefix rows, non-steel CBAM goods are marked outside app scope, scenario assumptions are clamped to realistic ranges, and source-stream entry has business-document presets.
+- Disabled free-license enforcement for core PWA routes so users can start local CBAM work without registration or administrator approval; the existing license/admin flow remains available for optional distribution and support metadata.
+- Added the first real-data beginner UI milestone: a five-item navigation shell, next-action dashboard, conditional emissions metrics, and a combined installation/reporting-period workspace that writes to the existing IndexedDB stores.
+- Completed the beginner input workflow with minimal product/CN entry, process-to-output-line creation, four-step utility-data entry, conditional precursor handling, visual calculation review, and a four-step EU report gate while preserving every original page behind `?advanced=1`.
+- Added a repeatable headless-Chrome beginner-flow check that saves real IndexedDB data, verifies the calculation/result journey, checks advanced-mode fallback, captures desktop/tablet screenshots, and fails on browser console errors.
+- Added and passed a repeatable 2026 hot-rolled coil scenario rehearsal (CN 72083900) with assumed electricity, city gas, and purchased-slab data; it verifies Annex II indirect exclusion, dashboard scope context, calculation values, zero Export-blocking errors, responsive screenshots, and browser-console cleanliness in an isolated Chrome profile.
+- Added and passed a complex steel rehearsal with one shared process, one CBAM output, one non-CBAM co-product, and two purchased-slab production routes. It confirmed mass allocation and route aggregation but exposed that non-CBAM outputs currently receive CBAM-basis results, contaminate dashboard/result totals, and block Export.
+- Recorded both rehearsal traces, prioritized findings, recommended data-model changes, and acceptance criteria in `docs/harness/steel-scenario-rehearsals.md`; this document is the baseline for the next calculation-scope milestone.
+- Completed the calculation-scope milestone: optional product/output reporting scopes, general HS groups, precursor-to-output allocations, nullable non-CBAM certificate-basis results, reportable-only dashboard/result/export aggregates, backward-compatible backup round trips, and passing simple/complex browser rehearsals with zero Export blockers.
 
 Pending product decisions:
 
@@ -210,7 +218,7 @@ Next:
 - Review the deployed beta rehearsal artifacts in `artifacts/beta-browser-rehearsal/20260601T131659` if a release reviewer needs screenshots or downloaded files.
 - Review and finalize `docs/free-pwa-terms-draft.md` and `docs/free-pwa-release-announcement-draft.md` with legal/operational wording before public distribution.
 - Make the limited beta Go/No-Go decision after legal/operator wording review.
-- Run post-deploy smoke checks for the live `/license` registration gate, email-code recovery, automatic approval refresh, and Neon admin forms after pushing these updates.
+- Run post-deploy smoke checks confirming that core PWA routes open without registration while optional license recovery and Neon admin forms remain isolated from CBAM work data.
 - Run `db/admin/004_license_user_archive.sql` in Neon before using the admin `목록 보관` action in production.
 
 ## Decision Log
@@ -224,3 +232,5 @@ Next:
 - 2026-06-03: License recovery should use short-lived email verification codes instead of passwords for the free PWA. This avoids password storage and keeps the server scope limited to distribution-management metadata.
 - 2026-06-03: User/business inquiries should default to an in-app form instead of opening the user's mail client, but the form must reuse already registered license contact metadata, avoid extra identity fields and pre-send checkboxes, and retain a direct email fallback to `openbrain.main@gmail.com`.
 - 2026-06-04: AI staff operations should start as a manual system. The admin console may expose staff prompts, output templates, data boundaries, and automation readiness, but no OpenAI API execution or scheduled automation is enabled until user volume justifies it.
+- 2026-07-12: Core PWA use no longer requires free-license registration or administrator approval. License and admin features may continue as optional distribution/support tooling, but they must not gate local calculation, validation, Export, or backup access.
+- 2026-07-12: The beginner UI is the default `modern` mode, the immediately preceding dashboard/product UI is preserved as `previous`, and the oldest shell remains `legacy`; UI switching must not migrate or alter local CBAM data.

@@ -155,6 +155,7 @@ export default function PrecursorsPage() {
                     indirect_see_tco2e_per_t: editPrecursor.indirect_see_tco2e_per_t,
                     source: editPrecursor.source,
                     default_value_justification: editPrecursor.default_value_justification,
+                    output_allocations: editPrecursor.output_allocations,
                 });
                 setEditingPrecursorId(editPrecursor.id);
                 setShowForm(true);
@@ -240,6 +241,7 @@ export default function PrecursorsPage() {
             indirect_see_tco2e_per_t: precursor.indirect_see_tco2e_per_t,
             source: precursor.source,
             default_value_justification: precursor.default_value_justification,
+            output_allocations: precursor.output_allocations,
         });
         setErrors({});
         setEditingPrecursorId(precursor.id);
@@ -825,7 +827,7 @@ export default function PrecursorsPage() {
                                 const evidenceIssues = getPrecursorEvidenceIssues(precursor);
                                 return (
                                     <tr key={precursor.id} className="transition hover:bg-slate-50">
-                                        <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-slate-950">{precursor.name}</td>
+                                        <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-slate-950"><div>{precursor.name}</div><div className="mt-1 text-xs font-normal text-slate-500">{precursor.production_route || '생산경로 미입력'}</div></td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{precursor.process_id ? processNames.get(precursor.process_id) ?? '알 수 없음' : '-'}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{precursor.period_id ? periodNames.get(precursor.period_id) ?? '알 수 없음' : '-'}</td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{precursor.product_id ? productNames.get(precursor.product_id) ?? '알 수 없음' : '-'}</td>
