@@ -1416,6 +1416,13 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                         실측(actual)으로 저장됩니다 — 공급사 회신 자료의 출처·날짜를 아래 &lsquo;SEE 출처&rsquo;에 꼭 남기세요.
                     </p>
                 )}
+                {dataMode === 'SEMI_ACTUAL' && (
+                    // 초기 설계의 SAD 주의 문구. 20% 한도는 전환기 전용이라 수치 없이 질적 안내만 한다.
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                        혼합(semi-actual)은 실측과 기본값이 섞인 값입니다. 어느 성분이 기본값인지 아래 &lsquo;SEE 출처&rsquo;에 남기고,
+                        기본값 비중이 총 SEE를 지배하면 공급사 실측 확보를 우선하세요.
+                    </p>
+                )}
                 <Field label="SEE 출처" hint="예: 공급사 회신 메일(날짜), EU 기본값 파일">
                     <input className={fieldClass} value={source} onChange={(event) => setSource(event.target.value)} placeholder="공급사 회신 메일 2026-05-02" />
                 </Field>
@@ -1501,6 +1508,9 @@ function ResultsPanel({ data, binding, selectedProcessId, onSelectStep }: PanelP
                     <p className="text-[11px] text-slate-500">tCO₂e/t</p>
                 </div>
             </div>
+            <p className="text-[11px] leading-4 text-slate-500">
+                철강(Annex II)은 간접분이 인증서 &lsquo;산정 기준&rsquo;에서 빠지지만 보고에는 반드시 포함됩니다 — 그래서 기준과 총 SEE가 다릅니다.
+            </p>
 
             {(warningMessages.length > 0 || issues.length > 0) ? (
                 <div className="space-y-2">
