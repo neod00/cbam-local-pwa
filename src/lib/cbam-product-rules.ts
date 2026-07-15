@@ -106,6 +106,17 @@ export function getCbamCoverage(product?: Pick<Product, 'cn_code' | 'hs_code'>):
         };
     }
 
+    // 명시적 비대상: 고철·철스크랩(CN 7204)과 제외 페로알로이(CN 7202 46)는 CBAM 범위에서 제외되고
+    // 내재배출 0으로 본다(Guidance §5.6, footnote 48 — post-consumer scrap zero embedded).
+    // 72 접두 휴리스틱보다 먼저 걸러 잘못 COVERED로 판정되지 않게 한다.
+    if (code.startsWith('7204') || code.startsWith('720246')) {
+        return {
+            status: 'NOT_COVERED',
+            label: 'CBAM 대상 아님 (스크랩·제외 페로알로이)',
+            reason: '고철·철스크랩(CN 7204)과 일부 페로알로이(CN 7202 46)는 CBAM 대상에서 제외되며 내재배출 0으로 봅니다. 전구물질로 넣지 마세요.',
+        };
+    }
+
     const meta = getCbamGoodsMetadata(product);
     if (meta.annex_i_candidate && meta.steel_app_supported) {
         return {

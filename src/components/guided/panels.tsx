@@ -780,6 +780,12 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         );
     }
 
+    // 원료 CN이 스크랩·비대상이면 경고한다(고철 CN 7204 등은 전구물질이 아님).
+    const precursorCnDigits = cn.replace(/\D/g, '');
+    const precursorCoverage = precursorCnDigits.length >= 4
+        ? getCbamCoverage({ cn_code: precursorCnDigits, hs_code: precursorCnDigits.slice(0, 4) })
+        : null;
+
     // 이 공정이 만드는 제품(생산라인). 2개 이상이면 전구물질을 제품별로 배분할 수 있다(E_PurchPrec (b) 구조).
     const outputLines = data.productOutputLines.filter(
         (line) => line.process_id === process.id && line.output_mass_t > 0
@@ -948,7 +954,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                     사온 CBAM 원료 추가
                 </p>
                 <p className="text-xs leading-5 text-slate-500">
-                    선재·빌릿처럼 CBAM 대상인 강재 원료만 해당합니다. 윤활유·소모품 같은 일반 부자재는 넣지 않습니다.
+                    선재·빌릿처럼 CBAM 대상인 강재 원료만 해당합니다. 고철·스크랩(CN 7204)·윤활유·소모품 같은 비대상·부자재는 넣지 않습니다(내재배출 0).
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                     <Field label="원료 이름">
@@ -957,6 +963,11 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                     <Field label="원료 CN 코드">
                         <input className={fieldClass} value={cn} onChange={(event) => setCn(event.target.value)} placeholder="72131000" />
                     </Field>
+                    {precursorCoverage?.status === 'NOT_COVERED' && (
+                        <p className="col-span-2 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-900">
+                            {precursorCoverage.reason}
+                        </p>
+                    )}
                     <Field label="소비량 (t)" hint="이 공정에 투입한 양">
                         <input className={fieldClass} inputMode="decimal" value={consumed} onChange={(event) => setConsumed(event.target.value)} placeholder="1050" />
                     </Field>
