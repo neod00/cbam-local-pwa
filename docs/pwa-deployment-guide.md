@@ -10,7 +10,7 @@ MVP 단계에서는 Vercel 같은 Next.js 지원 호스팅을 우선 검토합�
 
 - GitHub 저장소는 Private 상태로 유지합니다.
 - 호스팅 서비스에는 Private 저장소 접근 권한만 연결합니다.
-- 배포 산출물에는 `CBAM_documents/`, 공식 EU 템플릿, 실제 기업자료, `.cbam` 백업 파일을 포함하지 않습니다.
+- 배포 산출물에는 `CBAM_documents/`, 실제 기업자료, `.cbam` 백업 파일을 포함하지 않습니다. 예외는 딱 하나 — 편의용으로 내장한 공식 EU Communication Template 사본(`public/templates/`, 약관 §3에 명시)입니다.
 - 배포 전에는 반드시 `npm run verify`를 통과시킵니다.
 - 무료 PWA 약관/고지와 보안 안내를 README 또는 앱 내 안내에서 확인 가능하게 유지합니다.
 
@@ -42,7 +42,7 @@ Cloudflare Pages와 Netlify도 사용할 수 있지만, Next.js App Router 지�
 ## 배포 전 금지 항목
 
 - `CBAM_documents/` 폴더를 저장소나 배포 산출물에 포함하지 않습니다.
-- 공식 EU 템플릿 원본 파일을 앱에 내장하지 않습니다.
+- 공식 EU 템플릿은 편의용 사본 1개(`public/templates/`)만 내장합니다. 최신본 보증은 하지 않으며 사용자가 직접 업로드해 덮어쓸 수 있습니다(약관 §3). 그 외 Excel/PDF/ZIP 파일은 내장하지 않습니다.
 - 샘플이 아닌 실제 기업자료를 데모 데이터로 넣지 않습니다.
 - `.env` 파일이나 서비스 토큰을 커밋하지 않습니다.
 - 유료 또는 보호 대상 계산 로직을 프론트엔드 번들에 넣기 전에 별도 보호 전략을 검토합니다.
@@ -57,7 +57,7 @@ npm run verify:deployment
 npm run verify:routes
 ```
 
-`verify:deployment`는 Git 추적 파일에 `CBAM_documents/`, `artifacts/`, `.env*`, `.vercel`, `.cbam`, Excel/PDF/ZIP 같은 로컬 자료가 포함되지 않았는지 확인합니다. 또한 저장소가 private-source 배포 전제에 맞게 `package.json`의 `private` 설정과 배포 문서 링크를 유지하는지 확인합니다.
+`verify:deployment`는 Git 추적 파일에 `CBAM_documents/`, `artifacts/`, `.env*`, `.vercel`, `.cbam`, Excel/PDF/ZIP 같은 로컬 자료가 포함되지 않았는지 확인합니다(허용 예외: 내장 공식 EU 템플릿 `public/templates/` 1건). 또한 저장소가 private-source 배포 전제에 맞게 `package.json`의 `private` 설정과 배포 문서 링크를 유지하는지 확인합니다.
 
 `verify:routes`는 production build를 기준으로 로컬 Next.js 서버를 잠깐 실행하고 주요 PWA 화면이 HTTP 200으로 열리는지 확인합니다.
 
@@ -68,5 +68,5 @@ npm run verify:routes
 - 설치 가능한 PWA로 표시되는지 확인합니다.
 - 새 브라우저 프로필에서 데이터가 비어 있는 상태로 시작하는지 확인합니다.
 - `.cbam` 백업 내보내기/가져오기가 동작하는지 확인합니다.
-- EU 원본 템플릿 업로드 후 Export 복사본이 생성되는지 확인합니다.
+- 내장 EU 템플릿(기본)과 직접 업로드 각각에서 Export 복사본이 생성되는지 확인합니다.
 - 브라우저 개발자도구 Network 탭에서 기업 입력자료가 외부 서버로 전송되지 않는지 확인합니다.
