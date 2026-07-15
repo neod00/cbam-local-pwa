@@ -760,6 +760,8 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
     const [source, setSource] = useState('');
     const [dataMode, setDataMode] = useState<PurchasedPrecursor['data_mode']>('ACTUAL');
     const [justification, setJustification] = useState('');
+    const [allocMode, setAllocMode] = useState<'auto' | 'manual'>('auto');
+    const [allocMasses, setAllocMasses] = useState<Record<string, string>>({});
     const [message, setMessage] = useState('');
     const [saved, setSaved] = useState(false);
     const processPrecursors = useMemo(
@@ -777,6 +779,30 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
             </div>
         );
     }
+
+    // 이 공정이 만드는 제품(생산라인). 2개 이상이면 전구물질을 제품별로 배분할 수 있다(E_PurchPrec (b) 구조).
+    const outputLines = data.productOutputLines.filter(
+        (line) => line.process_id === process.id && line.output_mass_t > 0
+    );
+    const hasMultipleProducts = outputLines.length > 1;
+    const outputTotal = outputLines.reduce((sum, line) => sum + line.output_mass_t, 0);
+    const allocSum = outputLines.reduce((sum, line) => sum + num(allocMasses[line.id] ?? ''), 0);
+    const pillClass = (active: boolean) =>
+        `min-h-8 rounded-full border px-3 text-xs font-bold transition ${
+            active ? 'border-teal-600 bg-teal-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-teal-200'
+        }`;
+
+    // '제품별 직접 입력'으로 전환 시, 소비량을 생산량 비율로 미리 나눠 채워준다(사용자가 조정).
+    const enableManualAllocation = () => {
+        const consumedMass = num(consumed);
+        const prefill: Record<string, string> = {};
+        outputLines.forEach((line) => {
+            const share = outputTotal > 0 ? line.output_mass_t / outputTotal : 0;
+            prefill[line.id] = consumedMass > 0 ? String(Math.round(consumedMass * share * 1000) / 1000) : '';
+        });
+        setAllocMasses(prefill);
+        setAllocMode('manual');
+    };
 
     const applyDefaultValues = async () => {
         const cnDigits = cn.replace(/\D/g, '');
@@ -836,6 +862,18 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
             setMessage('기본값 사용 사유를 적어주세요.');
             return;
         }
+        // 제품별 직접 배분을 골랐으면 합계가 소비량과 맞아야 한다(엔진도 불일치 시 경고).
+        let outputAllocations: PurchasedPrecursor['output_allocations'];
+        if (hasMultipleProducts && allocMode === 'manual') {
+            const tolerance = Math.max(0.01, consumedMass * 0.01);
+            if (Math.abs(allocSum - consumedMass) > tolerance) {
+                setMessage(`제품별 배분 합계(${fmt(allocSum, 1)} t)가 소비량(${fmt(consumedMass, 1)} t)과 다릅니다. 합계를 맞춰주세요.`);
+                return;
+            }
+            outputAllocations = outputLines
+                .map((line) => ({ product_output_line_id: line.id, allocated_mass_t: num(allocMasses[line.id] ?? '') }))
+                .filter((allocation) => allocation.allocated_mass_t > 0);
+        }
         await createLocalItem('precursors', {
             period_id: process.period_id,
             process_id: process.id,
@@ -856,6 +894,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
             indirect_see_tco2e_per_t: num(indirectSee),
             source: source.trim(),
             default_value_justification: justification.trim(),
+            output_allocations: outputAllocations,
         });
         setName('');
         setCn('');
@@ -866,6 +905,8 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         setSource('');
         setJustification('');
         setDataMode('ACTUAL');
+        setAllocMode('auto');
+        setAllocMasses({});
         setMessage('');
         setSaved(true);
         await onSaved();
@@ -929,6 +970,42 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                         <input className={fieldClass} inputMode="decimal" value={indirectSee} onChange={(event) => setIndirectSee(event.target.value)} placeholder="0.30" />
                     </Field>
                 </div>
+                {hasMultipleProducts && (
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                        <p className="text-sm font-semibold text-slate-800">이 원료를 제품별로 어떻게 나눌까요?</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                            이 공정은 제품이 {outputLines.length}개입니다. 원료가 제품마다 다르게 쓰이면 직접 나누세요(예: STS 선재는 STS 제품에만).
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            <button type="button" onClick={() => setAllocMode('auto')} className={pillClass(allocMode === 'auto')}>
+                                생산량 비율로 자동
+                            </button>
+                            <button type="button" onClick={enableManualAllocation} className={pillClass(allocMode === 'manual')}>
+                                제품별 직접 입력
+                            </button>
+                        </div>
+                        {allocMode === 'manual' && (
+                            <div className="mt-3 space-y-2">
+                                {outputLines.map((line) => (
+                                    <div key={line.id} className="flex items-center gap-3">
+                                        <span className="w-40 flex-none truncate text-sm text-slate-700">{line.name}</span>
+                                        <input
+                                            className={fieldClass}
+                                            inputMode="decimal"
+                                            value={allocMasses[line.id] ?? ''}
+                                            onChange={(event) => setAllocMasses((current) => ({ ...current, [line.id]: event.target.value }))}
+                                            placeholder="0"
+                                        />
+                                        <span className="flex-none text-xs text-slate-500">t</span>
+                                    </div>
+                                ))}
+                                <p className={`text-xs font-semibold ${Math.abs(allocSum - num(consumed)) > Math.max(0.01, num(consumed) * 0.01) ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                    배분 합계 {fmt(allocSum, 1)} t / 소비량 {fmt(num(consumed), 1)} t
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
                 <Button type="button" variant="secondary" onClick={applyDefaultValues}>
                     <Sparkles className="mr-2 h-4 w-4" />
                     공급사 자료 없음 — EU 기본값 채우기
