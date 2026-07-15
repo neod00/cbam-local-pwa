@@ -104,7 +104,8 @@ async function verifyRoutes() {
   assert.ok(renderedHtmlByRoute.get('/admin/login')?.includes('openbrain.main@gmail.com'), 'admin login should render the default operator email');
   assert.equal(renderedHtmlByRoute.get('/admin/login')?.includes('품목 관리'), false, 'admin login should not render the user app sidebar');
 
-  assert.ok(renderedHtmlByRoute.get('/guide')?.includes('Hot Rolled Coil'), 'guide should render the fictional HRC rehearsal path');
+  assert.ok(renderedHtmlByRoute.get('/guide')?.includes('처음에는 이것만 하세요'), 'guide should render the getting-started guide content');
+  assert.ok(renderedHtmlByRoute.get('/guide')?.includes('배출량은 이렇게 계산돼요'), 'guide should render the SEE flow diagram section');
   assert.ok(renderedHtmlByRoute.get('/settings')?.includes('.cbam'), 'settings should render backup guidance');
   assert.ok(renderedHtmlByRoute.has('/export'), 'export route should be included in rendered route checks');
   assert.ok(renderedHtmlByRoute.get('/terms')?.includes('openbrain.main@gmail.com'), 'terms should render the public support email');
