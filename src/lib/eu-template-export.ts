@@ -1584,20 +1584,35 @@ function createPrecursorCellWrites(precursors: PurchasedPrecursor[]): EuTemplate
             },
             { sheetName: 'E_PurchPrec', cell: `L${startRow + 35}`, label: '직접 SEE', value: precursor.direct_see_tco2e_per_t, sourceId: precursor.id },
             { sheetName: 'E_PurchPrec', cell: `M${startRow + 35}`, label: '직접 SEE 출처', value: precursor.source, sourceId: precursor.id },
-            {
-                sheetName: 'E_PurchPrec',
-                cell: `L${startRow + 36}`,
-                label: '전구물질 간접 SEE 환산 전력사용량',
-                value: precursor.indirect_see_tco2e_per_t > 0 ? 1 : 0,
-                sourceId: precursor.id,
-            },
-            {
-                sheetName: 'E_PurchPrec',
-                cell: `L${startRow + 37}`,
-                label: '전구물질 간접 SEE 환산 전력계수',
-                value: precursor.indirect_see_tco2e_per_t,
-                sourceId: precursor.id,
-            },
+            // 간접 SEE = 전력사용량(MWh/t) × 전력계수(tCO₂e/MWh). 공급사가 두 값을 따로 줬으면
+            // 그대로 기재해 검증 추적성을 살린다. 없으면 사용량 1로 두고 간접값 전량을 계수로 우겨넣는다(bridge).
+            ...(() => {
+                const hasBridge =
+                    precursor.indirect_electricity_mwh_per_t != null &&
+                    precursor.indirect_electricity_mwh_per_t > 0 &&
+                    precursor.indirect_electricity_factor_tco2e_per_mwh != null &&
+                    precursor.indirect_electricity_factor_tco2e_per_mwh > 0;
+                return [
+                    {
+                        sheetName: 'E_PurchPrec' as const,
+                        cell: `L${startRow + 36}`,
+                        label: '전구물질 간접 SEE 환산 전력사용량',
+                        value: hasBridge
+                            ? precursor.indirect_electricity_mwh_per_t!
+                            : precursor.indirect_see_tco2e_per_t > 0 ? 1 : 0,
+                        sourceId: precursor.id,
+                    },
+                    {
+                        sheetName: 'E_PurchPrec' as const,
+                        cell: `L${startRow + 37}`,
+                        label: '전구물질 간접 SEE 환산 전력계수',
+                        value: hasBridge
+                            ? precursor.indirect_electricity_factor_tco2e_per_mwh!
+                            : precursor.indirect_see_tco2e_per_t,
+                        sourceId: precursor.id,
+                    },
+                ];
+            })(),
             {
                 sheetName: 'E_PurchPrec',
                 cell: `L${startRow + 40}`,

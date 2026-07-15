@@ -757,6 +757,9 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
     const [purchased, setPurchased] = useState('');
     const [directSee, setDirectSee] = useState('');
     const [indirectSee, setIndirectSee] = useState('');
+    const [bridgeOpen, setBridgeOpen] = useState(false);
+    const [indirectMwh, setIndirectMwh] = useState('');
+    const [indirectFactor, setIndirectFactor] = useState('');
     const [source, setSource] = useState('');
     const [dataMode, setDataMode] = useState<PurchasedPrecursor['data_mode']>('ACTUAL');
     const [justification, setJustification] = useState('');
@@ -771,6 +774,12 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
     const [supplierInstallation, setSupplierInstallation] = useState('');
     const [supplierRoute, setSupplierRoute] = useState('');
     const [supplierPeriod, setSupplierPeriod] = useState('');
+    // ③ SAD 비교: 지금 입력한 실측값이 EU 공식 기본값보다 유리한지(=CBAM 비용이 낮은지) 판단.
+    const [compareOpen, setCompareOpen] = useState(false);
+    const [compareResult, setCompareResult] = useState<
+        null | { defaultDirect: number; defaultIndirect: number; hasIndirect: boolean; matchLabel: string }
+    >(null);
+    const [compareMessage, setCompareMessage] = useState('');
     const [message, setMessage] = useState('');
     const [saved, setSaved] = useState(false);
     const processPrecursors = useMemo(
@@ -819,9 +828,58 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         setConsumed(String(Math.round(mixTotalMass * 1000) / 1000));
         setDirectSee(String(Math.round(mixWeightedDirect * 1e6) / 1e6));
         setIndirectSee(String(Math.round(mixWeightedIndirect * 1e6) / 1e6));
+        // 가중평균 간접값은 단일 SEE라 전력 분해가 무의미 — bridge 분해값을 비운다(export는 synthetic fallback).
+        setIndirectMwh('');
+        setIndirectFactor('');
         setSource(`공급사 믹스(소비량 가중평균) — ${breakdown}`);
         setMixOpen(false);
         setMessage('공급사 믹스를 소비량 가중평균해 위 칸에 채웠습니다. 값을 확인하고 저장하세요.');
+    };
+
+    // bridge: 간접 SEE를 전력사용량(MWh/t)×전력계수(tCO₂e/MWh)로 입력.
+    // 공급사가 두 값을 따로 주면 실제 분해를 보존해 EU E_PurchPrec에 그대로 기재한다(검증 추적성).
+    const bridgeUsage = num(indirectMwh);
+    const bridgeFactor = num(indirectFactor);
+    const bridgeIndirect = bridgeUsage * bridgeFactor;
+    const applyBridge = () => {
+        if (bridgeUsage <= 0 || bridgeFactor <= 0) {
+            setMessage('전력사용량과 전력계수를 모두 입력하세요.');
+            return;
+        }
+        setIndirectSee(String(Math.round(bridgeIndirect * 1e6) / 1e6));
+        setBridgeOpen(false);
+        setMessage('전력사용량×계수로 간접 SEE를 채웠습니다. EU 문서에 두 값이 그대로 기재됩니다.');
+    };
+
+    // ③ SAD 비교: 현재 CN의 EU 공식 기본값을 조회해 지금 실측값과 나란히 보여준다(비용 판단 보조).
+    const runCompare = async () => {
+        const cnDigits = cn.replace(/\D/g, '');
+        if (cnDigits.length < 4) {
+            setCompareMessage('먼저 원료 CN 코드(4자리 이상)를 입력하세요.');
+            setCompareResult(null);
+            return;
+        }
+        const reference = await getLocalSetting<ImportedDefaultValueReference>('reference:default-values');
+        if (!reference) {
+            setCompareMessage('공식 기본값 파일이 없습니다. 자료 업로드에서 EU 기본값(DVs)을 가져오면 비교할 수 있습니다.');
+            setCompareResult(null);
+            return;
+        }
+        const match = findDefaultValueReference(reference, 'South Korea', cnDigits, '2026');
+        if (!match) {
+            setCompareMessage(`CN ${cnDigits}에 맞는 공식 기본값을 찾지 못했습니다. CN을 확인하세요.`);
+            setCompareResult(null);
+            return;
+        }
+        const hasIndirect = match.indirect_default != null;
+        const markedUpTotal = getDefaultValueTotalForYear(match, '2026') ?? match.total_default ?? match.direct_default ?? 0;
+        setCompareResult({
+            defaultDirect: hasIndirect ? (match.direct_default ?? 0) : markedUpTotal,
+            defaultIndirect: match.indirect_default ?? 0,
+            hasIndirect,
+            matchLabel: `${match.country} / ${match.cn_code}`,
+        });
+        setCompareMessage('');
     };
 
     // 이 공정이 만드는 제품(생산라인). 2개 이상이면 전구물질을 제품별로 배분할 수 있다(E_PurchPrec (b) 구조).
@@ -870,6 +928,8 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         const indirect = match.indirect_default ?? 0;
         setDirectSee(String(direct));
         setIndirectSee(String(indirect));
+        setIndirectMwh('');
+        setIndirectFactor('');
         setDataMode('DEFAULT');
         setJustification(
             `공급사 measured SEE 미입수 — EU 국가/CN 기본값(2026, markup 포함) 적용. 직접 ${direct}`
@@ -937,6 +997,8 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
             consumed_for_non_cbam_mass_t: 0,
             direct_see_tco2e_per_t: num(directSee),
             indirect_see_tco2e_per_t: num(indirectSee),
+            indirect_electricity_mwh_per_t: bridgeUsage > 0 && bridgeFactor > 0 ? bridgeUsage : undefined,
+            indirect_electricity_factor_tco2e_per_mwh: bridgeUsage > 0 && bridgeFactor > 0 ? bridgeFactor : undefined,
             source: source.trim(),
             default_value_justification: justification.trim(),
             output_allocations: outputAllocations,
@@ -947,6 +1009,9 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         setPurchased('');
         setDirectSee('');
         setIndirectSee('');
+        setBridgeOpen(false);
+        setIndirectMwh('');
+        setIndirectFactor('');
         setSource('');
         setJustification('');
         setDataMode('ACTUAL');
@@ -958,6 +1023,9 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         setSupplierInstallation('');
         setSupplierRoute('');
         setSupplierPeriod('');
+        setCompareOpen(false);
+        setCompareResult(null);
+        setCompareMessage('');
         setMessage('');
         setSaved(true);
         await onSaved();
@@ -970,6 +1038,14 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         await deleteLocalItem('precursors', precursor.id);
         await onSaved();
     };
+
+    // ③ SAD 비교 파생값(compareResult 있을 때만 의미): 실측 총 vs 기본값 총, t당·소비량 기준 차이.
+    const compareActualTotal = num(directSee) + num(indirectSee);
+    const compareDefaultTotal = compareResult ? compareResult.defaultDirect + compareResult.defaultIndirect : 0;
+    const comparePerT = compareActualTotal - compareDefaultTotal; // 음수 = 실측이 낮음 = 유리
+    const compareTotalDelta = comparePerT * num(consumed);
+    const compareFavorable = comparePerT < -1e-9;
+    const compareWorse = comparePerT > 1e-9;
 
     return (
         <>
@@ -1006,7 +1082,15 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                         <input className={fieldClass} value={name} onChange={(event) => setName(event.target.value)} placeholder="선재(와이어로드)" />
                     </Field>
                     <Field label="원료 CN 코드">
-                        <input className={fieldClass} value={cn} onChange={(event) => setCn(event.target.value)} placeholder="72131000" />
+                        <input
+                            className={fieldClass}
+                            value={cn}
+                            onChange={(event) => {
+                                setCn(event.target.value);
+                                setCompareResult(null);
+                            }}
+                            placeholder="72131000"
+                        />
                     </Field>
                     {precursorCoverage?.status === 'NOT_COVERED' && (
                         <p className="col-span-2 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-900">
@@ -1023,8 +1107,49 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                         <input className={fieldClass} inputMode="decimal" value={directSee} onChange={(event) => setDirectSee(event.target.value)} placeholder="1.80" />
                     </Field>
                     <Field label="원료 SEE 간접분 (tCO₂e/t)">
-                        <input className={fieldClass} inputMode="decimal" value={indirectSee} onChange={(event) => setIndirectSee(event.target.value)} placeholder="0.30" />
+                        <input
+                            className={fieldClass}
+                            inputMode="decimal"
+                            value={indirectSee}
+                            onChange={(event) => {
+                                // 수동 편집은 전력 분해를 무효화 — export는 synthetic fallback으로.
+                                setIndirectSee(event.target.value);
+                                setIndirectMwh('');
+                                setIndirectFactor('');
+                            }}
+                            placeholder="0.30"
+                        />
                     </Field>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                    <button
+                        type="button"
+                        onClick={() => setBridgeOpen((open) => !open)}
+                        aria-expanded={bridgeOpen}
+                        className="flex w-full items-center justify-between text-sm font-semibold text-slate-800"
+                    >
+                        간접분을 전력사용량×계수로 입력 (선택)
+                        <ChevronDown className={`h-4 w-4 flex-none text-slate-400 transition ${bridgeOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {bridgeOpen && (
+                        <div className="mt-3 space-y-2">
+                            <p className="text-xs leading-5 text-slate-500">
+                                공급사가 간접분을 전력사용량과 계수로 따로 줬다면 여기에 넣으세요. 곱해서 위 간접분 칸에 채우고, EU 문서에도 두 값이 그대로 기재됩니다(검증 대비). 한국 철강 기본값은 간접이 0이라 대개 비워둡니다.
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                                <Field label="전력사용량 (MWh/t)">
+                                    <input className={fieldClass} inputMode="decimal" value={indirectMwh} onChange={(event) => setIndirectMwh(event.target.value)} placeholder="0.346" />
+                                </Field>
+                                <Field label="전력계수 (tCO₂e/MWh)">
+                                    <input className={fieldClass} inputMode="decimal" value={indirectFactor} onChange={(event) => setIndirectFactor(event.target.value)} placeholder="0.590" />
+                                </Field>
+                            </div>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="text-xs font-semibold text-slate-600">= 간접 SEE {fmt(bridgeIndirect, 4)} tCO₂e/t</span>
+                                <Button type="button" variant="secondary" onClick={applyBridge}>간접분 칸에 채우기</Button>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-3">
                     <button
@@ -1110,6 +1235,55 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                     <Sparkles className="mr-2 h-4 w-4" />
                     공급사 자료 없음 — EU 기본값 채우기
                 </Button>
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                    <button
+                        type="button"
+                        onClick={() => setCompareOpen((open) => !open)}
+                        aria-expanded={compareOpen}
+                        className="flex w-full items-center justify-between text-sm font-semibold text-slate-800"
+                    >
+                        실측 vs 기본값 비교 (비용 판단, 선택)
+                        <ChevronDown className={`h-4 w-4 flex-none text-slate-400 transition ${compareOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {compareOpen && (
+                        <div className="mt-3 space-y-3">
+                            <p className="text-xs leading-5 text-slate-500">
+                                지금 입력한 실측값이 EU 공식 기본값보다 유리한지(내재배출=CBAM 비용이 낮은지) 비교합니다. 기본값은 보수적으로 높게 잡히므로 실측이 유리한 경우가 많습니다.
+                            </p>
+                            <Button type="button" variant="secondary" onClick={runCompare}>기본값과 비교</Button>
+                            {compareMessage && <p className="text-xs text-amber-700">{compareMessage}</p>}
+                            {compareResult && (
+                                <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="rounded-md bg-white p-2">
+                                            <p className="font-semibold text-slate-700">지금 실측</p>
+                                            <p className="text-slate-500">직접 {fmt(num(directSee), 3)} · 간접 {fmt(num(indirectSee), 3)}</p>
+                                            <p className="font-bold text-slate-900">총 {fmt(compareActualTotal, 3)}</p>
+                                        </div>
+                                        <div className="rounded-md bg-white p-2">
+                                            <p className="font-semibold text-slate-700">EU 기본값</p>
+                                            <p className="text-slate-500">
+                                                직접 {fmt(compareResult.defaultDirect, 3)}
+                                                {compareResult.hasIndirect ? ` · 간접 ${fmt(compareResult.defaultIndirect, 3)}` : ' · 간접 미제공(0)'}
+                                            </p>
+                                            <p className="font-bold text-slate-900">총 {fmt(compareDefaultTotal, 3)}</p>
+                                        </div>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400">기본값 출처: {compareResult.matchLabel} (2026, markup 포함)</p>
+                                    <p className={`rounded-md px-2 py-1.5 font-semibold ${compareFavorable ? 'bg-emerald-50 text-emerald-800' : compareWorse ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
+                                        {compareFavorable
+                                            ? `실측이 t당 ${fmt(Math.abs(comparePerT), 3)} 낮습니다 — 유리. 실측 자료를 확보·유지하세요`
+                                                + (num(consumed) > 0 ? ` (소비량 ${fmt(num(consumed), 1)}t 기준 총 ${fmt(Math.abs(compareTotalDelta), 2)} tCO₂e 절감).` : '.')
+                                            : compareWorse
+                                            ? `실측이 t당 ${fmt(comparePerT, 3)} 높습니다 — 기본값이 유리. 기본값 사용을 고려하세요`
+                                                + (num(consumed) > 0 ? ` (총 ${fmt(Math.abs(compareTotalDelta), 2)} tCO₂e 차이).` : '.')
+                                            : '실측과 기본값 차이가 거의 없습니다.'}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
                 <Field label="자료 종류 (data mode)" hint="입력한 SEE가 실측인지 기본값인지 명시합니다 — 추적성에 중요합니다.">
                     <select className={fieldClass} value={dataMode} onChange={(event) => setDataMode(event.target.value as PurchasedPrecursor['data_mode'])}>
                         <option value="ACTUAL">공급사 실측 (actual)</option>

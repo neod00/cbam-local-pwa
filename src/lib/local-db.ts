@@ -131,6 +131,11 @@ export interface PurchasedPrecursor extends LocalEntity {
   consumed_for_non_cbam_mass_t: number;
   direct_see_tco2e_per_t: number;
   indirect_see_tco2e_per_t: number;
+  // 간접 SEE의 실제 분해(선택): 공급사가 전력사용량·계수를 따로 주면 보존한다.
+  // 있으면 EU E_PurchPrec에 그대로 기재하고, 없으면 indirect_see를 1×값으로 우겨넣는다(bridge).
+  // indirect_see_tco2e_per_t는 여전히 권위값(= mwh × factor)이며 계산엔진은 이 단일값만 쓴다.
+  indirect_electricity_mwh_per_t?: number;
+  indirect_electricity_factor_tco2e_per_mwh?: number;
   source: string;
   default_value_justification: string;
   output_allocations?: PrecursorOutputAllocation[];
