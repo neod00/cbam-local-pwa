@@ -953,6 +953,25 @@ export async function createEuTemplateCopy(file: File): Promise<Blob> {
     });
 }
 
+// 앱에 내장한 공식 EU Communication Template(편의용 기본 사본). 사용자가 직접 업로드하면 덮어쓴다.
+// 버전이 고정되어 있으므로 UI에 날짜를 표기하고 최신 공식본 확인을 안내한다.
+export const DEFAULT_EU_TEMPLATE_PATH = '/templates/CBAM_Communication_template_for_installations_en_20241213.xlsx';
+export const DEFAULT_EU_TEMPLATE_FILENAME = 'CBAM Communication template for installations_en_20241213.xlsx';
+export const DEFAULT_EU_TEMPLATE_VERSION = '2024-12-13';
+
+// 내장 기본 템플릿을 File로 불러온다. validateEuTemplateFile와 파일명 생성이 .name(.xlsx)에 의존하므로
+// bare Blob이 아니라 공식 파일명을 가진 File로 감싼다.
+export async function loadDefaultEuTemplateFile(): Promise<File> {
+    const response = await fetch(DEFAULT_EU_TEMPLATE_PATH);
+    if (!response.ok) {
+        throw new Error('내장 EU 템플릿을 불러오지 못했습니다. 최신 공식 템플릿을 직접 업로드하세요.');
+    }
+    const blob = await response.blob();
+    return new File([blob], DEFAULT_EU_TEMPLATE_FILENAME, {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+}
+
 function escapeXml(value: string): string {
     return value
         .replaceAll('&', '&amp;')

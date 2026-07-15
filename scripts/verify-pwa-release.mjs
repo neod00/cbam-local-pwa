@@ -58,7 +58,11 @@ for (const route of expectedShellRoutes) {
 
 assert.equal(serviceWorker.includes('"/admin"'), false, 'protected admin route should not be cached by the service worker');
 assert.equal(serviceWorker.includes('"/admin/login"'), false, 'admin login should not be cached by the service worker');
-assert.ok(serviceWorker.includes('cbam-local-v5'), 'service worker cache version should be current');
+assert.ok(serviceWorker.includes('cbam-local-v6'), 'service worker cache version should be current');
+assert.ok(
+  serviceWorker.includes('/templates/CBAM_Communication_template_for_installations_en_20241213.xlsx'),
+  'service worker should precache the bundled EU Communication template for offline export'
+);
 assert.ok(serviceWorker.includes('networkFirst(request)'), 'service worker should use network-first route handling to avoid stale pages');
 assert.ok(serviceWorker.includes('request.mode === "navigate"'), 'service worker should detect navigation requests');
 assert.ok(serviceWorker.includes('fetch(request, { cache: "no-store" })'), 'service worker should bypass stale HTTP cache for network-first requests');

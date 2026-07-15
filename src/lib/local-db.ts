@@ -482,6 +482,44 @@ export async function clearLocalData(): Promise<void> {
   });
 }
 
+// '새 프로젝트' 시작 시 보존할 설정 키. 라이선스(로그인 유지), 업로드한 EU 기본값(DV) 참조,
+// 사용자 비용 가정은 프로젝트 간 재사용되므로 남기고, 그 외 프로젝트 범위 설정은 함께 지운다.
+export const NEW_PROJECT_PRESERVED_SETTING_KEYS = [
+  "license:free-registration",
+  "reference:default-values",
+  "scenario:assumptions",
+] as const;
+
+// 입력 데이터(7개 도메인 스토어)만 비우고, 설정은 위 보존 키만 남긴다. 라이선스·DV는 유지되므로
+// 사용자는 다시 로그인하거나 기본값을 재업로드할 필요가 없다. clearLocalData(전체 삭제)와 구별된다.
+export async function startNewProject(): Promise<void> {
+  const db = await openDatabase();
+  const domainStores = STORE_NAMES.filter((storeName) => storeName !== "settings");
+  const preserved = new Set<string>(NEW_PROJECT_PRESERVED_SETTING_KEYS);
+
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAMES, "readwrite");
+
+    for (const storeName of domainStores) {
+      transaction.objectStore(storeName).clear();
+    }
+
+    const settingsStore = transaction.objectStore("settings");
+    const request = settingsStore.getAll();
+    request.onsuccess = () => {
+      for (const setting of request.result as AppSetting[]) {
+        if (!preserved.has(setting.key)) {
+          settingsStore.delete(setting.id);
+        }
+      }
+    };
+
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+}
+
 export async function seedLocalData(): Promise<void> {
   const [installations, products, periods, processes, productOutputLines, sourceStreams, precursors] = await Promise.all([
     listLocalItems("installations"),

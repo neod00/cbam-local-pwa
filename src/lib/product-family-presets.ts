@@ -51,7 +51,7 @@ export const PRODUCT_FAMILY_PRESETS: ProductFamilyPreset[] = [
     {
         id: 'wire',
         label: '강선·와이어',
-        description: '철선, 도금선, STS 와이어, 합금강 와이어처럼 강재를 사서 선재·와이어로 가공하는 제품군입니다.',
+        description: '철선, 도금선, STS 와이어, 합금강 와이어처럼 강재를 구매해 선재·와이어로 가공하는 제품군입니다.',
         examples: ['만호제강', '영흥철강', 'DSR제강', '홍덕산업', '청우제강'],
         details: [
             {
@@ -104,7 +104,7 @@ export const PRODUCT_FAMILY_PRESETS: ProductFamilyPreset[] = [
     {
         id: 'pipe-tube',
         label: '강관·튜브',
-        description: 'HRC, 후판, 코일을 사서 제관하는 무계목·용접 강관 제품군입니다.',
+        description: 'HRC, 후판, 코일을 구매해 제관하는 무계목·용접 강관 제품군입니다.',
         examples: ['휴스틸', '넥스틸', '하이스틸', '한진철관', '동양철관', '미주제강'],
         details: [
             {
@@ -125,7 +125,7 @@ export const PRODUCT_FAMILY_PRESETS: ProductFamilyPreset[] = [
     {
         id: 'stainless-flat',
         label: 'STS 냉연·평판',
-        description: '스테인리스 열연코일을 사서 냉연·소둔·절단하는 평판 제품군입니다.',
+        description: '스테인리스 열연코일을 구매해 냉연·소둔·절단하는 평판 제품군입니다.',
         examples: ['비앤지스틸', '대양금속', '황금에스티'],
         details: [
             {

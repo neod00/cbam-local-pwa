@@ -141,15 +141,15 @@ export function SeeFlowDiagram({
                     </g>
                 )}
 
-                {/* 경계 밖 투입: 전력 / 사온 원료 */}
+                {/* 경계 밖 투입: 전력 / 구매한 원료 */}
                 <SeeNode push={push} href="/processes" label="전력 사용량 입력으로 이동" term="간접배출">
                     <rect className="see-rect" x="230" y="82" width="190" height="52" rx="8" fill={COLORS.indigo.fill} stroke={COLORS.indigo.stroke} strokeWidth="1" />
                     <text x="325" y="104" textAnchor="middle" fontSize="14" fontWeight="600" fill={COLORS.indigo.title}>전력</text>
                     <text x="325" y="122" textAnchor="middle" fontSize="12" fill={COLORS.indigo.sub}>발전소에서 만들어 옴</text>
                 </SeeNode>
-                <SeeNode push={push} href="/precursors" label="전구물질(사온 원료) 입력으로 이동" term="전구물질">
+                <SeeNode push={push} href="/precursors" label="전구물질(구매한 원료) 입력으로 이동" term="전구물질">
                     <rect className="see-rect" x="450" y="82" width="190" height="52" rx="8" fill={COLORS.teal.fill} stroke={COLORS.teal.stroke} strokeWidth="1" />
-                    <text x="545" y="104" textAnchor="middle" fontSize="14" fontWeight="600" fill={COLORS.teal.title}>사온 원료 강재</text>
+                    <text x="545" y="104" textAnchor="middle" fontSize="14" fontWeight="600" fill={COLORS.teal.title}>구매한 원료 강재</text>
                     <text x="545" y="122" textAnchor="middle" fontSize="12" fill={COLORS.teal.sub}>규정 용어: 전구물질</text>
                 </SeeNode>
                 <line x1="325" y1="134" x2="325" y2="176" stroke={COLORS.indigo.stroke} strokeWidth="1.5" markerEnd="url(#see-arrow)" />

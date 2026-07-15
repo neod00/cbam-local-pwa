@@ -1,4 +1,4 @@
-const CACHE_NAME = "cbam-local-v5";
+const CACHE_NAME = "cbam-local-v6";
 const APP_SHELL = [
   "/",
   "/announcement",
@@ -20,7 +20,8 @@ const APP_SHELL = [
   "/workspace",
   "/manifest.webmanifest",
   "/update-manifest.json",
-  "/icon.svg"
+  "/icon.svg",
+  "/templates/CBAM_Communication_template_for_installations_en_20241213.xlsx"
 ];
 
 function isSameOrigin(request) {

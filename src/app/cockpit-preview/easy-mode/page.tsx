@@ -371,9 +371,9 @@ export default function EasyModePreview() {
                     {step === 4 && (
                         <div className="space-y-4">
                             <h2 className="text-lg font-semibold">
-                                <Term k="전구물질" />(원료)를 사 왔나요?
+                                <Term k="전구물질" />(원료)를 구매했나요?
                             </h2>
-                            <p className="text-sm text-slate-500">선철·합금철·조강 등 CBAM 대상 원료를 매입했다면 그 원료의 내재배출도 제품에 더해집니다. 없으면 비워두고 넘어가세요.</p>
+                            <p className="text-sm text-slate-500">선철·합금철·조강 등 CBAM 대상 원료를 구매했다면 그 원료의 내재배출도 제품에 더해집니다. 없으면 비워두고 넘어가세요.</p>
                             <div>
                                 <label className="text-sm font-semibold text-slate-700">원료명 / 소비량 (t)</label>
                                 <div className="mt-1 grid grid-cols-2 gap-2">

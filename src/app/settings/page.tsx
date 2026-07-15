@@ -579,14 +579,14 @@ export default function SettingsPage() {
             <SectionCard className="border-red-200">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
-                        <h2 className="text-lg font-semibold text-red-900">로컬 데이터 삭제</h2>
+                        <h2 className="text-lg font-semibold text-red-900">전체 초기화 (라이선스·기본값 포함)</h2>
                         <p className="mt-1 text-sm text-red-700">
-                            이 브라우저의 모든 CBAM Local 데이터를 삭제합니다. 보관이 필요하면 먼저 백업을 내보내세요.
+                            이 브라우저의 <strong>모든</strong> CBAM Local 데이터를 삭제합니다 — 입력 데이터뿐 아니라 라이선스 등록과 업로드한 EU 기본값(DV)까지 지워집니다. 입력만 비우고 새로 시작하려면 지도 화면의 <strong>&lsquo;새 프로젝트&rsquo;</strong>를 사용하세요. 보관이 필요하면 먼저 백업을 내보내세요.
                         </p>
                     </div>
                     <Button type="button" variant="danger" onClick={handleClearData}>
                         <Trash2 className="mr-2 h-4 w-4" />
-                        데이터 삭제
+                        전체 초기화
                     </Button>
                 </div>
             </SectionCard>
