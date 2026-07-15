@@ -14,7 +14,17 @@ const forbiddenTrackedPatterns = [
   /\.(?:cbam|xlsx|xls|xlsm|pdf|zip)$/i,
 ];
 
+// 정책 변경(약관 §3 개정): 공식 EU Communication Template 사본 1개는 편의를 위해 의도적으로
+// 앱에 내장한다(public/templates). 그 외 Excel/PDF/ZIP/.cbam/로컬 자료는 여전히 추적 금지.
+const allowedTrackedFiles = new Set([
+  'public/templates/CBAM_Communication_template_for_installations_en_20241213.xlsx',
+]);
+
 for (const file of trackedFiles) {
+  if (allowedTrackedFiles.has(file)) {
+    continue;
+  }
+
   for (const pattern of forbiddenTrackedPatterns) {
     assert.equal(pattern.test(file), false, `deployment artifact should not track forbidden file: ${file}`);
   }
