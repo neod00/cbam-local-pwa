@@ -837,6 +837,23 @@ assertEqual(readFormula(summaryProductsSheet, 'I10'), 'D10&" direct SEE"', 'Summ
 assertEqual(readFormula(summaryProductsSheet, 'J10'), 'D10&" indirect SEE"', 'Summary_Products J10 formula');
 assertEqual(readFormula(summaryProductsSheet, 'K10'), 'I10+J10', 'Summary_Products K10 formula');
 
+// bridge: 공급사가 간접 SEE를 전력사용량(MWh/t)×계수(tCO₂e/MWh)로 준 경우, 그 실제 분해가
+// E_PurchPrec L50/L51에 그대로 기재된다(synthetic 1×값이 아님). 검증 추적성 보존.
+const bridgeFile = createSyntheticWorkbook(euExport.REQUIRED_EU_TEMPLATE_SHEETS);
+const bridgeExport = await euExport.createEuTemplateExportCopyResult(bridgeFile, {
+  ...data,
+  precursors: [{
+    ...precursor,
+    indirect_electricity_mwh_per_t: 0.346,
+    indirect_electricity_factor_tco2e_per_mwh: 0.59,
+    indirect_see_tco2e_per_t: 0.20414,
+  }],
+});
+const bridgeZip = fflate.unzipSync(new Uint8Array(await bridgeExport.blob.arrayBuffer()));
+const bridgePrecursorSheet = fflate.strFromU8(bridgeZip['xl/worksheets/sheet9.xml']);
+assertEqual(readCell(bridgePrecursorSheet, 'L50'), '0.346', 'E_PurchPrec L50 (bridge usage)');
+assertEqual(readCell(bridgePrecursorSheet, 'L51'), '0.59', 'E_PurchPrec L51 (bridge factor)');
+
 const packageGeneratedAt = new Date('2026-06-14T00:00:00.000Z');
 const backup = {
   manifest: {
