@@ -122,6 +122,7 @@ export interface PurchasedPrecursor extends LocalEntity {
   production_route: string;
   supplier_country: string;
   supplier_installation: string;
+  supplier_reporting_period?: string;
   data_mode: "ACTUAL" | "SEMI_ACTUAL" | "DEFAULT";
   verification_status: "UNVERIFIED" | "SUPPLIER_CONFIRMED" | "VERIFIED";
   default_value_year: "2026" | "2027" | "2028_ONWARDS";
