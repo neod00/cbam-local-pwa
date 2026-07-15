@@ -9,10 +9,12 @@ import {
     createExportChecklist,
     createEuTemplateExportCellWrites,
     createEuTemplateExportCopyResult,
+    DEFAULT_EU_TEMPLATE_VERSION,
     downloadBlob,
     evaluateEuExportReadiness,
     getEuExportDownloadStatusMessage,
     getEuExportIssueEditHref,
+    loadDefaultEuTemplateFile,
     REQUIRED_EU_TEMPLATE_SHEETS,
     validateEuTemplateFile,
     type EuTemplateValidationResult,
@@ -182,6 +184,7 @@ function ExportStepCard({
 
 export default function ExportPage() {
     const [templateFile, setTemplateFile] = useState<File | undefined>();
+    const [usingDefaultTemplate, setUsingDefaultTemplate] = useState(false);
     const [validation, setValidation] = useState<EuTemplateValidationResult | undefined>();
     const [validationError, setValidationError] = useState('');
     const [isValidating, setIsValidating] = useState(false);
@@ -203,6 +206,25 @@ export default function ExportPage() {
     const [lastPackageResult, setLastPackageResult] = useState<LastPackageResult | undefined>();
     const [lastBackupAt, setLastBackupAt] = useState<string | undefined>();
     const [exportResponseType, setExportResponseType] = useState<ExportResponseType>('TYPE_2_EXPORTER');
+
+    // 내장 기본 EU 템플릿을 자동으로 불러온다 — 사용자가 직접 업로드하면 덮어쓴다.
+    useEffect(() => {
+        let active = true;
+        loadDefaultEuTemplateFile()
+            .then(async (file) => {
+                const result = await validateEuTemplateFile(file);
+                if (!active) return;
+                setTemplateFile(file);
+                setValidation(result);
+                setUsingDefaultTemplate(true);
+            })
+            .catch(() => {
+                // 내장 로드 실패 시 수동 업로드 안내가 상시 노출되므로 조용히 무시한다.
+            });
+        return () => {
+            active = false;
+        };
+    }, []);
 
     useEffect(() => {
         async function loadPreviewData() {
@@ -482,6 +504,7 @@ export default function ExportPage() {
 
     async function handleTemplateFileChange(file: File | undefined) {
         setTemplateFile(file);
+        setUsingDefaultTemplate(false);
         setValidation(undefined);
         setValidationError('');
         setExportError('');
@@ -787,16 +810,23 @@ export default function ExportPage() {
                     <div className="flex items-start gap-3">
                         <FileSpreadsheet className="mt-1 h-5 w-5 text-teal-700" />
                         <div>
-                            <h2 className="text-lg font-semibold text-slate-950">EU 원본 템플릿 선택</h2>
+                            <h2 className="text-lg font-semibold text-slate-950">EU 원본 템플릿</h2>
                             <p className="mt-1 text-sm text-slate-600">
-                                EU에서 제공한 최신 `.xlsx` 템플릿을 선택합니다. 파일은 서버로 전송하지 않고 브라우저 안에서만 처리합니다.
+                                앱에 공식 Communication Template(버전 {DEFAULT_EU_TEMPLATE_VERSION})이 내장되어 자동으로 사용됩니다. 최신 공식본이 있으면 직접 업로드해 덮어쓸 수 있습니다. 파일은 서버로 전송하지 않고 브라우저 안에서만 처리합니다.
                             </p>
                         </div>
                     </div>
 
+                    {usingDefaultTemplate && validation?.isValid && (
+                        <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                            <FileCheck2 className="mt-0.5 h-4 w-4 flex-none" />
+                            <span>내장 템플릿을 사용 중입니다 (버전 {DEFAULT_EU_TEMPLATE_VERSION}). 최신 공식본이 아닐 수 있으니 제출 전 확인하세요.</span>
+                        </div>
+                    )}
+
                     <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center hover:bg-teal-50">
                         <FileSpreadsheet className="h-10 w-10 text-teal-700" />
-                        <span className="mt-3 text-sm font-semibold text-teal-800">EU 원본 템플릿 파일 선택</span>
+                        <span className="mt-3 text-sm font-semibold text-teal-800">{usingDefaultTemplate ? '최신 공식 템플릿으로 덮어쓰기' : 'EU 원본 템플릿 파일 선택'}</span>
                         <span className="mt-1 text-xs text-slate-500">XLSX 파일만 지원</span>
                         <input
                             type="file"
@@ -806,7 +836,7 @@ export default function ExportPage() {
                         />
                     </label>
 
-                    {templateFile && (
+                    {templateFile && !usingDefaultTemplate && (
                         <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
                             선택한 파일: <span className="font-medium">{templateFile.name}</span>
                         </div>
@@ -1175,7 +1205,7 @@ export default function ExportPage() {
                             <div>
                                 <h3 className="text-sm font-semibold text-slate-950">최신 EU 원본 템플릿</h3>
                                 <p className="mt-1 text-sm leading-6 text-slate-600">
-                                    앱에 템플릿을 내장하지 않습니다. 사용자가 보유한 최신 공식 Communication Template을 업로드한 경우에만 수입자 전달용 복사본을 생성하세요.
+                                    편의를 위해 공식 Communication Template(버전 {DEFAULT_EU_TEMPLATE_VERSION}) 사본을 내장해 기본으로 사용합니다. 내장본은 최신 공식본이 아닐 수 있으므로, 제출 전 EU 최신 템플릿 여부를 확인하고 필요하면 직접 업로드해 덮어쓰세요.
                                 </p>
                             </div>
                         </div>

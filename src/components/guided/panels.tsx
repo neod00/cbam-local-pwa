@@ -7,8 +7,10 @@ import { CN_CODE_OPTIONS } from '@/lib/cn-code-options';
 import {
     createEuExportFilename,
     createEuTemplateExportCopyResult,
+    DEFAULT_EU_TEMPLATE_VERSION,
     downloadBlob,
     getEuExportIssueEditHref,
+    loadDefaultEuTemplateFile,
     validateEuTemplateFile,
     type EuExportReadinessIssue,
 } from '@/lib/eu-template-export';
@@ -34,9 +36,9 @@ import {
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import type { SeeFlowBinding } from '@/lib/see-flow';
 import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
-import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ExternalLink, Lock, Plus, Sparkles, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ExternalLink, Lock, Pencil, Plus, Sparkles, Trash2, Upload } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 export interface GuidedData {
     loaded: boolean;
@@ -388,6 +390,7 @@ function ProductsPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
 // ── 3단계: 생산공정 (다제품 = 제품별 생산량 → 질량 기준 배분) ─────────
 function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
     const reportingProducts = data.products.filter((product) => isCbamReportingScope(getProductReportingScope(product)));
+    const [editingProcessId, setEditingProcessId] = useState('');
     const [name, setName] = useState('');
     const [route, setRoute] = useState('');
     const [periodId, setPeriodId] = useState(data.periods[0]?.id ?? '');
@@ -397,7 +400,55 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
 
     const totalMass = reportingProducts.reduce((sum, product) => sum + num(masses[product.id] ?? ''), 0);
 
-    const addProcess = async () => {
+    const resetForm = () => {
+        setEditingProcessId('');
+        setName('');
+        setRoute('');
+        setMasses({});
+        setMessage('');
+    };
+
+    // 목록의 공정을 클릭하면 값을 폼에 다시 로드해 그 자리에서 수정한다(지도 안에서 편집).
+    const startEdit = (process: ProductionProcess) => {
+        const massMap: Record<string, string> = {};
+        data.productOutputLines
+            .filter((line) => line.process_id === process.id)
+            .forEach((line) => {
+                if (line.product_id) massMap[line.product_id] = String(line.output_mass_t);
+            });
+        setEditingProcessId(process.id);
+        setName(process.name);
+        setRoute(process.production_route);
+        setPeriodId(process.period_id ?? data.periods[0]?.id ?? '');
+        setMasses(massMap);
+        setMessage('');
+        setSaved(false);
+    };
+
+    // 삭제는 백스테이지와 동일하게 하위 데이터(전구물질·배출원)가 연결돼 있으면 막는다.
+    const removeProcess = async (process: ProductionProcess) => {
+        const linkedPrecursors = data.precursors.filter((precursor) => precursor.process_id === process.id);
+        const linkedSourceStreams = data.sourceStreams.filter((stream) => stream.process_id === process.id);
+        if (linkedPrecursors.length > 0 || linkedSourceStreams.length > 0) {
+            window.alert(
+                `이 공정은 하위 데이터에 연결돼 있어 삭제할 수 없습니다.\n연결된 전구물질 ${linkedPrecursors.length}건 · 배출원 ${linkedSourceStreams.length}건\n먼저 ①연료·②전력·③전구물질에서 해당 자료를 지운 뒤 다시 시도하세요.`
+            );
+            return;
+        }
+        if (!window.confirm(`'${process.name}' 공정을 삭제할까요? 산정결과·EU 문서에서도 제외됩니다.`)) {
+            return;
+        }
+        await Promise.all(
+            data.productOutputLines
+                .filter((line) => line.process_id === process.id)
+                .map((line) => deleteLocalItem('product_output_lines', line.id))
+        );
+        await deleteLocalItem('processes', process.id);
+        if (editingProcessId === process.id) resetForm();
+        await onSaved();
+    };
+
+    const saveProcess = async () => {
         const activePeriodId = periodId || data.periods[0]?.id;
         if (!name.trim()) {
             setMessage('공정 이름을 입력하세요. 예: 신선·소둔 라인');
@@ -415,33 +466,81 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             return;
         }
         const primary = lines.reduce((best, line) => (line.mass > best.mass ? line : best), lines[0]);
-        const process = await createLocalItem('processes', {
-            period_id: activePeriodId,
-            product_id: primary.product.id,
-            name: name.trim(),
-            production_route: route.trim() || '가공(압연·신선·열처리)',
-            output_mass_t: totalMass,
-            market_output_mass_t: 0,
-            internal_consumption_mass_t: 0,
-            direct_attributable_emissions_tco2e: 0,
-            electricity_mwh: 0,
-            electricity_ef_tco2e_per_mwh: 0.47,
-            electricity_ef_source: undefined,
-        });
-        await Promise.all(lines.map((line) => createLocalItem('product_output_lines', {
-            process_id: process.id,
-            product_id: line.product.id,
-            name: line.product.name,
-            output_mass_t: line.mass,
-            allocation_basis: 'MASS' as const,
-            manual_allocation_percent: 100,
-            note: '',
-            reporting_scope: getProductReportingScope(line.product),
-        })));
-        setName('');
-        setRoute('');
-        setMasses({});
-        setMessage('');
+
+        if (editingProcessId) {
+            const existingProcess = data.processes.find((process) => process.id === editingProcessId);
+            if (!existingProcess) {
+                setMessage('수정할 공정을 찾지 못했습니다.');
+                return;
+            }
+            const existingLines = data.productOutputLines.filter((line) => line.process_id === editingProcessId);
+            const reportingIds = new Set(reportingProducts.map((product) => product.id));
+            // 보고범위 밖(비CBAM 부산물 등) 라인은 폼에 없으므로 보존하고, 공정 총량에도 포함한다.
+            const preservedOutsideMass = existingLines
+                .filter((line) => !reportingIds.has(line.product_id ?? ''))
+                .reduce((sum, line) => sum + line.output_mass_t, 0);
+            // 보고범위 제품: 생산량>0이면 기존 라인 갱신 또는 신규, 0/공란이면 기존 라인 삭제(배분·비고는 보존).
+            await Promise.all(
+                reportingProducts.map((product) => {
+                    const mass = num(masses[product.id] ?? '');
+                    const existing = existingLines.find((line) => line.product_id === product.id);
+                    if (mass > 0) {
+                        if (existing) {
+                            return updateLocalItem('product_output_lines', {
+                                ...existing,
+                                name: product.name,
+                                output_mass_t: mass,
+                                reporting_scope: getProductReportingScope(product),
+                            });
+                        }
+                        return createLocalItem('product_output_lines', {
+                            process_id: editingProcessId,
+                            product_id: product.id,
+                            name: product.name,
+                            output_mass_t: mass,
+                            allocation_basis: 'MASS' as const,
+                            manual_allocation_percent: 100,
+                            note: '',
+                            reporting_scope: getProductReportingScope(product),
+                        });
+                    }
+                    return existing ? deleteLocalItem('product_output_lines', existing.id) : Promise.resolve();
+                })
+            );
+            await updateLocalItem('processes', {
+                ...existingProcess,
+                period_id: activePeriodId,
+                product_id: primary.product.id,
+                name: name.trim(),
+                production_route: route.trim() || existingProcess.production_route || '가공(압연·신선·열처리)',
+                output_mass_t: totalMass + preservedOutsideMass,
+            });
+        } else {
+            const process = await createLocalItem('processes', {
+                period_id: activePeriodId,
+                product_id: primary.product.id,
+                name: name.trim(),
+                production_route: route.trim() || '가공(압연·신선·열처리)',
+                output_mass_t: totalMass,
+                market_output_mass_t: 0,
+                internal_consumption_mass_t: 0,
+                direct_attributable_emissions_tco2e: 0,
+                electricity_mwh: 0,
+                electricity_ef_tco2e_per_mwh: 0.47,
+                electricity_ef_source: undefined,
+            });
+            await Promise.all(lines.map((line) => createLocalItem('product_output_lines', {
+                process_id: process.id,
+                product_id: line.product.id,
+                name: line.product.name,
+                output_mass_t: line.mass,
+                allocation_basis: 'MASS' as const,
+                manual_allocation_percent: 100,
+                note: '',
+                reporting_scope: getProductReportingScope(line.product),
+            })));
+        }
+        resetForm();
         setSaved(true);
         await onSaved();
     };
@@ -452,11 +551,25 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                 <ul className="space-y-2">
                     {data.processes.map((process) => {
                         const lines = data.productOutputLines.filter((line) => line.process_id === process.id);
+                        const isEditing = editingProcessId === process.id;
                         return (
-                            <li key={process.id} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm">
-                                <span className="font-semibold text-slate-900">{process.name}</span>
-                                <span className="ml-2 text-slate-500">
-                                    {fmt(process.output_mass_t, 1)} t · 제품 {lines.length > 0 ? lines.length : 1}개
+                            <li
+                                key={process.id}
+                                className={`flex items-center justify-between gap-2 rounded-xl border px-4 py-2.5 text-sm ${isEditing ? 'border-teal-400 bg-teal-50' : 'border-slate-200 bg-white'}`}
+                            >
+                                <span className="min-w-0 truncate">
+                                    <span className="font-semibold text-slate-900">{process.name}</span>
+                                    <span className="ml-2 text-slate-500">
+                                        {fmt(process.output_mass_t, 1)} t · 제품 {lines.length > 0 ? lines.length : 1}개
+                                    </span>
+                                </span>
+                                <span className="flex flex-none items-center gap-1">
+                                    <button type="button" aria-label={`${process.name} 수정`} onClick={() => startEdit(process)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-teal-700">
+                                        <Pencil className="h-4 w-4" />
+                                    </button>
+                                    <button type="button" aria-label={`${process.name} 삭제`} onClick={() => removeProcess(process)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-red-600">
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
                                 </span>
                             </li>
                         );
@@ -474,8 +587,8 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             ) : (
                 <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-sm font-semibold text-slate-800">
-                        <Plus className="mr-1 inline h-4 w-4" />
-                        공정 추가
+                        {editingProcessId ? <Pencil className="mr-1 inline h-4 w-4" /> : <Plus className="mr-1 inline h-4 w-4" />}
+                        {editingProcessId ? '공정 수정' : '공정 추가'}
                     </p>
                     <Field label="공정 이름" hint="설비 묶음 하나면 충분합니다. 예: 신선·소둔 라인">
                         <input className={fieldClass} value={name} onChange={(event) => setName(event.target.value)} placeholder="신선·소둔 라인" />
@@ -509,7 +622,12 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                         ))}
                         {totalMass > 0 && <p className="text-xs font-semibold text-slate-600">합계 {fmt(totalMass, 1)} t</p>}
                     </div>
-                    <Button type="button" onClick={addProcess}>공정 저장</Button>
+                    <div className="flex gap-2">
+                        <Button type="button" onClick={saveProcess}>{editingProcessId ? '수정 저장' : '공정 저장'}</Button>
+                        {editingProcessId && (
+                            <Button type="button" variant="secondary" onClick={resetForm}>취소</Button>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -804,7 +922,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         ? getCbamCoverage({ cn_code: precursorCnDigits, hs_code: precursorCnDigits.slice(0, 4) })
         : null;
 
-    // ④ 다수 공급사 믹스: 같은 원료를 여러 공급사에서 사온 경우, 소비량 가중평균 SEE를 한 줄에 채운다
+    // ④ 다수 공급사 믹스: 같은 원료를 여러 공급사에서 구매한 경우, 소비량 가중평균 SEE를 한 줄에 채운다
     // (E_PurchPrec는 원료 1개당 한 블록에 SEE 하나를 기대하므로 가중평균이 올바른 형태).
     const mixTotalMass = mixRows.reduce((sum, row) => sum + num(row.mass), 0);
     const mixWeightedDirect = mixTotalMass > 0
@@ -1074,7 +1192,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-800">
                     <Plus className="mr-1 inline h-4 w-4" />
-                    사온 CBAM 원료 추가
+                    구매한 CBAM 원료 추가
                 </p>
                 <p className="text-xs leading-5 text-slate-500">
                     선재·빌릿처럼 CBAM 대상인 강재 원료만 해당합니다. 고철·스크랩(CN 7204)·윤활유·소모품 같은 비대상·부자재는 넣지 않습니다(내재배출 0).
@@ -1160,13 +1278,13 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                         aria-expanded={mixOpen}
                         className="flex w-full items-center justify-between text-sm font-semibold text-slate-800"
                     >
-                        여러 공급사에서 사왔어요 (가중 계산)
+                        여러 공급사에서 구매했어요 (가중 계산)
                         <ChevronDown className={`h-4 w-4 flex-none text-slate-400 transition ${mixOpen ? 'rotate-180' : ''}`} />
                     </button>
                     {mixOpen && (
                         <div className="mt-3 space-y-2">
                             <p className="text-xs leading-5 text-slate-500">
-                                같은 원료를 여러 공급사에서 사왔다면 각 공급사의 소비량·SEE를 넣으세요. 소비량 가중평균 SEE로 위 칸에 한 줄로 채워집니다.
+                                같은 원료를 여러 공급사에서 구매했다면 각 공급사의 소비량·SEE를 넣으세요. 소비량 가중평균 SEE로 위 칸에 한 줄로 채워집니다.
                             </p>
                             {mixRows.map((row, index) => (
                                 <div key={index} className="space-y-2 rounded-lg border border-slate-200 p-2">
@@ -1437,15 +1555,36 @@ function ResultsPanel({ data, binding, selectedProcessId, onSelectStep }: PanelP
 function ExportPanel({ data }: PanelProps) {
     const [templateFile, setTemplateFile] = useState<File | null>(null);
     const [validation, setValidation] = useState<Awaited<ReturnType<typeof validateEuTemplateFile>> | null>(null);
+    const [usingDefault, setUsingDefault] = useState(false);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState('');
     const [done, setDone] = useState(false);
+
+    // 내장 기본 템플릿을 자동으로 불러온다 — 사용자가 직접 업로드하면 덮어쓴다.
+    useEffect(() => {
+        let active = true;
+        loadDefaultEuTemplateFile()
+            .then(async (file) => {
+                const result = await validateEuTemplateFile(file);
+                if (!active) return;
+                setTemplateFile(file);
+                setValidation(result);
+                setUsingDefault(true);
+            })
+            .catch(() => {
+                // 내장 로드 실패 시엔 수동 업로드 안내가 상시 노출되므로 조용히 무시한다.
+            });
+        return () => {
+            active = false;
+        };
+    }, []);
 
     const handleFile = async (file: File | null) => {
         setTemplateFile(file);
         setValidation(null);
         setMessage('');
         setDone(false);
+        setUsingDefault(false);
         if (!file) {
             return;
         }
@@ -1499,23 +1638,38 @@ function ExportPanel({ data }: PanelProps) {
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-800">
                     <Upload className="mr-1 inline h-4 w-4" />
-                    1) EU 원본 템플릿 선택
+                    1) EU 원본 템플릿
                 </p>
-                <p className="text-xs leading-5 text-slate-500">
-                    EU가 배포한 Communication Template 원본(.xlsx)이 필요합니다. 앱은 입력 셀에만 값을 넣고 공식 수식은 건드리지 않습니다.
-                </p>
-                <input
-                    type="file"
-                    accept=".xlsx"
-                    onChange={(event) => handleFile(event.target.files?.[0] ?? null)}
-                    className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-700 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-teal-800"
-                />
-                {templateFile && validation?.isValid && (
+                {usingDefault && validation?.isValid ? (
+                    <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold leading-5 text-emerald-800">
+                        <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
+                        내장 템플릿을 사용 중입니다 (버전 {DEFAULT_EU_TEMPLATE_VERSION}). 앱은 입력 셀에만 값을 넣고 공식 수식은 건드리지 않습니다.
+                    </p>
+                ) : (
+                    <p className="text-xs leading-5 text-slate-500">
+                        EU가 배포한 Communication Template 원본(.xlsx)이 필요합니다. 앱은 입력 셀에만 값을 넣고 공식 수식은 건드리지 않습니다.
+                    </p>
+                )}
+                <div>
+                    <p className="mb-1.5 text-xs font-semibold text-slate-600">
+                        {usingDefault ? '최신 공식본이 있으면 직접 업로드해 덮어쓰세요:' : '공식 Communication Template(.xlsx)을 선택하세요:'}
+                    </p>
+                    <input
+                        type="file"
+                        accept=".xlsx"
+                        onChange={(event) => handleFile(event.target.files?.[0] ?? null)}
+                        className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-700 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-teal-800"
+                    />
+                </div>
+                {templateFile && validation?.isValid && !usingDefault && (
                     <p className="text-xs font-semibold text-emerald-700">
                         <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
                         {templateFile.name} — 원본 템플릿 확인됨
                     </p>
                 )}
+                <p className="text-[11px] leading-4 text-slate-400">
+                    내장본은 편의를 위한 사본이며 최신 공식본이 아닐 수 있습니다. 제출 전 EU 최신 템플릿 여부를 확인하세요.
+                </p>
             </div>
 
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -1541,8 +1695,8 @@ const PANEL_META: Record<GuidedStepId, { description: string; backstage?: { href
     products: { description: 'EU로 수출하는 제품과 CN 코드를 연결합니다. CN이 대상 여부를 결정합니다.', backstage: { href: '/products', label: '상세 입력' } },
     process: { description: '제품을 만드는 설비 묶음과 생산량을 등록합니다. 여러 제품이면 각각의 생산량으로 자동 배분됩니다.', backstage: { href: '/processes', label: '상세 입력' } },
     fuel: { description: '공장 안에서 태운 연료를 입력합니다 — 지도의 ① 직접배출이 됩니다.', backstage: { href: '/source-streams', label: '상세 입력' } },
-    electricity: { description: '사서 쓴 전기를 입력합니다 — 지도의 ② 간접배출이 됩니다.', backstage: { href: '/processes', label: '상세 입력' } },
-    precursors: { description: '사온 CBAM 강재(전구물질)가 지니고 온 배출을 더합니다 — 지도의 ③입니다.', backstage: { href: '/precursors', label: '상세 입력' } },
+    electricity: { description: '구매해 쓴 전기를 입력합니다 — 지도의 ② 간접배출이 됩니다.', backstage: { href: '/processes', label: '상세 입력' } },
+    precursors: { description: '구매한 CBAM 강재(전구물질)가 지니고 온 배출을 더합니다 — 지도의 ③입니다.', backstage: { href: '/precursors', label: '상세 입력' } },
     results: { description: '계산 결과와 막는 항목을 확인합니다.', backstage: { href: '/results', label: '상세 결과' } },
     export: { description: 'EU 원본 템플릿에 우리 데이터를 채워 수입자 전달용 사본을 만듭니다.', backstage: { href: '/export', label: '상세 Export' } },
 };

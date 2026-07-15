@@ -113,7 +113,7 @@ export function deriveGuidedSteps(input: GuidedMapInput, binding: SeeFlowBinding
             status: precursorsDone ? 'done' : 'optional',
             summary: precursorsDone
                 ? `직접 ${fmt(binding.precursorDirectEmissions)} · 간접 ${fmt(binding.precursorIndirectEmissions)}`
-                : '사온 CBAM 강재가 있으면',
+                : '구매한 CBAM 강재가 있으면',
         },
         {
             id: 'results',

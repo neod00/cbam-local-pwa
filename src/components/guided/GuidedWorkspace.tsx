@@ -5,10 +5,10 @@ import { GuidedStepPanel, type GuidedData } from '@/components/guided/panels';
 import { calculateLocalResults } from '@/lib/calculation-engine';
 import { evaluateEuExportReadiness } from '@/lib/eu-template-export';
 import { deriveGuidedSteps, getGuidedProgress, type GuidedStepId } from '@/lib/guided-map';
-import { listLocalItems } from '@/lib/local-db';
+import { CBAM_LAST_BACKUP_AT_KEY, exportLocalBackup, listLocalItems, startNewProject } from '@/lib/local-db';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { buildSeeFlowBinding } from '@/lib/see-flow';
-import { BarChart3, CircleHelp, Map as MapIcon, ShieldCheck, Upload } from 'lucide-react';
+import { BarChart3, CircleHelp, FilePlus, Map as MapIcon, ShieldCheck, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -72,12 +72,43 @@ export function GuidedWorkspace() {
     const [data, setData] = useState<GuidedData>(EMPTY_DATA);
     const [selectedStep, setSelectedStep] = useState<GuidedStepId | null>(null);
     const [selectedProcessId, setSelectedProcessId] = useState<string>('ALL');
+    const [newProjectBusy, setNewProjectBusy] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
 
     const reload = useCallback(async () => {
         const nextData = await fetchGuidedData();
         setData(nextData);
     }, []);
+
+    // 새 프로젝트: 입력 데이터만 비우고 라이선스·EU 기본값·비용 가정은 유지한다(startNewProject).
+    // 되돌릴 수 없으므로 확인 + 삭제 전 .cbam 백업을 제안한다.
+    const handleNewProject = useCallback(async () => {
+        if (!window.confirm('새 프로젝트를 시작하면 현재 입력 데이터(사업장·제품·공정·연료·전력·전구물질)가 모두 삭제됩니다.\n라이선스·EU 기본값(DV)·비용 가정은 유지됩니다.\n계속할까요?')) {
+            return;
+        }
+        setNewProjectBusy(true);
+        try {
+            if (window.confirm('삭제 전에 지금 데이터를 .cbam 파일로 백업할까요?\n확인 = 백업 후 시작 · 취소 = 백업 없이 시작')) {
+                const backup = await exportLocalBackup();
+                const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const anchor = document.createElement('a');
+                anchor.href = url;
+                anchor.download = `cbam-backup-${backup.manifest.exported_at.slice(0, 10)}.cbam`;
+                document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+                URL.revokeObjectURL(url);
+            }
+            await startNewProject();
+            window.localStorage.removeItem(CBAM_LAST_BACKUP_AT_KEY);
+            setSelectedStep(null);
+            setSelectedProcessId('ALL');
+            await reload();
+        } finally {
+            setNewProjectBusy(false);
+        }
+    }, [reload]);
 
     useEffect(() => {
         let active = true;
@@ -159,6 +190,15 @@ export function GuidedWorkspace() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={handleNewProject}
+                        disabled={newProjectBusy}
+                        className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-teal-300 hover:text-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        <FilePlus className="h-3.5 w-3.5" />
+                        새 프로젝트
+                    </button>
                     <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
                         {progress.done} / {progress.total} 완료
                     </span>

@@ -1115,7 +1115,7 @@ export default function ProductsPage() {
                                 </div>
                                 <h3 className="mt-3 text-base font-semibold text-slate-950">제품을 고르면 CN 후보를 먼저 좁힙니다</h3>
                                 <p className="mt-1 text-sm leading-6 text-teal-950">
-                                    이 흐름은 강재·코일·선재·후판 등을 사서 가공하는 중소·중견 철강사 기준입니다. 쇳물, 고로, 전기로, 제강, 주조·압연 전 과정을 직접 운영하는 제철소형 산정은 간단 모드 범위를 넘어섭니다.
+                                    이 흐름은 강재·코일·선재·후판 등을 구매해 가공하는 중소·중견 철강사 기준입니다. 쇳물, 고로, 전기로, 제강, 주조·압연 전 과정을 직접 운영하는 제철소형 산정은 간단 모드 범위를 넘어섭니다.
                                 </p>
                                 <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                                     <div>
