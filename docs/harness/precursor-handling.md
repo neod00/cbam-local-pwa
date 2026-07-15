@@ -26,6 +26,8 @@
 - **공통 템플릿**(voluntary)으로 다국·다언어 공급사 통신 표준화 권장.
 - **EU산 전구물질도 가산 대상**(Q&A #61) — 단 EU에서 지불한 탄소가격은 반영 가능.
 
+> ⚠️ **위 5종 중 ①설비 식별정보·④보고기간은 EU Communication Template에 전송 셀이 없다**(2026-07-15 공식 템플릿 `..._en_20241213.xlsx` 직접 확인, P2-run06-01 해소). 템플릿의 전구물질 등록(A_InstData 102+)은 `품목군·Country code·Route 1–5·Name`만, E_PurchPrec 상세는 `소비량 표 + SEE(직접·전력사용량·전력계수·간접·Source·기본값 근거)`만 받는다. → ①④는 **담당자 자체 기록·검증용**이며 앱은 `supplier_installation`·`supplier_reporting_period`를 추적성 메타데이터로만 보존(전송 매핑 불필요). ②③⑤는 각각 SEE 셀·경로 셀·(탄소가격은 신고인 몫)로 처리.
+
 ## 3. 기본값(DV) 규칙 (Guidance 6.1.5–6.1.6)
 - actual 미입수 시에만 DV 사용. DV는 **CN 4/6/8자리 + 생산경로 + 품목군**별, **direct/indirect 분리** SEE(tCO₂e/t).
 - 8자리는 대개 철강(경로·합금 반영). DV는 보수적(높게) → 실측이 유리한 경우 많음.
