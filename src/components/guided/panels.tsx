@@ -34,7 +34,7 @@ import {
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import type { SeeFlowBinding } from '@/lib/see-flow';
 import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
-import { AlertTriangle, ArrowRight, CheckCircle2, ExternalLink, Lock, Plus, Sparkles, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ExternalLink, Lock, Plus, Sparkles, Trash2, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState, type ReactNode } from 'react';
 
@@ -762,6 +762,11 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
     const [justification, setJustification] = useState('');
     const [allocMode, setAllocMode] = useState<'auto' | 'manual'>('auto');
     const [allocMasses, setAllocMasses] = useState<Record<string, string>>({});
+    const [mixOpen, setMixOpen] = useState(false);
+    const [mixRows, setMixRows] = useState<Array<{ supplier: string; mass: string; direct: string; indirect: string }>>([
+        { supplier: '', mass: '', direct: '', indirect: '' },
+        { supplier: '', mass: '', direct: '', indirect: '' },
+    ]);
     const [message, setMessage] = useState('');
     const [saved, setSaved] = useState(false);
     const processPrecursors = useMemo(
@@ -785,6 +790,31 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
     const precursorCoverage = precursorCnDigits.length >= 4
         ? getCbamCoverage({ cn_code: precursorCnDigits, hs_code: precursorCnDigits.slice(0, 4) })
         : null;
+
+    // ④ 다수 공급사 믹스: 같은 원료를 여러 공급사에서 사온 경우, 소비량 가중평균 SEE를 한 줄에 채운다
+    // (E_PurchPrec는 원료 1개당 한 블록에 SEE 하나를 기대하므로 가중평균이 올바른 형태).
+    const mixTotalMass = mixRows.reduce((sum, row) => sum + num(row.mass), 0);
+    const mixWeightedDirect = mixTotalMass > 0
+        ? mixRows.reduce((sum, row) => sum + num(row.mass) * num(row.direct), 0) / mixTotalMass
+        : 0;
+    const mixWeightedIndirect = mixTotalMass > 0
+        ? mixRows.reduce((sum, row) => sum + num(row.mass) * num(row.indirect), 0) / mixTotalMass
+        : 0;
+    const updateMixRow = (index: number, key: 'supplier' | 'mass' | 'direct' | 'indirect', value: string) =>
+        setMixRows((rows) => rows.map((row, idx) => (idx === index ? { ...row, [key]: value } : row)));
+    const applyMix = () => {
+        if (mixTotalMass <= 0) {
+            setMessage('공급사별 소비량을 입력하세요.');
+            return;
+        }
+        const suppliers = mixRows.filter((row) => num(row.mass) > 0).map((row) => row.supplier.trim() || '공급사').join(', ');
+        setConsumed(String(Math.round(mixTotalMass * 1000) / 1000));
+        setDirectSee(String(Math.round(mixWeightedDirect * 1e6) / 1e6));
+        setIndirectSee(String(Math.round(mixWeightedIndirect * 1e6) / 1e6));
+        setSource(`공급사 믹스(${suppliers}) — 소비량 가중평균`);
+        setMixOpen(false);
+        setMessage('공급사 믹스를 소비량 가중평균해 위 칸에 채웠습니다. 값을 확인하고 저장하세요.');
+    };
 
     // 이 공정이 만드는 제품(생산라인). 2개 이상이면 전구물질을 제품별로 배분할 수 있다(E_PurchPrec (b) 구조).
     const outputLines = data.productOutputLines.filter(
@@ -913,6 +943,8 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         setDataMode('ACTUAL');
         setAllocMode('auto');
         setAllocMasses({});
+        setMixOpen(false);
+        setMixRows([{ supplier: '', mass: '', direct: '', indirect: '' }, { supplier: '', mass: '', direct: '', indirect: '' }]);
         setMessage('');
         setSaved(true);
         await onSaved();
@@ -980,6 +1012,50 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                     <Field label="원료 SEE 간접분 (tCO₂e/t)">
                         <input className={fieldClass} inputMode="decimal" value={indirectSee} onChange={(event) => setIndirectSee(event.target.value)} placeholder="0.30" />
                     </Field>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                    <button
+                        type="button"
+                        onClick={() => setMixOpen((open) => !open)}
+                        aria-expanded={mixOpen}
+                        className="flex w-full items-center justify-between text-sm font-semibold text-slate-800"
+                    >
+                        여러 공급사에서 사왔어요 (가중 계산)
+                        <ChevronDown className={`h-4 w-4 flex-none text-slate-400 transition ${mixOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {mixOpen && (
+                        <div className="mt-3 space-y-2">
+                            <p className="text-xs leading-5 text-slate-500">
+                                같은 원료를 여러 공급사에서 사왔다면 각 공급사의 소비량·SEE를 넣으세요. 소비량 가중평균 SEE로 위 칸에 한 줄로 채워집니다.
+                            </p>
+                            {mixRows.map((row, index) => (
+                                <div key={index} className="space-y-2 rounded-lg border border-slate-200 p-2">
+                                    <div className="flex items-center gap-2">
+                                        <input className={fieldClass} value={row.supplier} onChange={(event) => updateMixRow(index, 'supplier', event.target.value)} placeholder={`공급사 ${index + 1}`} />
+                                        {mixRows.length > 1 && (
+                                            <button type="button" aria-label="공급사 삭제" onClick={() => setMixRows((rows) => rows.filter((_, idx) => idx !== index))} className="flex-none text-slate-400 transition hover:text-red-600">
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <input className={fieldClass} inputMode="decimal" value={row.mass} onChange={(event) => updateMixRow(index, 'mass', event.target.value)} placeholder="소비량 t" />
+                                        <input className={fieldClass} inputMode="decimal" value={row.direct} onChange={(event) => updateMixRow(index, 'direct', event.target.value)} placeholder="직접 SEE" />
+                                        <input className={fieldClass} inputMode="decimal" value={row.indirect} onChange={(event) => updateMixRow(index, 'indirect', event.target.value)} placeholder="간접 SEE" />
+                                    </div>
+                                </div>
+                            ))}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <button type="button" onClick={() => setMixRows((rows) => [...rows, { supplier: '', mass: '', direct: '', indirect: '' }])} className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700">
+                                    <Plus className="h-3.5 w-3.5" /> 공급사 추가
+                                </button>
+                                <span className="text-xs font-semibold text-slate-600">
+                                    가중 직접 {fmt(mixWeightedDirect, 3)} · 간접 {fmt(mixWeightedIndirect, 3)} · 총 {fmt(mixTotalMass, 1)} t
+                                </span>
+                            </div>
+                            <Button type="button" variant="secondary" onClick={applyMix}>가중값으로 위 칸에 채우기</Button>
+                        </div>
+                    )}
                 </div>
                 {hasMultipleProducts && (
                     <div className="rounded-xl border border-slate-200 bg-white p-3">
