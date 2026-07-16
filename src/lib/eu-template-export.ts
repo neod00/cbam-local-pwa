@@ -1519,14 +1519,47 @@ function createSummaryProductRows(data: EuTemplateExportData): EuSummaryProductE
     return rows;
 }
 
-// EU 템플릿은 품목별로 허용 생산경로 드롭다운이 다르다. 최종 철강제품('Iron or steel products')은
-// 'All production routes' 한 가지만 허용하므로 공정의 자유텍스트 경로를 이 값으로 대체(중복은 1개로 축약)한다.
-function getEuAggregatedGoodRoutes(good: string, routes: string[]): string[] {
-    if (good === 'Iron or steel products') {
-        return ['All production routes'];
+// EU 템플릿은 집계품목별로 허용 생산경로 드롭다운이 다르다(A_InstData 라우트 셀 = INDIRECT($T)).
+// 철강 최종제품·조강·선철·소결광은 'All production routes'만 허용, DRI·합금철은 세부 경로만 허용.
+// 앱의 자유텍스트 경로가 목록에 없으면 템플릿 검증을 위반하므로 허용값으로 정규화한다.
+const EU_GOOD_ALLOWED_ROUTES: Record<string, string[]> = {
+    'Iron or steel products': ['All production routes'],
+    'Crude steel': ['All production routes'],
+    'Pig iron': ['All production routes'],
+    'Sintered Ore': ['All production routes'],
+    'Direct reduced iron': ['Basic oxygen steelmaking', 'Electric arc furnace', 'Other production routes', 'Unknown production routes'],
+    'Alloys (FeMn, FeCr, FeNi)': ['Blast furnace route', 'Smelting reduction', 'Other production routes', 'Unknown production routes'],
+};
+
+// 자유텍스트 경로 하나를 해당 품목의 허용 드롭다운 값으로 정규화. 이미 유효하면 그대로,
+// 단일 허용값이면 그 값, 매칭 실패 시 'Other production routes'(있으면)로 폴백.
+function normalizeEuRoute(good: string, route: string): string {
+    const allowed = EU_GOOD_ALLOWED_ROUTES[good];
+
+    if (!allowed || allowed.length === 0 || allowed.includes(route)) {
+        return route;
     }
 
-    return routes;
+    if (allowed.length === 1) {
+        return allowed[0];
+    }
+
+    return allowed.includes('Other production routes') ? 'Other production routes' : allowed[0];
+}
+
+function getEuAggregatedGoodRoutes(good: string, routes: string[]): string[] {
+    const allowed = EU_GOOD_ALLOWED_ROUTES[good];
+
+    if (!allowed) {
+        return routes;
+    }
+
+    // 단일 허용값(대부분의 철강 품목) → 그 값 하나로 축약. 세부 경로 품목 → 각 경로를 허용값으로 정규화·중복 제거.
+    if (allowed.length === 1) {
+        return [allowed[0]];
+    }
+
+    return Array.from(new Set(routes.map((route) => normalizeEuRoute(good, route))));
 }
 
 function createAggregatedGoodsAndBoundaryCellWrites(
