@@ -237,6 +237,20 @@ function cnCodeSheetXml() {
   ].join('');
 }
 
+function cCodeListsSheetXml() {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<sheetData>',
+    '<row r="11">',
+    inlineCell('F11', 'KR'),
+    inlineCell('G11', 'Korea, Republic of'),
+    '</row>',
+    '</sheetData>',
+    '</worksheet>',
+  ].join('');
+}
+
 function workbookXml(sheetNames) {
   const sheets = sheetNames
     .map((name, index) => `<sheet name="${escapeXml(name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`)
@@ -311,7 +325,9 @@ function createSyntheticWorkbook(sheetNames) {
           ? installationSheetXml()
           : name === 'Summary_Products'
             ? summaryProductsSheetXml()
-            : emptySheetXml()
+            : name === 'c_CodeLists'
+              ? cCodeListsSheetXml()
+              : emptySheetXml()
     );
   });
 
@@ -793,17 +809,17 @@ assertEqual(readCell(installationSheet, 'I21'), '1 Steel Road', 'A_InstData I21'
 assertEqual(readCell(installationSheet, 'I22'), 'Steel processing', 'A_InstData I22');
 assertEqual(readCell(installationSheet, 'I23'), '21990', 'A_InstData I23');
 assertEqual(readCell(installationSheet, 'I25'), 'Incheon', 'A_InstData I25');
-assertEqual(readCell(installationSheet, 'I26'), 'KR', 'A_InstData I26');
+assertEqual(readCell(installationSheet, 'I26'), 'Korea, Republic of', 'A_InstData I26 (country code KR -> template country name)');
 assertEqual(readCell(installationSheet, 'I30'), 'Local CBAM Manager', 'A_InstData I30');
 assertEqual(readCell(installationSheet, 'I31'), 'cbam@example.com', 'A_InstData I31');
 assertEqual(readCell(installationSheet, 'I32'), '+82-32-000-0000', 'A_InstData I32');
 assertEqual(readCell(installationSheet, 'E62'), 'Iron or steel products', 'A_InstData E62');
-assertEqual(readCell(installationSheet, 'I62'), 'Flat steel processing', 'A_InstData I62');
+assertEqual(readCell(installationSheet, 'I62'), 'All production routes', 'A_InstData I62 (iron/steel route -> only permitted dropdown value)');
 assertEqual(readCell(installationSheet, 'E83'), 'Iron or steel products', 'A_InstData E83');
 assertEqual(readCell(installationSheet, 'F83'), 'Only direct production', 'A_InstData F83');
 assertEqual(readCell(installationSheet, 'L83'), 'Rolling and finishing', 'A_InstData L83');
 assertEqual(readCell(installationSheet, 'E102'), 'Iron or steel products', 'A_InstData E102');
-assertEqual(readCell(installationSheet, 'F102'), 'South Korea', 'A_InstData F102');
+assertEqual(readCell(installationSheet, 'F102'), 'KR', 'A_InstData F102 (supplier country name -> ISO code)');
 assertEqual(readCell(installationSheet, 'L102'), 'Purchased hot rolled coil', 'A_InstData L102');
 assertEqual(readCell(sourceStreamSheet, 'D17'), 'Combustion', 'B_EmInst D17');
 assertEqual(readCell(sourceStreamSheet, 'E17'), 'Natural gas combustion', 'B_EmInst E17');
@@ -826,10 +842,10 @@ assertEqual(readCell(precursorSheet, 'L17'), '1100', 'E_PurchPrec L17');
 assertEqual(readCell(precursorSheet, 'L28'), '1000', 'E_PurchPrec L28');
 assertEqual(readCell(precursorSheet, 'L38'), '0', 'E_PurchPrec L38');
 assertEqual(readCell(precursorSheet, 'L49'), '1.2', 'E_PurchPrec L49');
-assertEqual(readCell(precursorSheet, 'M49'), 'Supplier communication template', 'E_PurchPrec M49');
+assertEqual(readCell(precursorSheet, 'M49'), 'Measured', 'E_PurchPrec M49 (data_mode ACTUAL -> Measured/Default/Unknown)');
 assertEqual(readCell(precursorSheet, 'L50'), '1', 'E_PurchPrec L50');
 assertEqual(readCell(precursorSheet, 'L51'), '0.25', 'E_PurchPrec L51');
-assertEqual(readCell(precursorSheet, 'L54'), '', 'E_PurchPrec L54');
+assertEqual(readCell(precursorSheet, 'K54'), '', 'E_PurchPrec K54 (justification on merge anchor K, not L)');
 assertEqual(readCell(summaryProductsSheet, 'D10'), 'Rolling and finishing', 'Summary_Products D10');
 assertEqual(readCell(summaryProductsSheet, 'F10'), '72083900', 'Summary_Products F10');
 assertEqual(readCell(summaryProductsSheet, 'H10'), 'Hot Rolled Coil', 'Summary_Products H10');
