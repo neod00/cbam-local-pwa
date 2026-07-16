@@ -601,6 +601,24 @@ assertEqual(
   'mixed allocation basis warning'
 );
 assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '47', 'planned cell writes');
+// 집계품목 라우트 정규화: 조강(Crude steel) 등 자유텍스트 경로도 허용 드롭다운 값('All production routes')으로.
+const crudeProduct = { ...product, id: 'product-crude', name: 'Crude steel billet', hs_code: '7207', cn_code: '72071111', hs_group: '72', product_type_enum: 'HS72_SEMI' };
+const crudeProcess = { ...process, id: 'process-crude', product_id: crudeProduct.id, name: 'EAF steelmaking', production_route: 'Electric arc furnace' };
+const crudeLine = { ...outputLine, id: 'line-crude', process_id: crudeProcess.id, product_id: crudeProduct.id };
+const crudeWrites = euExport.createEuTemplateExportCellWrites(
+  { ...data, products: [crudeProduct], processes: [crudeProcess], productOutputLines: [crudeLine], precursors: [], sourceStreams: [] },
+  validation.cnCodeMap
+);
+assertEqual(
+  String(crudeWrites.find((write) => write.sheetName === 'A_InstData' && write.cell === 'E62')?.value),
+  'Crude steel',
+  'Crude steel aggregated good (E62)'
+);
+assertEqual(
+  String(crudeWrites.find((write) => write.sheetName === 'A_InstData' && write.cell === 'I62')?.value),
+  'All production routes',
+  'Crude steel free-text route normalized to allowed dropdown value (I62)'
+);
 const activityUnitFuelWrites = euExport.createEuTemplateExportCellWrites(
   {
     ...data,
