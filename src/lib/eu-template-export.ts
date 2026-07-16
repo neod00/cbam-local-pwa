@@ -905,6 +905,52 @@ function parseCnCodeMap(zip: Record<string, Uint8Array>): EuCnCodeMap {
     return cnCodeMap;
 }
 
+// 템플릿 c_CodeLists(F열=ISO 2자리 코드, G열=국가명)에서 코드↔이름 맵을 만든다.
+// 사업장 국가(이름 필드)·전구물질 공급국(코드 필드)을 드롭다운에 맞게 정규화하는 데 쓴다.
+function parseCountryMaps(zip: Record<string, Uint8Array>): EuCountryMaps {
+    const codeToName = new Map<string, string>();
+    const nameToCode = new Map<string, string>();
+    const sheetTargetByName = parseWorkbookSheetTargets(zip);
+    const cCodeListsPath = sheetTargetByName.get('c_CodeLists');
+    const cCodeListsXml = cCodeListsPath ? zip[cCodeListsPath] : undefined;
+
+    if (!cCodeListsXml) {
+        return { codeToName, nameToCode };
+    }
+
+    const sharedStrings = parseSharedStrings(zip);
+    const document = new DOMParser().parseFromString(strFromU8(cCodeListsXml), 'application/xml');
+
+    for (const row of Array.from(document.getElementsByTagName('row'))) {
+        const valuesByColumn = new Map<string, string>();
+
+        for (const cell of Array.from(row.getElementsByTagName('c'))) {
+            const reference = cell.getAttribute('r');
+
+            if (!reference) {
+                continue;
+            }
+
+            valuesByColumn.set(getColumnName(reference), readCellText(cell, sharedStrings));
+        }
+
+        const code = (valuesByColumn.get('F') ?? '').trim().toUpperCase();
+        const name = (valuesByColumn.get('G') ?? '').trim();
+
+        if (/^[A-Z]{2}$/.test(code) && name) {
+            if (!codeToName.has(code)) {
+                codeToName.set(code, name);
+            }
+
+            if (!nameToCode.has(name.toLowerCase())) {
+                nameToCode.set(name.toLowerCase(), code);
+            }
+        }
+    }
+
+    return { codeToName, nameToCode };
+}
+
 export async function parseEuTemplateCnCodeOptions(file: File): Promise<CnCodeOption[]> {
     if (!file.name.toLowerCase().endsWith('.xlsx')) {
         throw new Error('EU 원본 템플릿은 .xlsx 파일이어야 합니다.');
@@ -1271,9 +1317,91 @@ function createEmissionsEnergyCellWrites(processes: ProductionProcess[], product
     ];
 }
 
+// EU 템플릿 국가 필드는 두 가지 표기를 요구한다: 사업장 국가(A_InstData!I26)는 국가"명" 드롭다운,
+// 전구물질 공급국(A_InstData!F102)은 2자리 ISO"코드" 드롭다운. 앱은 국가를 코드 또는 자유텍스트로
+// 저장하므로 템플릿 c_CodeLists의 코드↔이름 목록으로 정규화해 드롭다운에 맞는 값을 기재한다.
+interface EuCountryMaps {
+    codeToName: Map<string, string>;
+    nameToCode: Map<string, string>;
+}
+
+// 자유텍스트 국가명 → ISO 코드 별칭(템플릿 정식명과 다르게 입력된 흔한 표기 보정).
+const COUNTRY_NAME_ALIASES: Record<string, string> = {
+    'south korea': 'KR',
+    'korea': 'KR',
+    'republic of korea': 'KR',
+    'korea, south': 'KR',
+    'north korea': 'KP',
+    'china': 'CN',
+    'p.r. china': 'CN',
+    "people's republic of china": 'CN',
+    'japan': 'JP',
+    'taiwan': 'TW',
+    'chinese taipei': 'TW',
+    'vietnam': 'VN',
+    'viet nam': 'VN',
+    'united states': 'US',
+    'united states of america': 'US',
+    'usa': 'US',
+    'u.s.a.': 'US',
+    'united kingdom': 'GB',
+    'uk': 'GB',
+    'russia': 'RU',
+    'india': 'IN',
+    'germany': 'DE',
+    'turkey': 'TR',
+    'türkiye': 'TR',
+};
+
+// 입력(코드/국가명/별칭)을 ISO 2자리 코드로 정규화. 매핑 실패 시 undefined(호출부에서 원본 유지).
+function resolveCountryCode(input: string | undefined, maps?: EuCountryMaps): string | undefined {
+    const raw = (input ?? '').trim();
+    if (!raw) {
+        return undefined;
+    }
+
+    const upper = raw.toUpperCase();
+
+    if (/^[A-Z]{2}$/.test(upper) && (!maps || maps.codeToName.has(upper))) {
+        return upper;
+    }
+
+    const byName = maps?.nameToCode.get(raw.toLowerCase());
+    if (byName) {
+        return byName;
+    }
+
+    const alias = COUNTRY_NAME_ALIASES[raw.toLowerCase()];
+    if (alias) {
+        return alias;
+    }
+
+    return /^[A-Z]{2}$/.test(upper) ? upper : undefined;
+}
+
+// 입력(코드/국가명/별칭)을 템플릿 정식 국가명으로 정규화. 매핑 실패 시 undefined(호출부에서 원본 유지).
+function resolveCountryName(input: string | undefined, maps?: EuCountryMaps): string | undefined {
+    const raw = (input ?? '').trim();
+    if (!raw) {
+        return undefined;
+    }
+
+    if (maps?.nameToCode.has(raw.toLowerCase())) {
+        return raw;
+    }
+
+    const code = resolveCountryCode(raw, maps);
+    if (code && maps?.codeToName.has(code)) {
+        return maps.codeToName.get(code);
+    }
+
+    return undefined;
+}
+
 function createInstallationCellWrites(
     installations: Installation[] = [],
-    periods: ReportingPeriod[] = []
+    periods: ReportingPeriod[] = [],
+    countryMaps?: EuCountryMaps
 ): EuTemplateExportCellWrite[] {
     const installation = installations[0];
     const period = periods[0];
@@ -1311,8 +1439,8 @@ function createInstallationCellWrites(
             {
                 sheetName: 'A_InstData',
                 cell: 'I26',
-                label: '사업장 국가',
-                value: installation.country,
+                label: '사업장 국가(국가명)',
+                value: resolveCountryName(installation.country, countryMaps) ?? installation.country,
                 sourceId: installation.id,
             }
         );
@@ -1391,9 +1519,20 @@ function createSummaryProductRows(data: EuTemplateExportData): EuSummaryProductE
     return rows;
 }
 
+// EU 템플릿은 품목별로 허용 생산경로 드롭다운이 다르다. 최종 철강제품('Iron or steel products')은
+// 'All production routes' 한 가지만 허용하므로 공정의 자유텍스트 경로를 이 값으로 대체(중복은 1개로 축약)한다.
+function getEuAggregatedGoodRoutes(good: string, routes: string[]): string[] {
+    if (good === 'Iron or steel products') {
+        return ['All production routes'];
+    }
+
+    return routes;
+}
+
 function createAggregatedGoodsAndBoundaryCellWrites(
     data: EuTemplateExportData,
-    cnCodeMap?: EuCnCodeMap
+    cnCodeMap?: EuCnCodeMap,
+    countryMaps?: EuCountryMaps
 ): EuTemplateExportCellWrite[] {
     const productById = new Map(data.products.map((product) => [product.id, product]));
     const outputLinesByProcess = new Map<string, ProductOutputLine[]>();
@@ -1433,6 +1572,7 @@ function createAggregatedGoodsAndBoundaryCellWrites(
 
     aggregatedGoods.forEach((row, index) => {
         const sheetRow = 62 + index;
+        const routes = getEuAggregatedGoodRoutes(row.good, row.routes);
 
         writes.push({
             sheetName: 'A_InstData',
@@ -1442,7 +1582,7 @@ function createAggregatedGoodsAndBoundaryCellWrites(
             sourceId: row.sourceId,
         });
 
-        row.routes.slice(0, 6).forEach((route, routeIndex) => {
+        routes.slice(0, 6).forEach((route, routeIndex) => {
             writes.push({
                 sheetName: 'A_InstData',
                 cell: `${String.fromCharCode('I'.charCodeAt(0) + routeIndex)}${sheetRow}`,
@@ -1523,7 +1663,7 @@ function createAggregatedGoodsAndBoundaryCellWrites(
                 sheetName: 'A_InstData',
                 cell: `F${sheetRow}`,
                 label: 'Purchased precursor country code',
-                value: precursor.supplier_country,
+                value: resolveCountryCode(precursor.supplier_country, countryMaps) ?? precursor.supplier_country,
                 sourceId: precursor.id,
             },
             {
@@ -1585,6 +1725,12 @@ function addOptionalInstallationWrite(
     });
 }
 
+// E_PurchPrec의 SEE 'Source' 셀은 Measured/Default/Unknown 드롭다운이다(자유텍스트 출처가 아님).
+// 데이터 모드를 매핑한다: 기본값 사용=Default, 실측/혼합(측정 기반)=Measured.
+function getEuPrecursorSeeSourceType(precursor: PurchasedPrecursor): string {
+    return precursor.data_mode === 'DEFAULT' ? 'Default' : 'Measured';
+}
+
 function createPrecursorCellWrites(precursors: PurchasedPrecursor[]): EuTemplateExportCellWrite[] {
     const writes: EuTemplateExportCellWrite[] = [];
 
@@ -1602,7 +1748,7 @@ function createPrecursorCellWrites(precursors: PurchasedPrecursor[]): EuTemplate
                 sourceId: precursor.id,
             },
             { sheetName: 'E_PurchPrec', cell: `L${startRow + 35}`, label: '직접 SEE', value: precursor.direct_see_tco2e_per_t, sourceId: precursor.id },
-            { sheetName: 'E_PurchPrec', cell: `M${startRow + 35}`, label: '직접 SEE 출처', value: precursor.source, sourceId: precursor.id },
+            { sheetName: 'E_PurchPrec', cell: `M${startRow + 35}`, label: '직접 SEE 데이터 출처유형(Measured/Default/Unknown)', value: getEuPrecursorSeeSourceType(precursor), sourceId: precursor.id },
             // 간접 SEE = 전력사용량(MWh/t) × 전력계수(tCO₂e/MWh). 공급사가 두 값을 따로 줬으면
             // 그대로 기재해 검증 추적성을 살린다. 없으면 사용량 1로 두고 간접값 전량을 계수로 우겨넣는다(bridge).
             ...(() => {
@@ -1634,7 +1780,8 @@ function createPrecursorCellWrites(precursors: PurchasedPrecursor[]): EuTemplate
             })(),
             {
                 sheetName: 'E_PurchPrec',
-                cell: `L${startRow + 40}`,
+                // 이 justification 입력은 병합셀 K:M이고 앵커가 K열이므로 K에 기재한다(L은 병합 내부 셀).
+                cell: `K${startRow + 40}`,
                 label: '기본값 사용 근거',
                 value: precursor.default_value_justification,
                 sourceId: precursor.id,
@@ -1683,13 +1830,14 @@ function createSummaryProductCellWrites(data: EuTemplateExportData): EuTemplateE
 
 export function createEuTemplateExportCellWrites(
     data: EuTemplateExportData,
-    cnCodeMap?: EuCnCodeMap
+    cnCodeMap?: EuCnCodeMap,
+    countryMaps?: EuCountryMaps
 ): EuTemplateExportCellWrite[] {
     const exportScope = createReportableExportScope(data);
     const exportData: EuTemplateExportData = { ...data, ...exportScope };
     return [
-        ...createInstallationCellWrites(data.installations, data.periods),
-        ...createAggregatedGoodsAndBoundaryCellWrites(exportData, cnCodeMap),
+        ...createInstallationCellWrites(data.installations, data.periods, countryMaps),
+        ...createAggregatedGoodsAndBoundaryCellWrites(exportData, cnCodeMap, countryMaps),
         ...createSourceStreamCellWrites(exportScope.sourceStreams),
         ...createEmissionsEnergyCellWrites(exportScope.processes, exportScope.products),
         ...createProcessCellWrites(exportScope.processes),
@@ -1734,6 +1882,7 @@ export async function createEuTemplateExportCopyResult(file: File, data: EuTempl
     const workbookBytes = new Uint8Array(await file.arrayBuffer());
     const zip = unzipSync(workbookBytes);
     const cnCodeMap = parseCnCodeMap(zip);
+    const countryMaps = parseCountryMaps(zip);
     const readiness = evaluateEuExportReadiness(data, cnCodeMap);
 
     if (!readiness.canExportDraft) {
@@ -1765,7 +1914,7 @@ export async function createEuTemplateExportCopyResult(file: File, data: EuTempl
         throw new Error('EU 템플릿에서 A_InstData, D_Processes 또는 E_PurchPrec 시트를 찾을 수 없습니다.');
     }
 
-    const cellWrites = createEuTemplateExportCellWrites(data, cnCodeMap);
+    const cellWrites = createEuTemplateExportCellWrites(data, cnCodeMap, countryMaps);
     const installationCellWrites = cellWrites.filter((write) => write.sheetName === 'A_InstData');
     const sourceStreamCellWrites = cellWrites.filter((write) => write.sheetName === 'B_EmInst');
     const emissionsEnergyCellWrites = cellWrites.filter((write) => write.sheetName === 'C_Emissions&Energy');
