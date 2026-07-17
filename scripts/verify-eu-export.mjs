@@ -144,16 +144,23 @@ globalThis.euExport = {
 }
 
 function loadDeliveryPackageModule() {
+  // delivery-package는 공용 OOXML 빌더(docx-builder)를 쓰므로 함께 인라인한다.
+  const docxBuilderSource = readFileSync('src/lib/docx-builder.ts', 'utf8')
+    .replace("import { strToU8, zipSync } from 'fflate';", '')
+    .replace(/^import type .*;\r?\n/gm, '')
+    .replace(/^export /gm, '');
   const source = readFileSync('src/lib/delivery-package.ts', 'utf8')
     .replace(
       "import { strToU8, zipSync } from 'fflate';",
       'const { strToU8, zipSync } = fflate;'
     )
+    .replace("import { cell, createDocx, paragraph, table, xmlEscape } from './docx-builder';", '')
     .replace("import { getSourceStreamEmissionFactorBasis } from './source-stream-calculation';", '')
     .replace(/import type[\s\S]*?;\r?\n/gm, '')
     .replace(/^export /gm, '');
   const compiled = ts.transpileModule(
-    `${source}
+    `${docxBuilderSource}
+${source}
 function getSourceStreamEmissionFactorBasis(sourceStream) {
   return sourceStream.emission_factor_basis === 'PER_ACTIVITY_UNIT' ? 'PER_ACTIVITY_UNIT' : 'PER_TJ';
 }
