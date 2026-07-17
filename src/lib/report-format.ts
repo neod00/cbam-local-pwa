@@ -39,6 +39,20 @@ export function formatForReport(value: number | undefined, digits = 4): string {
     }).format(roundForReport(value, digits));
 }
 
+/**
+ * 반올림 없이 원천 자릿수 그대로 표기한다.
+ * 부속서 A.2가 「산식에 표기하는 피연산자는 반올림하지 않는다」를 선언하므로,
+ * 산식의 피연산자는 formatForReport(반올림)가 아니라 이 함수를 써야 선언과 출력이 일치한다(씨밤이 P1).
+ */
+export function formatRawForReport(value: number | undefined): string {
+    if (value === undefined || !Number.isFinite(value)) {
+        return '-';
+    }
+
+    // 이진 부동소수 잔재(1.9987499999999998)를 유효자릿수로 정리하되 반올림 표기는 하지 않는다.
+    return String(Number(value.toPrecision(15)));
+}
+
 /** 정수(생산량 등) 표기 */
 export function formatIntegerForReport(value: number | undefined): string {
     if (value === undefined || !Number.isFinite(value)) {
@@ -54,8 +68,9 @@ export function formatPercentForReport(ratio: number | undefined, digits = 2): s
         return '-';
     }
 
-    const percent = roundForReport(ratio * 100, digits);
-    const sign = percent >= 0 ? '+' : '';
+    // roundForReport가 -0을 반환하면 `-0 >= 0`이 true라 '+'가 붙고 Intl은 '-0.00'을 찍어 `+-0.00%`가 된다.
+    const percent = roundForReport(ratio * 100, digits) + 0;
+    const sign = percent > 0 ? '+' : '';
 
     return `${sign}${new Intl.NumberFormat('ko-KR', {
         minimumFractionDigits: digits,

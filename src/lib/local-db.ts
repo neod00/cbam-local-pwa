@@ -151,6 +151,13 @@ export interface ReportTranspositionRow {
   conversion_note?: string;
   measurement_method?: string;
   data_quality?: string;
+  /**
+   * 계수의 출처(발행기관·문서·판본·표번호). 활동자료 증빙(SourceStream.source, 예: 요금청구서)과
+   * 반드시 구분해야 한다. 청구서에는 배출계수가 실리지 않으므로, 한 필드를 양쪽에 쓰면
+   * 보고서가 「이 계수는 청구서에서 왔다」는 사실이 아닌 진술을 하게 된다(씨밤이 P0).
+   */
+  ncv_source?: string;
+  ef_source?: string;
 }
 
 /** 7장 전력 배출계수 출처 메타데이터 (생산공정 단위) */

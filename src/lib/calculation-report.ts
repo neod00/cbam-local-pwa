@@ -1,9 +1,11 @@
 import { cell, createDocx, paragraph, table } from './docx-builder';
-import { checkDisplaySum, formatForReport, formatIntegerForReport, formatPercentForReport, roundForReport } from './report-format';
+import { checkDisplaySum, formatForReport, formatIntegerForReport, formatPercentForReport, formatRawForReport, roundForReport } from './report-format';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
 import { isCbamReportingScope, getProductReportingScope } from './reporting-scope';
-import { findDefaultValueReference } from './reference-workbooks';
+import { findDefaultValueReference, hasAmbiguousDefaultValueRoutes } from './reference-workbooks';
 import type { DefaultValueReferenceRow, ImportedDefaultValueReference } from './reference-workbooks';
+import { getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
+import { calculateLocalResults } from './calculation-engine';
 import type { LocalCalculationResult } from './calculation-engine';
 import type {
     Installation,
@@ -69,13 +71,164 @@ export interface CalculationReportResult {
 }
 
 const PLACEHOLDER = '기재 필요';
+/** 해당 계수가 이 배출원의 산식에 등장하지 않음. 0과 구분해야 한다. */
+const NOT_APPLICABLE = '해당 없음';
+/** 공식 기본값이 공표되지 않은 조합. 0(=배출 없음)과 반드시 구분한다. */
+const NOT_PUBLISHED = 'N/A (미공표)';
+
+/**
+ * 검증인이 6개월 뒤 같은 입력으로 같은 결과를 재현하려면 어떤 소프트웨어였는지 특정해야 한다.
+ * DV 워크북 판본은 기재하면서 그것을 해석한 엔진이 무버전이면 재현이 성립하지 않는다(씨밤이 P1).
+ */
+const APP_VERSION = 'v0.1.0';
 
 function reportableResults(input: CalculationReportInput) {
     return input.results.filter((result) => result.is_cbam_reportable);
 }
 
+/**
+ * 보고기간은 산정 결과가 가리키는 기간이다.
+ * periods[0]을 쓰면 기간이 여러 개 등록됐을 때 데이터와 무관한 기간이 표지에 인쇄된다(씨밤이 P1).
+ */
 function firstPeriod(input: CalculationReportInput) {
-    return input.periods[0];
+    const periodId = reportableResults(input).find((result) => result.period_id)?.period_id;
+
+    return input.periods.find((period) => period.id === periodId) ?? input.periods[0];
+}
+
+/** G1 — 한 보고서는 한 보고기간만 다룬다. 결과가 여러 기간에 걸쳐 있으면 표지가 거짓이 된다. */
+function checkSinglePeriod(input: CalculationReportInput): ReportGateIssue[] {
+    const periodIds = new Set(
+        reportableResults(input)
+            .map((result) => result.period_id)
+            .filter((id): id is string => Boolean(id))
+    );
+
+    if (periodIds.size <= 1) {
+        return [];
+    }
+
+    const names = [...periodIds]
+        .map((id) => input.periods.find((period) => period.id === id)?.name ?? id)
+        .join(', ');
+
+    return [{
+        gate: 'G1',
+        severity: 'block',
+        message: `산정 결과가 여러 보고기간(${names})에 걸쳐 있습니다. 산정보고서는 보고기간별로 발행해야 합니다.`,
+    }];
+}
+
+/** 신고 대상 결과가 가리키는 제품들(중복 제거). 간접배출 취급은 제품마다 갈릴 수 있다. */
+function reportableProducts(input: CalculationReportInput) {
+    const seen = new Set<string>();
+    const products: Product[] = [];
+
+    for (const result of reportableResults(input)) {
+        const product = input.products.find((item) => item.id === result.product_id);
+
+        if (product && !seen.has(product.id)) {
+            seen.add(product.id);
+            products.push(product);
+        }
+    }
+
+    return products;
+}
+
+/**
+ * 산정경계 안(= CBAM 신고 대상 결과가 가리키는 공정)에 속한 것만 추린다.
+ * 6·7장이 input 전체를 순회하면 경계 밖 공정·배출원이 경계 안 문서에 실린다(씨밤이 P1).
+ */
+function cbamProcessIds(input: CalculationReportInput) {
+    return new Set(reportableResults(input).map((result) => result.process_id));
+}
+
+function cbamProcesses(input: CalculationReportInput) {
+    const ids = cbamProcessIds(input);
+
+    return input.processes.filter((process) => ids.has(process.id));
+}
+
+function cbamSourceStreams(input: CalculationReportInput) {
+    const ids = cbamProcessIds(input);
+
+    return input.sourceStreams.filter((stream) => stream.process_id !== undefined && ids.has(stream.process_id));
+}
+
+function cbamPrecursors(input: CalculationReportInput) {
+    const ids = cbamProcessIds(input);
+
+    return input.precursors.filter((precursor) => precursor.process_id !== undefined && ids.has(precursor.process_id));
+}
+
+/**
+ * 이 전구물질의 직접 기여가 CBAM 기준 SEE에서 차지하는 비중.
+ * 결과의 대부분이 미검증 값에서 온다는 사실은 검증인이 가장 먼저 봐야 할 지표인데,
+ * 독자가 직접 나눠봐야 알 수 있으면 노출된 것이 아니다(씨밤이 P0).
+ */
+function precursorContributionShare(input: CalculationReportInput, precursor: PurchasedPrecursor) {
+    const result = reportableResults(input).find((item) => item.process_id === precursor.process_id);
+
+    if (!result?.see_cbam_basis || result.output_mass_t <= 0) {
+        return undefined;
+    }
+
+    const contribution = (precursor.consumed_mass_t * precursor.direct_see_tco2e_per_t) / result.output_mass_t;
+
+    return contribution / result.see_cbam_basis;
+}
+
+/** 원천자료가 에너지 단위이면 NCV 환산이 산식에서 상쇄된다(제6.1장 고지 판단용). */
+const ENERGY_UNITS = new Set(['MJ', 'GJ', 'TJ', 'KWH', 'MWH', 'GWH']);
+
+const ALLOCATION_BASIS_LABEL: Record<string, string> = {
+    PROCESS_TOTAL: '공정 전체(제품 배분 없음 — 공정별 단일 제품)',
+    MASS: '질량 기준(MASS)',
+    MANUAL: '수동 지정(MANUAL)',
+};
+
+/**
+ * 「도구가 자동 경고한다」는 방법 진술이 아니다. 어떤 배분방법을 실제로 썼는지 말해야
+ * 검증인이 배분기준 혼용 여부를 판단할 수 있다(씨밤이 P1 — v0.3 회귀).
+ */
+function describeAllocationBasis(input: CalculationReportInput) {
+    const bases = [...new Set(reportableResults(input).map((result) => result.allocation_basis).filter(Boolean))];
+
+    if (bases.length === 0) {
+        return '제품 배분 기준: 확인 필요(자료).';
+    }
+
+    const labels = bases.map((basis) => ALLOCATION_BASIS_LABEL[basis] ?? basis).join(' · ');
+
+    return bases.length === 1
+        ? `제품 배분 기준: ${labels} 단일 적용, 한 공정 내 기준 혼용 없음.`
+        : `제품 배분 기준: ${labels} — 기준이 혼용되어 있어 공정별 적정성을 개별 확인해야 한다(제4장). 확인 필요(자료).`;
+}
+
+/** 비중(0~1) 표기. 부호 없이 백분율만. */
+function formatPercentShare(ratio: number) {
+    return `${formatForReport(ratio * 100, 1)}%`;
+}
+
+/**
+ * 표지·요약에 올릴 최대 한계 한 줄.
+ * 미검증 전구물질이 기준 SEE의 큰 비중을 차지하면 그것이 이 문서의 최대 한계다.
+ */
+function topLimitation(input: CalculationReportInput) {
+    const candidates = cbamPrecursors(input)
+        .filter((precursor) => precursor.verification_status !== 'VERIFIED' && precursor.data_mode !== 'DEFAULT')
+        .map((precursor) => ({ precursor, share: precursorContributionShare(input, precursor) }))
+        .filter((item): item is { precursor: PurchasedPrecursor; share: number } => item.share !== undefined)
+        .sort((a, b) => b.share - a.share);
+
+    const top = candidates[0];
+
+    if (!top) {
+        return undefined;
+    }
+
+    return `CBAM 기준 SEE의 약 ${formatPercentShare(top.share)}가 제3자 검증을 받지 않은 공급사 통지값(${top.precursor.name})에서 유래한다. 불인정 시 영향은 제9.2장 민감도 참조 — 상세는 제8·9·14장.`;
 }
 
 function formatDate(date: Date) {
@@ -100,7 +253,9 @@ function checkNumericColumns(
         rows.forEach((row) => {
             const value = row[index] ?? '';
 
-            if (value === '' || value === '-' || value === PLACEHOLDER) {
+            // 자리표시·비해당 표기는 숫자가 아니어도 정상이다. 「해당 없음」은 그 계수가
+            // 이 배출원의 산식에 등장하지 않는다는 뜻이므로 0을 쓰면 오히려 거짓이 된다.
+            if (value === '' || value === '-' || value === PLACEHOLDER || value === NOT_APPLICABLE || value === NOT_PUBLISHED || value === '대조 불가' || value === '확인 필요(자료)') {
                 return;
             }
 
@@ -167,6 +322,35 @@ function checkResultDisplaySums(results: LocalCalculationResult[]): { issues: Re
     }
 
     return { issues, needsRoundingNote };
+}
+
+/**
+ * G1 — SEE의 분모(생산량)가 0 이하면 차단한다.
+ * 엔진은 이때 SEE를 0으로 두고 경고만 남기므로, 게이트가 없으면 「CBAM 기준 SEE 0.0000」이
+ * 아무 표식 없이 검증인에게 나간다. "배출이 없다"는 진술이 되어버린다(씨밤이 P0).
+ */
+function checkSeeDenominator(results: LocalCalculationResult[]): ReportGateIssue[] {
+    return results
+        .filter((result) => result.output_mass_t <= 0)
+        .map((result) => ({
+            gate: 'G1' as const,
+            severity: 'block' as const,
+            message: `${result.product_name}(${result.process_name}): 생산량이 ${formatForReport(result.output_mass_t)} t이라 제품 1톤당 SEE를 산정할 수 없습니다. 생산량을 확인하세요.`,
+        }));
+}
+
+/**
+ * G1 — 엔진이 남긴 산정 경고를 보고서로 끌어올린다.
+ * 제13장이 건수만 인쇄하고 내용은 어디에도 없으면 검증인에게 단서가 아니라 red flag다(씨밤이 P1).
+ */
+function collectEngineWarnings(results: LocalCalculationResult[]): ReportGateIssue[] {
+    return results.flatMap((result) =>
+        result.warnings.map((message) => ({
+            gate: 'G1' as const,
+            severity: 'warn' as const,
+            message: `${result.product_name}(${result.process_name}): ${message}`,
+        }))
+    );
 }
 
 /** G4 — 본문의 「제N장」 참조가 실재하는 장을 가리키는지. v0.2 샘플의 dangling 참조 재발 방지. */
@@ -238,8 +422,8 @@ function coverSection(input: CalculationReportInput, isInterim: boolean) {
     const installation = input.installations[0];
     const period = firstPeriod(input);
     const reportable = reportableResults(input);
-    const product = input.products.find((item) => item.id === reportable[0]?.product_id);
-    const applicability = getIndirectEmissionsApplicability(product);
+    // 제품마다 간접배출 취급이 갈릴 수 있다. 첫 제품으로 전체를 대표하면 표지가 나머지 제품에 대해 거짓이 된다(씨밤이 P0).
+    const labels = [...new Set(reportableProducts(input).map((item) => getIndirectEmissionsApplicability(item).label))];
 
     const rows: Array<[string, string]> = [
         ['보고기간 (Reporting period)', period ? `${period.start_date} ~ ${period.end_date}` : PLACEHOLDER],
@@ -247,13 +431,21 @@ function coverSection(input: CalculationReportInput, isInterim: boolean) {
             ? reportable.map((result) => `${result.product_name} · CN ${result.cn_code ?? '-'}`).join('\n')
             : PLACEHOLDER],
         ['대상 온실가스 (GHG scope)', 'CO2 (철강 품목의 CBAM 대상 GHG — 확인 필요(규정)). 본문 tCO2e = tCO2'],
-        ['간접배출 취급', applicability.label],
+        ['간접배출 취급', labels.length === 1 ? labels[0] : `제품별 상이 — 제3.1장 참조 (${labels.join(' / ')})`],
         ['문서 상태 (Status)', isInterim
             ? '기중 잠정(interim) — 보고기간 종료 전 발행. 증빙 커버리지 확인 필요'
             : '내부 검토 대기 · 제3자 검증 제출 전'],
         ['작성일 (Date of issue)', formatDate(input.generatedAt)],
-        ['작성 도구 (Prepared with)', 'CBAM Local — 로컬 우선 산정 도구'],
+        ['작성 도구 (Prepared with)', `CBAM Local ${APP_VERSION} — 로컬 우선 산정 도구${input.defaultValues ? ` · 기본값 기준자료 ${input.defaultValues.summary.filename}` : ' · 기본값 기준자료 미연결'}`],
     ];
+
+    // 이 산정의 최대 한계는 표지를 통과해야 한다. 각주에 묻히면 요약만 읽는 검증인은
+    // 자기가 무엇을 보고 있는지 모른 채 넘어간다(씨밤이 P0).
+    const limitation = topLimitation(input);
+
+    if (limitation) {
+        rows.push(['주요 한계 (Key limitation)', limitation]);
+    }
 
     return [
         paragraph('CBAM 내재배출량 산정보고서', 'Title'),
@@ -274,6 +466,7 @@ function coverSection(input: CalculationReportInput, isInterim: boolean) {
 
 function summarySection(input: CalculationReportInput) {
     const reportable = reportableResults(input);
+    const limitation = topLimitation(input);
     const columns = [
         { header: '제품 (CN)' },
         { header: '생산량 (t)', numeric: true },
@@ -296,7 +489,13 @@ function summarySection(input: CalculationReportInput) {
             table(columns.map((column) => column.header), rows, {
                 widths: [2300, 1500, 1750, 1750, 1700], headerShade: SOFT, headerBold: true, repeatHeader: true,
             }),
-            paragraph('SEE 직접 = 자체 공정 직접배출 + 구매 전구물질의 직접 내재배출. SEE 간접의 인증서 기준 반영 여부는 제3장 근거를 따른다.', 'Note'),
+            paragraph('SEE 직접 = 자체 공정 직접배출 + 구매 전구물질의 직접 내재배출. SEE 간접의 인증서 기준 반영 여부는 제3.1장 근거를 따른다.', 'Note'),
+            paragraph(
+                `참고 총 SEE(직접+간접, 정보 목적) = ${reportable.map((result) => `${result.product_name} ${formatForReport(result.see_informational_total)}`).join(' · ')} tCO2e/t.`,
+                'Note'
+            ),
+            // 요약만 읽는 독자에게 최대 한계를 전달하지 못하면 요약이 제 역할을 못한 것이다(씨밤이 P0).
+            ...(limitation ? [paragraph(`주요 잔여 리스크: ${limitation}`, 'Note', { color: AMBER })] : []),
         ].join(''),
         gateIssues: checkNumericColumns('제1장 요약표', columns, rows),
     };
@@ -331,8 +530,6 @@ function installationSection(input: CalculationReportInput) {
 function productSection(input: CalculationReportInput) {
     const period = firstPeriod(input);
     const reportable = reportableResults(input);
-    const product = input.products.find((item) => item.id === reportable[0]?.product_id);
-    const applicability = getIndirectEmissionsApplicability(product);
     const rows: Array<[string, string]> = [
         ['보고기간', period ? `${period.start_date} ~ ${period.end_date}` : PLACEHOLDER],
         ['제품명 / CN 코드', reportable.map((result) => `${result.product_name} / ${result.cn_code ?? '-'}`).join('\n') || PLACEHOLDER],
@@ -345,11 +542,31 @@ function productSection(input: CalculationReportInput) {
         paragraph('3.1 간접배출 취급 근거', 'Heading2'),
     ];
 
-    if (applicability.applicable) {
-        body.push(paragraph(`본 제품은 간접배출을 포함해 산정한다. 근거: ${applicability.reason} (조항 확인 필요(규정))`));
-    } else {
-        body.push(paragraph(`본 제품은 직접배출만 고려하는 품목으로, 최종제품의 자체 전력 간접배출은 CBAM 인증서 산정 기준 SEE에서 제외하고 정보 목적으로 보고한다. 근거: ${applicability.reason} (Regulation (EU) 2023/956 Art. 7(1) — 조항 번호 EUR-Lex 원문 확인 필요(규정))`));
+    // 제품마다 판정한다. 첫 제품으로 전체를 대표하면 분류가 갈리는 순간 문서가 자기모순에 빠진다(씨밤이 P0).
+    for (const product of reportableProducts(input)) {
+        const applicability = getIndirectEmissionsApplicability(product);
+        const label = `${product.name}(CN ${product.cn_code ?? '미기재'})`;
 
+        if (applicability.applicable) {
+            body.push(paragraph(`${label}: 간접배출을 포함해 산정한다. 판정: ${applicability.label} (조항 확인 필요(규정))`));
+        } else {
+            body.push(paragraph(`${label}: 직접배출만 고려하는 품목으로, 최종제품의 자체 전력 간접배출은 CBAM 인증서 산정 기준 SEE에서 제외하고 정보 목적으로 보고한다. 판정: ${applicability.label} (Regulation (EU) 2023/956 Art. 7(1) — 조항 번호 EUR-Lex 원문 확인 필요(규정))`));
+        }
+    }
+
+    // 판정이 어떻게 내려졌는지 밝힌다. 산정 도구는 CN 접두 규칙으로 판정하며 Annex II 등재 목록을
+    // 조회하지 않는다. 이 사실을 감추면 보고서가 "등재를 확인했다"고 말하는 셈이 된다(씨밤이 P0).
+    body.push(paragraph(
+        '판정 방법: 본 판정은 산정 도구의 CN 접두 규칙에 따른 것이며, Annex II 등재 목록 원본을 조회한 결과가 아니다. 등재 목록·판본 대조는 완료되지 않았다 — 확인 필요(자료).',
+        'Note',
+        { color: AMBER }
+    ));
+
+    const directOnlyProducts = reportableProducts(input).filter(
+        (product) => !getIndirectEmissionsApplicability(product).applicable
+    );
+
+    if (directOnlyProducts.length > 0) {
         // 전구물질별로 개별 판정 — 하나라도 직접전용이 아니면 그 간접배출은 최종재로 전가될 수 있다.
         const nonDirectOnly = input.precursors.filter((precursor) => {
             const applicabilityOfPrecursor = getIndirectEmissionsApplicability({
@@ -365,7 +582,7 @@ function productSection(input: CalculationReportInput) {
 
         if (nonDirectOnly.length > 0) {
             body.push(paragraph(
-                `주의: 다음 전구물질은 직접배출만 고려되는 품목이 아니므로 그 간접 내재배출이 최종재로 전가될 수 있습니다 — ${nonDirectOnly.map((precursor) => `${precursor.name}(${precursor.precursor_cn_code ?? 'CN 미기재'})`).join(', ')}. 인증서 산정 기준 반영 여부를 개별 확인해야 합니다. 확인 필요(규정).`,
+                `주의: 다음 전구물질은 직접배출만 고려되는 품목이 아니므로 그 간접 내재배출이 최종재로 전가될 수 있다 — ${nonDirectOnly.map((precursor) => `${precursor.name}(${precursor.precursor_cn_code ?? 'CN 미기재'})`).join(', ')}. 인증서 산정 기준 반영 여부를 개별 확인해야 한다. 확인 필요(규정).`,
                 undefined,
                 { color: AMBER }
             ));
@@ -403,7 +620,7 @@ function processSection(input: CalculationReportInput) {
         table(columns.map((column) => column.header), rows, {
             widths: [2700, 2100, 1400, 1400, 1400], headerShade: SOFT, headerBold: true, repeatHeader: true,
         }),
-        paragraph(`본 보고서의 CBAM 대상 생산공정은 ${scope.length}개이다. 제품 배분 기준과 생산라인 합계 정합은 산정 도구의 자동 검사를 통과하였다(제6장).`),
+        paragraph(`본 보고서의 CBAM 대상 생산공정은 ${scope.length}개이다. ${describeAllocationBasis(input)} SEE 산정의 분모는 각 공정의 총생산량이다.`),
     ];
 
     if (hasInternal) {
@@ -425,8 +642,11 @@ function methodologySection(input: CalculationReportInput) {
         paragraph('산정은 Regulation (EU) 2023/956 및 2026 확정기간 이행규정에 따른다. 본 보고서의 산정방법을 지배하는 이행규정의 번호·적용 조항은 EUR-Lex 원문 대조가 완료되지 않았다 — 확인 필요(규정). 참조 문서는 부속서 B를 따른다.'),
         paragraph('전환기(~2025) Guidance 및 Q&A는 개념 참조용으로만 사용하였으며, 수치·한도를 본 확정기간 산정에 적용하지 않았다.', 'Note'),
         paragraph('5.1 직접배출 (연료 연소)', 'Heading2'),
-        paragraph('E직접 = 활동자료 × 순발열량 NCV(GJ/단위) × 배출계수 EF(tCO2/TJ) ÷ 1,000 × 산화계수'),
-        paragraph('철강 품목의 CBAM 대상 온실가스는 CO2이므로(확인 필요(규정)) tCO2 = tCO2e로 표기한다.', 'Note'),
+        // 산식은 엔진이 실제로 계산하는 것과 같아야 한다. 전환계수·화석분율을 빠뜨리면
+        // 바이오매스가 섞인 배출원에서 인쇄된 산식으로 인쇄된 결과를 재현할 수 없다(씨밤이 P1).
+        paragraph('E직접 = 활동자료 AD × 순발열량 NCV(GJ/단위) × 배출계수 EF(tCO2/TJ) × 산화계수 OxF × 전환계수 CF × 화석 분율 ÷ 1,000'),
+        paragraph('배출계수가 활동자료 단위 기준(tCO2/단위)으로 주어진 경우에는 NCV와 ÷1,000을 적용하지 않는다: E직접 = AD × EF × OxF × CF × 화석 분율. 각 계수의 실제 적용값은 제6.2.1장에 있다.', 'Note'),
+        paragraph('철강 품목의 CBAM 대상 온실가스는 CO2이므로(확인 필요(규정)) tCO2 = tCO2e로 표기한다. 연소에 따른 CH4·N2O는 본 산정의 대상 GHG에 포함되지 않는다 — 확인 필요(규정).', 'Note'),
         paragraph('5.2 간접배출 (전력)', 'Heading2'),
         paragraph('E간접 = 전력 사용량(MWh) × 전력 배출계수(tCO2e/MWh). 인증서 기준 반영 여부는 제3장 근거를 따른다.'),
         paragraph('5.3 전구물질 내재배출', 'Heading2'),
@@ -435,12 +655,15 @@ function methodologySection(input: CalculationReportInput) {
         paragraph('5.4 제품 SEE 및 인증서 기준', 'Heading2'),
     ];
 
+    // 피연산자는 원천값으로 인쇄한다. formatForReport(반올림)를 쓰면 바로 아래 줄의
+    // 「피연산자는 반올림하지 않는다」와 문서가 자기모순에 빠지고, 검증인이 인쇄된 산식으로
+    // 인쇄된 결과를 재현하지 못하는 경우가 생긴다(씨밤이 P1 — v0.1 회귀).
     for (const result of reportable) {
         body.push(paragraph(
-            `${result.product_name}: SEE(직접, 전구물질 포함) = ${formatForReport(result.direct_see)} + ${formatForReport(result.precursor_direct_see)} = ${formatForReport(result.see_direct_incl_precursor)} tCO2e/t`
+            `${result.product_name}: SEE(직접, 전구물질 포함) = ${formatRawForReport(result.direct_see)} + ${formatRawForReport(result.precursor_direct_see)} = ${formatForReport(result.see_direct_incl_precursor)} tCO2e/t`
         ));
         body.push(paragraph(
-            `${result.product_name}: SEE(간접) = ${formatForReport(result.own_indirect_see)} + ${formatForReport(result.precursor_indirect_see)} = ${formatForReport(result.see_indirect_incl_precursor)} tCO2e/t`
+            `${result.product_name}: SEE(간접) = ${formatRawForReport(result.own_indirect_see)} + ${formatRawForReport(result.precursor_indirect_see)} = ${formatForReport(result.see_indirect_incl_precursor)} tCO2e/t`
         ));
     }
 
@@ -451,7 +674,7 @@ function methodologySection(input: CalculationReportInput) {
 
 /** 6.1 — 원천 단위(청구서 MJ 등) → 산정 활동자료(t) 경로. 없으면 검증인의 첫 점검이 막힌다(씨밤이 P1). */
 function transpositionTable(input: CalculationReportInput) {
-    const rows = input.sourceStreams.map((stream) => {
+    const rows = cbamSourceStreams(input).map((stream) => {
         const entry = input.reportInputs?.transpositions?.find((item) => item.source_stream_id === stream.id);
         return [
             stream.name,
@@ -461,14 +684,36 @@ function transpositionTable(input: CalculationReportInput) {
         ];
     });
 
-    return table(['배출원', '원천자료 (청구서 등)', '환산 근거', '산정 활동자료'], rows, {
+    const body = [table(['배출원', '원천자료 (청구서 등)', '환산 근거', '산정 활동자료'], rows, {
         widths: [2200, 2200, 2600, 2000], headerShade: SOFT, headerBold: true, repeatHeader: true,
+    })];
+
+    // 원천자료가 이미 에너지 단위인데 NCV로 나눠 질량으로 바꾼 뒤 산식에서 같은 NCV를 다시 곱하면
+    // NCV는 상쇄된다. 이를 말하지 않으면 검증인이 NCV의 적정성을 계수 위계 이슈로 오인 추적한다
+    // (실제로는 본 건 배출량에 영향이 없다). v0.3에 있던 고지의 회귀(씨밤이 P1).
+    const cancelling = cbamSourceStreams(input).filter((stream) => {
+        const entry = input.reportInputs?.transpositions?.find((item) => item.source_stream_id === stream.id);
+        const unit = entry?.source_unit?.trim().toUpperCase();
+
+        return Boolean(unit)
+            && ENERGY_UNITS.has(unit as string)
+            && getSourceStreamEmissionFactorBasis(stream) === 'PER_TJ'
+            && stream.ncv_gj_per_unit > 0;
     });
+
+    if (cancelling.length > 0) {
+        body.push(paragraph(
+            `NCV 상쇄 고지: ${cancelling.map((stream) => stream.name).join(', ')}의 원천자료는 이미 에너지 단위이며, 질량 환산에 사용한 순발열량과 제5.1장 산식의 순발열량이 동일하므로 두 값은 상쇄된다. 따라서 순발열량 값의 오차는 본 건 배출량에 영향을 주지 않는다. 다만 산정 활동자료로 표기한 질량은 계량된 값이 아니라 환산으로 얻은 파생값이므로, 환산에 사용한 순발열량의 출처를 제6.2.2장에 밝힌다.`,
+            'Note'
+        ));
+    }
+
+    return body.join('');
 }
 
 /** 6.3 — 측정 방식·데이터 품질. */
 function measurementTable(input: CalculationReportInput) {
-    const rows = input.sourceStreams.map((stream) => {
+    const rows = cbamSourceStreams(input).map((stream) => {
         const entry = input.reportInputs?.transpositions?.find((item) => item.source_stream_id === stream.id);
         return [
             stream.name,
@@ -484,24 +729,59 @@ function measurementTable(input: CalculationReportInput) {
 }
 
 function activityDataSection(input: CalculationReportInput) {
+    // 헤더에 단위가 없으면 G7(단위 정합)이 검사할 대상 자체가 없어 공허하게 통과한다.
+    // tCO2/TJ와 tCO2/단위 혼동은 이 도메인의 대표적 결함이라 표에 단위가 박혀 있어야 한다(씨밤이 P1).
     const columns = [
         { header: '배출원' },
         { header: '산정방법' },
         { header: '활동자료', numeric: true },
         { header: '단위' },
-        { header: 'NCV', numeric: true },
+        { header: 'NCV (GJ/단위)', numeric: true },
         { header: 'EF', numeric: true },
-        { header: '계수 출처' },
+        { header: 'EF 기준' },
     ];
-    const rows = input.sourceStreams.map((stream) => [
+    const streams = cbamSourceStreams(input);
+    const rows = streams.map((stream) => {
+        const perActivityUnit = getSourceStreamEmissionFactorBasis(stream) === 'PER_ACTIVITY_UNIT';
+
+        return [
+            stream.name,
+            stream.method,
+            formatRawForReport(stream.activity_data),
+            stream.activity_unit,
+            perActivityUnit ? NOT_APPLICABLE : formatRawForReport(stream.ncv_gj_per_unit),
+            formatRawForReport(stream.emission_factor_tco2e_per_unit),
+            perActivityUnit ? `tCO2/${stream.activity_unit}` : 'tCO2/TJ',
+        ];
+    });
+
+    // 산식에 등장하는 계수는 전부 표에 값이 있어야 검증인이 인쇄된 산식으로 인쇄된 결과를 재현한다.
+    // 종전에는 산화계수가 산식에만 있고 값이 문서 어디에도 없었다(씨밤이 P1).
+    const factorColumns = [
+        { header: '배출원' },
+        { header: '산화계수 (OxF)', numeric: true },
+        { header: '전환계수 (CF)', numeric: true },
+        { header: '화석 분율', numeric: true },
+        { header: '바이오매스 분율', numeric: true },
+    ];
+    const factorRows = streams.map((stream) => [
         stream.name,
-        stream.method,
-        formatForReport(stream.activity_data, 4),
-        stream.activity_unit,
-        formatForReport(stream.ncv_gj_per_unit, 4),
-        formatForReport(stream.emission_factor_tco2e_per_unit, 4),
-        stream.source || PLACEHOLDER,
+        formatRawForReport(stream.oxidation_factor),
+        formatRawForReport(stream.conversion_factor),
+        formatRawForReport(stream.fossil_fraction),
+        formatRawForReport(stream.biomass_fraction),
     ]);
+
+    // 계수 출처는 활동자료 증빙과 다른 문서다. 청구서에는 배출계수가 실리지 않는다(씨밤이 P0).
+    const sourceRows = streams.map((stream) => {
+        const entry = input.reportInputs?.transpositions?.find((item) => item.source_stream_id === stream.id);
+
+        return [
+            stream.name,
+            getSourceStreamEmissionFactorBasis(stream) === 'PER_ACTIVITY_UNIT' ? NOT_APPLICABLE : entry?.ncv_source || PLACEHOLDER,
+            entry?.ef_source || PLACEHOLDER,
+        ];
+    });
     const reportable = reportableResults(input);
 
     const body = [
@@ -511,7 +791,17 @@ function activityDataSection(input: CalculationReportInput) {
         transpositionTable(input),
         paragraph('6.2 배출계수', 'Heading2'),
         table(columns.map((column) => column.header), rows, {
-            widths: [1800, 1300, 1200, 800, 900, 1200, 1800], headerShade: SOFT, headerBold: true, repeatHeader: true,
+            widths: [1700, 1300, 1200, 800, 1300, 1200, 1500], headerShade: SOFT, headerBold: true, repeatHeader: true,
+        }),
+        paragraph('6.2.1 산식 적용 계수', 'Heading2'),
+        paragraph('제5.1장 산식에 대입한 계수의 실제 값이다.'),
+        table(factorColumns.map((column) => column.header), factorRows, {
+            widths: [2200, 1700, 1700, 1700, 1700], headerShade: SOFT, headerBold: true, repeatHeader: true,
+        }),
+        paragraph('6.2.2 계수 출처', 'Heading2'),
+        paragraph('계수의 출처는 활동자료 증빙(제6.3장)과 다른 문서다. 요금청구서 등 거래 증빙에는 순발열량·배출계수가 기재되지 않으므로, 인용 계수의 발행기관·문서명·판본·표번호를 별도로 밝힌다.'),
+        table(['배출원', 'NCV 출처', 'EF 출처'], sourceRows, {
+            widths: [2200, 3400, 3400], headerShade: SOFT, headerBold: true, repeatHeader: true,
         }),
         paragraph('확인 필요(규정): 확정기간 이행규정이 표준계수 위계를 두는 경우 인용 계수의 적격성을 원문 대조로 확인해야 한다.', 'Note'),
         paragraph('6.3 측정 방식 및 데이터 품질', 'Heading2'),
@@ -526,12 +816,37 @@ function activityDataSection(input: CalculationReportInput) {
     body.push(table(['생산공정', '정합 결과'], reconRows, { widths: [2700, 6300], headerShade: SOFT, headerBold: true, repeatHeader: true }));
     body.push(paragraph('본 점검은 산정 도구의 내부 정합성 기준(±1%)에 따른 자체 QC이며, 규정상 허용오차가 아니다. 배출원이 1건인 공정에서는 이 점검이 전기(轉記) 오류 검출에 한정된다.', 'Note'));
 
-    return { xml: body.join(''), gateIssues: checkNumericColumns('제6장 배출계수표', columns, rows) };
+    // 계수 출처·전치·측정 방식이 비면 조용히 「기재 필요」로 인쇄되던 것을 경고로 올린다.
+    // 설계 §8이 6.1·6.3을 /report-inputs 유도 대상으로 명시했는데 게이트가 없었다(씨밤이 P1).
+    const gateIssues: ReportGateIssue[] = [...checkNumericColumns('제6장 배출계수표', columns, rows)];
+
+    for (const stream of streams) {
+        const entry = input.reportInputs?.transpositions?.find((item) => item.source_stream_id === stream.id);
+        const perActivityUnit = getSourceStreamEmissionFactorBasis(stream) === 'PER_ACTIVITY_UNIT';
+
+        if (!entry?.ef_source?.trim() || (!perActivityUnit && !entry?.ncv_source?.trim())) {
+            gateIssues.push({
+                gate: 'G5',
+                severity: 'warn',
+                message: `제6.2.2장: ${stream.name}의 계수 출처(발행기관·문서명·판본)가 비어 있습니다. 활동자료 증빙과 계수 출처는 다른 문서입니다.`,
+            });
+        }
+
+        if (!entry?.measurement_method?.trim()) {
+            gateIssues.push({
+                gate: 'G5',
+                severity: 'warn',
+                message: `제6.3장: ${stream.name}의 측정 방식이 비어 있습니다.`,
+            });
+        }
+    }
+
+    return { xml: body.join(''), gateIssues };
 }
 
 function electricitySection(input: CalculationReportInput) {
     const gateIssues: ReportGateIssue[] = [];
-    const rows = input.processes.map((process) => {
+    const rows = cbamProcesses(input).map((process) => {
         const meta = input.reportInputs?.electricity_ef_meta?.find((item) => item.process_id === process.id);
         const source = [meta?.publisher, meta?.document, meta?.vintage].filter(Boolean).join(' · ');
 
@@ -574,7 +889,7 @@ function precursorSection(input: CalculationReportInput) {
         { header: 'SEE 직접', numeric: true },
         { header: 'SEE 간접', numeric: true },
     ];
-    const rows = input.precursors.map((precursor) => [
+    const rows = cbamPrecursors(input).map((precursor) => [
         `${precursor.name}\n${precursor.precursor_cn_code ?? '-'}`,
         precursor.production_route || PLACEHOLDER,
         formatIntegerForReport(precursor.purchased_mass_t),
@@ -590,23 +905,34 @@ function precursorSection(input: CalculationReportInput) {
         }),
     ];
 
-    for (const precursor of input.precursors) {
+    const period = firstPeriod(input);
+
+    for (const [index, precursor] of cbamPrecursors(input).entries()) {
+        // 공급사 자료의 대상기간이 본 보고기간과 다르면 확정기간 적격성(빈티지 대응)이 걸린다.
+        // 값만 인쇄하고 불일치를 말하지 않으면 리스크가 문서에서 사라진다(씨밤이 P1 — v0.3 회귀).
+        const vintage = precursor.supplier_reporting_period?.trim();
+        const vintageMismatch = Boolean(vintage && period?.name && vintage !== period.name);
         const detail: Array<[string, string]> = [
             ['공급사 / 원산지', `${precursor.supplier_installation || '-'} / ${precursor.supplier_country || PLACEHOLDER}`],
             ['데이터 구분', precursor.data_mode === 'DEFAULT' ? '기본값 (Default)' : precursor.data_mode === 'SEMI_ACTUAL' ? '혼합 (Measured + Default)' : '실측 (Measured)'],
-            ['자료 대상기간 (vintage)', precursor.supplier_reporting_period || '확인 필요(자료)'],
+            ['자료 대상기간 (vintage)', !vintage
+                ? '확인 필요(자료)'
+                : vintageMismatch
+                    ? `${vintage} — 본 보고기간(${period?.name})과 불일치. 확정기간 적격성 및 대표성 확인 필요 — 확인 필요(규정) (제14장)`
+                    : vintage],
             ['검증 상태', precursor.verification_status === 'VERIFIED' ? '제3자 검증 완료' : precursor.verification_status === 'SUPPLIER_CONFIRMED' ? '공급사 확인 — 제3자 검증 미완료' : '미검증'],
             ['비CBAM 용도 소비', `${formatIntegerForReport(precursor.consumed_for_non_cbam_mass_t)} t`],
             ['질량 수지', precursor.purchased_mass_t >= precursor.consumed_mass_t
                 ? `구매 ${formatIntegerForReport(precursor.purchased_mass_t)} t ≥ 소비 ${formatIntegerForReport(precursor.consumed_mass_t)} t — 기말 재고 ${formatIntegerForReport(precursor.purchased_mass_t - precursor.consumed_mass_t)} t (차기 이월)`
                 : `⚠ 소비량이 구매량을 초과합니다 — 확인 필요(자료)`],
         ];
-        body.push(paragraph(`8.x ${precursor.name}`, 'Heading2'));
+        body.push(paragraph(`8.${index + 1} ${precursor.name}`, 'Heading2'));
         body.push(table(['항목', '내용'], detail, { widths: [2700, 6300], headerShade: SOFT, headerBold: true, repeatHeader: true }));
 
         if (precursor.verification_status !== 'VERIFIED' && precursor.data_mode !== 'DEFAULT') {
+            const share = precursorContributionShare(input, precursor);
             body.push(paragraph(
-                `리스크 고지: 본 전구물질의 실측값은 제3자 검증이 완료되지 않았습니다. 확정기간의 실측 인정 요건(검증 수준·기간 대응)은 확인 필요(규정)이며, 불인정 시 공식 기본값 대체가 발동됩니다 — 그 영향은 제9장에 정량화합니다.`,
+                `리스크 고지: 본 전구물질의 실측값은 제3자 검증이 완료되지 않았다.${share === undefined ? '' : ` 이 값이 CBAM 기준 SEE의 약 ${formatPercentShare(share)}를 차지한다.`}${vintageMismatch ? ` 자료 대상기간도 ${vintage}년으로 본 보고기간과 다르다.` : ''} 확정기간의 실측 인정 요건(검증 수준·기간 대응)은 확인 필요(규정)이며, 불인정 시 공식 기본값 대체가 발동된다 — 그 영향은 제9장에 정량화한다.`,
                 undefined,
                 { color: AMBER }
             ));
@@ -626,6 +952,8 @@ interface PrecursorDvComparison {
     row?: DefaultValueReferenceRow;
     /** heading 상속으로 찾았는지 (CN 8자리 실측 vs 4자리 heading DV) */
     isHeadingInherited: boolean;
+    /** 같은 국가×CN에 생산경로가 다른 DV 행이 둘 이상 있는지 */
+    isRouteAmbiguous: boolean;
     /** 해당 연도의 markup 포함 적용값 */
     appliedDirect?: number;
     /** 실측 − DV(raw) 절대차 */
@@ -636,13 +964,13 @@ interface PrecursorDvComparison {
 }
 
 function compareWithDefaultValues(input: CalculationReportInput): PrecursorDvComparison[] {
-    return input.precursors.map((precursor) => {
+    return cbamPrecursors(input).map((precursor) => {
         const year: DefaultValueYear = (precursor.default_value_year as DefaultValueYear) ?? input.defaultValueYear ?? '2026';
         const cnCode = normalizeCnForLookup(precursor.precursor_cn_code);
-        const row = findDefaultValueReference(input.defaultValues, precursor.supplier_country, cnCode, year);
+        const row = findDefaultValueReference(input.defaultValues, precursor.supplier_country, cnCode, year, precursor.production_route);
 
         if (!row) {
-            return { precursor, year, isHeadingInherited: false };
+            return { precursor, year, isHeadingInherited: false, isRouteAmbiguous: false };
         }
 
         const appliedDirect = year === '2026' ? row.markup_2026 : year === '2027' ? row.markup_2027 : row.markup_2028_onwards;
@@ -653,8 +981,10 @@ function compareWithDefaultValues(input: CalculationReportInput): PrecursorDvCom
             year,
             row,
             isHeadingInherited: normalizeCnForLookup(row.cn_code) !== cnCode,
+            isRouteAmbiguous: hasAmbiguousDefaultValueRoutes(input.defaultValues, precursor.supplier_country, cnCode),
             appliedDirect,
-            deltaRaw: row.direct_default === undefined ? undefined : actual - row.direct_default,
+            // null(공표 안 함)과 undefined(값 없음)를 모두 거른다. null을 그냥 두면 actual - null = actual이 된다.
+            deltaRaw: row.direct_default === undefined || row.direct_default === null ? undefined : actual - row.direct_default,
             deltaApplied: appliedDirect === undefined ? undefined : actual - appliedDirect,
             deltaAppliedRatio: appliedDirect === undefined || appliedDirect === 0 ? undefined : (actual - appliedDirect) / appliedDirect,
         };
@@ -724,15 +1054,17 @@ function defaultValueSection(input: CalculationReportInput) {
         }
 
         rows.push([key, '본 산정 실측값 (채택)', formatForReport(precursor.direct_see_tco2e_per_t, 4), formatForReport(precursor.indirect_see_tco2e_per_t, 5), '공급사 제공']);
-        rows.push([key, '공식 DV — raw', row.direct_default === undefined ? PLACEHOLDER : formatForReport(row.direct_default, 8),
-            row.indirect_default === undefined || row.indirect_default === null ? 'N/A (미공표)' : formatForReport(row.indirect_default, 8),
+        rows.push([key, '공식 DV — raw', row.direct_default === undefined || row.direct_default === null ? NOT_PUBLISHED : formatForReport(row.direct_default, 8),
+            row.indirect_default === undefined || row.indirect_default === null ? NOT_PUBLISHED : formatForReport(row.indirect_default, 8),
             `조회 행 CN ${row.cn_code}`]);
         rows.push([key, `공식 DV — ${year} 적용값`, comparison.appliedDirect === undefined ? PLACEHOLDER : formatForReport(comparison.appliedDirect, 9),
-            'N/A (미공표)', 'markup 포함']);
+            NOT_PUBLISHED, 'markup 포함']);
 
         if (comparison.deltaRaw !== undefined) {
+            // raw 행에도 상대차를 준다. 두 차이 행의 정보 수준이 다를 이유가 없다(씨밤이 P2).
+            const rawRatio = row.direct_default ? comparison.deltaRaw / row.direct_default : undefined;
             rows.push([key, '차이: 실측 − DV(raw)', formatForReport(comparison.deltaRaw, 8), '대조 불가',
-                comparison.deltaRaw < 0 ? '실측이 낮음 (유리)' : '실측이 높음 (불리)']);
+                `${rawRatio === undefined ? '' : `${formatPercentForReport(rawRatio)} · `}${comparison.deltaRaw < 0 ? '실측이 낮음 (유리)' : '실측이 높음 (불리)'}`]);
         }
 
         if (comparison.deltaApplied !== undefined) {
@@ -765,7 +1097,22 @@ function defaultValueSection(input: CalculationReportInput) {
         }
 
         if (comparison.row.indirect_default === undefined || comparison.row.indirect_default === null) {
-            notes.push('해당 조합의 간접 기본값은 공표되지 않아(N/A) 간접 실측값은 DV 대조가 불가합니다.');
+            notes.push('해당 조합의 간접 기본값은 공표되지 않아(N/A) 간접 실측값은 DV 대조가 불가하다.');
+        }
+
+        // 같은 국가×CN에 경로가 갈리는 행이 여럿이면, 조회가 어느 행을 골랐는지가 결과를 바꾼다.
+        // 이 사실을 감추면 검증인이 다른 행으로 대조해 다른 결론에 이른다(씨밤이 P1).
+        if (comparison.isRouteAmbiguous) {
+            notes.push(`해당 국가·CN 조합에는 생산경로가 다른 공식 기본값 행이 둘 이상 있다. 본 대조는 그중 「${dvRoute || '경로 미표기'}」 행을 사용했으므로, 적용 경로의 적정성을 원본 워크북으로 확인해야 한다 — 확인 필요(자료).`);
+            gateIssues.push({
+                gate: 'G6',
+                severity: 'warn',
+                message: `${comparison.precursor.name}: ${comparison.precursor.supplier_country} × CN ${comparison.precursor.precursor_cn_code ?? '-'} 조합에 생산경로가 다른 DV 행이 여럿 있습니다. 적용 경로를 확인하세요.`,
+            });
+        }
+
+        if (comparison.row.direct_default === undefined || comparison.row.direct_default === null) {
+            notes.push('해당 조합의 직접 기본값이 공표되지 않아(N/A) raw 기준 대조가 불가하다.');
         }
 
         if (notes.length > 0) {
@@ -785,25 +1132,40 @@ function defaultValueSection(input: CalculationReportInput) {
     ];
     let hasSensitivity = false;
 
+    // 전구물질 direct SEE만 DV로 갈아끼운 뒤 엔진을 다시 돌린다.
+    // 배분(공정 귀속·output line·allocation_share)과 Annex II 간접 분기를 보고서가 재구현하면
+    // 반드시 엔진과 어긋난다 — 실제로 어긋나서 리스크가 축소 표기됐다(씨밤이 P0). 엔진을 유일한 산정 주체로 둔다.
+    const substitutedPrecursors = input.precursors.map((precursor) => {
+        const comparison = comparisons.find((item) => item.precursor.id === precursor.id);
+        return comparison?.appliedDirect === undefined
+            ? precursor
+            : { ...precursor, direct_see_tco2e_per_t: comparison.appliedDirect };
+    });
+    // 결과 id가 아니라 (공정, 산출라인)으로 짝짓는다 — id 체계가 바뀌면 조용히 민감도가 사라진다.
+    const resultKey = (item: { process_id: string; product_output_line_id?: string }) =>
+        `${item.process_id}::${item.product_output_line_id ?? ''}`;
+    const substitutedByKey = new Map(
+        calculateLocalResults({ ...input, precursors: substitutedPrecursors }).map((item) => [resultKey(item), item])
+    );
+    // 일부 전구물질만 DV를 찾은 경우, 그 시나리오는 "전부 대체"가 아니다. 숫자만 보여주면 과소 표기가 된다.
+    const unmatched = comparisons.filter((comparison) => comparison.appliedDirect === undefined);
+
     for (const result of reportableResults(input)) {
-        if (result.see_cbam_basis === null) {
+        const dvResult = substitutedByKey.get(resultKey(result));
+
+        if (result.see_cbam_basis === null || dvResult?.see_cbam_basis === null || dvResult === undefined) {
             continue;
         }
 
-        // 이 제품에 투입된 전구물질만 골라 DV로 치환했을 때의 기준 SEE를 재구성한다.
-        const related = comparisons.filter((comparison) => comparison.precursor.product_id === result.product_id);
-        const replaceable = related.filter((comparison) => comparison.appliedDirect !== undefined);
+        const processHasReplacement = comparisons.some(
+            (comparison) => comparison.appliedDirect !== undefined && comparison.precursor.process_id === result.process_id
+        );
 
-        if (replaceable.length === 0 || result.output_mass_t <= 0) {
+        if (!processHasReplacement || result.output_mass_t <= 0) {
             continue;
         }
 
-        const dvPrecursorDirect = related.reduce((sum, comparison) => {
-            const ratio = comparison.precursor.consumed_mass_t / result.output_mass_t;
-            const value = comparison.appliedDirect ?? comparison.precursor.direct_see_tco2e_per_t;
-            return sum + ratio * value;
-        }, 0);
-        const dvBasis = result.direct_see + dvPrecursorDirect;
+        const dvBasis = dvResult.see_cbam_basis;
         const delta = dvBasis - result.see_cbam_basis;
         const ratio = result.see_cbam_basis === 0 ? undefined : delta / result.see_cbam_basis;
 
@@ -822,6 +1184,25 @@ function defaultValueSection(input: CalculationReportInput) {
             widths: [2200, 2800, 2200, 1800], headerShade: SOFT, headerBold: true, repeatHeader: true,
         }));
         body.push(paragraph('실측이 인정되지 않아 공식 기본값으로 대체될 경우의 영향이다. 전구물질의 제3자 검증 결과 확보가 최우선 과제인 이유를 정량적으로 보여준다(제14장).', 'Note'));
+        // 9.1이 "개연성 참고로만 사용한다"고 유보한 DV로 확정적 단일값을 내면 유보가 증발한다.
+        // markup 적용 여부가 미확정이면 답이 갈리므로, 어느 쪽을 택했는지 밝혀야 한다(씨밤이 P1).
+        body.push(paragraph(
+            `본 민감도는 markup을 포함한 ${[...new Set(comparisons.map((comparison) => comparison.year))].join(' / ')} 적용값을 대체값으로 사용했다. 전구물질에 대한 markup 적용 여부·방식은 확인 필요(규정)이며, markup 미적용(raw) 기준으로는 영향이 더 작다. 두 기준의 차이는 제9.1장 대조표에서 확인할 수 있다. 보수적 판단을 위해 본문은 markup 포함값을 채택했다.`,
+            'Note'
+        ));
+        body.push(paragraph(
+            '제9.1장에 기재한 조회 전제(heading 상속 여부·생산경로 대응 미확인)는 본 민감도에도 그대로 적용된다. 해당 전제가 확인되기 전까지 본 수치는 개연성 참고이다 — 확인 필요(자료).',
+            'Note',
+            { color: AMBER }
+        ));
+
+        if (unmatched.length > 0) {
+            body.push(paragraph(
+                `본 민감도는 공식 기본값을 찾은 전구물질만 대체한 결과이며, 다음 전구물질은 대체되지 않았다 — ${unmatched.map((comparison) => comparison.precursor.name).join(', ')}. 따라서 실제 영향은 위 수치보다 클 수 있다 — 확인 필요(자료).`,
+                'Note',
+                { color: AMBER }
+            ));
+        }
         gateIssues.push(...checkNumericColumns('제9.2장 민감도표', sensitivityColumns, sensitivityRows));
     } else {
         body.push(paragraph('대체 가능한 공식 기본값을 찾지 못해 민감도를 산출하지 못했습니다 — 확인 필요(자료).', 'Note'));
@@ -907,12 +1288,26 @@ function carbonPriceSection(input: CalculationReportInput) {
             message: '제11장(기지불 탄소가격)이 비어 있습니다. 신고인이 인증서 차감을 위해 요구하는 항목이므로 「해당 없음」이라도 사유와 함께 기재해야 합니다.',
         });
     } else {
-        body.push(table(['대상', '해당 여부', '내용 및 증빙 상태'], rows.map((row) => [
-            row.target,
-            CARBON_PRICE_LABEL[row.applicable] ?? row.applicable,
-            [row.note, row.amount ? `지불액: ${row.amount}` : '', `증빙: ${EVIDENCE_STATUS_LABEL[row.evidence_status] ?? row.evidence_status}`]
-                .filter(Boolean).join('\n'),
-        ]), { widths: [2600, 2200, 4200], headerShade: SOFT, headerBold: true, repeatHeader: true }));
+        // 전구물질에 내재된 기지불 탄소가격은 공급사로부터 별도로 받아야 한다.
+        // 사업장 행만 두면 전구물질 몫이 문서에서 사라진다(씨밤이 P1 — v0.3 회귀).
+        const covered = rows.map((row) => row.target ?? '').join(' ');
+        const precursorRows = cbamPrecursors(input)
+            .filter((precursor) => !covered.includes(precursor.name))
+            .map((precursor) => [
+                `전구물질 (${precursor.name})`,
+                CARBON_PRICE_LABEL.TO_CONFIRM ?? '확인 필요(자료)',
+                `공급사(${precursor.supplier_installation || '미기재'})가 원산지국 배출권거래제 할당대상일 수 있다. 전구물질에 내재된 기지불 탄소가격 정보·증빙은 공급사로부터 별도 수령 필요.\n증빙: 미수령(pending) — 자동 초안`,
+            ]);
+
+        body.push(table(['대상', '해당 여부', '내용 및 증빙 상태'], [
+            ...rows.map((row) => [
+                row.target,
+                CARBON_PRICE_LABEL[row.applicable] ?? row.applicable,
+                [row.note, row.amount ? `지불액: ${row.amount}` : '', `증빙: ${EVIDENCE_STATUS_LABEL[row.evidence_status] ?? row.evidence_status}`]
+                    .filter(Boolean).join('\n'),
+            ]),
+            ...precursorRows,
+        ], { widths: [2600, 2200, 4200], headerShade: SOFT, headerBold: true, repeatHeader: true }));
 
         const unconfirmed = rows.filter((row) => row.applicable === 'TO_CONFIRM' || row.evidence_status !== 'confirmed');
 
@@ -978,22 +1373,45 @@ function monitoringSection(input: CalculationReportInput) {
     return { xml: body.join(''), gateIssues };
 }
 
-function principlesSection(input: CalculationReportInput) {
+/**
+ * 13장 — 자체평가는 **실제 게이트 실행 결과**에서 파생돼야 한다.
+ * 고정 문안으로 「경고 0건」·「게이트 G1 통과」를 쓰면, 경고가 떠 있는데도 통과했다고 말하게 된다.
+ * 검증인이 이 한 줄의 거짓을 발견하면 자동 생성 장 전체를 신뢰하지 않는다(씨밤이 P0).
+ */
+function principlesSection(input: CalculationReportInput, issues: ReportGateIssue[]) {
     const reportable = reportableResults(input);
-    const totalWarnings = reportable.reduce((sum, result) => sum + result.warnings.length, 0);
     const maxDelta = reportable.reduce((max, result) => Math.max(max, Math.abs(result.source_stream_delta_tco2e)), 0);
+    const processCount = cbamProcessIds(input).size;
+    const cbamStreamCount = cbamSourceStreams(input).length;
+    const cbamPrecursorCount = cbamPrecursors(input).length;
+
+    const warnings = issues.filter((issue) => issue.severity === 'warn');
+    const gateSummary = warnings.length === 0
+        ? '발행 게이트 G1–G7 실행: 차단 0건·경고 0건.'
+        : `발행 게이트 G1–G7 실행: 차단 0건·경고 ${warnings.length}건(${[...new Set(warnings.map((issue) => issue.gate))].sort().join('·')}). 해당 경고 내용은 본문 각 장에 표기.`;
+    const displaySumWarned = issues.some((issue) => issue.gate === 'G1' && /반올림 표기/.test(issue.message));
+    const accuracyGate = displaySumWarned
+        ? '표시값 합계 자가검사(게이트 G1): 반올림 표기 차이가 있어 해당 표에 각주를 삽입했다. 원천값 정합은 통과.'
+        : '표시값 합계 자가검사(게이트 G1) 통과.';
+    // 배분기준은 "도구가 검사한다"가 아니라 "무엇을 썼는가"를 말해야 방법 진술이 된다(씨밤이 P1).
+    const allocation = describeAllocationBasis(input);
+    // 「기재 필요」를 남기는 게이트는 G5(사용자 입력)뿐 아니라 G3(경계 서술)도 있다.
+    // 미기재가 있는데 잔여 한계에 적지 않으면 완전성 자체평가가 거짓이 된다(씨밤이 P1).
+    const placeholderNote = issues.some((issue) => issue.gate === 'G5' || issue.gate === 'G3')
+        ? '「기재 필요」로 남은 항목이 있다 — 제14.1장 미해소 항목 등록부 참조. 발행 전 기재해야 한다. 보고기간 중 신규 배출원 발생 시 재산정 필요.'
+        : '보고기간 중 신규 배출원 발생 시 재산정 필요.';
 
     const rows: string[][] = [
         ['완전성\nCompleteness',
-            `산정경계 내 CBAM 대상 생산공정 ${input.processes.length}개·배출원 ${input.sourceStreams.length}건·구매 전구물질 ${input.precursors.length}건을 포함. 경계의 포함·제외 항목을 제2장에 명시.`,
-            `산정 도구 자동 검사: 경고 ${totalWarnings}건. 공정–배출원 연결 검사 수행.`,
-            '보고기간 중 신규 배출원 발생 시 재산정 필요.'],
+            `산정경계 내 CBAM 대상 생산공정 ${processCount}개·배출원 ${cbamStreamCount}건·구매 전구물질 ${cbamPrecursorCount}건을 포함. 경계의 포함·제외 항목을 제2장에 명시.`,
+            gateSummary,
+            placeholderNote],
         ['정확성\nAccuracy',
             '활동자료는 원천 증빙 기반. 원천자료→활동자료 전치 경로를 제6.1장에 기재.',
-            `배출원 합계와 공정 직접배출량의 최대 차이 ${formatForReport(maxDelta)} tCO2e — 도구 내부 정합 기준(±1%) 기준. 표시값 합계 자가검사(게이트 G1) 통과.`,
+            `배출원 합계와 공정 직접배출량의 최대 차이 ${formatForReport(maxDelta)} tCO2e — 도구 내부 정합 기준(±1%) 기준이며 규정상 허용오차가 아니다. 배출원이 1건인 공정에서는 이 점검이 전기(轉記) 오류 검출에 한정된다(제6.4장). ${accuracyGate}`,
             '계수 위계 적격성(6.2)·불확도 요구 수준(6.3)은 확인 필요(규정).'],
         ['일관성\nConsistency',
-            '동일 보고기간 내 동일 방법론·동일 계수를 일관 적용. 배분기준 혼용 여부는 도구가 자동 경고.',
+            `동일 보고기간 내 동일 방법론·동일 계수를 일관 적용. ${allocation}`,
             '산정 방법·계수는 입력 시점 기준으로 앱 데이터베이스와 .cbam 백업에 보존.',
             '도구에 변경이력 기능이 없어 검토 절차·백업으로 보완(제12장).'],
         ['투명성\nTransparency',
@@ -1001,9 +1419,9 @@ function principlesSection(input: CalculationReportInput) {
             '증빙 목록(제15장)과 .cbam 백업으로 최종 산정 상태 재현 가능. 자동 생성·사용자 입력 구분을 부속서 C에 공개.',
             '백업은 최종 상태 스냅샷이며 변경 과정 이력은 미포함.'],
         ['적절성\nRelevance',
-            'CBAM 목적에 필요한 데이터를 EU Communication Template 구조에 맞게 수집·산정. 간접배출 취급은 품목별 등재 기준으로 판단(제3장).',
-            'CN 코드를 EU 공식 템플릿 CN 목록과 대조 확인. 템플릿 기재 셀 전수 자동 대조 검증.',
-            '조항 단위 인용은 확인 필요(규정). EU 규정·템플릿 개정 시 최신판 기준 재검토.'],
+            'CBAM 목적에 필요한 데이터를 EU Communication Template 구조에 맞게 수집·산정. 간접배출 취급은 품목별로 판단(제3.1장).',
+            'CN 코드를 EU 공식 템플릿 CN 목록과 대조 확인.',
+            '간접배출 취급 판정은 CN 접두 규칙 기반이며 Annex II 등재 목록 대조 미완 — 확인 필요(자료). 조항 단위 인용은 확인 필요(규정). EU 규정·템플릿 개정 시 최신판 기준 재검토.'],
     ];
 
     return [
@@ -1015,24 +1433,118 @@ function principlesSection(input: CalculationReportInput) {
     ].join('');
 }
 
+/**
+ * 본문에 흩어진 미해소 표기를 장별로 수집한다.
+ * 「확인 필요」·「기재 필요」가 16개 장에 흩어져 있는데 통합 목록이 없으면,
+ * 제16장이 "「확인 필요」 항목을 유보한다"고 말해도 그 항목이 무엇인지 가리키지 못한다.
+ * 열거하지 않은 것은 유보할 수 없다(씨밤이 P1).
+ */
+function scanOutstandingItems(bodyXml: string) {
+    const chapters = bodyXml.split('<w:pStyle w:val="Heading1"/>');
+    const items: Array<{ chapter: string; regulation: number; data: number; placeholder: number }> = [];
+
+    // 첫 조각은 표지(장 제목 앞)이므로 건너뛴다.
+    for (const chunk of chapters.slice(1)) {
+        const text = chunk.replace(/<[^>]+>/g, ' ');
+        const title = text.trim().split(/\s{2,}|\s(?=[A-Z])/)[0]?.trim() ?? '';
+        const count = (pattern: RegExp) => (text.match(pattern) ?? []).length;
+        const regulation = count(/확인 필요\(규정\)/g);
+        const data = count(/확인 필요\(자료\)/g);
+        // 등록부 자신의 헤더 문구가 잡히지 않도록 「기재 필요」는 자리표시자 용법만 센다.
+        const placeholder = count(/기재 필요/g);
+
+        if (regulation + data + placeholder > 0) {
+            items.push({ chapter: title, regulation, data, placeholder });
+        }
+    }
+
+    return items;
+}
+
+function outstandingRegistrySection(bodyXml: string) {
+    const items = scanOutstandingItems(bodyXml);
+
+    if (items.length === 0) {
+        return [
+            paragraph('14.1 미해소 항목 등록부   Outstanding Items Register', 'Heading2'),
+            paragraph('본문에 미해소 표기(「확인 필요」·「기재 필요」)가 없다.'),
+        ].join('');
+    }
+
+    const total = items.reduce((sum, item) => sum + item.regulation + item.data + item.placeholder, 0);
+    const rows = items.map((item) => [
+        item.chapter,
+        item.regulation === 0 ? '-' : `${item.regulation}건`,
+        item.data === 0 ? '-' : `${item.data}건`,
+        item.placeholder === 0 ? '-' : `${item.placeholder}건`,
+    ]);
+
+    return [
+        paragraph('14.1 미해소 항목 등록부   Outstanding Items Register', 'Heading2'),
+        paragraph(`본문에 남은 미해소 표기는 총 ${total}건이다. 제16장 선언은 이 등록부를 유보 대상으로 참조한다. 해당 장의 본문에서 각 항목의 내용을 확인해야 한다.`),
+        table(['장', '확인 필요(규정)', '확인 필요(자료)', '기재 필요'], rows, {
+            widths: [3600, 1800, 1800, 1800], headerShade: SOFT, headerBold: true, repeatHeader: true,
+        }),
+        paragraph('「확인 필요(규정)」 = 규정 원문 대조 미완 · 「확인 필요(자료)」 = 외부 자료·증빙 미수령 · 「기재 필요」 = 발행 전 반드시 채워야 하는 값.', 'Note'),
+    ].join('');
+}
+
 function improvementSection(input: CalculationReportInput) {
     const rows: string[][] = [];
 
-    for (const precursor of input.precursors) {
+    const period = firstPeriod(input);
+
+    // 기여 집중도가 큰 순으로 올린다 — 결과를 지배하는 미검증 값이 표의 맨 위에 와야 한다.
+    const precursorsByImpact = [...cbamPrecursors(input)].sort(
+        (a, b) => (precursorContributionShare(input, b) ?? 0) - (precursorContributionShare(input, a) ?? 0)
+    );
+
+    for (const precursor of precursorsByImpact) {
         if (precursor.verification_status !== 'VERIFIED') {
+            const share = precursorContributionShare(input, precursor);
             rows.push([
                 `전구물질 검증 — ${precursor.name}`,
-                precursor.verification_status === 'SUPPLIER_CONFIRMED' ? '공급사 확인 단계 — 제3자 검증 미완료' : '미검증',
-                '공급사 제3자 검증보고서 수령. 미수령·불인정 시 공식 기본값 대체 가능성과 SEE 영향은 제9장 참조.',
+                `${precursor.verification_status === 'SUPPLIER_CONFIRMED' ? '공급사 확인 단계 — 제3자 검증 미완료' : '미검증'}${share === undefined ? '' : `. CBAM 기준 SEE의 약 ${formatPercentShare(share)}를 차지`}`,
+                '공급사 제3자 검증보고서 수령. 미수령·불인정 시 공식 기본값 대체 가능성과 SEE 영향은 제9.2장 참조.',
             ]);
         }
 
         if (precursor.data_mode === 'DEFAULT' && !precursor.default_value_justification?.trim()) {
-            rows.push([`기본값 사용 근거 — ${precursor.name}`, '기본값을 사용하나 사유 미기재', '기본값 사용 사유를 기재하세요.']);
+            rows.push([`기본값 사용 근거 — ${precursor.name}`, '기본값을 사용하나 사유 미기재', '기본값 사용 사유를 기재하세요 — 기재 필요.']);
+        }
+
+        const vintage = precursor.supplier_reporting_period?.trim();
+
+        if (vintage && period?.name && vintage !== period.name) {
+            rows.push([
+                `전구물질 자료 기간 — ${precursor.name}`,
+                `${vintage}년 대상 공급사 데이터를 ${period.name} 보고기간에 적용`,
+                '확정기간 적격성(빈티지·기간 대응) 규정 확인 및 대표성 근거 확보 — 확인 필요(규정).',
+            ]);
         }
     }
 
-    rows.push(['전력 배출계수 출처', '공표 메타데이터 미기재', '공표기관·문서명·공표연도를 기재하고 증빙에 첨부.']);
+    rows.push([
+        '간접배출 취급 판정 근거',
+        '산정 도구의 CN 접두 규칙으로 판정. Annex II 등재 목록 원본 대조 미완',
+        '등재 목록·판본을 확보해 품목별 등재 사실을 대조하고 부속서 B에 등재 — 확인 필요(자료).',
+    ]);
+    rows.push([
+        '이행규정 특정',
+        '본 산정을 지배하는 이행규정의 번호·적용 조항 미확정',
+        'EUR-Lex 원문으로 번호·조항을 확정해 제5장·부속서 B에 기재 — 확인 필요(규정). 확정 전까지 제16장 선언의 준거 범위는 Regulation (EU) 2023/956과 본문 기술 방법론으로 한정된다.',
+    ]);
+
+    // 제7장에 출처를 채웠는데도 14장이 「미기재」를 주장하면 문서가 자기와 싸운다(씨밤이 P1).
+    // 공정별 전력 EF 메타가 하나라도 비어 있을 때만 개선 항목으로 올린다.
+    const electricityMetaMissing = [...cbamProcessIds(input)].some((processId) => {
+        const meta = input.reportInputs?.electricity_ef_meta?.find((item) => item.process_id === processId);
+        return !meta?.publisher?.trim() || !meta?.document?.trim() || !meta?.vintage?.trim();
+    });
+
+    if (electricityMetaMissing) {
+        rows.push(['전력 배출계수 출처', '공표 메타데이터 미기재', '공표기관·문서명·공표연도를 기재하고 증빙에 첨부.']);
+    }
     rows.push(['활동자료 불확도', '별도 불확도 산정 미실시', '규정상 요구 수준 확인 후 필요 시 도입 — 확인 필요(규정).']);
     rows.push(['변경이력(audit trail)', '산정 도구 미지원', '검토 절차·기간별 백업으로 보완.']);
 
@@ -1044,6 +1556,75 @@ function improvementSection(input: CalculationReportInput) {
     ].join('');
 }
 
+/**
+ * 15장 자동 초안 — 본 보고서가 본문에서 인용한 문서를 증빙 행으로 만든다.
+ * 검증인의 1순위 요청 대상(모니터링 계획·계수 출처·DV 워크북)이 목록에 없으면
+ * 15장이 스스로 정의한 용도("검증인은 이 목록으로 원천자료를 요청한다")를 못 한다.
+ */
+function seedEvidenceRows(input: CalculationReportInput): string[][] {
+    const rows: string[][] = [];
+    const plan = input.reportInputs?.monitoring_plan;
+
+    if (plan?.doc_no?.trim()) {
+        rows.push([
+            `모니터링 계획서 ${plan.doc_no}${plan.version ? ` ${plan.version}` : ''}`,
+            '본 산정을 지배하는 모니터링 방법론(제12장)',
+            PLACEHOLDER,
+            '자동 초안 — 확인 필요(자료)',
+        ]);
+    }
+
+    if (input.defaultValues) {
+        rows.push([
+            input.defaultValues.summary.filename,
+            '제9장 공식 기본값 대조의 기준자료',
+            PLACEHOLDER,
+            `자동 초안 — 연결일 ${input.defaultValues.summary.imported_at.slice(0, 10)}`,
+        ]);
+    }
+
+    for (const stream of cbamSourceStreams(input)) {
+        const entry = input.reportInputs?.transpositions?.find((item) => item.source_stream_id === stream.id);
+
+        for (const [label, value] of [['NCV', entry?.ncv_source], ['EF', entry?.ef_source]] as const) {
+            if (value?.trim()) {
+                rows.push([value.trim(), `${stream.name} ${label} 계수 출처(제6.2.2장)`, PLACEHOLDER, '자동 초안 — 확인 필요(자료)']);
+            }
+        }
+    }
+
+    for (const meta of input.reportInputs?.electricity_ef_meta ?? []) {
+        if (meta.document?.trim()) {
+            rows.push([
+                [meta.publisher, meta.document, meta.vintage].filter(Boolean).join(' · '),
+                '제7장 전력 배출계수 출처',
+                PLACEHOLDER,
+                '자동 초안 — 확인 필요(자료)',
+            ]);
+        }
+    }
+
+    // 같은 문서가 여러 배출원에 쓰이면 한 행으로 합친다.
+    const byItem = new Map<string, string[]>();
+
+    for (const row of rows) {
+        const existing = byItem.get(row[0]);
+
+        if (existing) {
+            existing[1] = `${existing[1]} · ${row[1]}`;
+        } else {
+            byItem.set(row[0], row);
+        }
+    }
+
+    return [...byItem.values()];
+}
+
+/** 14장은 등록부(14.1)가 본문 스캔 결과를 담으므로 본문 조립 뒤에 완성된다. */
+function improvementSectionWithRegistry(input: CalculationReportInput, scannedXml: string) {
+    return improvementSection(input) + outstandingRegistrySection(scannedXml);
+}
+
 function evidenceAndDeclarationSection(input: CalculationReportInput) {
     const evidence = input.reportInputs?.evidence ?? [];
     const declaration = input.reportInputs?.declaration;
@@ -1051,22 +1632,38 @@ function evidenceAndDeclarationSection(input: CalculationReportInput) {
 
     const body = [
         paragraph('15. 증빙 목록   Evidence Register', 'Heading1'),
-        paragraph('각 데이터의 원천 증빙과 그 입증 대상·보관처·상태를 기재한다. 검증인은 이 목록으로 원천자료를 요청한다.'),
+        paragraph('각 데이터의 원천 증빙과 그 입증 대상·보관처·상태를 기재한다. 검증인은 이 목록으로 원천자료를 요청한다. 아래 표는 사용자가 입력한 증빙과, 본 보고서가 본문에서 인용한 문서의 자동 초안을 합친 것이다.'),
+    ];
+
+    // 본문이 인용한 문서가 증빙 목록에 없으면, 검증인은 그 문서를 요청 대상으로 인지하지 못한다.
+    // 설계 §3이 15장을 「자동 초안 + 보관처·상태 입력」으로 명시했는데 자동 초안이 없었다(씨밤이 P1).
+    const seeded = seedEvidenceRows(input);
+    const userItems = new Set(evidence.map((row) => row.item?.trim()).filter(Boolean));
+    const merged = [
+        ...evidence.map((row) => [row.item, row.proves, row.custodian, row.status ?? PLACEHOLDER]),
+        ...seeded.filter((row) => !userItems.has(row[0])),
     ];
 
     if (evidence.length === 0) {
-        body.push(paragraph('기재 필요 — 증빙 목록이 입력되지 않았습니다.', undefined, { color: AMBER }));
-        gateIssues.push({ gate: 'G5', severity: 'warn', message: '제15장(증빙 목록)이 비어 있습니다. 검증인이 원천자료를 요청할 근거가 없습니다.' });
-    } else {
-        body.push(table(['증빙', '입증 대상', '보관', '상태'],
-            evidence.map((row) => [row.item, row.proves, row.custodian, row.status]),
-            { widths: [2700, 3000, 1650, 1650], headerShade: SOFT, headerBold: true, repeatHeader: true }));
+        gateIssues.push({ gate: 'G5', severity: 'warn', message: '제15장(증빙 목록)에 사용자 입력이 없습니다. 자동 초안만으로는 보관처·상태가 채워지지 않습니다.' });
     }
 
-    // 16장 — 국문 선언에 「본인이 아는 범위에서」 한정을 넣어 영문과 보증 수준을 맞춘다(씨밤이 P1).
+    body.push(table(['증빙', '입증 대상', '보관', '상태'], merged,
+        { widths: [2700, 3000, 1650, 1650], headerShade: SOFT, headerBold: true, repeatHeader: true }));
+
+    if (seeded.length > 0) {
+        body.push(paragraph('「자동 초안」으로 표시된 행은 본 보고서가 인용한 문서를 산정 도구가 자동으로 등재한 것이다. 보관처와 상태를 확인해 기재해야 한다.', 'Note'));
+    }
+
+    // 16장 — 국·영문의 보증 수준이 같아야 한다. EU 기관·검증인이 읽는 것은 영문이므로,
+    // 국문에만 유보를 두고 영문을 무유보로 두면 서명자의 책임이 언어별로 갈린다(씨밤이 P0).
+    //
+    // 제5장이 "본 산정을 지배하는 이행규정의 번호·조항을 대조하지 못했다"고 적고 있으므로,
+    // 선언이 "그 이행규정에 따라 작성했다"고 말하면 문서가 자기와 모순된다. 준거 범위를
+    // 실제로 확보한 근거(2023/956 + 본문 기술 방법론)까지로 좁힌다(씨밤이 P0).
     body.push(paragraph('16. 운영자 선언   Operator Declaration', 'Heading1'));
-    body.push(paragraph('본인은 본인이 아는 범위에서(to the best of my knowledge) 본 보고서에 기재된 정보가 완전하고 정확하며, Regulation (EU) 2023/956 및 관련 이행규정과 본 보고서에 기술된 방법론 및 5개 보고원칙에 따라 성실하게 작성되었음을 선언합니다. 「확인 필요」로 표기된 항목은 규정 원문 대조 또는 자료 수령이 완료되지 않았음을 명시합니다.'));
-    body.push(paragraph('I declare that, to the best of my knowledge, the information in this report is complete and accurate, and has been prepared in accordance with Regulation (EU) 2023/956 and its implementing regulations, and with the methodology and reporting principles described herein.', 'Note'));
+    body.push(paragraph('본인은 본인이 아는 범위에서(to the best of my knowledge) 본 보고서에 기재된 정보가 완전하고 정확하며, Regulation (EU) 2023/956 및 본 보고서에 기술된 방법론 및 5개 보고원칙에 따라 성실하게 작성되었음을 선언합니다. 본 산정을 지배하는 이행규정의 번호·적용 조항은 원문 대조가 완료되지 않았으며(제5장), 「확인 필요」로 표기된 항목은 규정 원문 대조 또는 자료 수령이 완료되지 않았음을 명시합니다. 미해소 항목은 제14장에 열거되어 있습니다.'));
+    body.push(paragraph('I declare that, to the best of my knowledge, the information in this report is complete and accurate, and has been prepared in accordance with Regulation (EU) 2023/956 and with the methodology and reporting principles described herein. The number and applicable articles of the implementing regulation governing this calculation have not yet been reconciled against the source legislation (Chapter 5). Items marked "확인 필요 / to be confirmed" indicate that reconciliation against the regulatory text or receipt of supporting evidence has not been completed; outstanding items are listed in Chapter 14.', 'Note'));
     body.push(paragraph('본 선언의 준거 문안은 국문을 우선한다. (In case of discrepancy, the Korean text prevails.)', 'Note'));
     body.push(table(['항목', '기재'], [
         ['성명 (Name)', declaration?.name || ''],
@@ -1142,7 +1739,28 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
     const monitoring = monitoringSection(input);
     const evidence = evidenceAndDeclarationSection(input);
 
-    const bodyXml = [
+    // 제13장은 게이트 실행 결과를 서술하므로 게이트를 먼저 모은다.
+    // (G4는 완성된 본문을 대상으로 하지만 차단 게이트라, 발동하면 발행 자체가 막혀 13장이 나갈 일이 없다.)
+    const preIssues: ReportGateIssue[] = [
+        ...dateIssues,
+        ...checkSeeDenominator(reportable),
+        ...checkSinglePeriod(input),
+        ...collectEngineWarnings(reportable),
+        ...checkBoundaryConsistency(input),
+        ...summary.gateIssues,
+        ...processes.gateIssues,
+        ...activity.gateIssues,
+        ...electricity.gateIssues,
+        ...precursors.gateIssues,
+        ...defaultValues.gateIssues,
+        ...results.gateIssues,
+        ...carbonPrice.gateIssues,
+        ...monitoring.gateIssues,
+        ...evidence.gateIssues,
+    ];
+
+    // 14.1 등록부는 나머지 본문을 훑어 미해소 표기를 모으므로, 본문을 먼저 조립하고 14장을 나중에 채운다.
+    const beforeImprovement = [
         coverSection(input, isInterim),
         summary.xml,
         installationSection(input),
@@ -1156,27 +1774,19 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
         results.xml,
         carbonPrice.xml,
         monitoring.xml,
-        principlesSection(input),
-        improvementSection(input),
-        evidence.xml,
-        annexes(),
+        principlesSection(input, preIssues),
+    ].join('');
+    const afterImprovement = [evidence.xml, annexes()].join('');
+    const bodyXml = [
+        beforeImprovement,
+        improvementSectionWithRegistry(input, beforeImprovement + afterImprovement),
+        afterImprovement,
     ].join('');
 
     // 게이트 G4는 완성된 본문 텍스트를 대상으로 검사한다.
     const bodyText = bodyXml.replace(/<[^>]+>/g, ' ');
     const issues: ReportGateIssue[] = [
-        ...dateIssues,
-        ...checkBoundaryConsistency(input),
-        ...summary.gateIssues,
-        ...processes.gateIssues,
-        ...activity.gateIssues,
-        ...electricity.gateIssues,
-        ...precursors.gateIssues,
-        ...defaultValues.gateIssues,
-        ...results.gateIssues,
-        ...carbonPrice.gateIssues,
-        ...monitoring.gateIssues,
-        ...evidence.gateIssues,
+        ...preIssues,
         ...checkCrossReferences(bodyText),
     ];
 

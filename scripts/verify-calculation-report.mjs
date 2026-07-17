@@ -144,17 +144,18 @@ assertTrue(!fflate.strFromU8(plain['[Content_Types].xml']).includes('header1.xml
 
 // ---------------- calculation-report (P2) ----------------
 // 게이트가 실제로 차단/라벨하는지가 핵심. 통과 케이스만 보면 게이트가 죽어 있어도 모른다.
-const prelude = [
+const prelude = ['const { strToU8, zipSync, strFromU8, unzipSync } = fflate;'].concat([
     'src/lib/report-format.ts',
     'src/lib/docx-builder.ts',
     'src/lib/cbam-product-rules.ts',
     'src/lib/reporting-scope.ts',
     'src/lib/reference-workbooks.ts',
+    'src/lib/source-stream-calculation.ts',
+    'src/lib/calculation-engine.ts',
 ]
     .map((path) => readFileSync(path, 'utf8')
-        .replace("import { strToU8, zipSync } from 'fflate';", 'const { strToU8, zipSync } = fflate;')
         .replace(/^import .*;\r?\n/gm, '')
-        .replace(/^export /gm, ''))
+        .replace(/^export /gm, '')))
     .join('\n');
 
 const reportModule = (() => {
@@ -163,10 +164,10 @@ const reportModule = (() => {
         .replace(/^import type[\s\S]*?;\r?\n/gm, '')
         .replace(/^export /gm, '');
     const compiled = ts.transpileModule(
-        `${prelude}\n${source}\nglobalThis.__report = { createCalculationReport, createCalculationReportFilename };`,
+        `${prelude}\n${source}\nglobalThis.__report = { createCalculationReport, createCalculationReportFilename, calculateLocalResults, parseDefaultValueWorkbook, hasAmbiguousDefaultValueRoutes };`,
         { compilerOptions: { module: ts.ModuleKind.None, target: ts.ScriptTarget.ES2022 } }
     ).outputText;
-    const context = { fflate, console, Intl, Math, Number, String, Array, Object, Blob, Date, RegExp, Set, Error };
+    const context = { fflate, console, Intl, Math, Number, String, Array, Object, Blob, Date, RegExp, Set, Map, Error, Uint8Array, Promise };
     vm.runInNewContext(compiled, context);
     return context.__report;
 })();
@@ -267,14 +268,14 @@ const steelOnlyXml = fflate.strFromU8(
 // 정합하는 표에는 반올림 각주가 붙지 않아야 한다(각주 남발 방지)
 assertTrue(!steelOnlyXml.includes('마지막 자리에서 다를 수 있다'), '정합하는 표에는 반올림 각주 없음');
 assertTrue(steelOnlyXml.includes('소비 전구물질 역시 모두 동일하게 직접배출만 고려되는 품목'), '3.1 철강 전구물질 문안');
-assertTrue(!steelOnlyXml.includes('최종재로 전가될 수 있습니다'), '3.1 철강만일 땐 전가 경고 없음');
+assertTrue(!steelOnlyXml.includes('최종재로 전가될 수 있다'), '3.1 철강만일 땐 전가 경고 없음');
 
 const mixed = reportModule.createCalculationReport({
     ...baseInput(),
     precursors: [basePrecursor, { ...basePrecursor, id: 'pr2', name: '알루미늄 전구물질', precursor_cn_code: '76011000' }],
 });
 const mixedXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await mixed.blob.arrayBuffer()))['word/document.xml']);
-assertTrue(mixedXml.includes('최종재로 전가될 수 있습니다'), '3.1 비직접전용 전구물질 → 전가 경고로 문안 분기');
+assertTrue(mixedXml.includes('최종재로 전가될 수 있다'), '3.1 비직접전용 전구물질 → 전가 경고로 문안 분기');
 assertTrue(mixedXml.includes('알루미늄 전구물질'), '3.1 해당 전구물질 명시');
 
 // 산출물이 실제 docx 구조인지
@@ -377,7 +378,7 @@ const filled = reportModule.createCalculationReport({
         rnr: [{ data: '천연가스 사용량', collector: '경영지원팀', transposer: '환경안전팀', approver: '공장장', system: '앱 · 배출원 자료' }],
         carbon_price: [{ target: '본 사업장', applicable: 'TO_CONFIRM', note: '법인 단위 확인 필요', evidence_status: 'pending' }],
         evidence: [{ item: '도시가스 요금청구서', proves: '활동자료 89.13 t', custodian: '경영지원팀', status: '확보' }],
-        transpositions: [{ source_stream_id: 's1', source_unit: 'MJ', source_quantity: '4,278,240', conversion_note: '÷ 48,000 MJ/t', measurement_method: '정산용 계량기', data_quality: '상업 거래용 계량' }],
+        transpositions: [{ source_stream_id: 's1', source_unit: 'MJ', source_quantity: '4,278,240', conversion_note: '÷ 48,000 MJ/t', measurement_method: '정산용 계량기', data_quality: '상업 거래용 계량', ncv_source: 'IPCC 2006 Guidelines Vol.2 Table 1.2', ef_source: 'IPCC 2006 Guidelines Vol.2 Table 1.4' }],
         electricity_ef_meta: [{ process_id: 'proc1', publisher: '집행위', document: 'Country EF list', vintage: '2026' }],
         declaration: { name: '박지훈', position: 'CBAM 담당', date: '2027-01-15' },
     },
@@ -406,4 +407,320 @@ const latePlan = reportModule.createCalculationReport({
 });
 assertTrue(latePlan.issues.some((issue) => issue.gate === 'G2' && /승인일/.test(issue.message)), '모니터링 계획 승인일 지연 경고');
 
-console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5).');
+// ---------------- 씨밤이 재감사(앱 산출물) 회귀 — 해피패스 밖 좌표 ----------------
+// 기존 픽스처는 제품1·공정1·기간1·간접제외 하나뿐이었다. 그 좌표를 벗어나면 보고서가 차단도 경고도
+// 없이 틀린 숫자를 인쇄한다는 것이 재감사에서 드러났다. 아래는 그 좌표들을 고정한다.
+
+// [P0] 간접 포함 품목의 9.2 민감도 — 기준 행과 DV 대체 행이 같은 정의(see_cbam_basis)로 계산돼야 한다.
+// 과거: dvBasis = direct_see + dvPrecursorDirect 로 간접을 빠뜨려 리스크를 +15.27% → +1.44%로 축소 표기.
+const ironOreProduct = at({ id: 'p9', name: '응결 철광석', hs_code: '2601', cn_code: '26011200', hs_group: '26', product_type_enum: 'OTHER', unit: 'tonne', reporting_scope: 'CBAM_GOOD' });
+const ironOreProcess = at({ id: 'proc9', product_id: 'p9', period_id: 'per1', name: '소결', production_route: 'All production routes', output_mass_t: 8000, market_output_mass_t: 8000, internal_consumption_mass_t: 0, direct_attributable_emissions_tco2e: 240.009264, electricity_mwh: 1600, electricity_ef_tco2e_per_mwh: 0.459 });
+const ironOreStream = at({ ...baseStream, id: 's9', process_id: 'proc9' });
+const ironOrePrecursor = at({ ...basePrecursor, id: 'pr9', product_id: 'p9', process_id: 'proc9', supplier_country: 'South Korea' });
+const ironOreEngine = reportModule.calculateLocalResults({
+    processes: [ironOreProcess], precursors: [ironOrePrecursor], products: [ironOreProduct],
+    periods: [at({ id: 'per1', name: '2026', start_date: '2026-01-01', end_date: '2026-12-31', status: 'CALCULATED' })],
+    sourceStreams: [ironOreStream], productOutputLines: [],
+});
+assertTrue(ironOreEngine[0].indirect_emissions_applicable, '전제: CN 2601 12 00은 간접 포함 품목');
+
+const ironOreReport = reportModule.createCalculationReport({
+    ...baseInput(),
+    products: [ironOreProduct], processes: [ironOreProcess], sourceStreams: [ironOreStream],
+    precursors: [ironOrePrecursor], results: ironOreEngine, defaultValues: dvReference,
+});
+const ironOreXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await ironOreReport.blob.arrayBuffer()))['word/document.xml']);
+
+// 엔진을 다시 돌려 얻은 참값과 보고서 인쇄값이 같아야 한다.
+const ironOreDvEngine = reportModule.calculateLocalResults({
+    processes: [ironOreProcess],
+    precursors: [{ ...ironOrePrecursor, direct_see_tco2e_per_t: 2.330323809 }],
+    products: [ironOreProduct],
+    periods: [at({ id: 'per1', name: '2026', start_date: '2026-01-01', end_date: '2026-12-31', status: 'CALCULATED' })],
+    sourceStreams: [ironOreStream], productOutputLines: [],
+});
+const expectedIronOreDv = ironOreDvEngine[0].see_cbam_basis.toFixed(4);
+assertEqual(expectedIronOreDv, '2.8176', '전제: 간접 포함 품목의 DV 대체 참값');
+assertTrue(ironOreXml.includes(expectedIronOreDv), `간접 포함 품목 민감도가 엔진 참값(${expectedIronOreDv})과 일치`);
+// 옛 산식(direct_see + dvPrecursorDirect)은 간접을 빠뜨려 2.4186(-0.38%)을 인쇄했다.
+// 부호가 뒤집혀 "실측이 불인정돼도 손해가 없다"고 말하게 된다 — 가장 위험한 형태의 오답이다.
+assertTrue(!ironOreXml.includes('2.4186'), '간접 누락 산식의 과거 오답(2.4186)이 나오지 않음');
+assertTrue(ironOreXml.includes('+16.06%'), '민감도 증가율이 참값(+16.06%)으로 인쇄');
+
+// [P0] 같은 제품·공정 2개 — 남의 공정 전구물질을 끌어와 나누면 안 된다(엔진은 공정 단위 귀속).
+const proc2 = at({ ...baseProcess, id: 'proc2', period_id: 'per1', output_mass_t: 2000, direct_attributable_emissions_tco2e: 60, electricity_mwh: 400 });
+const proc1WithPeriod = at({ ...baseProcess, period_id: 'per1' });
+const twoProcPrecursors = [
+    at({ ...basePrecursor, id: 'prA', process_id: 'proc1', supplier_country: 'South Korea' }),
+    at({ ...basePrecursor, id: 'prB', process_id: 'proc2', consumed_mass_t: 2050, purchased_mass_t: 2100, supplier_country: 'South Korea' }),
+];
+const twoProcEngine = reportModule.calculateLocalResults({
+    processes: [proc1WithPeriod, proc2], precursors: twoProcPrecursors, products: [baseProduct],
+    periods: [at({ id: 'per1', name: '2026', start_date: '2026-01-01', end_date: '2026-12-31', status: 'CALCULATED' })],
+    sourceStreams: [baseStream, at({ ...baseStream, id: 's2', process_id: 'proc2', activity_data: 22.28 })], productOutputLines: [],
+});
+const twoProcReport = reportModule.createCalculationReport({
+    ...baseInput(),
+    processes: [proc1WithPeriod, proc2], precursors: twoProcPrecursors,
+    sourceStreams: [baseStream, at({ ...baseStream, id: 's2', process_id: 'proc2', activity_data: 22.28 })],
+    results: twoProcEngine, defaultValues: dvReference,
+});
+const twoProcXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await twoProcReport.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(!twoProcXml.includes('3.0157'), '공정 2개일 때 남의 전구물질을 합산한 과거 오답(3.0157)이 나오지 않음');
+assertTrue(!twoProcXml.includes('+48.65%'), '공정 2개 민감도 과대 증가율(+48.65%)이 나오지 않음');
+
+// [P0] 생산량 0 → SEE 0.0000을 발행하면 안 된다. 차단해야 한다.
+const zeroOutputProcess = at({ ...baseProcess, output_mass_t: 0, period_id: 'per1' });
+const zeroEngine = reportModule.calculateLocalResults({
+    processes: [zeroOutputProcess], precursors: [basePrecursor], products: [baseProduct],
+    periods: [at({ id: 'per1', name: '2026', start_date: '2026-01-01', end_date: '2026-12-31', status: 'CALCULATED' })],
+    sourceStreams: [baseStream], productOutputLines: [],
+});
+let zeroBlocked = false;
+try {
+    reportModule.createCalculationReport({ ...baseInput(), processes: [zeroOutputProcess], results: zeroEngine });
+} catch (error) {
+    zeroBlocked = /생산량/.test(error.message);
+}
+assertTrue(zeroBlocked, '생산량 0 → 발행 차단 (SEE 0.0000 인쇄 금지)');
+
+// [P0] 다중 제품에서 간접배출 취급이 갈리면 표지가 하나로 단정하면 안 된다.
+const mixedProductsReport = reportModule.createCalculationReport({
+    ...baseInput(),
+    products: [baseProduct, ironOreProduct],
+    processes: [baseProcess, ironOreProcess],
+    sourceStreams: [baseStream, ironOreStream],
+    precursors: [basePrecursor, ironOrePrecursor],
+    results: [baseResult, ...ironOreEngine],
+});
+const mixedProductsXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await mixedProductsReport.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(mixedProductsXml.includes('제품별 상이'), '간접 취급이 갈리면 표지가 「제품별 상이」로 표기');
+assertTrue(mixedProductsXml.includes('응결 철광석') && mixedProductsXml.includes('용접강관'), '3.1장이 제품별로 판정');
+assertTrue(mixedProductsXml.includes('CN 접두 규칙'), '3.1장이 판정 방법(접두 규칙·등재 목록 미조회)을 고지');
+
+// [P1] 기간이 여러 개면 periods[0]이 아니라 결과가 가리키는 기간을 써야 한다.
+const twoPeriods = reportModule.createCalculationReport({
+    ...baseInput(),
+    periods: [
+        at({ id: 'per0', name: '2025', start_date: '2025-01-01', end_date: '2025-12-31', status: 'CALCULATED' }),
+        at({ id: 'per1', name: '2026', start_date: '2026-01-01', end_date: '2026-12-31', status: 'CALCULATED' }),
+    ],
+    results: [{ ...baseResult, period_id: 'per1' }],
+});
+const twoPeriodsXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await twoPeriods.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(twoPeriodsXml.includes('2026-01-01'), '결과의 period_id가 가리키는 기간을 표지에 인쇄');
+assertTrue(!twoPeriodsXml.includes('2025-12-31'), 'periods[0](2025)을 임의 채택하지 않음');
+
+// 결과가 여러 기간에 걸치면 차단
+let mixedPeriodBlocked = false;
+try {
+    reportModule.createCalculationReport({
+        ...baseInput(),
+        periods: [
+            at({ id: 'per0', name: '2025', start_date: '2025-01-01', end_date: '2025-12-31', status: 'CALCULATED' }),
+            at({ id: 'per1', name: '2026', start_date: '2026-01-01', end_date: '2026-12-31', status: 'CALCULATED' }),
+        ],
+        results: [{ ...baseResult, period_id: 'per0' }, { ...baseResult, id: 'r2', period_id: 'per1' }],
+    });
+} catch (error) {
+    mixedPeriodBlocked = /보고기간/.test(error.message);
+}
+assertTrue(mixedPeriodBlocked, '결과가 여러 보고기간에 걸치면 차단');
+
+// [P1] 엔진 경고를 건수만이 아니라 내용으로 끌어올린다.
+const warnedResult = { ...baseResult, warnings: ['소비량이 구매량을 초과합니다.'] };
+const warned = reportModule.createCalculationReport({ ...baseInput(), results: [warnedResult] });
+assertTrue(
+    warned.issues.some((issue) => issue.gate === 'G1' && /소비량이 구매량을 초과/.test(issue.message)),
+    '엔진 경고가 보고서 게이트 이슈로 노출'
+);
+
+// [P1] 공란 셀이 "공표된 0.0"이 되면 안 된다 — Number('') === 0 함정.
+const emptyCellDv = {
+    ...dvReference,
+    rows: [{ ...dvReference.rows[0], direct_default: undefined, total_default: undefined, markup_2026: undefined }],
+};
+const emptyCellReport = reportModule.createCalculationReport({
+    ...baseInput(),
+    precursors: [{ ...basePrecursor, supplier_country: 'South Korea' }],
+    defaultValues: emptyCellDv,
+});
+const emptyCellXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await emptyCellReport.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(!emptyCellXml.includes('0.00000000'), '미공표 DV가 0.00000000으로 인쇄되지 않음');
+
+// ---------------- 재감사 R2 회귀 — 문서가 하지 않은 일을 했다고 말하지 않는지 ----------------
+
+// [P0] 13장 자체평가는 실제 게이트 결과에서 파생돼야 한다. G3 경고가 떠 있는데 「경고 0건」은 거짓이다.
+const okXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await ok.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(ok.issues.some((issue) => issue.gate === 'G3'), '전제: 기본 시나리오는 G3 경고가 있다');
+assertTrue(!okXml.includes('경고 0건'), '경고가 있는데 「경고 0건」이라 말하지 않음');
+assertTrue(/경고 \d+건\(G/.test(okXml.replace(/<[^>]+>/g, '')), '13장이 실제 경고 건수·게이트를 서술');
+
+// [P1] 13장이 하지 않은 export 검증을 했다고 주장하지 않는다.
+assertTrue(!okXml.includes('템플릿 기재 셀 전수 자동 대조 검증'), '수행하지 않은 export 검증을 근거로 올리지 않음');
+// 6.4의 단일 배출원 한계 고지가 13장 정확성 근거에도 전재된다.
+assertTrue(okXml.includes('전기(轉記) 오류 검출에 한정'), '13장 정확성이 6.4의 한계를 함께 전재');
+
+// [P1] 산식 피연산자는 반올림하지 않는다 — 문서가 스스로 선언한 규칙.
+assertTrue(okXml.includes('0.030001158'), '5.4 산식이 피연산자를 원천값으로 인쇄');
+assertTrue(okXml.includes('1.99875'), '5.4 전구물질 피연산자 원천값');
+
+// [P1] 7장에 전력 EF 출처를 채우면 14장이 「미기재」라고 우기면 안 된다.
+const filledXml2 = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await filled.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(filledXml2.includes('Country EF list'), '전제: 7장에 전력 EF 출처가 기재됨');
+assertTrue(!filledXml2.includes('공표 메타데이터 미기재'), '7장에 기재되면 14장이 「미기재」를 주장하지 않음');
+// 반대로 비어 있으면 개선 항목으로 올라온다.
+assertTrue(okXml.includes('공표 메타데이터 미기재'), '7장이 비면 14장에 개선 항목으로 등재');
+
+// [P0] 결과의 대부분이 미검증 값에서 온다는 사실이 표지·요약을 통과해야 한다.
+assertTrue(okXml.includes('주요 한계'), '표지에 「주요 한계」 행');
+assertTrue(okXml.includes('98.5%'), '미검증 전구물질 기여 집중도(98.5%)를 정량 노출');
+assertTrue(okXml.includes('주요 잔여 리스크'), '1장 요약에 잔여 리스크 노출');
+assertTrue(okXml.includes('참고 총 SEE'), '1장에 참고 총 SEE');
+
+// [P1] 앱 버전이 표지에 있어야 재현이 성립한다.
+assertTrue(okXml.includes('CBAM Local v0.1.0'), '표지에 산정 엔진 버전');
+
+// [P1] 전구물질 자료 기간이 보고기간과 다르면 불일치를 말해야 한다.
+assertTrue(okXml.includes('본 보고기간(2026)과 불일치'), '8장 vintage 불일치 고지');
+assertTrue(okXml.includes('전구물질 자료 기간'), '14장에 vintage 불일치 개선 항목');
+
+// [P0] 선언은 확보하지 않은 근거로 준거를 말하지 않는다. 국·영문 보증 수준이 같아야 한다.
+assertTrue(!okXml.includes('and its implementing regulations'), '영문 선언이 미확정 이행규정 준거를 주장하지 않음');
+assertTrue(okXml.includes('Items marked'), '영문 선언에도 「확인 필요」 유보 문구');
+assertTrue(okXml.includes('outstanding items are listed in Chapter 14'), '영문 선언이 미해소 항목 등록부를 가리킴');
+assertTrue(okXml.includes('본인이 아는 범위에서'), '국문 선언 한정 유지');
+
+// [P1] 미해소 항목 등록부 — 열거하지 않은 것은 유보할 수 없다.
+assertTrue(okXml.includes('14.1 미해소 항목 등록부'), '14.1 등록부 존재');
+assertTrue(okXml.includes('미해소 표기는 총'), '등록부가 총 건수를 집계');
+
+// [P1] 8.x 자리표시자가 실제 채번으로 바뀌었는지 (전구물질 2건)
+const twoPrecursors = reportModule.createCalculationReport({
+    ...baseInput(),
+    precursors: [basePrecursor, { ...basePrecursor, id: 'pr2', name: '선재' }],
+});
+const twoPrecXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await twoPrecursors.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(!twoPrecXml.includes('8.x'), '8.x 자리표시자 미치환 없음');
+assertTrue(twoPrecXml.includes('8.1 HRC') && twoPrecXml.includes('8.2 선재'), '전구물질 절 번호 채번');
+
+// [P1] 경계 밖 공정·배출원이 6·7장에 유입되면 안 된다.
+const nonCbamProduct = at({ id: 'pX', name: '비CBAM 제품', hs_code: '9999', cn_code: '99999999', hs_group: '99', product_type_enum: 'OTHER', unit: 'tonne', reporting_scope: 'NON_CBAM' });
+const nonCbamProcess = at({ ...baseProcess, id: 'procX', product_id: 'pX', name: '비CBAM 도장', electricity_mwh: 900 });
+const nonCbamStream = at({ ...baseStream, id: 'sX', process_id: 'procX', name: '경유' });
+const scoped = reportModule.createCalculationReport({
+    ...baseInput(),
+    products: [baseProduct, nonCbamProduct],
+    processes: [baseProcess, nonCbamProcess],
+    sourceStreams: [baseStream, nonCbamStream],
+});
+const scopedXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await scoped.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(!scopedXml.includes('비CBAM 도장'), '7장에 경계 밖 공정이 실리지 않음');
+assertTrue(!scopedXml.includes('경유'), '6장에 경계 밖 배출원이 실리지 않음');
+assertTrue(scopedXml.includes('CBAM 대상 생산공정 1개'), '13장이 경계 안 공정 수만 집계');
+
+// [P2] formatPercentForReport가 `+-0.00%`를 내지 않는다.
+assertEqual(fmt.formatPercentForReport(-0.00001), '0.00%', 'formatPercentForReport -0 정규화');
+
+// [P1] 배분기준을 "도구가 검사한다"가 아니라 "무엇을 썼는가"로 서술
+assertTrue(okXml.includes('제품 배분 기준: 질량 기준(MASS) 단일 적용'), '13장 일관성이 실제 배분기준을 진술');
+assertTrue(!okXml.includes('배분기준 혼용 여부는 도구가 자동 경고'), '「도구가 검사한다」를 방법 진술로 쓰지 않음');
+// 미기재가 있으면 완전성 잔여 한계가 그 사실을 말해야 한다(G3도 「기재 필요」를 남긴다)
+assertTrue(okXml.includes('「기재 필요」로 남은 항목이 있다'), '미기재가 있으면 13장 완전성이 이를 잔여 한계로 서술');
+// 내부 enum이 그대로 새어나가면 안 된다
+assertTrue(!okXml.includes('PROCESS_TOTAL 단일'), '배분기준 내부 enum 노출 없음');
+
+// ---------------- 재감사 R3 회귀 — 근거 복원(추적성) ----------------
+
+// [P0] 계수 출처와 활동자료 증빙은 다른 문서다. 청구서에는 배출계수가 실리지 않는다.
+assertTrue(filledXml2.includes('6.2.2 계수 출처'), '6.2.2 계수 출처 절 분리');
+assertTrue(filledXml2.includes('IPCC 2006 Guidelines Vol.2 Table 1.4'), '계수 출처가 사용자 입력에서 렌더');
+assertTrue(filledXml2.includes('6.3 측정 방식 및 데이터 품질'), '6.3 원천 증빙은 별도 절');
+// 계수 출처가 비면 조용히 「기재 필요」로 나가지 말고 경고해야 한다.
+assertTrue(
+    ok.issues.some((issue) => issue.gate === 'G5' && /계수 출처/.test(issue.message)),
+    '계수 출처 미기재 → G5 경고'
+);
+
+// [P1] 산식에 등장하는 계수는 표에 값이 있어야 재현된다. 종전엔 산화계수가 산식에만 있었다.
+assertTrue(filledXml2.includes('6.2.1 산식 적용 계수'), '6.2.1 산식 적용 계수 표');
+assertTrue(filledXml2.includes('산화계수 (OxF)'), '산화계수 열');
+assertTrue(filledXml2.includes('바이오매스 분율'), '바이오매스 분율 열');
+
+// [P1] 단위 없는 헤더는 G7이 검사할 대상이 없어 공허하게 통과한다.
+assertTrue(filledXml2.includes('NCV (GJ/단위)'), 'NCV 헤더에 단위');
+assertTrue(filledXml2.includes('EF 기준'), 'EF 기준(basis) 열');
+assertTrue(filledXml2.includes('tCO2/TJ'), 'EF 단위 명시');
+
+// PER_ACTIVITY_UNIT 배출원은 NCV를 쓰지 않으므로 그렇게 표기해야 한다.
+const perUnit = reportModule.createCalculationReport({
+    ...baseInput(),
+    sourceStreams: [{ ...baseStream, emission_factor_basis: 'PER_ACTIVITY_UNIT', emission_factor_tco2e_per_unit: 2.69 }],
+});
+const perUnitXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await perUnit.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(perUnitXml.includes('tCO2/t'), 'PER_ACTIVITY_UNIT은 활동자료 단위 기준 EF로 표기');
+
+// [P1] 원천자료가 에너지 단위면 NCV가 상쇄된다는 사실을 말해야 한다.
+assertTrue(filledXml2.includes('NCV 상쇄 고지'), '6.1 NCV 상쇄 고지');
+// 질량 단위 원천자료에는 상쇄 고지가 붙으면 안 된다(남발 방지).
+const massSource = reportModule.createCalculationReport({
+    ...baseInput(),
+    reportInputs: { transpositions: [{ source_stream_id: 's1', source_unit: 't', source_quantity: '89.13', ncv_source: 'X', ef_source: 'Y', measurement_method: '계량기' }] },
+});
+const massSourceXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await massSource.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(!massSourceXml.includes('NCV 상쇄 고지'), '질량 원천자료엔 상쇄 고지 없음');
+
+// [P1] 15장 자동 초안 — 본문이 인용한 문서가 증빙 목록에 있어야 한다.
+assertTrue(filledXml2.includes('모니터링 계획서 HB-CBAM-MP-001'), '15장에 모니터링 계획 자동 등재');
+assertTrue(filledXml2.includes('자동 초안'), '자동 초안 표시');
+const withDvXml2 = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await withDv.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(withDvXml2.includes('DVs as adopted_v20260204.xlsx'), '15장에 DV 워크북 자동 등재');
+
+// [P1] 11장 전구물질 탄소가격 행 — 공급사로부터 별도 수령해야 한다.
+assertTrue(filledXml2.includes('전구물질 (HRC)'), '11장 전구물질 행 자동 시딩');
+
+// [P2] 9.1 raw 행에도 상대차를 준다.
+assertTrue(dvXml.includes('-7.95%'), '9.1 raw 상대차(%)');
+
+// [P1] 9.2가 9.1의 유보를 전재하고 markup 채택을 밝힌다.
+assertTrue(dvXml.includes('markup을 포함한'), '9.2 markup 채택 명시');
+assertTrue(dvXml.includes('본 수치는 개연성 참고이다'), '9.2에 9.1 조회 전제 유보 전재');
+
+// [P1] 5.1 산식이 엔진 산식과 같아야 한다(전환계수·화석분율·PER_ACTIVITY_UNIT 분기).
+assertTrue(filledXml2.includes('전환계수 CF × 화석 분율'), '5.1 산식에 CF·화석분율');
+assertTrue(filledXml2.includes('NCV와 ÷1,000을 적용하지 않는다'), '5.1 PER_ACTIVITY_UNIT 분기 명시');
+assertTrue(filledXml2.includes('CH4·N2O는 본 산정의 대상 GHG에 포함되지 않는다'), '5.1 GHG 범위 진술');
+
+// [P1] DV 조회가 생산경로를 무시하면 워크북 행 순서로 아무 행이나 집는다.
+const routeDv = {
+    ...dvReference,
+    rows: [
+        { ...dvReference.rows[0], cn_code: '2523', production_route: '(B)', direct_default: 1.29, total_default: 1.29, markup_2026: 1.42 },
+        { ...dvReference.rows[0], cn_code: '2523', production_route: '(A)', direct_default: 1.24, total_default: 1.24, markup_2026: 1.36 },
+    ],
+};
+const routed = reportModule.createCalculationReport({
+    ...baseInput(),
+    precursors: [{ ...basePrecursor, precursor_cn_code: '25231000', supplier_country: 'South Korea', production_route: '(A)' }],
+    defaultValues: routeDv,
+});
+const routedXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await routed.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(routedXml.includes('1.24'), '생산경로가 같은 DV 행을 우선 조회');
+assertTrue(routedXml.includes('생산경로가 다른 공식 기본값 행이 둘 이상'), '경로 분화 조합임을 고지');
+assertTrue(routed.issues.some((issue) => issue.gate === 'G6' && /생산경로가 다른 DV 행/.test(issue.message)), '경로 모호 → G6 경고');
+
+// [P1] direct_default가 null이면 actual - null = actual이 되면 안 된다.
+const nullDirectDv = { ...dvReference, rows: [{ ...dvReference.rows[0], direct_default: null, markup_2026: null }] };
+const nullDirect = reportModule.createCalculationReport({
+    ...baseInput(),
+    precursors: [{ ...basePrecursor, supplier_country: 'South Korea' }],
+    defaultValues: nullDirectDv,
+});
+const nullDirectXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await nullDirect.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(!nullDirectXml.includes('차이: 실측 − DV(raw)'), 'direct_default가 null이면 raw 차이 행을 만들지 않음');
+assertTrue(nullDirectXml.includes('직접 기본값이 공표되지 않아'), 'direct_default 미공표 고지');
+
+assertTrue(reportModule.hasAmbiguousDefaultValueRoutes(routeDv, 'South Korea', '25231000'), 'hasAmbiguousDefaultValueRoutes 검출');
+assertTrue(!reportModule.hasAmbiguousDefaultValueRoutes(dvReference, 'South Korea', '72083900'), '경로 단일이면 모호하지 않음');
+
+console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3 회귀).');

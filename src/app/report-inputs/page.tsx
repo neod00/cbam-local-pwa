@@ -257,7 +257,12 @@ export default function ReportInputsPage() {
                                     <input className={inputClass} value={entry.conversion_note ?? ''} placeholder="환산 근거 (예: ÷ 48,000 MJ/t)" onChange={(event) => update({ conversion_note: event.target.value })} />
                                     <input className={inputClass} value={entry.measurement_method ?? ''} placeholder="측정 방식 (예: 정산용 계량기)" onChange={(event) => update({ measurement_method: event.target.value })} />
                                     <input className={inputClass} value={entry.data_quality ?? ''} placeholder="데이터 품질·불확도" onChange={(event) => update({ data_quality: event.target.value })} />
+                                    <input className={inputClass} value={entry.ncv_source ?? ''} placeholder="NCV 출처 (기관·문서·판본·표번호)" onChange={(event) => update({ ncv_source: event.target.value })} />
+                                    <input className={inputClass} value={entry.ef_source ?? ''} placeholder="EF 출처 (기관·문서·판본·표번호)" onChange={(event) => update({ ef_source: event.target.value })} />
                                 </div>
+                                <p className="mt-2 text-xs text-slate-500">
+                                    계수 출처는 활동자료 증빙과 다릅니다 — 요금청구서에는 순발열량·배출계수가 실리지 않습니다. 인용한 계수 문헌을 적어주세요.
+                                </p>
                             </div>
                         );
                     })}
