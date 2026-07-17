@@ -626,7 +626,7 @@ assertEqual(fmt.formatPercentForReport(-0.00001), '0.00%', 'formatPercentForRepo
 assertTrue(okXml.includes('제품 배분 기준: 질량 기준(MASS) 단일 적용'), '13장 일관성이 실제 배분기준을 진술');
 assertTrue(!okXml.includes('배분기준 혼용 여부는 도구가 자동 경고'), '「도구가 검사한다」를 방법 진술로 쓰지 않음');
 // 미기재가 있으면 완전성 잔여 한계가 그 사실을 말해야 한다(G3도 「기재 필요」를 남긴다)
-assertTrue(okXml.includes('「기재 필요」로 남은 항목이 있다'), '미기재가 있으면 13장 완전성이 이를 잔여 한계로 서술');
+assertTrue(okXml.includes('미기재 항목이 남아 있다'), '미기재가 있으면 13장 완전성이 이를 잔여 한계로 서술');
 // 내부 enum이 그대로 새어나가면 안 된다
 assertTrue(!okXml.includes('PROCESS_TOTAL 단일'), '배분기준 내부 enum 노출 없음');
 
@@ -757,7 +757,11 @@ assertTrue(
 // [P1-B] 등록부는 자기 장(14장)도 세야 한다. 16장 선언이 이 등록부를 유보 대상으로 가리키므로,
 // 열거가 불완전하면 선언이 거짓이 된다.
 assertTrue(okXml.includes('14. 데이터 한계 및 개선계획'), '전제: 14장 존재');
-const registrySlice = okXml.slice(okXml.indexOf('14.1 미해소 항목 등록부'));
+// 등록부 표만 자른다. 문서 끝까지 자르면 뒤따르는 실제 장 제목(15·16·부속서)까지 섞인다.
+// 표 뒤에는 범례(Legend 문단)가 오므로 그 지점을 끝으로 삼는다.
+const registryStart = okXml.indexOf('14.1 미해소 항목 등록부');
+const registrySlice = okXml.slice(registryStart, okXml.indexOf('<w:pStyle w:val="Legend"/>', registryStart));
+assertTrue(registrySlice.length > 0 && registrySlice.length < okXml.length, '등록부 표 구간 추출');
 assertTrue(/14\. 데이터 한계 및 개선계획/.test(registrySlice.replace(/<[^>]+>/g, ' ')), '등록부에 「14.」 행이 존재');
 
 const printedTotalMatch = okXml.replace(/<[^>]+>/g, ' ').match(/미해소 표기는 총 (\d+)건/);
@@ -788,4 +792,52 @@ assertEqual(coverRow[1], '1건', '표지 확인 필요(규정) 1건 (범례 미�
 assertEqual(coverRow[2], '-', '표지 확인 필요(자료) 없음 (범례 미계상)');
 assertEqual(coverRow[3], '-', '표지 기재 필요 없음 (범례 미계상)');
 
-console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4 회귀).');
+// ---------------- 재감사 R5 회귀 — 등록부 순서·범례 구조화·자기언급 ----------------
+
+// [P2-1] 등록부 행은 문서 순서(표지 → 1~16장 → 부속서)를 따라야 한다.
+// R4에서 14장을 스캔 끝에 붙여 세게 만들었더니 행 위치까지 끝으로 갔다.
+const registryText = registrySlice.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
+const orderKeys = [...registryText.matchAll(/\|(표지|(\d{1,2})\. |([A-C])\. )/g)].map((match) => match[1].trim());
+const orderIndex = orderKeys.map((key) => {
+    if (key === '표지') return -1;
+    if (/^\d/.test(key)) return Number.parseInt(key, 10);
+    return 100 + key.charCodeAt(0);
+});
+assertTrue(orderIndex.length >= 3, '등록부 행 파싱');
+assertEqual(
+    JSON.stringify(orderIndex),
+    JSON.stringify([...orderIndex].sort((a, b) => a - b)),
+    '등록부 행이 문서 순서(표지 → 장번호 → 부속서)로 정렬'
+);
+// R4가 만든 역순의 직접 회귀 — 14장 행이 뒤따르는 장·부속서보다 앞에 와야 한다.
+// (미해소 표기가 없는 장은 행 자체가 없으므로 15장 존재를 전제하면 안 된다.)
+const idx14 = orderIndex.indexOf(14);
+const idxAfter14 = orderIndex.findIndex((value) => value > 14);
+assertTrue(idx14 !== -1, '등록부에 14장 행 존재');
+assertTrue(idxAfter14 === -1 || idx14 < idxAfter14, '14장 행이 이후 장·부속서 행보다 앞');
+
+// [P2-2] 범례를 문자열이 아니라 스타일로 식별해야 한다.
+// 문자열 매칭이면 본문 문안에 그 문구가 섞이는 순간 그 문단의 진짜 표기가 조용히 사라진다.
+assertTrue(docx.paragraph('x', 'Legend').includes('<w:pStyle w:val="Legend"/>'), 'Legend 스타일 지원');
+assertTrue(read('word/styles.xml').includes('w:styleId="Legend"'), 'styles.xml에 Legend 정의');
+// 씨밤이가 재현한 시나리오: 본문 문단에 범례 문구가 섞여도 그 문단의 표기는 살아 있어야 한다.
+const legendCollision = reportModule.createCalculationReport({
+    ...baseInput(),
+    installations: [at({
+        id: 'i1', name: 'X', local_name: 'X', country: 'KR',
+        // 사업장 서술에 범례와 같은 문구를 넣는다 — 옛 로직이면 이 문단의 표기 3건이 통째로 사라진다.
+        economic_activity: '본 계수는 규정 원문 대조 미완 상태다 — 확인 필요(규정). 증빙 미수령 — 확인 필요(자료).',
+    })],
+});
+const collisionXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await legendCollision.blob.arrayBuffer()))['word/document.xml']);
+const collisionTotal = Number((collisionXml.replace(/<[^>]+>/g, ' ').match(/미해소 표기는 총 (\d+)건/) ?? [])[1]);
+const okTotal = Number(printedTotalMatch[1]);
+assertTrue(collisionTotal > okTotal, '본문에 범례 문구가 섞여도 그 문단의 표기가 집계에서 사라지지 않음');
+
+// [P2-3] 표기 규칙을 서술하는 자기언급은 미해소 항목이 아니다.
+assertTrue(!okXml.includes('미기재 항목은 「기재 필요」로 표기된다'), '12장 자기언급 제거');
+assertTrue(!okXml.includes('「기재 필요」로 남은 항목이 있다'), '13장 자기언급 제거');
+// 다만 의미는 남아야 한다 — 미기재가 있다는 사실 자체는 계속 말해야 한다.
+assertTrue(okXml.includes('미기재 항목이 남아 있다'), '13장이 미기재 잔존 사실은 계속 진술');
+
+console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4·R5 회귀).');

@@ -77,16 +77,15 @@ const NOT_APPLICABLE = '해당 없음';
 const NOT_PUBLISHED = 'N/A (미공표)';
 
 /**
- * 표기의 뜻을 설명하는 범례 문단(표지·14.1에 각각 등장).
- * 범례는 미해소 항목이 아니므로 등록부 집계에서 빼야 한다. 안 빼면 문서가 자기 범례를
- * 미해소 항목으로 세어 총계가 부풀고, 등록부가 자기 자신을 집계한다.
- * 「규정 원문 대조 미완」은 범례에만 등장하는 문구라 이를 표식으로 삼는다.
+ * 표기의 뜻을 설명하는 범례 문단(표지·14.1에 각각 등장)을 등록부 집계에서 뺀다.
+ * 안 빼면 문서가 자기 범례를 미해소 항목으로 세어 총계가 부풀고, 등록부가 자기 자신을 집계한다.
+ *
+ * 문자열('규정 원문 대조 미완')로 알아보던 것을 **Legend 스타일**로 바꿨다.
+ * 문자열 매칭은 본문 문안에 같은 문구가 섞이는 순간 그 문단의 진짜 표기까지 통째로
+ * 지워 조용히 과소 계상한다 — 「지금 틀렸다」가 아니라 「다음에 조용히 틀릴 준비가 됐다」는
+ * 문제이고, 이 프로젝트가 반복해온 실패 모양과 같다(씨밤이 P2).
  */
-const LEGEND_SIGNATURE = '규정 원문 대조 미완';
-const LEGEND_PARAGRAPH_PATTERN = new RegExp(
-    `<w:p>(?:(?!</w:p>)[\\s\\S])*?${LEGEND_SIGNATURE}(?:(?!</w:p>)[\\s\\S])*?</w:p>`,
-    'g'
-);
+const LEGEND_PARAGRAPH_PATTERN = /<w:p><w:pPr><w:pStyle w:val="Legend"\/>(?:(?!<\/w:p>)[\s\S])*?<\/w:p>/g;
 
 /**
  * 검증인이 6개월 뒤 같은 입력으로 같은 결과를 재현하려면 어떤 소프트웨어였는지 특정해야 한다.
@@ -491,7 +490,7 @@ function coverSection(input: CalculationReportInput, isInterim: boolean) {
         ),
         paragraph(
             '미확정 항목 표기: 「확인 필요(규정)」 = 규정 원문 대조 미완 · 「확인 필요(자료)」 = 외부 자료·증빙 미수령 · 「기재 필요」 = 실제 산정 시 반드시 채워야 하는 값.',
-            'Note'
+            'Legend'
         ),
     ].join('');
 }
@@ -1396,7 +1395,8 @@ function monitoringSection(input: CalculationReportInput) {
     body.push(table(['절차', '내용'], [
         ['검토 분리', '수집 담당자와 검토·승인자를 분리하고, 입력값을 원천 증빙과 대조한 뒤 승인한다.'],
         ['자동 정합 검사', '산정 도구 내부 검사: 배출원 합계 ↔ 공정 직접배출량(±1%), 생산라인 합계 ↔ 총 생산량, 활동자료 단위 ↔ NCV 정합, 전구물질 질량수지.'],
-        ['보고서 발행 게이트', '표시값 합계 정합·교차참조·단위 정합 검사를 통과해야 보고서가 발행된다. 미기재 항목은 「기재 필요」로 표기된다.'],
+        // 표기 규칙을 서술할 때 표기 문구 자체를 쓰면 등록부가 이를 실제 미해소 항목으로 센다(씨밤이 P2).
+        ['보고서 발행 게이트', '표시값 합계 정합·교차참조·단위 정합 검사를 통과해야 보고서가 발행된다. 미기재 항목은 본문에 표기하고 제14.1장 등록부에 집계한다.'],
         ['데이터 보존', '산정 데이터는 앱 로컬 데이터베이스에 저장하고, 보고기간별 .cbam 백업과 원천 증빙을 함께 보관한다.'],
     ], { widths: [2600, 6400], headerShade: SOFT, headerBold: true, repeatHeader: true }));
     body.push(paragraph('현 도구의 한계: 산정 도구는 변경이력(audit trail) 기능을 제공하지 않는다. 변경 통제는 검토 절차와 기간별 백업 보관으로 보완하며, 백업 파일은 최종 산정 상태를 재현하되 변경 과정의 이력은 포함하지 않는다.', 'Note'));
@@ -1429,7 +1429,7 @@ function principlesSection(input: CalculationReportInput, issues: ReportGateIssu
     // 「기재 필요」를 남기는 게이트는 G5(사용자 입력)뿐 아니라 G3(경계 서술)도 있다.
     // 미기재가 있는데 잔여 한계에 적지 않으면 완전성 자체평가가 거짓이 된다(씨밤이 P1).
     const placeholderNote = issues.some((issue) => issue.gate === 'G5' || issue.gate === 'G3')
-        ? '「기재 필요」로 남은 항목이 있다 — 제14.1장 미해소 항목 등록부 참조. 발행 전 기재해야 한다. 보고기간 중 신규 배출원 발생 시 재산정 필요.'
+        ? '미기재 항목이 남아 있다 — 제14.1장 미해소 항목 등록부 참조. 발행 전 기재해야 한다. 보고기간 중 신규 배출원 발생 시 재산정 필요.'
         : '보고기간 중 신규 배출원 발생 시 재산정 필요.';
 
     const rows: string[][] = [
@@ -1496,7 +1496,26 @@ function scanOutstandingItems(bodyXml: string) {
         countIn(chunk, text.trim().split(/\s{2,}|\s(?=[A-Z])/)[0]?.trim() ?? '');
     }
 
-    return items;
+    // 스캔 순서가 아니라 문서 순서로 낸다. 14장을 세게 하려고 스캔 끝에 붙였더니 행 위치까지
+    // 끝으로 가서, 검증인이 장 번호순으로 훑으면 14장 행을 놓친다(씨밤이 P2).
+    return items.sort((a, b) => chapterOrder(a.chapter) - chapterOrder(b.chapter));
+}
+
+/** 표지 → 1~16장 → 부속서 A/B/C 순. */
+function chapterOrder(title: string) {
+    if (title === '표지') {
+        return -1;
+    }
+
+    const numeric = title.match(/^(\d{1,2})\./);
+
+    if (numeric) {
+        return Number.parseInt(numeric[1], 10);
+    }
+
+    const annex = title.match(/^([A-C])\./);
+
+    return annex ? 100 + annex[1].charCodeAt(0) : 99;
 }
 
 function outstandingRegistrySection(bodyXml: string) {
@@ -1523,7 +1542,7 @@ function outstandingRegistrySection(bodyXml: string) {
         table(['장', '확인 필요(규정)', '확인 필요(자료)', '기재 필요'], rows, {
             widths: [3600, 1800, 1800, 1800], headerShade: SOFT, headerBold: true, repeatHeader: true,
         }),
-        paragraph('「확인 필요(규정)」 = 규정 원문 대조 미완 · 「확인 필요(자료)」 = 외부 자료·증빙 미수령 · 「기재 필요」 = 발행 전 반드시 채워야 하는 값.', 'Note'),
+        paragraph('「확인 필요(규정)」 = 규정 원문 대조 미완 · 「확인 필요(자료)」 = 외부 자료·증빙 미수령 · 「기재 필요」 = 발행 전 반드시 채워야 하는 값.', 'Legend'),
     ].join('');
 }
 

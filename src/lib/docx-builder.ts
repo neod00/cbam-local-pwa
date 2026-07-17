@@ -8,7 +8,12 @@ import { strToU8, zipSync } from 'fflate';
 // delivery-package.ts에서 추출·확장했다. 기존 호출부 호환을 위해 시그니처는 그대로 두고
 // 선택 옵션만 추가했다(표 음영·가변 셀너비·머리글/바닥글·페이지번호·글자색).
 
-export type DocxParagraphStyle = 'Title' | 'Heading1' | 'Heading2' | 'Note';
+/**
+ * Legend — 표기의 뜻을 설명하는 범례. 겉모습은 Note와 같지만 스타일을 따로 두어,
+ * 문서를 훑는 쪽(산정보고서 14.1 등록부)이 **문자열이 아니라 구조로** 범례를 골라낼 수 있게 한다.
+ * 문자열로 알아보면 본문 문안에 같은 문구가 섞이는 순간 조용히 오작동한다(씨밤이 P2).
+ */
+export type DocxParagraphStyle = 'Title' | 'Heading1' | 'Heading2' | 'Note' | 'Legend';
 export type DocxAlign = 'left' | 'center' | 'right';
 
 export interface DocxRunOptions {
@@ -182,6 +187,7 @@ function docxStylesXml() {
   <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:before="280" w:after="120"/></w:pPr><w:rPr><w:b/><w:sz w:val="26"/></w:rPr></w:style>
   <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:before="200" w:after="80"/></w:pPr><w:rPr><w:b/><w:sz w:val="22"/></w:rPr></w:style>
   <w:style w:type="paragraph" w:styleId="Note"><w:name w:val="Note"/><w:basedOn w:val="Normal"/><w:rPr><w:color w:val="475569"/><w:sz w:val="18"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Legend"><w:name w:val="Legend"/><w:basedOn w:val="Note"/><w:rPr><w:color w:val="475569"/><w:sz w:val="18"/></w:rPr></w:style>
 </w:styles>`;
 }
 
