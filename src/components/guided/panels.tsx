@@ -34,7 +34,7 @@ import {
     type ImportedDefaultValueReference,
 } from '@/lib/reference-workbooks';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
-import type { SeeFlowBinding } from '@/lib/see-flow';
+import { describeSeeFlowIndirect, type SeeFlowBinding } from '@/lib/see-flow';
 import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ExternalLink, Lock, Pencil, Plus, Sparkles, Trash2, Upload } from 'lucide-react';
 import Link from 'next/link';
@@ -1486,6 +1486,8 @@ function ResultsPanel({ data, binding, selectedProcessId, onSelectStep }: PanelP
         : data.results.filter((result) => result.process_id === selectedProcessId);
     const warningMessages = Array.from(new Set(scopedResults.flatMap((result) => result.warnings))).slice(0, 5);
     const issues = data.exportIssues.slice(0, 5);
+    // 간접배출을 서술하려면 집계 상태를 거쳐야 한다. 정적 문안을 쓰면 판정 없이 단정하게 된다.
+    const indirectLabels = describeSeeFlowIndirect(binding.indirectRelevance, binding.basisExcludesUndetermined);
 
     return (
         <>
@@ -1498,7 +1500,8 @@ function ResultsPanel({ data, binding, selectedProcessId, onSelectStep }: PanelP
                     <p className="text-[11px] text-emerald-700">tCO₂e/t</p>
                 </div>
                 <div className="rounded-xl bg-indigo-50 p-3 text-center">
-                    <p className="text-xs font-semibold text-indigo-800">간접 (보고용)</p>
+                    {/* 정적 「보고용」은 판정 없이 「기준에서 빠진다」를 단정한다. 상태에서 파생한다(씨밤이 N2). */}
+                    <p className="text-xs font-semibold text-indigo-800">{indirectLabels.indirectLabel.replace('간접 SEE ', '간접 ')}</p>
                     <p className="mt-1 text-xl font-bold text-indigo-900">{fmt(binding.seeIndirect, 3)}</p>
                     <p className="text-[11px] text-indigo-700">tCO₂e/t</p>
                 </div>
@@ -1508,9 +1511,10 @@ function ResultsPanel({ data, binding, selectedProcessId, onSelectStep }: PanelP
                     <p className="text-[11px] text-slate-500">tCO₂e/t</p>
                 </div>
             </div>
-            <p className="text-[11px] leading-4 text-slate-500">
-                철강(Annex II)은 간접분이 인증서 &lsquo;산정 기준&rsquo;에서 빠지지만 보고에는 반드시 포함됩니다 — 그래서 기준과 총 SEE가 다릅니다.
-            </p>
+            {/* relevance·CN과 무관한 정적 규정 진술이었다. 「철강(Annex II)은…」은 우리가 확인하지
+                못한 등재를 단정하고, 간접 포함 품목에서는 두 타일이 같은 숫자인데 「다릅니다」라고
+                말했다 — 화면 자기모순(씨밤이 N3). 상태에서 파생한다. */}
+            <p className="text-[11px] leading-4 text-slate-500">{indirectLabels.basisVsTotalNote}</p>
 
             {(warningMessages.length > 0 || issues.length > 0) ? (
                 <div className="space-y-2">
