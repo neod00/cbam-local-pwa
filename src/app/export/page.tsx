@@ -644,6 +644,7 @@ export default function ExportPage() {
                 precursors,
                 results: reportableResults,
                 generatedAt: new Date(),
+                defaultValues: defaultValueReference,
             });
 
             downloadBlob(report.blob, report.filename);
