@@ -77,6 +77,7 @@ export function SeeFlowDiagram({
         productName,
         cnCode,
         indirectRelevance,
+        basisExcludesUndetermined,
         outputMassT,
         directEmissions,
         ownIndirectEmissions,
@@ -92,14 +93,27 @@ export function SeeFlowDiagram({
     const indirectIncluded = indirectRelevance === 'INCLUDED';
     const indirectUndetermined = indirectRelevance === 'UNDETERMINED';
 
-    const basisSub = indirectUndetermined ? '판정 전이라 산출하지 않음' : indirectIncluded ? '= ① + ② + ③ 전부' : '= ① 전부 + ③의 태운 몫';
+    const basisSub = indirectUndetermined
+        ? (basisExcludesUndetermined ? '= 판정된 제품만 · 판정 불가 제품 제외' : '판정 전이라 산출하지 않음')
+        : indirectIncluded
+            ? '= ① + ② + ③ 전부'
+            : indirectRelevance === 'MIXED'
+                ? '= 제품마다 다름 · 제품별 결과 참조'
+                : '= ① 전부 + ③의 태운 몫';
     // 「철강(CN 72/73) 규칙 기준」은 접두 규칙 진술이다. 판정은 공식 CN 목록 조회로 한다.
     const basisNote = indirectUndetermined
         ? '간접배출 관련성 판정 불가 — 확인 필요'
         : indirectIncluded
             ? '간접 포함 품목 기준'
-            : 'EU 공식 CN 목록상 간접배출 비관련';
-    const indirectLabel = indirectIncluded ? '간접 SEE (기준에 포함)' : '간접 SEE (보고용)';
+            : indirectRelevance === 'MIXED'
+                ? '제품별 간접배출 관련성 상이'
+                : 'EU 공식 CN 목록상 간접배출 비관련';
+    // 3상태 위에 2상태 삼항식을 쓰면 판정 불가가 「보고용」(=제외 확정 함의)으로 표시된다(씨밤이 D4).
+    const indirectLabel = indirectIncluded
+        ? '간접 SEE (기준에 포함)'
+        : indirectUndetermined
+            ? '간접 SEE (기준 반영 여부 확인 필요)'
+            : '간접 SEE (보고용)';
     const indirectNote = indirectUndetermined
         ? '인증서 기준 반영 여부 확인 필요'
         : indirectIncluded
@@ -112,7 +126,10 @@ export function SeeFlowDiagram({
         : indirectUndetermined
             ? '판정 불가 — 산출 안 함'
             : '신고 대상 아님';
-    const showTotalIdentity = !indirectIncluded && !indirectUndetermined && seeCbamBasis !== null;
+    // 총 SEE = 기준 + 간접 항등식은 **전부 비관련일 때만** 성립한다. 포함·비관련이 섞이면
+    // 포함 제품의 기준 SEE에 이미 간접이 들어 있어 우변이 이중계상된다 — 산술이 틀린 등식을
+    // 인쇄하게 된다(씨밤이 D5). MIXED·UNDETERMINED에서는 항등식을 쓰지 않는다.
+    const showTotalIdentity = indirectRelevance === 'NOT_RELEVANT' && seeCbamBasis !== null;
     const totalText = showTotalIdentity
         ? `총 SEE (내부 검토용) ${fmtSee(seeTotal)} tCO₂e/t = ${fmtSee(seeCbamBasis!)} + ${fmtSee(seeIndirect)}`
         : `총 SEE (내부 검토용) ${fmtSee(seeTotal)} tCO₂e/t`;
@@ -131,9 +148,12 @@ export function SeeFlowDiagram({
                 xmlns="http://www.w3.org/2000/svg"
             >
                 <title>철강 제품 CBAM 배출량(SEE) 산정 흐름</title>
+                {/* relevance와 무관한 정적 문안이면 판정 불가 제품에도 「철강은 제외된다」고 단정하게 된다.
+                    basisNote에서 지운 철강 일괄 규칙이 산문으로 남아 스크린리더에 읽히던 것(씨밤이 D2). */}
                 <desc>
-                    연료 직접배출, 전력 간접배출, 전구물질 배출이 생산공정에 모여 생산량으로 나뉘어 SEE가 됩니다. 철강은 간접
-                    SEE가 인증서 계산에서만 제외되고 보고에는 포함됩니다. 각 상자를 누르면 입력·결과 화면으로 이동합니다.
+                    연료 직접배출, 전력 간접배출, 전구물질 배출이 생산공정에 모여 생산량으로 나뉘어 SEE가 됩니다. {basisNote}
+                    {indirectUndetermined ? ' — 간접 SEE의 인증서 기준 반영 여부를 확인해야 합니다.' : ` — ${indirectNote}.`} 각
+                    상자를 누르면 입력·결과 화면으로 이동합니다.
                 </desc>
                 <style>{`
                     .see-node { cursor: pointer; }
