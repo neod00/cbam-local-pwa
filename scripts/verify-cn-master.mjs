@@ -18,6 +18,11 @@ function fail(message) {
     process.exit(1);
 }
 
+// 개행은 정규화해 비교한다. core.autocrlf=true 환경에서는 git이 체크아웃 시 CRLF로 바꾸는데
+// 생성기는 LF로 쓰므로, 바이트 그대로 비교하면 **내용이 같아도** 실패한다.
+// 잡으려는 것은 개행이 아니라 내용 드리프트다.
+const normalize = (text) => text.replace(/\r\n/g, '\n');
+
 const committed = readFileSync(GENERATED, 'utf8');
 writeFileSync(BACKUP, committed);
 
@@ -25,8 +30,10 @@ try {
     execFileSync('node', ['scripts/generate-cn-master.mjs'], { stdio: 'pipe' });
     const regenerated = readFileSync(GENERATED, 'utf8');
 
-    if (regenerated !== committed) {
-        writeFileSync(GENERATED, committed);
+    // 재생성 파일을 그대로 두면 작업트리가 개행만 다른 상태로 더럽혀진다. 커밋본을 되돌린다.
+    writeFileSync(GENERATED, committed);
+
+    if (normalize(regenerated) !== normalize(committed)) {
         fail(
             `${GENERATED}가 원본 템플릿에서 재생성한 결과와 다릅니다.\n` +
             '  생성 파일을 손으로 고쳤거나, 템플릿이 교체됐는데 재생성하지 않았습니다.\n' +
@@ -96,4 +103,26 @@ if (goodsCount !== 18) {
     fail(`품목군 개수가 18이 아닙니다: ${goodsCount}`);
 }
 
-console.log(`CN master verification passed (CN ${cnCount}종 · 품목군 ${goodsCount}종 · 원본 sha256 ${actualSha.slice(0, 12)}… · 재생성 바이트 동일).`);
+// 개행이 CRLF로 체크아웃돼도 게이트가 통과해야 한다.
+// core.autocrlf=true 환경에서 git이 CRLF로 바꿔놓는데 생성기는 LF로 쓴다. 이걸 바이트 그대로
+// 비교하면 내용이 같아도 실패해 main의 verify가 깨진다 — 실제로 깨뜨렸다.
+// 반대로 내용이 다르면 개행과 무관하게 반드시 잡아야 한다.
+const crlf = committed.replace(/\n/g, '\r\n').replace(/\r\r\n/g, '\r\n');
+const lf = committed.replace(/\r\n/g, '\n');
+
+if (normalize(crlf) !== normalize(lf)) {
+    fail('개행 정규화가 깨졌습니다 — CRLF/LF가 정규화 후 같아야 합니다.');
+}
+
+// 내용 드리프트는 개행과 무관하게 잡혀야 한다(게이트가 무력화되지 않았는지 확인).
+const tampered = lf.replace('"Sintered Ore": true', '"Sintered Ore": false');
+
+if (tampered === lf) {
+    fail('게이트 자가검사: 변조 문자열을 찾지 못했습니다.');
+}
+
+if (normalize(tampered) === normalize(crlf)) {
+    fail('게이트 자가검사: 내용이 달라졌는데 정규화 비교가 같다고 판정합니다 — 게이트가 무력합니다.');
+}
+
+console.log(`CN master verification passed (CN ${cnCount}종 · 품목군 ${goodsCount}종 · 원본 sha256 ${actualSha.slice(0, 12)}… · 재생성 내용 동일, 개행 무관).`);
