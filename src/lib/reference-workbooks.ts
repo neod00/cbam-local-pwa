@@ -104,6 +104,12 @@ function normalizeReferenceCountry(value: string) {
 }
 
 function toNumber(value: string): number | undefined {
+    // Number('') === 0 이므로 공란을 그대로 넘기면 "미공표"가 "공표된 0.0"으로 둔갑한다.
+    // 기본값 대조에서 0은 "배출이 없다"는 강한 진술이라 반드시 undefined와 구분해야 한다(씨밤이 P1).
+    if (value.trim() === '') {
+        return undefined;
+    }
+
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : undefined;
 }

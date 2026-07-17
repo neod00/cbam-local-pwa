@@ -4,6 +4,7 @@ import { getIndirectEmissionsApplicability } from './cbam-product-rules';
 import { isCbamReportingScope, getProductReportingScope } from './reporting-scope';
 import { findDefaultValueReference } from './reference-workbooks';
 import type { DefaultValueReferenceRow, ImportedDefaultValueReference } from './reference-workbooks';
+import { calculateLocalResults } from './calculation-engine';
 import type { LocalCalculationResult } from './calculation-engine';
 import type {
     Installation,
@@ -74,8 +75,54 @@ function reportableResults(input: CalculationReportInput) {
     return input.results.filter((result) => result.is_cbam_reportable);
 }
 
+/**
+ * 보고기간은 산정 결과가 가리키는 기간이다.
+ * periods[0]을 쓰면 기간이 여러 개 등록됐을 때 데이터와 무관한 기간이 표지에 인쇄된다(씨밤이 P1).
+ */
 function firstPeriod(input: CalculationReportInput) {
-    return input.periods[0];
+    const periodId = reportableResults(input).find((result) => result.period_id)?.period_id;
+
+    return input.periods.find((period) => period.id === periodId) ?? input.periods[0];
+}
+
+/** G1 — 한 보고서는 한 보고기간만 다룬다. 결과가 여러 기간에 걸쳐 있으면 표지가 거짓이 된다. */
+function checkSinglePeriod(input: CalculationReportInput): ReportGateIssue[] {
+    const periodIds = new Set(
+        reportableResults(input)
+            .map((result) => result.period_id)
+            .filter((id): id is string => Boolean(id))
+    );
+
+    if (periodIds.size <= 1) {
+        return [];
+    }
+
+    const names = [...periodIds]
+        .map((id) => input.periods.find((period) => period.id === id)?.name ?? id)
+        .join(', ');
+
+    return [{
+        gate: 'G1',
+        severity: 'block',
+        message: `산정 결과가 여러 보고기간(${names})에 걸쳐 있습니다. 산정보고서는 보고기간별로 발행해야 합니다.`,
+    }];
+}
+
+/** 신고 대상 결과가 가리키는 제품들(중복 제거). 간접배출 취급은 제품마다 갈릴 수 있다. */
+function reportableProducts(input: CalculationReportInput) {
+    const seen = new Set<string>();
+    const products: Product[] = [];
+
+    for (const result of reportableResults(input)) {
+        const product = input.products.find((item) => item.id === result.product_id);
+
+        if (product && !seen.has(product.id)) {
+            seen.add(product.id);
+            products.push(product);
+        }
+    }
+
+    return products;
 }
 
 function formatDate(date: Date) {
@@ -169,6 +216,35 @@ function checkResultDisplaySums(results: LocalCalculationResult[]): { issues: Re
     return { issues, needsRoundingNote };
 }
 
+/**
+ * G1 — SEE의 분모(생산량)가 0 이하면 차단한다.
+ * 엔진은 이때 SEE를 0으로 두고 경고만 남기므로, 게이트가 없으면 「CBAM 기준 SEE 0.0000」이
+ * 아무 표식 없이 검증인에게 나간다. "배출이 없다"는 진술이 되어버린다(씨밤이 P0).
+ */
+function checkSeeDenominator(results: LocalCalculationResult[]): ReportGateIssue[] {
+    return results
+        .filter((result) => result.output_mass_t <= 0)
+        .map((result) => ({
+            gate: 'G1' as const,
+            severity: 'block' as const,
+            message: `${result.product_name}(${result.process_name}): 생산량이 ${formatForReport(result.output_mass_t)} t이라 제품 1톤당 SEE를 산정할 수 없습니다. 생산량을 확인하세요.`,
+        }));
+}
+
+/**
+ * G1 — 엔진이 남긴 산정 경고를 보고서로 끌어올린다.
+ * 제13장이 건수만 인쇄하고 내용은 어디에도 없으면 검증인에게 단서가 아니라 red flag다(씨밤이 P1).
+ */
+function collectEngineWarnings(results: LocalCalculationResult[]): ReportGateIssue[] {
+    return results.flatMap((result) =>
+        result.warnings.map((message) => ({
+            gate: 'G1' as const,
+            severity: 'warn' as const,
+            message: `${result.product_name}(${result.process_name}): ${message}`,
+        }))
+    );
+}
+
 /** G4 — 본문의 「제N장」 참조가 실재하는 장을 가리키는지. v0.2 샘플의 dangling 참조 재발 방지. */
 function checkCrossReferences(bodyText: string): ReportGateIssue[] {
     const issues: ReportGateIssue[] = [];
@@ -238,8 +314,8 @@ function coverSection(input: CalculationReportInput, isInterim: boolean) {
     const installation = input.installations[0];
     const period = firstPeriod(input);
     const reportable = reportableResults(input);
-    const product = input.products.find((item) => item.id === reportable[0]?.product_id);
-    const applicability = getIndirectEmissionsApplicability(product);
+    // 제품마다 간접배출 취급이 갈릴 수 있다. 첫 제품으로 전체를 대표하면 표지가 나머지 제품에 대해 거짓이 된다(씨밤이 P0).
+    const labels = [...new Set(reportableProducts(input).map((item) => getIndirectEmissionsApplicability(item).label))];
 
     const rows: Array<[string, string]> = [
         ['보고기간 (Reporting period)', period ? `${period.start_date} ~ ${period.end_date}` : PLACEHOLDER],
@@ -247,7 +323,7 @@ function coverSection(input: CalculationReportInput, isInterim: boolean) {
             ? reportable.map((result) => `${result.product_name} · CN ${result.cn_code ?? '-'}`).join('\n')
             : PLACEHOLDER],
         ['대상 온실가스 (GHG scope)', 'CO2 (철강 품목의 CBAM 대상 GHG — 확인 필요(규정)). 본문 tCO2e = tCO2'],
-        ['간접배출 취급', applicability.label],
+        ['간접배출 취급', labels.length === 1 ? labels[0] : `제품별 상이 — 제3.1장 참조 (${labels.join(' / ')})`],
         ['문서 상태 (Status)', isInterim
             ? '기중 잠정(interim) — 보고기간 종료 전 발행. 증빙 커버리지 확인 필요'
             : '내부 검토 대기 · 제3자 검증 제출 전'],
@@ -331,8 +407,6 @@ function installationSection(input: CalculationReportInput) {
 function productSection(input: CalculationReportInput) {
     const period = firstPeriod(input);
     const reportable = reportableResults(input);
-    const product = input.products.find((item) => item.id === reportable[0]?.product_id);
-    const applicability = getIndirectEmissionsApplicability(product);
     const rows: Array<[string, string]> = [
         ['보고기간', period ? `${period.start_date} ~ ${period.end_date}` : PLACEHOLDER],
         ['제품명 / CN 코드', reportable.map((result) => `${result.product_name} / ${result.cn_code ?? '-'}`).join('\n') || PLACEHOLDER],
@@ -345,11 +419,31 @@ function productSection(input: CalculationReportInput) {
         paragraph('3.1 간접배출 취급 근거', 'Heading2'),
     ];
 
-    if (applicability.applicable) {
-        body.push(paragraph(`본 제품은 간접배출을 포함해 산정한다. 근거: ${applicability.reason} (조항 확인 필요(규정))`));
-    } else {
-        body.push(paragraph(`본 제품은 직접배출만 고려하는 품목으로, 최종제품의 자체 전력 간접배출은 CBAM 인증서 산정 기준 SEE에서 제외하고 정보 목적으로 보고한다. 근거: ${applicability.reason} (Regulation (EU) 2023/956 Art. 7(1) — 조항 번호 EUR-Lex 원문 확인 필요(규정))`));
+    // 제품마다 판정한다. 첫 제품으로 전체를 대표하면 분류가 갈리는 순간 문서가 자기모순에 빠진다(씨밤이 P0).
+    for (const product of reportableProducts(input)) {
+        const applicability = getIndirectEmissionsApplicability(product);
+        const label = `${product.name}(CN ${product.cn_code ?? '미기재'})`;
 
+        if (applicability.applicable) {
+            body.push(paragraph(`${label}: 간접배출을 포함해 산정한다. 판정: ${applicability.label} (조항 확인 필요(규정))`));
+        } else {
+            body.push(paragraph(`${label}: 직접배출만 고려하는 품목으로, 최종제품의 자체 전력 간접배출은 CBAM 인증서 산정 기준 SEE에서 제외하고 정보 목적으로 보고한다. 판정: ${applicability.label} (Regulation (EU) 2023/956 Art. 7(1) — 조항 번호 EUR-Lex 원문 확인 필요(규정))`));
+        }
+    }
+
+    // 판정이 어떻게 내려졌는지 밝힌다. 산정 도구는 CN 접두 규칙으로 판정하며 Annex II 등재 목록을
+    // 조회하지 않는다. 이 사실을 감추면 보고서가 "등재를 확인했다"고 말하는 셈이 된다(씨밤이 P0).
+    body.push(paragraph(
+        '판정 방법: 본 판정은 산정 도구의 CN 접두 규칙에 따른 것이며, Annex II 등재 목록 원본을 조회한 결과가 아니다. 등재 목록·판본 대조는 완료되지 않았다 — 확인 필요(자료).',
+        'Note',
+        { color: AMBER }
+    ));
+
+    const directOnlyProducts = reportableProducts(input).filter(
+        (product) => !getIndirectEmissionsApplicability(product).applicable
+    );
+
+    if (directOnlyProducts.length > 0) {
         // 전구물질별로 개별 판정 — 하나라도 직접전용이 아니면 그 간접배출은 최종재로 전가될 수 있다.
         const nonDirectOnly = input.precursors.filter((precursor) => {
             const applicabilityOfPrecursor = getIndirectEmissionsApplicability({
@@ -365,7 +459,7 @@ function productSection(input: CalculationReportInput) {
 
         if (nonDirectOnly.length > 0) {
             body.push(paragraph(
-                `주의: 다음 전구물질은 직접배출만 고려되는 품목이 아니므로 그 간접 내재배출이 최종재로 전가될 수 있습니다 — ${nonDirectOnly.map((precursor) => `${precursor.name}(${precursor.precursor_cn_code ?? 'CN 미기재'})`).join(', ')}. 인증서 산정 기준 반영 여부를 개별 확인해야 합니다. 확인 필요(규정).`,
+                `주의: 다음 전구물질은 직접배출만 고려되는 품목이 아니므로 그 간접 내재배출이 최종재로 전가될 수 있다 — ${nonDirectOnly.map((precursor) => `${precursor.name}(${precursor.precursor_cn_code ?? 'CN 미기재'})`).join(', ')}. 인증서 산정 기준 반영 여부를 개별 확인해야 한다. 확인 필요(규정).`,
                 undefined,
                 { color: AMBER }
             ));
@@ -785,25 +879,40 @@ function defaultValueSection(input: CalculationReportInput) {
     ];
     let hasSensitivity = false;
 
+    // 전구물질 direct SEE만 DV로 갈아끼운 뒤 엔진을 다시 돌린다.
+    // 배분(공정 귀속·output line·allocation_share)과 Annex II 간접 분기를 보고서가 재구현하면
+    // 반드시 엔진과 어긋난다 — 실제로 어긋나서 리스크가 축소 표기됐다(씨밤이 P0). 엔진을 유일한 산정 주체로 둔다.
+    const substitutedPrecursors = input.precursors.map((precursor) => {
+        const comparison = comparisons.find((item) => item.precursor.id === precursor.id);
+        return comparison?.appliedDirect === undefined
+            ? precursor
+            : { ...precursor, direct_see_tco2e_per_t: comparison.appliedDirect };
+    });
+    // 결과 id가 아니라 (공정, 산출라인)으로 짝짓는다 — id 체계가 바뀌면 조용히 민감도가 사라진다.
+    const resultKey = (item: { process_id: string; product_output_line_id?: string }) =>
+        `${item.process_id}::${item.product_output_line_id ?? ''}`;
+    const substitutedByKey = new Map(
+        calculateLocalResults({ ...input, precursors: substitutedPrecursors }).map((item) => [resultKey(item), item])
+    );
+    // 일부 전구물질만 DV를 찾은 경우, 그 시나리오는 "전부 대체"가 아니다. 숫자만 보여주면 과소 표기가 된다.
+    const unmatched = comparisons.filter((comparison) => comparison.appliedDirect === undefined);
+
     for (const result of reportableResults(input)) {
-        if (result.see_cbam_basis === null) {
+        const dvResult = substitutedByKey.get(resultKey(result));
+
+        if (result.see_cbam_basis === null || dvResult?.see_cbam_basis === null || dvResult === undefined) {
             continue;
         }
 
-        // 이 제품에 투입된 전구물질만 골라 DV로 치환했을 때의 기준 SEE를 재구성한다.
-        const related = comparisons.filter((comparison) => comparison.precursor.product_id === result.product_id);
-        const replaceable = related.filter((comparison) => comparison.appliedDirect !== undefined);
+        const processHasReplacement = comparisons.some(
+            (comparison) => comparison.appliedDirect !== undefined && comparison.precursor.process_id === result.process_id
+        );
 
-        if (replaceable.length === 0 || result.output_mass_t <= 0) {
+        if (!processHasReplacement || result.output_mass_t <= 0) {
             continue;
         }
 
-        const dvPrecursorDirect = related.reduce((sum, comparison) => {
-            const ratio = comparison.precursor.consumed_mass_t / result.output_mass_t;
-            const value = comparison.appliedDirect ?? comparison.precursor.direct_see_tco2e_per_t;
-            return sum + ratio * value;
-        }, 0);
-        const dvBasis = result.direct_see + dvPrecursorDirect;
+        const dvBasis = dvResult.see_cbam_basis;
         const delta = dvBasis - result.see_cbam_basis;
         const ratio = result.see_cbam_basis === 0 ? undefined : delta / result.see_cbam_basis;
 
@@ -822,6 +931,14 @@ function defaultValueSection(input: CalculationReportInput) {
             widths: [2200, 2800, 2200, 1800], headerShade: SOFT, headerBold: true, repeatHeader: true,
         }));
         body.push(paragraph('실측이 인정되지 않아 공식 기본값으로 대체될 경우의 영향이다. 전구물질의 제3자 검증 결과 확보가 최우선 과제인 이유를 정량적으로 보여준다(제14장).', 'Note'));
+
+        if (unmatched.length > 0) {
+            body.push(paragraph(
+                `본 민감도는 공식 기본값을 찾은 전구물질만 대체한 결과이며, 다음 전구물질은 대체되지 않았다 — ${unmatched.map((comparison) => comparison.precursor.name).join(', ')}. 따라서 실제 영향은 위 수치보다 클 수 있다 — 확인 필요(자료).`,
+                'Note',
+                { color: AMBER }
+            ));
+        }
         gateIssues.push(...checkNumericColumns('제9.2장 민감도표', sensitivityColumns, sensitivityRows));
     } else {
         body.push(paragraph('대체 가능한 공식 기본값을 찾지 못해 민감도를 산출하지 못했습니다 — 확인 필요(자료).', 'Note'));
@@ -1166,6 +1283,9 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
     const bodyText = bodyXml.replace(/<[^>]+>/g, ' ');
     const issues: ReportGateIssue[] = [
         ...dateIssues,
+        ...checkSeeDenominator(reportable),
+        ...checkSinglePeriod(input),
+        ...collectEngineWarnings(reportable),
         ...checkBoundaryConsistency(input),
         ...summary.gateIssues,
         ...processes.gateIssues,
