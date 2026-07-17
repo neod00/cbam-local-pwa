@@ -723,4 +723,69 @@ assertTrue(nullDirectXml.includes('직접 기본값이 공표되지 않아'), 'd
 assertTrue(reportModule.hasAmbiguousDefaultValueRoutes(routeDv, 'South Korea', '25231000'), 'hasAmbiguousDefaultValueRoutes 검출');
 assertTrue(!reportModule.hasAmbiguousDefaultValueRoutes(dvReference, 'South Korea', '72083900'), '경로 단일이면 모호하지 않음');
 
-console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3 회귀).');
+// ---------------- 재감사 R4 회귀 — 「고치면서 새로 만든 결함」 ----------------
+// 두 건 다 같은 형태였다: 새 추상화를 만들고 일부 호출부에만 적용.
+
+// [P0-A] 경계는 문서 전체에서 하나여야 한다.
+// 6·7·8·13장은 결과 기반 필터로 갈아탔는데 4장·G3는 옛 product-scope 필터를 유지해,
+// 4장에 보이는 공정의 배출원이 6장에 없고 13장은 그 공정이 없다고 선언했다.
+// 재현: CBAM 품목 공정이지만 신고 대상 결과가 0건인 공정(산출라인이 전부 비CBAM인 경우 등).
+const orphanProcess = at({
+    id: 'procOrphan', product_id: 'p1', period_id: 'per1', name: '부산물 회수공정',
+    production_route: 'All production routes', output_mass_t: 500, market_output_mass_t: 500,
+    internal_consumption_mass_t: 0, direct_attributable_emissions_tco2e: 12, electricity_mwh: 30,
+    electricity_ef_tco2e_per_mwh: 0.459,
+});
+const orphanStream = at({ ...baseStream, id: 'sOrphan', process_id: 'procOrphan', name: '회수로 경유' });
+// 결과는 proc1 것만 있다 — procOrphan은 신고 대상 결과가 없다.
+const orphan = reportModule.createCalculationReport({
+    ...baseInput(),
+    processes: [baseProcess, orphanProcess],
+    sourceStreams: [baseStream, orphanStream],
+});
+const orphanXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await orphan.blob.arrayBuffer()))['word/document.xml']);
+
+assertTrue(!orphanXml.includes('회수로 경유'), '결과 없는 공정의 배출원은 6장에 실리지 않음');
+assertTrue(!orphanXml.includes('부산물 회수공정'), '4장도 같은 경계를 쓴다 — 결과 없는 공정을 싣지 않음');
+assertTrue(orphanXml.includes('CBAM 대상 생산공정 1개'), '13장 공정 수가 4장·6장과 일치');
+// 조용히 사라지면 완전성이 훼손된다. 반드시 경고로 드러나야 한다.
+assertTrue(
+    orphan.issues.some((issue) => issue.gate === 'G3' && /부산물 회수공정/.test(issue.message)),
+    'CBAM 품목 공정인데 결과가 없으면 G3 경고로 명시'
+);
+
+// [P1-B] 등록부는 자기 장(14장)도 세야 한다. 16장 선언이 이 등록부를 유보 대상으로 가리키므로,
+// 열거가 불완전하면 선언이 거짓이 된다.
+assertTrue(okXml.includes('14. 데이터 한계 및 개선계획'), '전제: 14장 존재');
+const registrySlice = okXml.slice(okXml.indexOf('14.1 미해소 항목 등록부'));
+assertTrue(/14\. 데이터 한계 및 개선계획/.test(registrySlice.replace(/<[^>]+>/g, ' ')), '등록부에 「14.」 행이 존재');
+
+const printedTotalMatch = okXml.replace(/<[^>]+>/g, ' ').match(/미해소 표기는 총 (\d+)건/);
+assertTrue(Boolean(printedTotalMatch), '등록부가 총 건수를 인쇄');
+
+// 등록부 총계가 실제 본문의 표기 수와 일치해야 한다.
+// 집계 대상: 표지 + 1~16장 + 부속서. 집계 제외: 등록부 표 자신, 표기 뜻을 설명하는 범례.
+const bodyWithoutRegistry = okXml.slice(0, okXml.indexOf('14.1 미해소 항목 등록부')) +
+    okXml.slice(okXml.indexOf('15. 증빙 목록'));
+const legendStripped = bodyWithoutRegistry
+    .split('</w:p>')
+    .filter((paragraph) => !paragraph.includes('규정 원문 대조 미완'))
+    .join('</w:p>')
+    .replace(/<[^>]+>/g, ' ');
+const actualTotal = [/확인 필요\(규정\)/g, /확인 필요\(자료\)/g, /기재 필요/g]
+    .reduce((sum, pattern) => sum + (legendStripped.match(pattern) ?? []).length, 0);
+assertEqual(Number(printedTotalMatch[1]), actualTotal, '등록부 총계가 실제 본문 표기 수와 일치(표지·14장 포함, 등록부·범례 제외)');
+
+// 표지에도 실제 미해소 항목이 있다(대상 온실가스 — 확인 필요(규정)). 건너뛰면 안 된다.
+assertTrue(/표지/.test(registrySlice.replace(/<[^>]+>/g, ' ')), '등록부에 「표지」 행이 존재');
+// 범례를 미해소 항목으로 세면 안 된다 — 표지 범례는 규정·자료·기재 각 1건씩을 허위 계상한다.
+const coverRow = registrySlice
+    .replace(/<[^>]+>/g, '|')
+    .replace(/\|+/g, '|')
+    .match(/표지\|([^|]+)\|([^|]+)\|([^|]+)\|/);
+assertTrue(Boolean(coverRow), '표지 행 파싱');
+assertEqual(coverRow[1], '1건', '표지 확인 필요(규정) 1건 (범례 미계상)');
+assertEqual(coverRow[2], '-', '표지 확인 필요(자료) 없음 (범례 미계상)');
+assertEqual(coverRow[3], '-', '표지 기재 필요 없음 (범례 미계상)');
+
+console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4 회귀).');
