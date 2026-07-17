@@ -241,7 +241,7 @@ function GoodsExpertDisclosure({ product }: { product: Product }) {
                     <dd>{metadata.annex_i_candidate ? 'Annex I 후보' : 'Annex I 확인 필요'}</dd>
                 </div>
                 <div>
-                    <dt className="font-semibold text-slate-500">Annex II direct-only</dt>
+                    <dt className="font-semibold text-slate-500">간접배출 관련성 (확정기간)</dt>
                     <dd>{metadata.direct_only_label}</dd>
                 </div>
                 <div>

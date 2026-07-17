@@ -391,7 +391,7 @@ export function ModernProducts() {
                 <StatTile label="등록 품목" value={`${stats.total}개`} caption="로컬 저장 기준" />
                 <StatTile label="CN 8자리" value={`${stats.cnReady}개`} caption="EU 보고서 매핑 준비" />
                 <StatTile label="CBAM 후보" value={`${stats.covered}개`} caption="현재 규칙상 대상 후보" />
-                <StatTile label="직접배출 중심" value={`${stats.directOnly}개`} caption="Annex II direct-only 후보" />
+                <StatTile label="직접배출 중심" value={`${stats.directOnly}개`} caption="EU 공식 CN 목록상 간접배출 비관련" />
             </section>
 
             <section className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
