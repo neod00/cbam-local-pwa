@@ -74,26 +74,44 @@ export interface DisplaySumCheck {
 
 export interface DisplaySumResult {
     label: string;
-    isValid: boolean;
+    /** 원천값 기준 — 구성 합이 소계와 실제로 같은가. 이게 깨지면 산정 데이터가 틀린 것이다. */
+    isMathValid: boolean;
+    /** 표시값 기준 — 반올림된 구성 합이 반올림된 소계와 같은가. 이것만 깨지면 반올림 표기 문제다. */
+    isDisplayValid: boolean;
     displayedPartsSum: number;
     displayedTotal: number;
+    rawDelta: number;
 }
 
 /**
- * 게이트 G1 — "구성 항목의 표시값 합 = 소계 표시값" 검사.
- * 반올림 후 값으로 비교해야 의미가 있다(검증인은 표시된 숫자를 더해 본다).
+ * 게이트 G1 — 표의 구성 항목과 소계 정합.
+ *
+ * 두 가지를 구분해서 답해야 한다. 게이트가 물어야 할 것은 "인쇄된 숫자가 더해지는가"가 아니라
+ * "데이터가 틀렸는가"이다.
+ *  - isMathValid  = 원천값의 합이 소계와 같은가 → 아니면 **산정 오류**(발행 차단)
+ *  - isDisplayValid = 표시값(반올림)의 합이 소계 표시값과 같은가 → 아니면 **반올림 표기 문제**(각주로 처리)
+ *
+ * 후자는 반올림의 본질적 성질이라 정상 데이터에서도 발생한다. 예: 0.20655 → 0.2066,
+ * 0.01755 → 0.0176 (둘 다 올림) 이면 표시 합 0.2242 vs 소계 표시 0.2241 로 0.0001이 벌어진다.
+ * 이걸 차단하면 정상 데이터로 보고서를 못 만든다.
  */
 export function checkDisplaySum({ label, parts, total, digits = 4 }: DisplaySumCheck): DisplaySumResult {
+    const rawPartsSum = parts.reduce((sum, part) => sum + part, 0);
+    const rawDelta = rawPartsSum - total;
     const displayedPartsSum = roundForReport(
         parts.reduce((sum, part) => sum + roundForReport(part, digits), 0),
         digits
     );
     const displayedTotal = roundForReport(total, digits);
+    // 원천값 비교는 부동소수점 오차만 흡수할 정도로만 느슨하게(표시 정밀도의 1/100).
+    const mathTolerance = Math.pow(10, -digits) / 100;
 
     return {
         label,
-        isValid: Math.abs(displayedPartsSum - displayedTotal) < Math.pow(10, -digits) / 2,
+        isMathValid: Math.abs(rawDelta) <= mathTolerance,
+        isDisplayValid: Math.abs(displayedPartsSum - displayedTotal) < Math.pow(10, -digits) / 2,
         displayedPartsSum,
         displayedTotal,
+        rawDelta,
     };
 }

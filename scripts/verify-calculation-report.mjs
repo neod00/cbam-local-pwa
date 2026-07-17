@@ -52,18 +52,28 @@ assertEqual(fmt.formatIntegerForReport(8000), '8,000', 'formatIntegerForReport')
 assertEqual(fmt.formatPercentForReport(-0.163205), '-16.32%', 'formatPercentForReport 음수');
 assertEqual(fmt.formatPercentForReport(0.1922), '+19.22%', 'formatPercentForReport 양수 부호');
 
-// 게이트 G1 — 구성 표시값 합 = 소계 표시값
+// 게이트 G1 — 데이터 정합(isMathValid)과 표기 정합(isDisplayValid)을 구분해야 한다.
 const okSum = fmt.checkDisplaySum({
   label: 'SEE 직접 소계',
   parts: [240.009264 / 8000, 1.025 * 1.95],
   total: 240.009264 / 8000 + 1.025 * 1.95,
 });
-assertTrue(okSum.isValid, 'checkDisplaySum 정합 케이스');
+assertTrue(okSum.isMathValid, 'checkDisplaySum 데이터 정합');
+assertTrue(okSum.isDisplayValid, 'checkDisplaySum 표기 정합');
 assertEqual(okSum.displayedPartsSum, 2.0288, 'checkDisplaySum 구성합');
 assertEqual(okSum.displayedTotal, 2.0288, 'checkDisplaySum 소계');
-// 불일치 케이스는 반드시 잡아내야 한다(게이트가 무력하면 안 됨)
+
+// 산정 오류(원천값 불일치)는 반드시 잡아야 한다 — 게이트가 무력하면 안 된다.
 const badSum = fmt.checkDisplaySum({ label: '인위적 불일치', parts: [0.03, 1.0], total: 1.5 });
-assertEqual(String(badSum.isValid), 'false', 'checkDisplaySum 불일치 검출');
+assertEqual(String(badSum.isMathValid), 'false', 'checkDisplaySum 산정 오류 검출');
+
+// 반올림 누적 — 데이터는 맞고 표기만 어긋나는 경우. 이걸 산정 오류로 오판하면 안 된다.
+// 0.20655 → 0.2066, 0.01755 → 0.0176 (둘 다 올림) → 표시 합 0.2242 vs 소계 표시 0.2241
+const roundingSum = fmt.checkDisplaySum({ label: '반올림 누적', parts: [0.20655, 0.01755], total: 0.20655 + 0.01755 });
+assertTrue(roundingSum.isMathValid, 'checkDisplaySum 반올림 누적은 데이터 정합');
+assertEqual(String(roundingSum.isDisplayValid), 'false', 'checkDisplaySum 반올림 누적은 표기 불일치');
+assertEqual(roundingSum.displayedPartsSum, 0.2242, 'checkDisplaySum 반올림 구성합');
+assertEqual(roundingSum.displayedTotal, 0.2241, 'checkDisplaySum 반올림 소계');
 
 // ---------------- docx-builder ----------------
 const docx = loadModule('src/lib/docx-builder.ts', ['paragraph', 'cell', 'table', 'createDocx', 'xmlEscape']);
@@ -205,7 +215,7 @@ assertTrue(interim.issues.some((issue) => issue.gate === 'G2' && issue.severity 
 assertTrue(baseInput().processes[0].internal_consumption_mass_t > 0, 'G3 전제: 내부소비 존재');
 assertTrue(ok.issues.some((issue) => issue.gate === 'G3' && issue.severity === 'warn'), 'G3 경계 경고');
 
-// 게이트 G1 — 소계가 구성 합과 어긋나면 반드시 차단해야 한다
+// 게이트 G1 — 원천값이 어긋나면(산정 오류) 반드시 차단
 let g1Blocked = false;
 try {
     reportModule.createCalculationReport({
@@ -215,7 +225,30 @@ try {
 } catch (error) {
     g1Blocked = /G1/.test(String(error.message));
 }
-assertTrue(g1Blocked, 'G1 표시값 불일치 → 발행 차단');
+assertTrue(g1Blocked, 'G1 원천값 불일치(산정 오류) → 발행 차단');
+
+// G1 — 반올림 누적으로 표시값만 어긋나는 건 정상 데이터에서도 발생한다. 차단하면 안 되고 각주로 처리.
+// 조강 시나리오 실측: 자체간접 0.20655 → 0.2066, 전구물질간접 0.01755 → 0.0176 (둘 다 올림)
+//   → 표시 합 0.2242 vs 소계 표시 0.2241
+const ownInd = 0.20655;
+const precInd = 0.01755;
+const roundingCase = reportModule.createCalculationReport({
+    ...baseInput(),
+    results: [{
+        ...baseResult,
+        own_indirect_see: ownInd,
+        precursor_indirect_see: precInd,
+        see_indirect_incl_precursor: ownInd + precInd,
+        see_informational_total: baseResult.see_direct_incl_precursor + ownInd + precInd,
+    }],
+});
+const roundingXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await roundingCase.blob.arrayBuffer()))['word/document.xml']);
+const g1Warns = roundingCase.issues.filter((issue) => issue.gate === 'G1' && issue.severity === 'warn');
+
+assertTrue(g1Warns.length > 0, 'G1 반올림 누적 → 차단이 아니라 경고');
+assertTrue(!roundingCase.issues.some((issue) => issue.gate === 'G1' && issue.severity === 'block'), 'G1 반올림 누적은 차단하지 않음');
+assertTrue(roundingXml.includes('마지막 자리에서 다를 수 있다'), 'G1 반올림 시 각주 자동 삽입');
+assertTrue(/산정값 자체는 정확하다/.test(roundingXml), '반올림 각주가 산정값 정확성을 명시');
 
 // 대상 결과가 없으면 생성 불가
 let noResultBlocked = false;
@@ -231,6 +264,8 @@ assertTrue(noResultBlocked, '신고 대상 결과 없음 → 생성 차단');
 const steelOnlyXml = fflate.strFromU8(
     fflate.unzipSync(new Uint8Array(await ok.blob.arrayBuffer()))['word/document.xml']
 );
+// 정합하는 표에는 반올림 각주가 붙지 않아야 한다(각주 남발 방지)
+assertTrue(!steelOnlyXml.includes('마지막 자리에서 다를 수 있다'), '정합하는 표에는 반올림 각주 없음');
 assertTrue(steelOnlyXml.includes('소비 전구물질 역시 모두 동일하게 직접배출만 고려되는 품목'), '3.1 철강 전구물질 문안');
 assertTrue(!steelOnlyXml.includes('최종재로 전가될 수 있습니다'), '3.1 철강만일 땐 전가 경고 없음');
 

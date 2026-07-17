@@ -1,5 +1,5 @@
 import { strToU8, zipSync } from 'fflate';
-import { cell, createDocx, paragraph, table, xmlEscape } from './docx-builder';
+import { createDocx, paragraph, table } from './docx-builder';
 import type { LocalCalculationResult } from './calculation-engine';
 import type { ExportChecklistSummary, EuExportReadinessResult, EuTemplateExportVerificationResult } from './eu-template-export';
 import { getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
@@ -36,6 +36,12 @@ export interface DeliveryPackageInput {
     exportVerification: EuTemplateExportVerificationResult;
     exportWorkbookBlob: Blob;
     exportWorkbookFilename: string;
+    /**
+     * 산정보고서(.docx). 생성은 호출부(Export 화면)가 하고 여기서는 포장만 한다 —
+     * 발행 게이트 실패를 패키지 안이 아니라 호출부에서 한 번에 드러내기 위함.
+     * 없으면 패키지에서 생략한다(하위호환).
+     */
+    calculationReportBlob?: Blob;
     generatedAt: Date;
     installations: Installation[];
     periods: ReportingPeriod[];
@@ -369,9 +375,11 @@ function createReadmeText(input: DeliveryPackageInput, files: string[]) {
         'Important / 중요:',
         '- The filled Communication Template should be opened in Microsoft Excel and recalculated before external sharing.',
         '- The DOCX files are editable working summaries/checklists, not official verification reports.',
+        '- 04_Calculation_Report.docx: items marked "기재 필요" / "확인 필요" are not yet completed. Review and complete them, and sign the operator declaration, before submitting to a verifier.',
         '- The .cbam backup can contain sensitive local project data. Share it only when explicitly intended.',
         '- 작성된 Communication Template은 외부 공유 전 Microsoft Excel에서 열고 재계산해야 합니다.',
         '- DOCX 파일은 수정 가능한 실무 요약/체크리스트이며 공식 검증보고서가 아닙니다.',
+        '- 04_Calculation_Report.docx: 「기재 필요」·「확인 필요」로 표기된 항목은 아직 완료되지 않았습니다. 제3자 검증 제출 전에 해당 항목을 채우고 운영자 선언에 서명하세요.',
         '- .cbam 백업에는 민감한 로컬 프로젝트 자료가 포함될 수 있으므로 명시적으로 의도한 경우에만 공유하세요.',
     ].join('\n');
 }
@@ -391,11 +399,25 @@ export async function createDeliveryPackage(input: DeliveryPackageInput): Promis
     const exportWorkbookPath = `01_${input.exportWorkbookFilename}`;
     const summaryDocxPath = '02_Calculation_Basis_Summary_KO-EN.docx';
     const checklistDocxPath = '03_Evidence_Checklist_KO-EN.docx';
-    const backupPath = `internal_archive/04_${createCbamBackupFilename(input.backup.manifest.exported_at)}`;
-    const logPath = 'internal_archive/05_export-log.json';
+    // 산정보고서는 제3자 검증 대비 문서라 전달물 중 가장 무겁다. 04로 넣고 내부 보관물은 05/06으로 민다.
+    const calculationReportPath = input.calculationReportBlob ? '04_Calculation_Report.docx' : undefined;
+    const archivePrefix = calculationReportPath ? { backup: '05', log: '06' } : { backup: '04', log: '05' };
+    const backupPath = `internal_archive/${archivePrefix.backup}_${createCbamBackupFilename(input.backup.manifest.exported_at)}`;
+    const logPath = `internal_archive/${archivePrefix.log}_export-log.json`;
     const readmePath = 'README_KO-EN.txt';
-    const files = [exportWorkbookPath, summaryDocxPath, checklistDocxPath, backupPath, logPath, readmePath];
+    const files = [
+        exportWorkbookPath,
+        summaryDocxPath,
+        checklistDocxPath,
+        ...(calculationReportPath ? [calculationReportPath] : []),
+        backupPath,
+        logPath,
+        readmePath,
+    ];
     const exportWorkbookBytes = new Uint8Array(await input.exportWorkbookBlob.arrayBuffer());
+    const calculationReportBytes = input.calculationReportBlob
+        ? new Uint8Array(await input.calculationReportBlob.arrayBuffer())
+        : undefined;
     const log = {
         generated_at: input.generatedAt.toISOString(),
         source_template_filename: input.templateFilename,
@@ -424,6 +446,7 @@ export async function createDeliveryPackage(input: DeliveryPackageInput): Promis
         [exportWorkbookPath]: exportWorkbookBytes,
         [summaryDocxPath]: createCalculationBasisSummaryDocx(input),
         [checklistDocxPath]: createEvidenceChecklistDocx(input),
+        ...(calculationReportPath && calculationReportBytes ? { [calculationReportPath]: calculationReportBytes } : {}),
         [backupPath]: strToU8(JSON.stringify(input.backup, null, 2)),
         [logPath]: strToU8(JSON.stringify(log, null, 2)),
         [readmePath]: strToU8(createReadmeText(input, files)),
