@@ -77,6 +77,18 @@ const NOT_APPLICABLE = '해당 없음';
 const NOT_PUBLISHED = 'N/A (미공표)';
 
 /**
+ * 표기의 뜻을 설명하는 범례 문단(표지·14.1에 각각 등장).
+ * 범례는 미해소 항목이 아니므로 등록부 집계에서 빼야 한다. 안 빼면 문서가 자기 범례를
+ * 미해소 항목으로 세어 총계가 부풀고, 등록부가 자기 자신을 집계한다.
+ * 「규정 원문 대조 미완」은 범례에만 등장하는 문구라 이를 표식으로 삼는다.
+ */
+const LEGEND_SIGNATURE = '규정 원문 대조 미완';
+const LEGEND_PARAGRAPH_PATTERN = new RegExp(
+    `<w:p>(?:(?!</w:p>)[\\s\\S])*?${LEGEND_SIGNATURE}(?:(?!</w:p>)[\\s\\S])*?</w:p>`,
+    'g'
+);
+
+/**
  * 검증인이 6개월 뒤 같은 입력으로 같은 결과를 재현하려면 어떤 소프트웨어였는지 특정해야 한다.
  * DV 워크북 판본은 기재하면서 그것을 해석한 엔진이 무버전이면 재현이 성립하지 않는다(씨밤이 P1).
  */
@@ -399,21 +411,41 @@ function checkIssueDate(input: CalculationReportInput): { isInterim: boolean; is
 
 /** G3 — 내부 소비가 있는데 CBAM 공정이 1개면 경계 서술이 필요하다(샘플 v0.2의 자기모순). */
 function checkBoundaryConsistency(input: CalculationReportInput): ReportGateIssue[] {
-    const scope = input.processes.filter((process) => {
-        const product = input.products.find((item) => item.id === process.product_id);
-        return product ? isCbamReportingScope(getProductReportingScope(product)) : false;
-    });
+    const issues: ReportGateIssue[] = [];
+    // 경계는 문서 전체에서 하나여야 한다. 4·6·7·8·13장과 같은 필터를 쓴다(씨밤이 P0).
+    const scope = cbamProcesses(input);
     const hasInternal = scope.some((process) => process.internal_consumption_mass_t > 0);
 
     if (hasInternal && scope.length === 1) {
-        return [{
+        issues.push({
             gate: 'G3',
             severity: 'warn',
             message: '내부 소비량이 있으나 CBAM 대상 생산공정이 1개입니다. 내부 소비분이 투입되는 공정(비CBAM 재화 생산공정 등)의 경계 서술이 필요합니다 — 제4장에 자동 각주를 넣었으니 내용을 확인하세요.',
-        }];
+        });
     }
 
-    return [];
+    // CBAM 품목 공정인데 신고 대상 결과가 0건이면 문서에서 통째로 빠진다(산출라인이 전부
+    // 비CBAM인 경우 등). 조용히 사라지면 완전성이 훼손되므로 반드시 드러낸다.
+    const inScopeIds = new Set(scope.map((process) => process.id));
+    const orphans = input.processes.filter((process) => {
+        if (inScopeIds.has(process.id)) {
+            return false;
+        }
+
+        const product = input.products.find((item) => item.id === process.product_id);
+
+        return product ? isCbamReportingScope(getProductReportingScope(product)) : false;
+    });
+
+    for (const process of orphans) {
+        issues.push({
+            gate: 'G3',
+            severity: 'warn',
+            message: `${process.name}: CBAM 대상 품목의 생산공정이나 신고 대상 산정 결과가 없어 본 보고서의 산정경계에서 제외되었습니다. 제외가 타당한지(산출물이 모두 비CBAM 재화인지 등) 확인하세요.`,
+        });
+    }
+
+    return issues;
 }
 
 // ---------------------------------------------------------------- 본문
@@ -595,10 +627,9 @@ function productSection(input: CalculationReportInput) {
 }
 
 function processSection(input: CalculationReportInput) {
-    const scope = input.processes.filter((process) => {
-        const product = input.products.find((item) => item.id === process.product_id);
-        return product ? isCbamReportingScope(getProductReportingScope(product)) : false;
-    });
+    // 6·7·8·13장과 같은 경계를 쓴다. 4장만 다른 자를 쓰면 여기 보이는 공정의 배출원을
+    // 6장에서 찾을 수 없고 13장은 그 공정이 없다고 선언한다(씨밤이 P0).
+    const scope = cbamProcesses(input);
     const columns = [
         { header: '생산공정' },
         { header: '생산경로 (EU 표기)' },
@@ -1440,22 +1471,29 @@ function principlesSection(input: CalculationReportInput, issues: ReportGateIssu
  * 열거하지 않은 것은 유보할 수 없다(씨밤이 P1).
  */
 function scanOutstandingItems(bodyXml: string) {
-    const chapters = bodyXml.split('<w:pStyle w:val="Heading1"/>');
+    // 표기의 뜻을 설명하는 범례는 미해소 항목이 아니다. 세면 표지·등록부가 자기 자신을 집계한다.
+    const withoutLegend = bodyXml.replace(LEGEND_PARAGRAPH_PATTERN, '');
+    const chapters = withoutLegend.split('<w:pStyle w:val="Heading1"/>');
     const items: Array<{ chapter: string; regulation: number; data: number; placeholder: number }> = [];
 
-    // 첫 조각은 표지(장 제목 앞)이므로 건너뛴다.
-    for (const chunk of chapters.slice(1)) {
+    const countIn = (chunk: string, title: string) => {
         const text = chunk.replace(/<[^>]+>/g, ' ');
-        const title = text.trim().split(/\s{2,}|\s(?=[A-Z])/)[0]?.trim() ?? '';
         const count = (pattern: RegExp) => (text.match(pattern) ?? []).length;
         const regulation = count(/확인 필요\(규정\)/g);
         const data = count(/확인 필요\(자료\)/g);
-        // 등록부 자신의 헤더 문구가 잡히지 않도록 「기재 필요」는 자리표시자 용법만 센다.
         const placeholder = count(/기재 필요/g);
 
         if (regulation + data + placeholder > 0) {
             items.push({ chapter: title, regulation, data, placeholder });
         }
+    };
+
+    // 첫 조각은 장 제목 앞 = 표지. 표지에도 실제 미해소 항목이 있으므로 건너뛰면 안 된다.
+    countIn(chapters[0] ?? '', '표지');
+
+    for (const chunk of chapters.slice(1)) {
+        const text = chunk.replace(/<[^>]+>/g, ' ');
+        countIn(chunk, text.trim().split(/\s{2,}|\s(?=[A-Z])/)[0]?.trim() ?? '');
     }
 
     return items;
@@ -1620,9 +1658,17 @@ function seedEvidenceRows(input: CalculationReportInput): string[][] {
     return [...byItem.values()];
 }
 
-/** 14장은 등록부(14.1)가 본문 스캔 결과를 담으므로 본문 조립 뒤에 완성된다. */
-function improvementSectionWithRegistry(input: CalculationReportInput, scannedXml: string) {
-    return improvementSection(input) + outstandingRegistrySection(scannedXml);
+/**
+ * 14장 = 개선계획 본문 + 등록부(14.1).
+ * 등록부의 스캔 대상에는 **14장 본문도 포함**해야 한다 — 16장 선언이 "미해소 항목은 제14장에
+ * 열거되어 있다"고 이 등록부를 가리키므로, 자기 장을 빼면 선언이 거짓이 된다(씨밤이 P1).
+ * 반대로 등록부 자신의 표·범례는 스캔에서 빼야 자가집계되지 않는다. 그래서 개선계획 본문을
+ * 먼저 만들어 스캔에 넣고, 등록부는 그 결과로 뒤에 붙인다.
+ */
+function improvementSectionWithRegistry(input: CalculationReportInput, otherChaptersXml: string) {
+    const improvement = improvementSection(input);
+
+    return improvement + outstandingRegistrySection(otherChaptersXml + improvement);
 }
 
 function evidenceAndDeclarationSection(input: CalculationReportInput) {
