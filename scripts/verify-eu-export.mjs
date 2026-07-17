@@ -154,7 +154,8 @@ function loadDeliveryPackageModule() {
       "import { strToU8, zipSync } from 'fflate';",
       'const { strToU8, zipSync } = fflate;'
     )
-    .replace("import { cell, createDocx, paragraph, table, xmlEscape } from './docx-builder';", '')
+    // import 목록은 바뀔 수 있으므로 정확 문자열이 아니라 패턴으로 지운다(바뀌면 조용히 깨지는 걸 방지).
+    .replace(/^import \{[^}]*\} from '\.\/docx-builder';\r?\n/gm, '')
     .replace("import { getSourceStreamEmissionFactorBasis } from './source-stream-calculation';", '')
     .replace(/import type[\s\S]*?;\r?\n/gm, '')
     .replace(/^export /gm, '');
@@ -179,6 +180,10 @@ globalThis.deliveryPackage = {
   const context = { Blob, fflate, console, Intl };
   vm.runInNewContext(compiled, context);
   return context.deliveryPackage;
+}
+
+function strToU8Bytes(text) {
+  return fflate.strToU8(text);
 }
 
 function inlineCell(cell, value) {
@@ -999,6 +1004,55 @@ assertEqual(String(packageResult.files.length), '6', 'delivery package file coun
 for (const expectedFile of expectedPackageFiles) {
   assertEqual(String(Boolean(packageZip[expectedFile])), 'true', `delivery package includes ${expectedFile}`);
 }
+
+// 산정보고서를 넣으면 04로 들어가고 내부 보관물이 05/06으로 밀린다.
+// (넣지 않으면 위 6파일 구조 그대로 — 하위호환)
+const packageWithReport = await deliveryPackage.createDeliveryPackage({
+  ...{
+    backup,
+    exportChecklist: checklist,
+    exportVerification: exportResult.verification,
+    exportWorkbookBlob: exportResult.blob,
+    exportWorkbookFilename: 'synthetic-cbam-template_cbam-local-copy_20260614.xlsx',
+    generatedAt: packageGeneratedAt,
+    installations: [installation],
+    periods: [period],
+    precursors: [precursor],
+    processes: [process],
+    products: [product],
+    readiness,
+    results: [calculationResult],
+    sourceStreams: [sourceStream],
+    templateFilename: file.name,
+    writtenCellCount: exportResult.writtenCellCount,
+  },
+  calculationReportBlob: new Blob([strToU8Bytes('fake-report-bytes')], {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  }),
+});
+const packageWithReportZip = fflate.unzipSync(new Uint8Array(await packageWithReport.blob.arrayBuffer()));
+
+assertEqual(String(packageWithReport.files.length), '7', 'delivery package file count with calculation report');
+assertEqual(
+  String(Boolean(packageWithReportZip['04_Calculation_Report.docx'])),
+  'true',
+  'delivery package includes 04_Calculation_Report.docx'
+);
+assertEqual(
+  String(Boolean(packageWithReportZip['internal_archive/05_cbam-local-backup-20260614000000.cbam'])),
+  'true',
+  'backup shifted to internal_archive/05 when report is included'
+);
+assertEqual(
+  String(Boolean(packageWithReportZip['internal_archive/06_export-log.json'])),
+  'true',
+  'export log shifted to internal_archive/06 when report is included'
+);
+assertEqual(
+  String(fflate.strFromU8(packageWithReportZip['README_KO-EN.txt']).includes('04_Calculation_Report.docx')),
+  'true',
+  'README lists the calculation report and its completion caution'
+);
 
 const summaryDocxZip = fflate.unzipSync(packageZip['02_Calculation_Basis_Summary_KO-EN.docx']);
 const checklistDocxZip = fflate.unzipSync(packageZip['03_Evidence_Checklist_KO-EN.docx']);

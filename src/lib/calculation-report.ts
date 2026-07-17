@@ -118,9 +118,14 @@ function checkNumericColumns(
     return issues;
 }
 
-/** G1 — 구성 항목의 표시값 합이 소계 표시값과 일치하는지 (검증인은 표시된 숫자를 더해 본다). */
-function checkResultDisplaySums(results: LocalCalculationResult[]): ReportGateIssue[] {
+/**
+ * G1 — 표의 구성 항목과 소계 정합.
+ * 원천값이 안 맞으면 산정 오류 → 발행 차단. 표시값만 안 맞으면 반올림 표기 문제 → 경고 + 각주.
+ * 반올림 누적은 정상 데이터에서도 발생하므로 차단하면 안 된다(예: 0.20655+0.01755).
+ */
+function checkResultDisplaySums(results: LocalCalculationResult[]): { issues: ReportGateIssue[]; needsRoundingNote: boolean } {
     const issues: ReportGateIssue[] = [];
+    let needsRoundingNote = false;
 
     for (const result of results) {
         const checks = [
@@ -142,17 +147,26 @@ function checkResultDisplaySums(results: LocalCalculationResult[]): ReportGateIs
         ];
 
         for (const check of checks) {
-            if (!check.isValid) {
+            if (!check.isMathValid) {
+                // 원천값이 안 맞는다 = 산정 데이터가 틀렸다. 이건 막아야 한다.
                 issues.push({
                     gate: 'G1',
                     severity: 'block',
-                    message: `${check.label}: 구성 표시값 합 ${check.displayedPartsSum} ≠ 소계 표시값 ${check.displayedTotal}`,
+                    message: `${check.label}: 구성 항목의 합이 소계와 일치하지 않습니다(원천값 차이 ${check.rawDelta}). 산정 데이터를 확인하세요.`,
                 });
+            } else if (!check.isDisplayValid) {
+                // 데이터는 맞고 표시만 어긋난다 = 반올림 누적. 각주로 알린다.
+                issues.push({
+                    gate: 'G1',
+                    severity: 'warn',
+                    message: `${check.label}: 반올림 표기로 구성 표시값 합(${check.displayedPartsSum})이 소계 표시값(${check.displayedTotal})과 다릅니다. 산정값은 정확하며, 표에 반올림 각주를 자동 삽입했습니다.`,
+                });
+                needsRoundingNote = true;
             }
         }
     }
 
-    return issues;
+    return { issues, needsRoundingNote };
 }
 
 /** G4 — 본문의 「제N장」 참조가 실재하는 장을 가리키는지. v0.2 샘플의 dangling 참조 재발 방지. */
@@ -840,15 +854,27 @@ function resultSection(input: CalculationReportInput) {
         rows.push([result.product_name, '참고 총 SEE', formatForReport(result.see_informational_total), '직접 + 간접']);
     }
 
+    const sums = checkResultDisplaySums(reportable);
+    const notes = [
+        paragraph('구성 항목과 소계의 정합은 문서 생성 시 자동 자가검사한다(게이트 G1). 수치는 EU Communication Template에 기재되는 값과 동일 원천에서 산출되며, 템플릿 자동 기재 시 기재 셀 전수를 자동 대조 검증한다. 검증 셀 수와 목록은 Export 검증 로그에 기록된다.', 'Note'),
+    ];
+
+    if (sums.needsRoundingNote) {
+        notes.push(paragraph(
+            '반올림 각주: 각 구성 항목은 소수 4자리로 반올림해 표기하므로, 표시된 구성 항목을 더한 값이 소계 표시값과 마지막 자리에서 다를 수 있다. 모든 소계·합계는 반올림 전 원천값에서 산출하였으므로 산정값 자체는 정확하다(부속서 A.2).',
+            'Note'
+        ));
+    }
+
     return {
         xml: [
             paragraph('10. 산정 결과   Calculation Results', 'Heading1'),
             table(columns.map((column) => column.header), rows, {
                 widths: [2000, 3000, 1800, 2200], headerShade: SOFT, headerBold: true, repeatHeader: true,
             }),
-            paragraph('본 표의 구성 항목 표시값 합은 소계 표시값과 일치한다(문서 생성 시 자동 자가검사 — 게이트 G1). 수치는 EU Communication Template에 기재되는 값과 동일 원천에서 산출되며, 템플릿 자동 기재 시 기재 셀 전수를 자동 대조 검증한다. 검증 셀 수와 목록은 Export 검증 로그에 기록된다.', 'Note'),
+            ...notes,
         ].join(''),
-        gateIssues: [...checkNumericColumns('제10장 결과표', columns, rows), ...checkResultDisplaySums(reportable)],
+        gateIssues: [...checkNumericColumns('제10장 결과표', columns, rows), ...sums.issues],
     };
 }
 
@@ -1067,7 +1093,7 @@ function annexes() {
         paragraph('· 배출량·SEE: 소수 4자리 / 계수·원단위: 원천 자릿수 유지'),
         paragraph('· 산식에 표기하는 피연산자는 반올림하지 않는다. 결과값만 반올림한다.'),
         paragraph('· 소계·합계는 미반올림 원천값에서 산출한 뒤 반올림한다(사사오입, 절댓값 기준).'),
-        paragraph('· 문서 생성 시 「구성 항목 표시값 합 = 소계 표시값」 자가검사를 수행하며, 불일치 시 발행이 차단된다.'),
+        paragraph('· 문서 생성 시 구성 항목과 소계의 정합을 자가검사한다. 원천값이 일치하지 않으면(산정 오류) 발행이 차단된다. 원천값은 일치하나 반올림 표기로 표시값이 어긋나는 경우에는 해당 표에 반올림 각주를 자동 삽입한다 — 이 경우 산정값 자체는 정확하다.'),
         paragraph('B. 부속서 B — 참조 문서   Annex B', 'Heading1'),
         paragraph('B.1 규범적 근거 (확정기간)', 'Heading2'),
         paragraph('· Regulation (EU) 2023/956 — CBAM 기본규정'),

@@ -592,8 +592,26 @@ export default function ExportPage() {
             });
             const exportWorkbookFilename = createEuExportFilename(templateFile.name);
             const backup = await exportLocalBackup();
+            // 산정보고서는 여기서 생성해 패키지에 넣는다. 발행 게이트가 막으면 이 catch로 올라와
+            // 패키지 생성 자체가 중단된다 — 미완성 보고서를 담아 내보내지 않기 위함.
+            const calculationReport = createCalculationReport({
+                installations,
+                periods,
+                products,
+                processes,
+                productOutputLines,
+                sourceStreams,
+                precursors,
+                results: reportableResults,
+                generatedAt,
+                defaultValues: defaultValueReference,
+                reportInputs,
+            });
+            setReportNotices(calculationReport.issues.map((issue) => `[${issue.gate}] ${issue.message}`));
+
             const packageResult = await createDeliveryPackage({
                 backup,
+                calculationReportBlob: calculationReport.blob,
                 exportChecklist,
                 exportVerification: exportResult.verification,
                 exportWorkbookBlob: exportResult.blob,
