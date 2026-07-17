@@ -323,4 +323,52 @@ const dvMiss = reportModule.createCalculationReport({
 });
 assertTrue(dvMiss.issues.some((issue) => issue.gate === 'G6' && /찾지 못했습니다/.test(issue.message)), 'DV 조합 미발견 → G6 경고');
 
-console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV 대조).');
+// ---------------- P4: 사용자 입력 (11·12·15·16장) + 게이트 G5 ----------------
+// 미입력이 조용히 넘어가면 "빈칸인 채로 검증인에게 제출"이 된다. 반드시 경고 + 「기재 필요」 표기.
+const g5Gates = ok.issues.filter((issue) => issue.gate === 'G5');
+assertTrue(g5Gates.length > 0, 'G5 사용자 입력 미기재 → 경고');
+assertTrue(g5Gates.some((issue) => /제11장/.test(issue.message)), 'G5 기지불 탄소가격 미입력 경고');
+assertTrue(g5Gates.some((issue) => /제12장/.test(issue.message)), 'G5 모니터링 계획 미입력 경고');
+assertTrue(g5Gates.some((issue) => /제15장/.test(issue.message)), 'G5 증빙 목록 미입력 경고');
+assertTrue(g5Gates.some((issue) => /제16장/.test(issue.message)), 'G5 운영자 선언 성명 미입력 경고');
+assertTrue(g5Gates.some((issue) => /제7장/.test(issue.message)), 'G5 전력 EF 출처 미입력 경고');
+assertTrue(steelOnlyXml.includes('기재 필요'), '미입력 시 본문에 「기재 필요」 표기');
+
+// 입력을 채우면 실제 내용으로 채워지고 해당 G5 경고가 사라진다
+const filled = reportModule.createCalculationReport({
+    ...baseInput(),
+    reportInputs: {
+        monitoring_plan: { doc_no: 'HB-CBAM-MP-001', version: 'v1.0', approved_at: '2026-01-05' },
+        rnr: [{ data: '천연가스 사용량', collector: '경영지원팀', transposer: '환경안전팀', approver: '공장장', system: '앱 · 배출원 자료' }],
+        carbon_price: [{ target: '본 사업장', applicable: 'TO_CONFIRM', note: '법인 단위 확인 필요', evidence_status: 'pending' }],
+        evidence: [{ item: '도시가스 요금청구서', proves: '활동자료 89.13 t', custodian: '경영지원팀', status: '확보' }],
+        transpositions: [{ source_stream_id: 's1', source_unit: 'MJ', source_quantity: '4,278,240', conversion_note: '÷ 48,000 MJ/t', measurement_method: '정산용 계량기', data_quality: '상업 거래용 계량' }],
+        electricity_ef_meta: [{ process_id: 'proc1', publisher: '집행위', document: 'Country EF list', vintage: '2026' }],
+        declaration: { name: '박지훈', position: 'CBAM 담당', date: '2027-01-15' },
+    },
+});
+const filledXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await filled.blob.arrayBuffer()))['word/document.xml']);
+const filledG5 = filled.issues.filter((issue) => issue.gate === 'G5');
+
+assertEqual(String(filledG5.length), '0', '입력을 채우면 G5 경고 없음');
+assertTrue(filledXml.includes('HB-CBAM-MP-001'), '12장 모니터링 계획 문서번호 반영');
+assertTrue(filledXml.includes('환경안전팀'), '12.1 R&R 반영');
+assertTrue(filledXml.includes('확인 필요(자료)'), '11장 탄소가격 TO_CONFIRM 라벨');
+assertTrue(filledXml.includes('미수령(pending)'), '11장 증빙 상태 라벨');
+assertTrue(filledXml.includes('도시가스 요금청구서'), '15장 증빙 목록 반영');
+assertTrue(filledXml.includes('박지훈'), '16장 선언 성명 반영');
+assertTrue(filledXml.includes('4,278,240'), '6.1 원천자료 수치 반영');
+assertTrue(filledXml.includes('÷ 48,000 MJ/t'), '6.1 환산 근거 반영');
+assertTrue(filledXml.includes('정산용 계량기'), '6.3 측정 방식 반영');
+assertTrue(filledXml.includes('Country EF list'), '7장 전력 EF 출처 메타 반영');
+// 국문 선언에 「본인이 아는 범위에서」 한정이 있어야 영문과 보증 수준이 맞는다 (씨밤이 P1)
+assertTrue(filledXml.includes('본인이 아는 범위에서'), '16장 국문 선언 한정 문구');
+
+// 모니터링 계획 승인일이 보고기간 시작 이후면 경고
+const latePlan = reportModule.createCalculationReport({
+    ...baseInput(),
+    reportInputs: { monitoring_plan: { doc_no: 'X', approved_at: '2026-06-01' } },
+});
+assertTrue(latePlan.issues.some((issue) => issue.gate === 'G2' && /승인일/.test(issue.message)), '모니터링 계획 승인일 지연 경고');
+
+console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5).');

@@ -24,6 +24,7 @@ const routes = [
   '/scenarios',
   '/upload',
   '/export',
+  '/report-inputs',
   '/settings',
   '/terms',
 ];
