@@ -89,7 +89,7 @@ const result = {
   direct_emissions_tco2e: 120,
   source_stream_count: 1,
   source_stream_delta_tco2e: 0,
-  indirect_emissions_applicable: false,
+  indirect_emissions_relevance: 'NOT_RELEVANT',
   indirect_see: 0,
   warningDetails: [],
 };
@@ -242,4 +242,34 @@ assert.equal(scenarioBasisDashboard.recentTasks[0].tone, 'warning');
 assert.match(scenarioBasisDashboard.recentTasks[0].label, /기본값 시나리오/);
 assert.equal(scenarioBasisDashboard.recentTasks[1].tone, 'success');
 
-console.log('Dashboard summary verification passed.');
+// --- 간접배출 관련성 3상태 (씨밤이 P1 회귀) ---
+// boolean으로 세면 「판정 불가」가 「해당 없음」이 되어 준비도를 올린다 —
+// 판정하지 못한 제품이 「완료」로 표시되는 것은 사용자를 속이는 것이다.
+const undeterminedDashboard = createDashboardSummary({
+  results: [{ ...result, indirect_emissions_relevance: 'UNDETERMINED', see_cbam_basis: null }],
+  productCount: 1,
+  processCount: 1,
+  precursorCount: 1,
+  scenarioRiskSummary: baseRiskSummary,
+  exportIssueCount: 0,
+  exportErrorCount: 0,
+  hasBenchmarkReference: true,
+  hasDefaultValueReference: true,
+});
+const undeterminedStep = undeterminedDashboard.steps.find((step) => step.name === '간접배출량');
+assert.equal(undeterminedStep.status, '판정 불가', '판정 불가를 「해당 없음」으로 표시하면 안 된다');
+assert.equal(undeterminedStep.tone, 'danger');
+
+// 진짜 비관련 품목과 화면에서 구분돼야 한다.
+const notRelevantStep = readyDashboard.steps.find((step) => step.name === '간접배출량');
+assert.equal(notRelevantStep.status, '해당 없음');
+assert.equal(notRelevantStep.tone, 'success');
+assert.notEqual(undeterminedStep.status, notRelevantStep.status, '판정 불가와 비관련이 화면에서 구분돼야 한다');
+
+// 판정 불가는 준비도에 산입되면 안 된다.
+assert.ok(
+  undeterminedDashboard.readinessRate < readyDashboard.readinessRate,
+  '판정 불가 제품이 준비도를 올리면 안 된다'
+);
+
+console.log('Dashboard summary verification passed (간접배출 3상태 회귀 포함).');

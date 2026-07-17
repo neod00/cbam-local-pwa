@@ -201,7 +201,7 @@ export const aiStaffAgents: AiStaffAgent[] = [
         executionMode: 'manual',
         automationReady: true,
         recommendedCadence: '계산로직 변경 또는 배포 전',
-        role: 'SEE, SEFA, Annex II direct-only, 간접배출 처리, 전구물질 반영 누락 가능성을 검토하는 계산 검증 담당자입니다.',
+        role: 'SEE, SEFA, 간접배출 관련성 판정, 전구물질 반영 누락 가능성을 검토하는 계산 검증 담당자입니다.',
         whenToUse: [
             '계산엔진이나 EU Export 매핑을 수정한 뒤',
             'Excel 공식 수식 재계산 결과와 앱 검토값 차이를 분석할 때',

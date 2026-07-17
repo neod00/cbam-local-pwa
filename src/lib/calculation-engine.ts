@@ -57,12 +57,14 @@ export interface LocalCalculationResult {
     output_mass_t: number;
     direct_emissions_tco2e: number;
     /**
-     * 간접배출이 인증서 기준에 **포함**되는가. 3상태를 boolean으로 뭉갠 값이므로
-     * 「포함 아님」과 「판정 불가」를 구분하지 못한다. 그 구분이 필요하면
-     * indirect_emissions_relevance를 보라 — 판정 불가를 「제외」로 읽으면 안 된다.
+     * 간접배출 관련성 — 3상태. 판정 불가면 see_cbam_basis가 null이다.
+     *
+     * boolean(indirect_emissions_applicable)을 두지 않는다. 남겨두면 「판정 불가」가
+     * 「제외」로 붕괴하고, 그 붕괴를 읽는 소비자를 **사람이 기억으로** 찾아야 한다.
+     * 실제로 여섯 번 연속 일부만 고쳤다 — 마지막엔 8곳 중 2곳(대시보드·SEE 흐름도)을 놓쳐
+     * 첫 화면이 판정 못 한 제품을 「해당 없음·완료」·「신고 대상 아님」으로 인쇄했다.
+     * 타입에서 지우면 컴파일러가 남은 소비자를 전부 지목한다(씨밤이 P1).
      */
-    indirect_emissions_applicable: boolean;
-    /** 3상태 판정 결과. 판정 불가면 see_cbam_basis가 null이다. */
     indirect_emissions_relevance: IndirectEmissionsRelevance;
     indirect_emissions_rule: string;
     indirect_emissions_excluded_tco2e: number;
@@ -468,7 +470,6 @@ export function calculateLocalResults(input: {
                 production_route: process.production_route,
                 output_mass_t: process.output_mass_t,
                 direct_emissions_tco2e: directEmissions,
-                indirect_emissions_applicable: processIndirectIncluded,
                 indirect_emissions_relevance: processIndirectApplicability.relevance,
                 indirect_emissions_rule: processIndirectApplicability.rule_code,
                 indirect_emissions_excluded_tco2e: indirectEmissionsExcluded,
@@ -562,7 +563,6 @@ export function calculateLocalResults(input: {
                 production_route: process.production_route,
                 output_mass_t: line.output_mass_t,
                 direct_emissions_tco2e: allocatedDirectEmissions,
-                indirect_emissions_applicable: lineIndirectIncluded,
                 indirect_emissions_relevance: lineIndirectApplicability.relevance,
                 indirect_emissions_rule: lineIndirectApplicability.rule_code,
                 indirect_emissions_excluded_tco2e: allocatedExcludedIndirectEmissions,
