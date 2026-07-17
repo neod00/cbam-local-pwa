@@ -147,6 +147,8 @@ assertTrue(!fflate.strFromU8(plain['[Content_Types].xml']).includes('header1.xml
 const prelude = ['const { strToU8, zipSync, strFromU8, unzipSync } = fflate;'].concat([
     'src/lib/report-format.ts',
     'src/lib/docx-builder.ts',
+    // cbam-product-rules 가 import 하므로 반드시 그 앞에 온다.
+    'src/lib/cn-master.generated.ts',
     'src/lib/cbam-product-rules.ts',
     'src/lib/reporting-scope.ts',
     'src/lib/reference-workbooks.ts',
@@ -181,7 +183,7 @@ const baseResult = {
     id: 'r1', process_id: 'proc1', process_name: 'ERW 용접', product_id: 'p1', product_name: '용접강관',
     reporting_scope: 'CBAM_GOOD', is_cbam_reportable: true, cn_code: '73063077', production_route: 'All production routes',
     allocation_basis: 'MASS', allocation_share: 1, output_mass_t: 8000,
-    direct_emissions_tco2e: 240.009264, indirect_emissions_applicable: false, indirect_emissions_rule: 'IRON_STEEL_CERTIFICATE_BASIS_EXCLUDED',
+    direct_emissions_tco2e: 240.009264, indirect_emissions_applicable: false, indirect_emissions_rule: 'GOODS_INDIRECT_NOT_RELEVANT',
     indirect_emissions_excluded_tco2e: 734.4, indirect_emissions_gross_tco2e: 734.4,
     source_stream_count: 1, source_stream_emissions_tco2e: 240.009264, source_stream_energy_tj: 4.27824, source_stream_delta_tco2e: 0,
     direct_see: 240.009264 / 8000, own_indirect_see: 734.4 / 8000, indirect_see: 0, indirect_see_excluded: 734.4 / 8000,

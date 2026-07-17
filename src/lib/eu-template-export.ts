@@ -1295,7 +1295,7 @@ function createEmissionsEnergyCellWrites(processes: ProductionProcess[], product
         (sum, process) => {
             const product = process.product_id ? productById.get(process.product_id) : undefined;
             const applicability = getIndirectEmissionsApplicability(product);
-            return applicability.applicable
+            return applicability.relevance === 'INCLUDED'
                 ? sum + process.electricity_mwh * process.electricity_ef_tco2e_per_mwh
                 : sum;
         },

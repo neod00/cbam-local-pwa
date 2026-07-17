@@ -215,7 +215,7 @@ export function ModernProducts() {
     const stats = useMemo<ProductStats>(() => {
         const cnReady = products.filter((product) => normalizeCnCode(product.cn_code ?? '').length === 8).length;
         const covered = products.filter((product) => getCbamCoverage(product).status === 'COVERED').length;
-        const directOnly = products.filter((product) => !getIndirectEmissionsApplicability(product).applicable).length;
+        const directOnly = products.filter((product) => getIndirectEmissionsApplicability(product).relevance === 'NOT_RELEVANT').length;
 
         return {
             total: products.length,
@@ -537,8 +537,8 @@ export function ModernProducts() {
                                                     <span>공정 {linkedProcessCount}개</span>
                                                 </div>
                                                 <div className="mt-3 flex flex-wrap gap-2">
-                                                    <StatusBadge tone={indirect.applicable ? 'info' : 'warning'}>
-                                                        {indirect.applicable ? '간접배출 포함' : '직접배출 중심'}
+                                                    <StatusBadge tone={indirect.relevance === 'INCLUDED' ? 'info' : 'warning'}>
+                                                        {indirect.label}
                                                     </StatusBadge>
                                                     {linkedProcessCount > 0 ? (
                                                         <StatusBadge tone="success">공정 연결됨</StatusBadge>

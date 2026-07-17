@@ -7,17 +7,23 @@ function loadLocalCalculationModule() {
   const sourceStreamCalculationSource = readFileSync('src/lib/source-stream-calculation.ts', 'utf8')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
-  const productRulesSource = readFileSync('src/lib/cbam-product-rules.ts', 'utf8')
-    .replace(/^import type .*;\r?\n/gm, '')
+  // cn-master.generated.ts 를 cbam-product-rules 가 import 한다. 이 로더는 import를 지우므로
+  // 생성 파일 소스를 앞에 붙여 심볼을 제공한다. 안 붙이면 CN 마스터가 undefined가 된다.
+  const cnMasterSource = readFileSync('src/lib/cn-master.generated.ts', 'utf8')
     .replace(/^export /gm, '');
+  const productRulesSource = [
+    cnMasterSource,
+    readFileSync('src/lib/cbam-product-rules.ts', 'utf8')
+      .replace(/^import .*;\r?\n/gm, '')
+      .replace(/^export /gm, ''),
+  ].join('\n');
   const reportingScopeSource = readFileSync('src/lib/reporting-scope.ts', 'utf8')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
+  // import를 개별 문자열로 지우면 import 목록이 바뀔 때 조용히 깨진다(실제로 깨졌다).
+  // 위에서 의존 소스를 전부 앞에 붙이므로 import 줄은 일괄 제거한다.
   const calculationEngineSource = readFileSync('src/lib/calculation-engine.ts', 'utf8')
-    .replace(/^import type .* from '\.\/local-db';\r?\n/gm, '')
-    .replace("import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';", '')
-    .replace("import { getIndirectEmissionsApplicability } from './cbam-product-rules';", '')
-    .replace("import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';", '')
+    .replace(/^import .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
 
   const compiled = ts.transpileModule(
@@ -191,7 +197,7 @@ assert.equal(productLineResults[0].output_mass_t, 600);
 assert.equal(productLineResults[0].direct_emissions_tco2e, 72);
 assert.equal(productLineResults[0].direct_see, 0.12);
 assert.equal(productLineResults[0].indirect_emissions_applicable, false);
-assert.equal(productLineResults[0].indirect_emissions_rule, 'IRON_STEEL_CERTIFICATE_BASIS_EXCLUDED');
+assert.equal(productLineResults[0].indirect_emissions_rule, 'GOODS_INDIRECT_NOT_RELEVANT');
 assert.equal(productLineResults[0].indirect_emissions_gross_tco2e, 141);
 assert.equal(productLineResults[0].indirect_emissions_excluded_tco2e, 141);
 assert.equal(productLineResults[0].own_indirect_see, 0.235);
@@ -234,8 +240,62 @@ const mixedAllocationResults = calculateLocalResults({
 });
 assert.match(mixedAllocationResults[0].warnings.join('\n'), /배분기준이 섞여 있습니다/);
 
-assert.equal(getIndirectEmissionsApplicability({ cn_code: '72083900', hs_code: '7208' }).applicable, false);
-assert.equal(getIndirectEmissionsApplicability({ cn_code: '26011200', hs_code: '2601' }).applicable, true);
+// --- CN 마스터 판정 (접두 휴리스틱 제거 회귀) ---
+// 아래 두 좌표는 접두 휴리스틱도 CN 마스터도 똑같이 통과시킨다. 이것만으로는 두 구현을
+// 구분하지 못하므로, 그 아래에 「휴리스틱이 통과할 수 없는」 케이스를 둔다.
+assert.equal(getIndirectEmissionsApplicability({ cn_code: '72083900', hs_code: '7208' }).relevance, 'NOT_RELEVANT');
+assert.equal(getIndirectEmissionsApplicability({ cn_code: '26011200', hs_code: '2601' }).relevance, 'INCLUDED');
+// Sintered Ore 예외가 하드코딩이 아니라 조회 결과임을 고정한다.
+assert.equal(getIndirectEmissionsApplicability({ cn_code: '26011200', hs_code: '2601' }).good, 'Sintered Ore');
+assert.equal(getIndirectEmissionsApplicability({ cn_code: '72083900', hs_code: '7208' }).good, 'Iron or steel products');
+
+// 판정 근거는 사실 진술이어야 한다 — 보고서가 그대로 인용한다.
+assert.match(getIndirectEmissionsApplicability({ cn_code: '72083900' }).lookup, /Communication Template/);
+
+// [휴리스틱이 통과할 수 없는 케이스 1] 73류인데 공식 목록에 없는 CN.
+// startsWith('73')은 이것을 "철강 direct-only"로 오판했다. 템플릿의 73류 헤딩은 13개뿐
+// (7301~7311, 7318, 7326)이라 7312~7317·7319~7325는 목록에 없다.
+// 주의: 7326은 등재돼 있다 — 73류라고 다 없는 게 아니라 헤딩 단위로 갈린다.
+for (const cn of ['73151100', '73121010', '73201000', '73249000']) {
+  const judged = getIndirectEmissionsApplicability({ cn_code: cn });
+  assert.equal(judged.relevance, 'UNDETERMINED', `${cn}: 공식 목록에 없으므로 판정 불가여야 한다`);
+  assert.equal(judged.rule_code, 'CN_NOT_IN_MASTER');
+}
+
+// [휴리스틱이 통과할 수 없는 케이스 2] 확정기간 간접배출 비관련인데 휴리스틱은 "포함"이라 했다.
+for (const [cn, good] of [['28041000', 'Hydrogen'], ['28142000', 'Ammonia'], ['76011010', 'Unwrought aluminium'], ['76031000', 'Aluminium products']]) {
+  const judged = getIndirectEmissionsApplicability({ cn_code: cn });
+  assert.equal(judged.relevance, 'NOT_RELEVANT', `${cn}(${good}): 확정기간 간접배출 비관련이어야 한다`);
+  assert.equal(judged.good, good);
+}
+
+// [휴리스틱이 통과할 수 없는 케이스 3] 마스터 밖 임의 CN은 INCLUDED도 NOT_RELEVANT도 아니다.
+// 종전 DEFAULT_INCLUDED가 정확히 여기서 죽는다 — 판정 실패를 판정으로 위장하지 않는다.
+for (const cn of ['99999999', '84069000', '85030000', '39269097', '61091000']) {
+  assert.equal(getIndirectEmissionsApplicability({ cn_code: cn }).relevance, 'UNDETERMINED', `${cn}: 목록 밖 CN`);
+}
+
+// CN 미기재도 판정 불가다(종전에는 "임시 포함"이었다).
+assert.equal(getIndirectEmissionsApplicability({ cn_code: '', hs_code: '' }).relevance, 'UNDETERMINED');
+assert.equal(getIndirectEmissionsApplicability(undefined).rule_code, 'CN_MISSING');
+
+// 4자리 CN rollup — 하위가 모두 같으면 적용하고, 갈리면 판정하지 않는다.
+const heading7208 = getIndirectEmissionsApplicability({ cn_code: '7208' });
+assert.equal(heading7208.relevance, 'NOT_RELEVANT', 'CN 7208: 하위가 모두 Iron or steel products');
+assert.equal(heading7208.matched_by_prefix, true);
+const heading2601 = getIndirectEmissionsApplicability({ cn_code: '2601' });
+assert.equal(heading2601.relevance, 'INCLUDED', 'CN 2601: 하위가 Sintered Ore 뿐');
+
+// 판정 불가면 엔진이 인증서 기준 SEE를 산출하지 않는다 — 정당화할 수 없는 숫자는 존재하면 안 된다.
+const unknownProduct = { ...product, id: 'p-unknown', cn_code: '73151100', hs_code: '7315', reporting_scope: 'CBAM_GOOD' };
+const unknownResults = calculateLocalResults({
+  processes: [{ ...process, id: 'proc-unknown', product_id: 'p-unknown' }],
+  precursors: [], products: [unknownProduct], periods: [period],
+  sourceStreams: [{ ...sourceStream, id: 'ss-unknown', process_id: 'proc-unknown' }],
+});
+assert.equal(unknownResults[0].see_cbam_basis, null, '판정 불가 → 인증서 기준 SEE 미산출');
+assert.ok(unknownResults[0].see_informational_total > 0, '정보 목적 총계는 남는다');
+assert.match(unknownResults[0].warnings.join('\n'), /간접배출 관련성을 판정하지 못해/, '판정 불가를 경고로 노출');
 
 // --- EU 공식 예제 회귀 (CBAM SEE V2.1 "Example Steel 2 EAF alloys") ---
 // 철강(Annex II direct-only) 인증서 기준 SEE가 전구물질 indirect를 제외해 EU SEE(direct)와 일치하고,
@@ -390,7 +450,11 @@ assertClose(complexHrcResult.see_cbam_basis, (830.28 + 9225) / 8200);
 assertClose(complexHrcResult.see_informational_total, (830.28 + 2097 + 9225 + 2380) / 8200);
 assert.equal(complexHrcResult.is_cbam_reportable, true);
 assert.equal(complexHrcResult.indirect_emissions_applicable, false);
-assert.equal(complexScaleResult.indirect_emissions_applicable, true);
+// 밀스케일(CN 2619 00 90)은 공식 CN 목록에 없어 간접배출 관련성을 판정하지 못한다.
+// 종전 접두 휴리스틱은 DEFAULT_INCLUDED로 "포함"이라 단정했다 — 근거 없는 단정이었다.
+assert.equal(complexScaleResult.indirect_emissions_relevance, 'UNDETERMINED');
+assert.equal(complexScaleResult.indirect_emissions_applicable, false);
+// 어차피 비CBAM 부산물이라 인증서 기준 SEE는 산출 대상이 아니다.
 assert.equal(complexScaleResult.is_cbam_reportable, false);
 assert.equal(complexScaleResult.see_cbam_basis, null);
 assertClose(
