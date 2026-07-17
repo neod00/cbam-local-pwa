@@ -272,4 +272,34 @@ assert.ok(
   '판정 불가 제품이 준비도를 올리면 안 된다'
 );
 
+// 혼재 케이스 — 판정 가능 제품이 섞이면 「판정 불가」인데도 준비율이 100%가 됐다(씨밤이 D1).
+// 단일 제품 픽스처만 검사하면 이 조합에 도달하지 못한다. 픽스처 빈곤이 여섯 번 연속
+// 결함을 통과시킨 원인이고, 여기서도 같았다.
+const mixedDashboard = createDashboardSummary({
+  results: [
+    { ...result, id: 'r-included', indirect_emissions_relevance: 'INCLUDED', indirect_see: 0.5 },
+    { ...result, id: 'r-undetermined', indirect_emissions_relevance: 'UNDETERMINED', see_cbam_basis: null },
+  ],
+  productCount: 1,
+  processCount: 1,
+  precursorCount: 1,
+  scenarioRiskSummary: baseRiskSummary,
+  exportIssueCount: 0,
+  exportErrorCount: 0,
+  hasBenchmarkReference: true,
+  hasDefaultValueReference: true,
+});
+const mixedStep = mixedDashboard.steps.find((step) => step.name === '간접배출량');
+assert.equal(mixedStep.status, '판정 불가', '혼재 시에도 판정 불가를 우선 표시');
+assert.equal(mixedStep.tone, 'danger');
+// 화면 좌측이 「판정 불가·danger」인데 우측 막대가 100%면 한 화면이 두 말을 한다.
+assert.ok(
+  mixedDashboard.readinessRate < 100,
+  '판정 불가가 섞이면 준비율이 100%일 수 없다 — 화면 자기모순'
+);
+assert.ok(
+  mixedDashboard.readinessRate < readyDashboard.readinessRate,
+  '혼재 케이스도 판정 불가로 준비도가 깎여야 한다'
+);
+
 console.log('Dashboard summary verification passed (간접배출 3상태 회귀 포함).');

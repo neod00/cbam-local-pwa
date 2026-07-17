@@ -189,7 +189,9 @@ export function createDashboardSummary(input: DashboardSummaryInput): DashboardS
         productCount > 0,
         processCount > 0,
         sourceStreamIssueCount === 0 && results.some((result) => result.source_stream_count > 0),
-        indirectCompleted || indirectNotRequired,
+        // 판정 불가가 하나라도 있으면 완료가 아니다. indirectCompleted는 some(INCLUDED)라
+        // 판정 가능 제품이 섞이면 참이 되어, 화면이 「판정 불가·danger」인데 준비율은 100%가 됐다(씨밤이 D1).
+        (indirectCompleted || indirectNotRequired) && !indirectUndetermined,
         precursorCount > 0,
         hasOfficialReferences,
         scenarioRiskSummary.is_ready_for_review,
