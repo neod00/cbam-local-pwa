@@ -18,7 +18,7 @@ export const CN_MASTER_SOURCE_SHA256 = '5a4e28fdbccfdca45a2c0520184b551a20c0c7bb
  * 이 플래그가 Regulation (EU) 2023/956 Annex II 등재와 법적으로 동치임을 확인했는가.
  * 리터럴 false — true로 바꾸려면 타입이 바뀌므로 리뷰가 강제된다.
  */
-export const CN_MASTER_LEGAL_BASIS_VERIFIED: false = false;
+export const CN_MASTER_LEGAL_BASIS_VERIFIED = false as const;
 
 /** 품목군 → 확정기간 간접배출 관련성. true = 간접 포함, false = 직접배출만. */
 export const GOODS_INDIRECT_RELEVANCE: Readonly<Record<string, boolean>> = {

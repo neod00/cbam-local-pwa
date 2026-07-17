@@ -404,7 +404,7 @@ export default function ProcessesPage() {
         const directSee =
             process.output_mass_t > 0 ? process.direct_attributable_emissions_tco2e / process.output_mass_t : 0;
         const indirectSee =
-            process.output_mass_t > 0 && indirectApplicability.applicable
+            process.output_mass_t > 0 && indirectApplicability.relevance === 'INCLUDED'
                 ? (process.electricity_mwh * process.electricity_ef_tco2e_per_mwh) / process.output_mass_t
                 : 0;
         return { directSee, indirectSee, indirectApplicability };
@@ -892,7 +892,7 @@ export default function ProcessesPage() {
                                 <div className="rounded-xl bg-slate-50 p-3">
                                     <dt className="text-xs text-slate-500">간접 SEE</dt>
                                     <dd className="mt-1 font-medium text-slate-900">{formatNumber(see.indirectSee)}</dd>
-                                    <dd className={see.indirectApplicability.applicable ? 'mt-1 text-xs text-slate-500' : 'mt-1 text-xs font-semibold text-amber-700'}>
+                                    <dd className={see.indirectApplicability.relevance === 'INCLUDED' ? 'mt-1 text-xs text-slate-500' : 'mt-1 text-xs font-semibold text-amber-700'}>
                                         {see.indirectApplicability.label}
                                     </dd>
                                 </div>
@@ -995,7 +995,7 @@ export default function ProcessesPage() {
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
                                             {formatNumber(see.indirectSee)}
-                                            <div className={see.indirectApplicability.applicable ? 'text-xs text-slate-400' : 'text-xs font-semibold text-amber-700'}>
+                                            <div className={see.indirectApplicability.relevance === 'INCLUDED' ? 'text-xs text-slate-400' : 'text-xs font-semibold text-amber-700'}>
                                                 {see.indirectApplicability.label}
                                             </div>
                                         </td>

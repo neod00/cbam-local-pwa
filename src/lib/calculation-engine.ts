@@ -1,6 +1,7 @@
 import type { Product, ProductOutputLine, ProductReportingScope, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
+import type { IndirectEmissionsRelevance } from './cbam-product-rules';
 import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';
 
 export type ActivityData = Record<string, number>;
@@ -55,7 +56,14 @@ export interface LocalCalculationResult {
     production_route: string;
     output_mass_t: number;
     direct_emissions_tco2e: number;
+    /**
+     * 간접배출이 인증서 기준에 **포함**되는가. 3상태를 boolean으로 뭉갠 값이므로
+     * 「포함 아님」과 「판정 불가」를 구분하지 못한다. 그 구분이 필요하면
+     * indirect_emissions_relevance를 보라 — 판정 불가를 「제외」로 읽으면 안 된다.
+     */
     indirect_emissions_applicable: boolean;
+    /** 3상태 판정 결과. 판정 불가면 see_cbam_basis가 null이다. */
+    indirect_emissions_relevance: IndirectEmissionsRelevance;
     indirect_emissions_rule: string;
     indirect_emissions_excluded_tco2e: number;
     indirect_emissions_gross_tco2e: number;
@@ -348,8 +356,19 @@ export function calculateLocalResults(input: {
         const sourceStreamDelta = sourceStreamEmissions - directEmissions;
         const grossIndirectEmissions = process.electricity_mwh * process.electricity_ef_tco2e_per_mwh;
         const processIndirectApplicability = getIndirectEmissionsApplicability(product);
-        const indirectEmissions = processIndirectApplicability.applicable ? grossIndirectEmissions : 0;
-        const indirectEmissionsExcluded = processIndirectApplicability.applicable ? 0 : grossIndirectEmissions;
+        // 판정 불가(UNDETERMINED)일 때 간접배출을 「포함」으로도 「제외」로도 확정하지 않는다.
+        // 정보 목적 총계에는 남기되, 인증서 기준 SEE는 아래에서 null로 둔다.
+        const processIndirectIncluded = processIndirectApplicability.relevance === 'INCLUDED';
+
+        // 판정 불가를 조용히 넘기면 기준 SEE가 null인 이유를 아무도 모른다.
+        if (processIndirectApplicability.relevance === 'UNDETERMINED' && processIsCbamReportable) {
+            addWarning(
+                `간접배출 관련성을 판정하지 못해 CBAM 인증서 기준 SEE를 산출하지 않았습니다. ${processIndirectApplicability.lookup}`,
+                { type: 'process', id: process.id }
+            );
+        }
+        const indirectEmissions = processIndirectIncluded ? grossIndirectEmissions : 0;
+        const indirectEmissionsExcluded = processIndirectIncluded ? 0 : grossIndirectEmissions;
         const precursorDirectEmissions = processPrecursors.reduce(
             (sum, precursor) => sum + precursor.consumed_mass_t * precursor.direct_see_tco2e_per_t,
             0
@@ -403,10 +422,14 @@ export function calculateLocalResults(input: {
         // declarant 보고용 SEE(direct/indirect) — 자체 + 전구물질 기여 포함 (EU Communication Template 컬럼)
         const see_direct_incl_precursor = direct_see + precursor_direct_see;
         const see_indirect_incl_precursor = own_indirect_see + precursor_indirect_see;
-        // 인증서 산정 기준: Annex II direct-only 품목은 자체 indirect뿐 아니라 전구물질 indirect도 제외
-        const calculatedProcessCbamBasis = processIndirectApplicability.applicable
-            ? see_direct_incl_precursor + see_indirect_incl_precursor
-            : see_direct_incl_precursor;
+        // 인증서 산정 기준: 간접배출 비관련 품목은 자체 indirect뿐 아니라 전구물질 indirect도 제외.
+        // 판정 불가면 기준 SEE를 산출하지 않는다(null) — 판정하지 못한 제품에 숫자를 만들어 주면
+        // 그 숫자가 대시보드·시나리오·export로 퍼진다. 정당화할 수 없는 숫자는 존재하면 안 된다.
+        const calculatedProcessCbamBasis = processIndirectApplicability.relevance === 'UNDETERMINED'
+            ? null
+            : processIndirectIncluded
+                ? see_direct_incl_precursor + see_indirect_incl_precursor
+                : see_direct_incl_precursor;
         const see_cbam_basis = processIsCbamReportable ? calculatedProcessCbamBasis : null;
         const see_informational_total = direct_see + own_indirect_see + precursor_see;
         const total_see = see_informational_total;
@@ -445,7 +468,8 @@ export function calculateLocalResults(input: {
                 production_route: process.production_route,
                 output_mass_t: process.output_mass_t,
                 direct_emissions_tco2e: directEmissions,
-                indirect_emissions_applicable: processIndirectApplicability.applicable,
+                indirect_emissions_applicable: processIndirectIncluded,
+                indirect_emissions_relevance: processIndirectApplicability.relevance,
                 indirect_emissions_rule: processIndirectApplicability.rule_code,
                 indirect_emissions_excluded_tco2e: indirectEmissionsExcluded,
                 indirect_emissions_gross_tco2e: grossIndirectEmissions,
@@ -479,8 +503,9 @@ export function calculateLocalResults(input: {
                 : (massTotal > 0 ? line.output_mass_t / massTotal : 0);
             const lineIndirectApplicability = getIndirectEmissionsApplicability(lineProduct);
             const lineGrossIndirectEmissions = grossIndirectEmissions * allocationShare;
-            const allocatedIndirectEmissions = lineIndirectApplicability.applicable ? lineGrossIndirectEmissions : 0;
-            const allocatedExcludedIndirectEmissions = lineIndirectApplicability.applicable ? 0 : lineGrossIndirectEmissions;
+            const lineIndirectIncluded = lineIndirectApplicability.relevance === 'INCLUDED';
+            const allocatedIndirectEmissions = lineIndirectIncluded ? lineGrossIndirectEmissions : 0;
+            const allocatedExcludedIndirectEmissions = lineIndirectIncluded ? 0 : lineGrossIndirectEmissions;
             const allocatedDirectEmissions = directEmissions * allocationShare;
             const allocatedPrecursorDirectEmissions = processPrecursors.reduce((sum, precursor) => {
                 const allocatedMass = getPrecursorAllocatedMassForLine(
@@ -511,9 +536,11 @@ export function calculateLocalResults(input: {
             const linePrecursorIndirectSee = line.output_mass_t > 0 ? allocatedPrecursorIndirectEmissions / line.output_mass_t : 0;
             const lineSeeDirectInclPrecursor = lineDirectSee + linePrecursorDirectSee;
             const lineSeeIndirectInclPrecursor = lineOwnIndirectSee + linePrecursorIndirectSee;
-            const calculatedLineCbamBasis = lineIndirectApplicability.applicable
-                ? lineSeeDirectInclPrecursor + lineSeeIndirectInclPrecursor
-                : lineSeeDirectInclPrecursor;
+            const calculatedLineCbamBasis = lineIndirectApplicability.relevance === 'UNDETERMINED'
+                ? null
+                : lineIndirectIncluded
+                    ? lineSeeDirectInclPrecursor + lineSeeIndirectInclPrecursor
+                    : lineSeeDirectInclPrecursor;
             const lineSeeCbamBasis = lineIsCbamReportable ? calculatedLineCbamBasis : null;
             const lineSeeInformationalTotal = lineDirectSee + lineOwnIndirectSee + linePrecursorSee;
 
@@ -535,7 +562,8 @@ export function calculateLocalResults(input: {
                 production_route: process.production_route,
                 output_mass_t: line.output_mass_t,
                 direct_emissions_tco2e: allocatedDirectEmissions,
-                indirect_emissions_applicable: lineIndirectApplicability.applicable,
+                indirect_emissions_applicable: lineIndirectIncluded,
+                indirect_emissions_relevance: lineIndirectApplicability.relevance,
                 indirect_emissions_rule: lineIndirectApplicability.rule_code,
                 indirect_emissions_excluded_tco2e: allocatedExcludedIndirectEmissions,
                 indirect_emissions_gross_tco2e: lineGrossIndirectEmissions,

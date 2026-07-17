@@ -246,7 +246,7 @@ function GoodsExpertDisclosure({ product }: { product: Product }) {
                 </div>
                 <div>
                     <dt className="font-semibold text-slate-500">Indirect emissions</dt>
-                    <dd>{indirectRule.applicable ? 'certificate-basis 포함 검토' : 'certificate-basis 제외 검토'}</dd>
+                    <dd>{indirectRule.label}</dd>
                 </div>
                 <div>
                     <dt className="font-semibold text-slate-500">Precursor</dt>

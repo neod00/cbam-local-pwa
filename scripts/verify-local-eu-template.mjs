@@ -80,9 +80,16 @@ function loadEuExportModule() {
   const sourceStreamCalculationSource = readFileSync('src/lib/source-stream-calculation.ts', 'utf8')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
-  const productRulesSource = readFileSync('src/lib/cbam-product-rules.ts', 'utf8')
-    .replace(/^import type .*;\r?\n/gm, '')
+  // cn-master.generated.ts 를 cbam-product-rules 가 import 한다. 이 로더는 import를 지우므로
+  // 생성 파일 소스를 앞에 붙여 심볼을 제공한다. 안 붙이면 CN 마스터가 undefined가 된다.
+  const cnMasterSource = readFileSync('src/lib/cn-master.generated.ts', 'utf8')
     .replace(/^export /gm, '');
+  const productRulesSource = [
+    cnMasterSource,
+    readFileSync('src/lib/cbam-product-rules.ts', 'utf8')
+      .replace(/^import .*;\r?\n/gm, '')
+      .replace(/^export /gm, ''),
+  ].join('\n');
   const source = readFileSync('src/lib/eu-template-export.ts', 'utf8')
     .replace(
       "import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';",

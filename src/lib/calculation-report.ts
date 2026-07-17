@@ -1,6 +1,7 @@
 import { cell, createDocx, paragraph, table } from './docx-builder';
 import { checkDisplaySum, formatForReport, formatIntegerForReport, formatPercentForReport, formatRawForReport, roundForReport } from './report-format';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
+import { CN_MASTER_TEMPLATE_VERSION } from './cn-master.generated';
 import { isCbamReportingScope, getProductReportingScope } from './reporting-scope';
 import { findDefaultValueReference, hasAmbiguousDefaultValueRoutes } from './reference-workbooks';
 import type { DefaultValueReferenceRow, ImportedDefaultValueReference } from './reference-workbooks';
@@ -71,6 +72,8 @@ export interface CalculationReportResult {
 }
 
 const PLACEHOLDER = '기재 필요';
+/** 판정 근거로 인용하는 공식 워크북. 보고서 전 장에서 같은 문자열을 쓴다. */
+const CN_MASTER_CITATION = `EU 공식 Communication Template(판본 ${CN_MASTER_TEMPLATE_VERSION})`;
 /** 해당 계수가 이 배출원의 산식에 등장하지 않음. 0과 구분해야 한다. */
 const NOT_APPLICABLE = '해당 없음';
 /** 공식 기본값이 공표되지 않은 조합. 0(=배출 없음)과 반드시 구분한다. */
@@ -578,23 +581,40 @@ function productSection(input: CalculationReportInput) {
         const applicability = getIndirectEmissionsApplicability(product);
         const label = `${product.name}(CN ${product.cn_code ?? '미기재'})`;
 
-        if (applicability.applicable) {
-            body.push(paragraph(`${label}: 간접배출을 포함해 산정한다. 판정: ${applicability.label} (조항 확인 필요(규정))`));
+        // 세 진술을 분리한다: ①조회한 사실 ②적용한 규칙 ③확인하지 않은 것.
+        // 「Annex II에 등재되어 있다」고 쓰지 않는다 — 원본 워크북에 그 문자열이 없다(씨밤이 P0).
+        if (applicability.relevance === 'INCLUDED') {
+            body.push(paragraph(`${label}: 간접배출을 포함해 산정한다. ${applicability.lookup} 해당 품목군은 확정기간 간접배출 관련으로 분류되어 있다.`));
+        } else if (applicability.relevance === 'NOT_RELEVANT') {
+            body.push(paragraph(`${label}: ${applicability.lookup} 해당 품목군은 확정기간 간접배출 비관련으로 분류되어 있으므로, 최종제품의 자체 전력 간접배출 및 전구물질 간접배출을 CBAM 인증서 산정 기준 SEE에서 제외하고 정보 목적으로 별도 보고한다. (Regulation (EU) 2023/956 Art. 7(1) — 조항 번호 EUR-Lex 원문 확인 필요(규정))`));
         } else {
-            body.push(paragraph(`${label}: 직접배출만 고려하는 품목으로, 최종제품의 자체 전력 간접배출은 CBAM 인증서 산정 기준 SEE에서 제외하고 정보 목적으로 보고한다. 판정: ${applicability.label} (Regulation (EU) 2023/956 Art. 7(1) — 조항 번호 EUR-Lex 원문 확인 필요(규정))`));
+            body.push(paragraph(
+                `${label}: 간접배출 관련성을 판정하지 못했다. ${applicability.lookup} 따라서 본 제품의 CBAM 인증서 산정 기준 SEE를 산출하지 않았으며, 정보 목적 총계만 제시한다 — 확인 필요(규정).`,
+                undefined,
+                { color: AMBER }
+            ));
+        }
+
+        if (applicability.matched_by_prefix) {
+            body.push(paragraph(
+                `${label}: 기재된 CN이 8자리 미만이라 하위 CN들의 분류가 일치함을 확인해 적용했다. 정확한 판정을 위해 8자리 CN 기재를 권고한다.`,
+                'Note'
+            ));
         }
     }
 
-    // 판정이 어떻게 내려졌는지 밝힌다. 산정 도구는 CN 접두 규칙으로 판정하며 Annex II 등재 목록을
-    // 조회하지 않는다. 이 사실을 감추면 보고서가 "등재를 확인했다"고 말하는 셈이 된다(씨밤이 P0).
+    // 판정 방법을 밝힌다. 감추면 보고서가 "등재를 확인했다"고 말하는 셈이 된다(씨밤이 P0).
     body.push(paragraph(
-        '판정 방법: 본 판정은 산정 도구의 CN 접두 규칙에 따른 것이며, Annex II 등재 목록 원본을 조회한 결과가 아니다. 등재 목록·판본 대조는 완료되지 않았다 — 확인 필요(자료).',
+        // 전반부(접두 규칙)는 CN 마스터 도입으로 거짓이 되므로 교체한다.
+        // 후반부(Annex II 등재 목록을 조회한 것이 아니다)는 **여전히 참**이므로 삭제하면 안 된다 —
+        // 원본 워크북에 "Annex II" 문자열이 0건이라 그 법적 동치를 우리는 확인하지 못했다(씨밤이 P0).
+        `판정 방법: 본 판정은 ${CN_MASTER_CITATION}의 CN 목록과 확정기간 간접배출 관련성 플래그를 CN 단위로 조회한 결과이며, CN 접두 규칙을 사용하지 않았다. 다만 이는 Regulation (EU) 2023/956 Annex II 등재 목록 원본을 조회한 결과가 아니다 — 해당 워크북은 「Annex II」를 인용하지 않으며, 이 플래그가 Annex II 등재와 법적으로 동치인지는 EUR-Lex 원문 대조가 완료되지 않았다. 확인 필요(규정). 또한 본 템플릿은 2024-12-13 배포본으로, 2026 확정기간 최종 채택본과 이 플래그가 일치하는지 확인되지 않았다 — 확인 필요(자료).`,
         'Note',
         { color: AMBER }
     ));
 
     const directOnlyProducts = reportableProducts(input).filter(
-        (product) => !getIndirectEmissionsApplicability(product).applicable
+        (product) => getIndirectEmissionsApplicability(product).relevance === 'NOT_RELEVANT'
     );
 
     if (directOnlyProducts.length > 0) {
@@ -604,7 +624,8 @@ function productSection(input: CalculationReportInput) {
                 cn_code: precursor.precursor_cn_code,
                 hs_code: precursor.precursor_cn_code ?? '',
             });
-            return applicabilityOfPrecursor.applicable;
+            // 판정 불가도 「직접전용이 아니다」로 다룬다 — 모르는 것을 안전하게 가정하지 않는다.
+            return applicabilityOfPrecursor.relevance !== 'NOT_RELEVANT';
         });
 
         if (input.precursors.length > 0 && nonDirectOnly.length === 0) {
@@ -619,7 +640,8 @@ function productSection(input: CalculationReportInput) {
             ));
         }
 
-        body.push(paragraph('간접배출 제외는 「최종제품이 철강이기 때문」이 아니라 「해당 품목이 직접배출만 고려하는 품목으로 등재되어 있기 때문」이다. 철강 중 CN 2601 12 00(응결 철광석·정광)은 간접 포함 예외이다.', 'Note'));
+        // 「등재」의 주어를 반드시 밝힌다. 주어가 없으면 독자는 Annex II를 떠올린다(씨밤이 P0).
+        body.push(paragraph(`간접배출 제외는 「최종제품이 철강이기 때문」이 아니라 「${CN_MASTER_CITATION}이 해당 품목군을 확정기간 간접배출 비관련으로 분류했기 때문」이다. 철강계 품목군 6종 중 CN 2601 12 00(응결 철광석·정광, 품목군 「Sintered Ore」)만 간접 포함이며, 이는 하드코딩 예외가 아니라 위 워크북의 플래그를 조회한 결과다.`, 'Note'));
     }
 
     return body.join('');

@@ -57,7 +57,7 @@ if (!committed.includes('Annex II 등재」가 아니다')) {
     fail('생성 파일에서 「이 플래그는 Annex II 등재가 아니다」 고지가 사라졌습니다. 이 고지는 사실이며 지우면 안 됩니다.');
 }
 
-if (!/CN_MASTER_LEGAL_BASIS_VERIFIED: false = false/.test(committed)) {
+if (!/CN_MASTER_LEGAL_BASIS_VERIFIED = false as const/.test(committed)) {
     fail('CN_MASTER_LEGAL_BASIS_VERIFIED가 리터럴 false가 아닙니다. Annex II 법적 동치는 EUR-Lex 원문 대조 미완입니다.');
 }
 
