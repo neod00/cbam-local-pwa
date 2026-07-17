@@ -297,6 +297,33 @@ assert.equal(unknownResults[0].see_cbam_basis, null, '판정 불가 → 인증�
 assert.ok(unknownResults[0].see_informational_total > 0, '정보 목적 총계는 남는다');
 assert.match(unknownResults[0].warnings.join('\n'), /간접배출 관련성을 판정하지 못해/, '판정 불가를 경고로 노출');
 
+// [P1] 3상태가 결과 경계에서 boolean으로 붕괴하면 안 된다.
+// boolean만 보면 「판정 불가」와 「비관련」이 똑같이 false라 화면이 둘을 구분하지 못하고,
+// 판정하지 못한 제품에 "Annex II direct-only" 같은 법적 단정을 인쇄하게 된다(씨밤이 P1).
+assert.equal(unknownResults[0].indirect_emissions_relevance, 'UNDETERMINED');
+assert.equal(unknownResults[0].indirect_emissions_applicable, false);
+const steelResult = calculateLocalResults({
+  processes: [{ ...process, id: 'proc-steel', product_id: 'p-steel' }],
+  precursors: [], products: [{ ...product, id: 'p-steel', cn_code: '73063077', hs_code: '7306', reporting_scope: 'CBAM_GOOD' }],
+  periods: [period], sourceStreams: [{ ...sourceStream, id: 'ss-steel', process_id: 'proc-steel' }],
+})[0];
+assert.equal(steelResult.indirect_emissions_relevance, 'NOT_RELEVANT');
+assert.equal(steelResult.indirect_emissions_applicable, false);
+// 두 제품은 boolean이 같지만 relevance로는 구분된다 — 표시 계층은 relevance를 읽어야 한다.
+assert.equal(steelResult.indirect_emissions_applicable, unknownResults[0].indirect_emissions_applicable);
+assert.notEqual(steelResult.indirect_emissions_relevance, unknownResults[0].indirect_emissions_relevance);
+// 진짜 비관련 품목은 기준 SEE가 산출된다. 판정 불가만 null이다.
+assert.ok(steelResult.see_cbam_basis !== null, '비관련 품목은 기준 SEE 산출');
+
+// [P2] 접두 rollup에서 하위 품목군이 여럿이면 대표를 자의로 고르지 않는다.
+const cementHeading = getIndirectEmissionsApplicability({ cn_code: '2523' });
+assert.equal(cementHeading.relevance, 'INCLUDED', 'CN 2523 하위는 모두 간접 포함');
+assert.equal(cementHeading.good, undefined, '하위 품목군이 여럿이면 good을 단정하지 않음');
+assert.ok((cementHeading.goods ?? []).length > 1, 'goods에는 걸린 품목군을 전부 담는다');
+// 단일 품목군이면 good을 채운다.
+const steelHeading = getIndirectEmissionsApplicability({ cn_code: '7208' });
+assert.equal(steelHeading.good, 'Iron or steel products');
+
 // --- EU 공식 예제 회귀 (CBAM SEE V2.1 "Example Steel 2 EAF alloys") ---
 // 철강(Annex II direct-only) 인증서 기준 SEE가 전구물질 indirect를 제외해 EU SEE(direct)와 일치하고,
 // 참고용 총 SEE(see_informational_total)는 EU SEE(total)과 일치하는지 검증한다.

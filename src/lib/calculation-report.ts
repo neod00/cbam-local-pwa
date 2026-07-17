@@ -1280,10 +1280,13 @@ function resultSection(input: CalculationReportInput) {
     for (const result of reportable) {
         rows.push([result.product_name, '자체 공정 직접배출', formatForReport(result.direct_see), '자체 배출 ÷ 생산량']);
         rows.push([result.product_name, '전구물질 직접 내재배출', formatForReport(result.precursor_direct_see), '소비비율 × 전구물질 SEE']);
-        rows.push([result.product_name, 'SEE 직접 소계', formatForReport(result.see_direct_incl_precursor), result.indirect_emissions_applicable ? '' : '= CBAM 인증서 산정 기준']);
-        rows.push([result.product_name, '자체 전력 간접배출', formatForReport(result.own_indirect_see), result.indirect_emissions_applicable ? '' : '정보 목적']);
-        rows.push([result.product_name, '전구물질 간접 내재배출', formatForReport(result.precursor_indirect_see), result.indirect_emissions_applicable ? '' : '정보 목적']);
-        rows.push([result.product_name, 'SEE 간접 소계', formatForReport(result.see_indirect_incl_precursor), result.indirect_emissions_applicable ? '인증서 기준 포함' : '인증서 기준 제외']);
+        // boolean으로 쓰면 「판정 불가」가 「제외」로 붕괴해 진짜 비관련 품목과 구분되지 않는다(씨밤이 P1).
+        const undetermined = result.indirect_emissions_relevance === 'UNDETERMINED';
+        const included = result.indirect_emissions_relevance === 'INCLUDED';
+        rows.push([result.product_name, 'SEE 직접 소계', formatForReport(result.see_direct_incl_precursor), undetermined ? '판정 불가 — 기준 SEE 미산출' : included ? '' : '= CBAM 인증서 산정 기준']);
+        rows.push([result.product_name, '자체 전력 간접배출', formatForReport(result.own_indirect_see), included ? '' : '정보 목적']);
+        rows.push([result.product_name, '전구물질 간접 내재배출', formatForReport(result.precursor_indirect_see), included ? '' : '정보 목적']);
+        rows.push([result.product_name, 'SEE 간접 소계', formatForReport(result.see_indirect_incl_precursor), undetermined ? '판정 불가 — 확인 필요' : included ? '인증서 기준 포함' : '인증서 기준 제외']);
         rows.push([result.product_name, '참고 총 SEE', formatForReport(result.see_informational_total), '직접 + 간접']);
     }
 
@@ -1474,7 +1477,7 @@ function principlesSection(input: CalculationReportInput, issues: ReportGateIssu
         ['적절성\nRelevance',
             'CBAM 목적에 필요한 데이터를 EU Communication Template 구조에 맞게 수집·산정. 간접배출 취급은 품목별로 판단(제3.1장).',
             'CN 코드를 EU 공식 템플릿 CN 목록과 대조 확인.',
-            '간접배출 취급 판정은 CN 접두 규칙 기반이며 Annex II 등재 목록 대조 미완 — 확인 필요(자료). 조항 단위 인용은 확인 필요(규정). EU 규정·템플릿 개정 시 최신판 기준 재검토.'],
+            `간접배출 취급 판정은 ${CN_MASTER_CITATION}의 CN 목록 조회 기반이나, 그 플래그가 Annex II 등재와 법적으로 동치인지는 대조 미완 — 확인 필요(규정). 조항 단위 인용은 확인 필요(규정). EU 규정·템플릿 개정 시 최신판 기준 재검토.`],
     ];
 
     return [
@@ -1605,7 +1608,7 @@ function improvementSection(input: CalculationReportInput) {
 
     rows.push([
         '간접배출 취급 판정 근거',
-        '산정 도구의 CN 접두 규칙으로 판정. Annex II 등재 목록 원본 대조 미완',
+        `${CN_MASTER_CITATION}의 CN 목록·확정기간 간접배출 관련성 플래그를 조회해 판정. 그 플래그와 Annex II 등재의 법적 동치는 대조 미완`,
         '등재 목록·판본을 확보해 품목별 등재 사실을 대조하고 부속서 B에 등재 — 확인 필요(자료).',
     ]);
     rows.push([

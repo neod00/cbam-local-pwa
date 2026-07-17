@@ -3,6 +3,7 @@
 import { ContactDialog } from '@/components/ContactDialog';
 import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummary';
 import { ActionItemCard, Button, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
+import { INDIRECT_RELEVANCE_LABEL, INDIRECT_RELEVANCE_TONE } from '@/lib/cbam-product-rules';
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import {
     createEuExportFilename,
@@ -1504,8 +1505,8 @@ export default function ExportPage() {
                                     <h3 className="break-words text-sm font-semibold text-slate-950">{result.product_name}</h3>
                                     <p className="mt-1 break-words text-xs text-slate-600">{result.process_name}</p>
                                 </div>
-                                <StatusBadge tone={result.indirect_emissions_applicable ? 'success' : 'warning'}>
-                                    {result.indirect_emissions_applicable ? '간접 포함' : '인증서 산정 제외'}
+                                <StatusBadge tone={INDIRECT_RELEVANCE_TONE[result.indirect_emissions_relevance]}>
+                                    {INDIRECT_RELEVANCE_LABEL[result.indirect_emissions_relevance]}
                                 </StatusBadge>
                             </div>
                             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -1564,8 +1565,8 @@ export default function ExportPage() {
                                     <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">{formatNumber(result.direct_see)}</td>
                                     <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">
                                         {formatNumber(result.indirect_see)}
-                                        <div className={result.indirect_emissions_applicable ? 'text-xs text-slate-400' : 'text-xs font-semibold text-amber-700'}>
-                                            {result.indirect_emissions_applicable ? '간접 포함' : '인증서 산정 제외'}
+                                        <div className={result.indirect_emissions_relevance === 'INCLUDED' ? 'text-xs text-slate-400' : 'text-xs font-semibold text-amber-700'}>
+                                            {INDIRECT_RELEVANCE_LABEL[result.indirect_emissions_relevance]}
                                         </div>
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-4 text-right text-sm font-semibold text-gray-900">{formatNumber(result.see_cbam_basis ?? 0)}</td>

@@ -27,15 +27,40 @@ export interface IndirectEmissionsApplicability {
     relevance: IndirectEmissionsRelevance;
     rule_code: IndirectEmissionsRuleCode;
     label: string;
-    /** 조회된 품목군. UNDETERMINED면 없다. */
+    /** 조회된 품목군. 단일 확정 시에만 채운다. 접두 rollup에서 하위가 여럿이면 대표를 고를 근거가 없다. */
     good?: string;
+    /** 조회에 걸린 품목군 전부. 판정된 경우 최소 1건. */
+    goods?: string[];
     /** 무엇을 조회해서 이렇게 판정했는지의 **사실 진술**. 보고서가 그대로 인용한다. */
     lookup: string;
     /** 4·6자리 입력을 하위 8자리 rollup으로 판정했는가 */
     matched_by_prefix?: boolean;
 }
 
-const MASTER_CITATION = `EU 공식 Communication Template(판본 ${CN_MASTER_TEMPLATE_VERSION})`;
+export const MASTER_CITATION = `EU 공식 Communication Template(판본 ${CN_MASTER_TEMPLATE_VERSION})`;
+
+/**
+ * 표시 계층 공용 라벨. **boolean이 아니라 3상태로 표시해야 한다.**
+ *
+ * 「Annex II direct-only」라고 쓰지 않는다 — 원본 워크북에 그 문자열이 없어 우리는 등재를
+ * 확인하지 못했다. 판정 불가 제품에 그렇게 쓰면 확인하지 못한 법적 단정을 인쇄하는 것이다.
+ *
+ * boolean(indirect_emissions_applicable)으로 표시하면 「판정 불가」가 「제외」로 붕괴해,
+ * 진짜 비관련 품목과 화면상 구분되지 않는다(씨밤이 P1).
+ */
+export const INDIRECT_RELEVANCE_LABEL: Record<IndirectEmissionsRelevance, string> = {
+    INCLUDED: '간접배출 포함',
+    NOT_RELEVANT: '인증서 산정 제외',
+    UNDETERMINED: '판정 불가 — 확인 필요',
+};
+
+export type IndirectRelevanceTone = 'success' | 'warning' | 'danger';
+
+export const INDIRECT_RELEVANCE_TONE: Record<IndirectEmissionsRelevance, IndirectRelevanceTone> = {
+    INCLUDED: 'success',
+    NOT_RELEVANT: 'warning',
+    UNDETERMINED: 'danger',
+};
 
 export type CbamGoodsSector =
     | 'iron_steel'
@@ -68,8 +93,8 @@ function relevanceOfGood(good: string, lookup: string, matchedByPrefix?: boolean
     const indirectRelevant = GOODS_INDIRECT_RELEVANCE[good];
 
     return indirectRelevant
-        ? { relevance: 'INCLUDED', rule_code: 'GOODS_INDIRECT_RELEVANT', label: '간접 포함', good, lookup, matched_by_prefix: matchedByPrefix }
-        : { relevance: 'NOT_RELEVANT', rule_code: 'GOODS_INDIRECT_NOT_RELEVANT', label: '인증서 산정 제외', good, lookup, matched_by_prefix: matchedByPrefix };
+        ? { relevance: 'INCLUDED', rule_code: 'GOODS_INDIRECT_RELEVANT', label: '간접 포함', good, goods: [good], lookup, matched_by_prefix: matchedByPrefix }
+        : { relevance: 'NOT_RELEVANT', rule_code: 'GOODS_INDIRECT_NOT_RELEVANT', label: '인증서 산정 제외', good, goods: [good], lookup, matched_by_prefix: matchedByPrefix };
 }
 
 /**
@@ -110,13 +135,17 @@ export function getIndirectEmissionsApplicability(product?: Pick<Product, 'cn_co
             const relevances = new Set(children.map(([, good]) => GOODS_INDIRECT_RELEVANCE[good]));
 
             if (relevances.size === 1) {
-                const good = children[0][1];
+                const distinctGoods = [...new Set(children.map(([, item]) => item))];
+                // 하위 품목군이 여럿이면 그중 하나를 대표로 고를 근거가 없다(예: CN 2523 →
+                // Cement clinker·Cement·Aluminous cement). relevance는 같으므로 판정은 유효하나,
+                // good을 첫 자식으로 채우면 「품목군 X로 조회됨」이 거짓이 된다(씨밤이 P2).
+                const good = distinctGoods.length === 1 ? distinctGoods[0] : undefined;
+                const lookup = `${MASTER_CITATION}의 CN 목록에서 CN ${code}(${code.length}자리)에 속하는 하위 CN ${children.length}건이 모두 동일하게 분류되어 그 값을 적용함. 하위 품목군: 「${distinctGoods.map((item) => item.trim()).join('」·「')}」.`;
+                const relevance = GOODS_INDIRECT_RELEVANCE[children[0][1]];
 
-                return relevanceOfGood(
-                    good,
-                    `${MASTER_CITATION}의 CN 목록에서 CN ${code}(${code.length}자리)에 속하는 하위 CN ${children.length}건이 모두 동일하게 분류되어 그 값을 적용함. 하위 품목군: 「${[...new Set(children.map(([, item]) => item.trim()))].join('」·「')}」.`,
-                    true
-                );
+                return relevance
+                    ? { relevance: 'INCLUDED', rule_code: 'GOODS_INDIRECT_RELEVANT', label: '간접 포함', good, goods: distinctGoods, lookup, matched_by_prefix: true }
+                    : { relevance: 'NOT_RELEVANT', rule_code: 'GOODS_INDIRECT_NOT_RELEVANT', label: '인증서 산정 제외', good, goods: distinctGoods, lookup, matched_by_prefix: true };
             }
 
             return {
@@ -232,10 +261,12 @@ const SECTOR_LABELS: Record<CbamGoodsSector, string> = {
 
 export function getCbamGoodsMetadata(product?: Pick<Product, 'cn_code' | 'hs_code'>): CbamGoodsMetadata {
     const applicability = getIndirectEmissionsApplicability(product);
-    const good = applicability.good;
+    const goods = applicability.goods ?? [];
 
-    if (good) {
-        const sector = GOOD_SECTORS[good] ?? 'other';
+    if (applicability.relevance !== 'UNDETERMINED' && goods.length > 0) {
+        // 접두 rollup으로 여러 품목군이 걸릴 수 있다. 전부 같은 분야일 때만 그 분야로 본다.
+        const sectors = [...new Set(goods.map((item) => GOOD_SECTORS[item] ?? 'other'))];
+        const sector = sectors.length === 1 ? sectors[0] : 'other';
         const directOnly = applicability.relevance === 'NOT_RELEVANT';
 
         return {
@@ -246,18 +277,20 @@ export function getCbamGoodsMetadata(product?: Pick<Product, 'cn_code' | 'hs_cod
             annex_ii_direct_only: directOnly,
             direct_only_label: directOnly ? '간접배출 비관련(확정기간)' : 'Indirect 포함',
             precursor_review_recommended: sector === 'iron_steel' || sector === 'aluminium' || sector === 'fertilisers',
-            note: `${MASTER_CITATION}의 CN 목록에서 품목군 「${good.trim()}」로 조회됨. ${applicability.lookup}`,
+            note: applicability.lookup,
         };
     }
 
+    // 판정 불가. annex_ii_direct_only=false는 「간접 포함」이 아니라 「직접전용으로 판정하지 못함」이다.
+    // direct_only_label을 「확인 필요」로 두어 표시 계층이 이를 「포함」으로 읽지 않게 한다.
     return {
         sector: 'other',
         sector_label: '확인 필요',
         annex_i_candidate: false,
         steel_app_supported: false,
         annex_ii_direct_only: false,
-        direct_only_label: '확인 필요',
+        direct_only_label: INDIRECT_RELEVANCE_LABEL.UNDETERMINED,
         precursor_review_recommended: false,
-        note: '현재 대표 규칙에 없는 코드입니다. 최신 EU Communication Template의 CN 목록과 품목군 기준을 확인하세요.',
+        note: applicability.lookup,
     };
 }

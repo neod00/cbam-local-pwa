@@ -5,6 +5,7 @@ import { SeeFlowDiagram } from '@/components/SeeFlowDiagram';
 import { WorkflowGuideCard } from '@/components/WorkflowGuideCard';
 import { ActionItemCard, Button, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
+import { INDIRECT_RELEVANCE_LABEL, INDIRECT_RELEVANCE_TONE } from '@/lib/cbam-product-rules';
 import { createDashboardSummary } from '@/lib/dashboard-summary';
 import { evaluateEuExportReadiness } from '@/lib/eu-template-export';
 import { CBAM_LAST_BACKUP_AT_KEY, getBackupStatus, getLocalSetting, listLocalItems } from '@/lib/local-db';
@@ -291,8 +292,8 @@ export default function Home() {
                   <h3 className="mt-1 break-words text-xl font-semibold text-slate-950">{primaryProduct.product_name}</h3>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <StatusBadge tone="info">Annex I 대상 검토</StatusBadge>
-                    <StatusBadge tone={primaryProduct.indirect_emissions_applicable ? 'success' : 'warning'}>
-                      {primaryProduct.indirect_emissions_applicable ? '간접배출 포함' : 'Annex II direct-only'}
+                    <StatusBadge tone={INDIRECT_RELEVANCE_TONE[primaryProduct.indirect_emissions_relevance]}>
+                      {INDIRECT_RELEVANCE_LABEL[primaryProduct.indirect_emissions_relevance]}
                     </StatusBadge>
                     <StatusBadge tone="pending">공급망 자료 확인</StatusBadge>
                   </div>
@@ -321,7 +322,7 @@ export default function Home() {
                 <span className="ml-1 text-base font-medium">tCO₂e/t</span>
               </div>
               <p className="mt-2 text-xs leading-5 text-teal-900">
-                Annex II direct-only 품목은 최종제품 자체 간접배출을 인증서 산정 기준에서 제외하고, 내부 검토용 total SEE로 별도 비교합니다.
+                EU 공식 CN 목록에서 간접배출 비관련으로 분류된 품목은 최종제품 자체 간접배출을 인증서 산정 기준에서 제외하고, 내부 검토용 total SEE로 별도 비교합니다.
               </p>
             </div>
             <dl className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-4 text-sm">
@@ -335,8 +336,12 @@ export default function Home() {
               </div>
               <div className="flex justify-between gap-3 py-3">
                 <dt className="text-slate-500">간접배출 검토</dt>
-                <dd><StatusBadge tone={results.some((result) => !result.indirect_emissions_applicable) ? 'warning' : 'success'}>
-                  {results.some((result) => !result.indirect_emissions_applicable) ? '제외 항목 있음' : '포함 기준'}
+                <dd><StatusBadge tone={results.some((result) => result.indirect_emissions_relevance === 'UNDETERMINED')
+                  ? 'danger'
+                  : results.some((result) => result.indirect_emissions_relevance === 'NOT_RELEVANT') ? 'warning' : 'success'}>
+                  {results.some((result) => result.indirect_emissions_relevance === 'UNDETERMINED')
+                    ? '판정 불가 항목 있음'
+                    : results.some((result) => result.indirect_emissions_relevance === 'NOT_RELEVANT') ? '제외 항목 있음' : '포함 기준'}
                 </StatusBadge></dd>
               </div>
             </dl>

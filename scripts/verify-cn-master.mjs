@@ -7,11 +7,10 @@
 // 이 게이트는 생성기를 다시 돌려 **바이트 단위로 비교**한다. 다르면 실패.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 const GENERATED = 'src/lib/cn-master.generated.ts';
 const TEMPLATE = 'public/templates/CBAM_Communication_template_for_installations_en_20241213.xlsx';
-const BACKUP = 'src/lib/cn-master.generated.ts.verify-backup';
 
 function fail(message) {
     console.error(`CN master verification FAILED: ${message}`);
@@ -24,29 +23,26 @@ function fail(message) {
 const normalize = (text) => text.replace(/\r\n/g, '\n');
 
 const committed = readFileSync(GENERATED, 'utf8');
-writeFileSync(BACKUP, committed);
+let regenerated;
 
+// 백업 파일을 쓰지 않는다. 복원은 메모리의 committed로 하므로 파일은 유출 경로일 뿐이었다 —
+// fail()의 process.exit이 finally를 건너뛰어 실패할 때마다 .verify-backup이 남았고,
+// gitignore 대상도 아니라 git add -A로 CN 마스터 사본이 커밋될 수 있었다(씨밤이 P2).
 try {
     execFileSync('node', ['scripts/generate-cn-master.mjs'], { stdio: 'pipe' });
-    const regenerated = readFileSync(GENERATED, 'utf8');
-
-    // 재생성 파일을 그대로 두면 작업트리가 개행만 다른 상태로 더럽혀진다. 커밋본을 되돌린다.
-    writeFileSync(GENERATED, committed);
-
-    if (normalize(regenerated) !== normalize(committed)) {
-        fail(
-            `${GENERATED}가 원본 템플릿에서 재생성한 결과와 다릅니다.\n` +
-            '  생성 파일을 손으로 고쳤거나, 템플릿이 교체됐는데 재생성하지 않았습니다.\n' +
-            '  `npm run generate:cn-master`를 실행하고 변경 내용을 리뷰하세요.\n' +
-            '  플래그가 바뀌면 SEE가 바뀝니다 — 그 결정 자리는 PR 리뷰입니다.'
-        );
-    }
+    regenerated = readFileSync(GENERATED, 'utf8');
 } finally {
-    try {
-        unlinkSync(BACKUP);
-    } catch {
-        // 백업 삭제 실패는 검증 결과에 영향을 주지 않는다.
-    }
+    // 생성기가 덮어쓴 파일을 반드시 커밋본으로 되돌린다. 생성기가 던져도 작업트리를 더럽히지 않는다.
+    writeFileSync(GENERATED, committed);
+}
+
+if (normalize(regenerated) !== normalize(committed)) {
+    fail(
+        `${GENERATED}가 원본 템플릿에서 재생성한 결과와 다릅니다.\n` +
+        '  생성 파일을 손으로 고쳤거나, 템플릿이 교체됐는데 재생성하지 않았습니다.\n' +
+        '  `npm run generate:cn-master`를 실행하고 변경 내용을 리뷰하세요.\n' +
+        '  플래그가 바뀌면 SEE가 바뀝니다 — 그 결정 자리는 PR 리뷰입니다.'
+    );
 }
 
 // 원본 판본 핀 — 템플릿이 바뀌면 생성 파일의 sha256도 바뀌므로 위 비교에서 이미 잡히지만,

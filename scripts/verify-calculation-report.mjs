@@ -498,7 +498,15 @@ const mixedProductsReport = reportModule.createCalculationReport({
 const mixedProductsXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await mixedProductsReport.blob.arrayBuffer()))['word/document.xml']);
 assertTrue(mixedProductsXml.includes('제품별 상이'), '간접 취급이 갈리면 표지가 「제품별 상이」로 표기');
 assertTrue(mixedProductsXml.includes('응결 철광석') && mixedProductsXml.includes('용접강관'), '3.1장이 제품별로 판정');
-assertTrue(mixedProductsXml.includes('CN 접두 규칙'), '3.1장이 판정 방법(접두 규칙·등재 목록 미조회)을 고지');
+// 「CN 접두 규칙」 부분문자열 검사는 공허하다 — 새 문안 「CN 접두 규칙을 사용하지 않았다」도
+// 통과시켜 정반대 진술을 승인한다. 실제로 이 통로로 13·14장의 접두 규칙 잔존이 빠져나갔다(씨밤이 P2).
+// 문서 전체에서 「접두 규칙으로 판정했다」는 진술이 없어야 한다.
+const claimsPrefixRule = /접두 규칙 기반|접두 규칙으로 판정|접두 규칙에 따른/;
+assertTrue(!claimsPrefixRule.test(mixedProductsXml.replace(/<[^>]+>/g, ' ')), '다중 제품 문서가 「접두 규칙으로 판정했다」고 진술하지 않음');
+// 대신 조회 사실과 미확인 사항을 밝혀야 한다.
+assertTrue(mixedProductsXml.includes('CN 접두 규칙을 사용하지 않았다'), '3.1장이 접두 규칙 미사용을 명시');
+assertTrue(mixedProductsXml.includes('Annex II 등재 목록 원본을 조회한 결과가 아니다'), '3.1장이 Annex II 대조 미완을 유지');
+assertTrue(mixedProductsXml.includes('Communication Template'), '3.1장이 조회한 출처를 인용');
 
 // [P1] 기간이 여러 개면 periods[0]이 아니라 결과가 가리키는 기간을 써야 한다.
 const twoPeriods = reportModule.createCalculationReport({
@@ -554,6 +562,10 @@ assertTrue(!emptyCellXml.includes('0.00000000'), '미공표 DV가 0.00000000으�
 
 // [P0] 13장 자체평가는 실제 게이트 결과에서 파생돼야 한다. G3 경고가 떠 있는데 「경고 0건」은 거짓이다.
 const okXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await ok.blob.arrayBuffer()))['word/document.xml']);
+// [P1] 13·14장이 3.1장과 정반대를 말하면 안 된다 — 문서가 자기 판정 방법을 거짓 진술한다.
+// 3.1장만 고치고 13·14장을 놓쳤던 것이 실제 결함이었다(씨밤이 P1).
+assertTrue(!claimsPrefixRule.test(okXml.replace(/<[^>]+>/g, ' ')), '문서 전체가 「접두 규칙으로 판정했다」고 진술하지 않음');
+
 assertTrue(ok.issues.some((issue) => issue.gate === 'G3'), '전제: 기본 시나리오는 G3 경고가 있다');
 assertTrue(!okXml.includes('경고 0건'), '경고가 있는데 「경고 0건」이라 말하지 않음');
 assertTrue(/경고 \d+건\(G/.test(okXml.replace(/<[^>]+>/g, '')), '13장이 실제 경고 건수·게이트를 서술');

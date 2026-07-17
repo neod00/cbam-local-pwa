@@ -4,6 +4,7 @@ import { ActionItemCard, DataTable, PageHeader, SectionCard, StatCard, StatusBad
 import { calculateLocalResults, getLocalCalculationWarningHref } from '@/lib/calculation-engine';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
 import { listLocalItems } from '@/lib/local-db';
+import { INDIRECT_RELEVANCE_LABEL } from '@/lib/cbam-product-rules';
 import { getProductReportingScopeLabel } from '@/lib/reporting-scope';
 import { AlertTriangle, ArrowRight, Factory, Gauge, Percent, Scale, Split, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
@@ -56,7 +57,8 @@ function getAllocationTone(result: LocalCalculationResult) {
 }
 
 function getIndirectApplicabilityLabel(result: LocalCalculationResult) {
-    return result.indirect_emissions_applicable ? '간접 포함' : '인증서 산정 제외';
+    // boolean이 아니라 3상태로 표시한다. boolean은 「판정 불가」를 「제외」로 뭉갠다(씨밤이 P1).
+    return INDIRECT_RELEVANCE_LABEL[result.indirect_emissions_relevance];
 }
 
 export default function ResultsPage() {
@@ -146,7 +148,7 @@ export default function ResultsPage() {
                                 <span className="ml-1 text-base font-medium">tCO₂e/t</span>
                             </div>
                             <p className="mt-2 text-xs leading-5 text-teal-900">
-                                제품 1톤당 CBAM 계산에 사용할 배출량입니다. 철강 Annex II 품목은 최종제품 자체의 간접배출을 여기서 제외할 수 있습니다.
+                                제품 1톤당 CBAM 계산에 사용할 배출량입니다. EU 공식 CN 목록에서 간접배출 비관련으로 분류된 품목은 최종제품 자체의 간접배출을 여기서 제외합니다.
                             </p>
                         </div>
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -170,7 +172,7 @@ export default function ResultsPage() {
                         <div className="rounded-2xl border border-slate-200 bg-white p-4">
                             <dt className="text-xs font-semibold text-slate-500">간접배출 제외 라인</dt>
                             <dd className="mt-2 text-2xl font-semibold text-slate-950">{summary.indirectExcludedCount}개</dd>
-                            <p className="mt-1 text-xs text-slate-500">Annex II direct-only 등</p>
+                            <p className="mt-1 text-xs text-slate-500">EU 공식 CN 목록에서 간접배출 비관련으로 분류된 품목</p>
                         </div>
                         <div className="rounded-2xl border border-slate-200 bg-white p-4">
                             <dt className="text-xs font-semibold text-slate-500">평균 CBAM 기준 SEE</dt>
