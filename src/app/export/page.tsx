@@ -20,6 +20,7 @@ import {
     type EuTemplateValidationResult,
 } from '@/lib/eu-template-export';
 import { createDeliveryPackage } from '@/lib/delivery-package';
+import { createCalculationReport } from '@/lib/calculation-report';
 import {
     CBAM_LAST_BACKUP_AT_KEY,
     exportLocalBackup,
@@ -202,6 +203,9 @@ export default function ExportPage() {
     const [exportError, setExportError] = useState('');
     const [packageError, setPackageError] = useState('');
     const [isPackaging, setIsPackaging] = useState(false);
+    const [reportError, setReportError] = useState<string | null>(null);
+    const [reportNotices, setReportNotices] = useState<string[]>([]);
+    const [isReporting, setIsReporting] = useState(false);
     const [lastExportResult, setLastExportResult] = useState<LastExportResult | undefined>();
     const [lastPackageResult, setLastPackageResult] = useState<LastPackageResult | undefined>();
     const [lastBackupAt, setLastBackupAt] = useState<string | undefined>();
@@ -624,6 +628,34 @@ export default function ExportPage() {
         }
     }
 
+    async function handleCalculationReport() {
+        setReportError(null);
+        setReportNotices([]);
+        setIsReporting(true);
+
+        try {
+            const report = createCalculationReport({
+                installations,
+                periods,
+                products,
+                processes,
+                productOutputLines,
+                sourceStreams,
+                precursors,
+                results: reportableResults,
+                generatedAt: new Date(),
+            });
+
+            downloadBlob(report.blob, report.filename);
+            // 차단은 예외로 처리되므로 여기 남는 건 경고·라벨뿐이다. 조용히 넘기지 않고 화면에 보여준다.
+            setReportNotices(report.issues.map((issue) => `[${issue.gate}] ${issue.message}`));
+        } catch (error) {
+            setReportError(error instanceof Error ? error.message : '산정보고서 생성 중 오류가 발생했습니다.');
+        } finally {
+            setIsReporting(false);
+        }
+    }
+
     return (
         <div className="space-y-6">
             <PageHeader
@@ -667,6 +699,15 @@ export default function ExportPage() {
                             >
                                 <Download className="mr-2 h-4 w-4" />
                                 EU 템플릿 복사본만 생성
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={handleCalculationReport}
+                                disabled={reportableResults.length === 0 || isReporting}
+                            >
+                                <FileText className="mr-2 h-4 w-4" />
+                                {isReporting ? '보고서 생성 중' : '산정보고서(Word) 다운로드'}
                             </Button>
                             <Link href="/settings">
                                 <Button type="button" variant="secondary">
@@ -973,6 +1014,24 @@ export default function ExportPage() {
                         <div className="mt-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
                             <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
                             <span>{packageError}</span>
+                        </div>
+                    )}
+
+                    {reportError && (
+                        <div className="mt-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                            <span>산정보고서: {reportError}</span>
+                        </div>
+                    )}
+
+                    {reportNotices.length > 0 && (
+                        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                            <p className="font-semibold">산정보고서를 생성했습니다 — 아래 항목을 확인하세요.</p>
+                            <ul className="mt-2 list-disc space-y-1 pl-5">
+                                {reportNotices.map((notice) => (
+                                    <li key={notice}>{notice}</li>
+                                ))}
+                            </ul>
                         </div>
                     )}
 
