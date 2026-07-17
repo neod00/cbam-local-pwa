@@ -452,7 +452,7 @@ export default function ExportPage() {
             reportingIndirectSee: result.see_indirect_incl_precursor,
             cbamBasisSee: result.see_cbam_basis ?? 0,
             informationalTotalSee: result.see_informational_total,
-            isIndirectIncluded: result.indirect_emissions_applicable,
+            isIndirectIncluded: result.indirect_emissions_relevance === 'INCLUDED',
         })),
         [reportableResults]
     );

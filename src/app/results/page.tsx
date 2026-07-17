@@ -61,6 +61,17 @@ function getIndirectApplicabilityLabel(result: LocalCalculationResult) {
     return INDIRECT_RELEVANCE_LABEL[result.indirect_emissions_relevance];
 }
 
+/** 색도 3상태로 나눈다. 판정 불가와 비관련이 같은 amber면 화면에서 구분되지 않는다(씨밤이 P2). */
+function getIndirectToneClass(result: LocalCalculationResult, base: string) {
+    if (result.indirect_emissions_relevance === 'INCLUDED') {
+        return `${base} font-medium text-slate-900`;
+    }
+
+    return result.indirect_emissions_relevance === 'UNDETERMINED'
+        ? `${base} font-semibold text-rose-700`
+        : `${base} font-semibold text-amber-700`;
+}
+
 export default function ResultsPage() {
     const [results, setResults] = useState<LocalCalculationResult[]>([]);
     const [loading, setLoading] = useState(true);
@@ -114,7 +125,7 @@ export default function ResultsPage() {
             weightedInformationalTotalSee: totalOutput > 0
                 ? reportableResults.reduce((sum, result) => sum + result.see_informational_total * result.output_mass_t, 0) / totalOutput
                 : 0,
-            indirectExcludedCount: reportableResults.filter((result) => !result.indirect_emissions_applicable).length,
+            indirectExcludedCount: reportableResults.filter((result) => result.indirect_emissions_relevance === 'NOT_RELEVANT').length,
             warningCount: allWarnings.length,
             warnings: allWarnings,
         };
@@ -266,9 +277,10 @@ export default function ResultsPage() {
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
                                             {formatNumber(result.indirect_see)}
-                                            <div className={result.indirect_emissions_applicable ? 'mt-1 text-xs text-slate-400' : 'mt-1 text-xs font-semibold text-amber-700'}>
+                                            <div className={getIndirectToneClass(result, 'mt-1 text-xs')}>
                                                 {getIndirectApplicabilityLabel(result)}
-                                                {!result.indirect_emissions_applicable && result.indirect_emissions_excluded_tco2e > 0
+                                                {/* 제외량은 「제외로 판정된」 경우에만 붙인다. 판정 불가에 붙이면 제외를 확정한 것처럼 읽힌다. */}
+                                                {result.indirect_emissions_relevance === 'NOT_RELEVANT' && result.indirect_emissions_excluded_tco2e > 0
                                                     ? ` ${formatNumber(result.indirect_emissions_excluded_tco2e)} tCO2e`
                                                     : ''}
                                             </div>
@@ -329,7 +341,7 @@ export default function ResultsPage() {
                                 </div>
                                 <div>
                                     <dt className="text-xs text-slate-500">간접 SEE</dt>
-                                    <dd className={result.indirect_emissions_applicable ? 'mt-1 font-medium text-slate-900' : 'mt-1 font-semibold text-amber-700'}>
+                                    <dd className={getIndirectToneClass(result, 'mt-1')}>
                                         {formatNumber(result.indirect_see)}
                                     </dd>
                                 </div>

@@ -196,7 +196,7 @@ assert.equal(productLineResults[0].allocation_share, 0.6);
 assert.equal(productLineResults[0].output_mass_t, 600);
 assert.equal(productLineResults[0].direct_emissions_tco2e, 72);
 assert.equal(productLineResults[0].direct_see, 0.12);
-assert.equal(productLineResults[0].indirect_emissions_applicable, false);
+assert.equal(productLineResults[0].indirect_emissions_relevance, 'NOT_RELEVANT');
 assert.equal(productLineResults[0].indirect_emissions_rule, 'GOODS_INDIRECT_NOT_RELEVANT');
 assert.equal(productLineResults[0].indirect_emissions_gross_tco2e, 141);
 assert.equal(productLineResults[0].indirect_emissions_excluded_tco2e, 141);
@@ -301,17 +301,17 @@ assert.match(unknownResults[0].warnings.join('\n'), /간접배출 관련성을 �
 // boolean만 보면 「판정 불가」와 「비관련」이 똑같이 false라 화면이 둘을 구분하지 못하고,
 // 판정하지 못한 제품에 "Annex II direct-only" 같은 법적 단정을 인쇄하게 된다(씨밤이 P1).
 assert.equal(unknownResults[0].indirect_emissions_relevance, 'UNDETERMINED');
-assert.equal(unknownResults[0].indirect_emissions_applicable, false);
 const steelResult = calculateLocalResults({
   processes: [{ ...process, id: 'proc-steel', product_id: 'p-steel' }],
   precursors: [], products: [{ ...product, id: 'p-steel', cn_code: '73063077', hs_code: '7306', reporting_scope: 'CBAM_GOOD' }],
   periods: [period], sourceStreams: [{ ...sourceStream, id: 'ss-steel', process_id: 'proc-steel' }],
 })[0];
 assert.equal(steelResult.indirect_emissions_relevance, 'NOT_RELEVANT');
-assert.equal(steelResult.indirect_emissions_applicable, false);
-// 두 제품은 boolean이 같지만 relevance로는 구분된다 — 표시 계층은 relevance를 읽어야 한다.
-assert.equal(steelResult.indirect_emissions_applicable, unknownResults[0].indirect_emissions_applicable);
+// 두 제품은 relevance로 구분된다. boolean(indirect_emissions_applicable)은 타입에서 지웠다 —
+// 남겨두면 둘 다 false라 화면이 구분하지 못하고, 소비자를 사람이 기억으로 찾아야 한다.
+// 실제로 여섯 번 연속 일부만 고쳤고, 마지막엔 대시보드·SEE 흐름도를 놓쳤다.
 assert.notEqual(steelResult.indirect_emissions_relevance, unknownResults[0].indirect_emissions_relevance);
+assert.equal(steelResult.indirect_emissions_applicable, undefined, 'boolean은 결과에 존재하지 않는다');
 // 진짜 비관련 품목은 기준 SEE가 산출된다. 판정 불가만 null이다.
 assert.ok(steelResult.see_cbam_basis !== null, '비관련 품목은 기준 SEE 산출');
 
@@ -360,7 +360,7 @@ assertClose(euP1Res.own_indirect_see, 0.5831, 0.001);
 assertClose(euP1Res.see_informational_total, 2.37991, 0.01);
 assertClose(euP2Res.see_informational_total, 3.17109, 0.01);
 // 인증서 기준(direct-only) = EU SEE(direct), 전구물질 indirect 제외 확인
-assert.equal(euP1Res.indirect_emissions_applicable, false);
+assert.equal(euP1Res.indirect_emissions_relevance, 'NOT_RELEVANT');
 assertClose(euP1Res.see_cbam_basis, 1.00149, 0.01);
 assertClose(euP2Res.see_cbam_basis, 1.43961, 0.01);
 assertClose(euP1Res.see_direct_incl_precursor, 1.00149, 0.01);
@@ -476,12 +476,10 @@ assertClose(complexHrcResult.precursor_indirect_see, 2380 / 8200);
 assertClose(complexHrcResult.see_cbam_basis, (830.28 + 9225) / 8200);
 assertClose(complexHrcResult.see_informational_total, (830.28 + 2097 + 9225 + 2380) / 8200);
 assert.equal(complexHrcResult.is_cbam_reportable, true);
-assert.equal(complexHrcResult.indirect_emissions_applicable, false);
+assert.equal(complexHrcResult.indirect_emissions_relevance, 'NOT_RELEVANT');
 // 밀스케일(CN 2619 00 90)은 공식 CN 목록에 없어 간접배출 관련성을 판정하지 못한다.
 // 종전 접두 휴리스틱은 DEFAULT_INCLUDED로 "포함"이라 단정했다 — 근거 없는 단정이었다.
 assert.equal(complexScaleResult.indirect_emissions_relevance, 'UNDETERMINED');
-assert.equal(complexScaleResult.indirect_emissions_applicable, false);
-// 어차피 비CBAM 부산물이라 인증서 기준 SEE는 산출 대상이 아니다.
 assert.equal(complexScaleResult.is_cbam_reportable, false);
 assert.equal(complexScaleResult.see_cbam_basis, null);
 assertClose(

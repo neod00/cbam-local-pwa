@@ -76,7 +76,7 @@ export function SeeFlowDiagram({
         isExample,
         productName,
         cnCode,
-        indirectApplicable,
+        indirectRelevance,
         outputMassT,
         directEmissions,
         ownIndirectEmissions,
@@ -89,12 +89,30 @@ export function SeeFlowDiagram({
 
     const push = (href: string) => router.push(href);
 
-    const basisSub = indirectApplicable ? '= ① + ② + ③ 전부' : '= ① 전부 + ③의 태운 몫';
-    const basisNote = indirectApplicable ? '간접 포함 품목 기준' : '철강(CN 72/73) 규칙 기준';
-    const indirectLabel = indirectApplicable ? '간접 SEE (기준에 포함)' : '간접 SEE (보고용)';
-    const indirectNote = indirectApplicable ? '인증서 계산에도 포함' : '인증서 계산에서만 제외 · 입력 필수';
-    const basisValue = seeCbamBasis === null ? '신고 대상 아님' : `${fmtSee(seeCbamBasis)} tCO₂e/t`;
-    const showTotalIdentity = !indirectApplicable && seeCbamBasis !== null;
+    const indirectIncluded = indirectRelevance === 'INCLUDED';
+    const indirectUndetermined = indirectRelevance === 'UNDETERMINED';
+
+    const basisSub = indirectUndetermined ? '판정 전이라 산출하지 않음' : indirectIncluded ? '= ① + ② + ③ 전부' : '= ① 전부 + ③의 태운 몫';
+    // 「철강(CN 72/73) 규칙 기준」은 접두 규칙 진술이다. 판정은 공식 CN 목록 조회로 한다.
+    const basisNote = indirectUndetermined
+        ? '간접배출 관련성 판정 불가 — 확인 필요'
+        : indirectIncluded
+            ? '간접 포함 품목 기준'
+            : 'EU 공식 CN 목록상 간접배출 비관련';
+    const indirectLabel = indirectIncluded ? '간접 SEE (기준에 포함)' : '간접 SEE (보고용)';
+    const indirectNote = indirectUndetermined
+        ? '인증서 기준 반영 여부 확인 필요'
+        : indirectIncluded
+            ? '인증서 계산에도 포함'
+            : '인증서 계산에서만 제외 · 입력 필수';
+    // seeCbamBasis가 null인 이유는 ①범위 밖 ②판정 불가 둘이다. 둘을 뭉개면 판정 못 한 제품에
+    // 「신고 대상 아님」을 단정하게 된다 — CN 목록은 포함 목록이라 부재가 곧 배제가 아니다(씨밤이 P1).
+    const basisValue = seeCbamBasis !== null
+        ? `${fmtSee(seeCbamBasis)} tCO₂e/t`
+        : indirectUndetermined
+            ? '판정 불가 — 산출 안 함'
+            : '신고 대상 아님';
+    const showTotalIdentity = !indirectIncluded && !indirectUndetermined && seeCbamBasis !== null;
     const totalText = showTotalIdentity
         ? `총 SEE (내부 검토용) ${fmtSee(seeTotal)} tCO₂e/t = ${fmtSee(seeCbamBasis!)} + ${fmtSee(seeIndirect)}`
         : `총 SEE (내부 검토용) ${fmtSee(seeTotal)} tCO₂e/t`;

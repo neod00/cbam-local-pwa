@@ -955,7 +955,7 @@ const calculationResult = {
   production_route: process.production_route,
   output_mass_t: process.output_mass_t,
   direct_emissions_tco2e: process.direct_attributable_emissions_tco2e,
-  indirect_emissions_applicable: false,
+  indirect_emissions_relevance: 'NOT_RELEVANT',
   indirect_emissions_rule: 'ANNEX_II_DIRECT_ONLY',
   indirect_emissions_excluded_tco2e: 235,
   indirect_emissions_gross_tco2e: 235,

@@ -1,4 +1,5 @@
 import type { LocalCalculationResult } from './calculation-engine';
+import type { IndirectEmissionsRelevance } from './cbam-product-rules';
 
 // SEE 산정 흐름도(SeeFlowDiagram)에 바인딩할 값. 절대배출(tCO₂e)과 SEE(tCO₂e/t)를 함께 담는다.
 // 다이어그램은 이 순수 구조만 받아 그리므로, 예시/실데이터 전환과 화면 렌더링이 분리된다.
@@ -6,8 +7,10 @@ export interface SeeFlowBinding {
     isExample: boolean;
     productName?: string;
     cnCode?: string;
-    // 인증서 산정 기준에 간접이 포함되는 품목인가(대개 철강 direct-only는 false, CN 2601 12 00 등은 true)
-    indirectApplicable: boolean;
+    // 인증서 산정 기준에 간접이 포함되는가 — 3상태.
+    // boolean이면 「판정 불가」가 「제외」로 붕괴해, 흐름도가 판정 못 한 제품에 대해
+    // 「신고 대상 아님」을 단정하고 「철강(CN 72/73) 규칙 기준」이라 말한다(씨밤이 P1).
+    indirectRelevance: IndirectEmissionsRelevance;
     outputMassT: number;
     directEmissions: number; // ① 자체 연료·공정 직접배출 (tCO₂e)
     ownIndirectEmissions: number; // ② 자체 전력 간접배출, 제외 적용 전 총량 (tCO₂e)
@@ -24,7 +27,7 @@ export const EXAMPLE_SEE_FLOW: SeeFlowBinding = {
     isExample: true,
     productName: '강선(예시)',
     cnCode: '7217',
-    indirectApplicable: false,
+    indirectRelevance: 'NOT_RELEVANT',
     outputMassT: 1000,
     directEmissions: 200,
     ownIndirectEmissions: 225,
@@ -72,16 +75,20 @@ export function buildSeeFlowBinding(results: LocalCalculationResult[]): SeeFlowB
         0
     ) / output;
 
-    // 모든 대상이 간접 포함이면 true(그때만 '기준에 포함' 문구). 하나라도 direct-only면 false로 두어
-    // 철강 표준 서사('간접은 인증서 계산에서만 제외, 보고엔 필수')를 기본으로 보여준다.
-    const indirectApplicable = reportable.every((result) => result.indirect_emissions_applicable);
+    // 하나라도 판정 불가면 판정 불가로 본다 — 모르는 것을 안전하게 가정하지 않는다.
+    // 전부 간접 포함일 때만 '기준에 포함' 문구를 쓴다.
+    const indirectRelevance: IndirectEmissionsRelevance = reportable.some((result) => result.indirect_emissions_relevance === 'UNDETERMINED')
+        ? 'UNDETERMINED'
+        : reportable.every((result) => result.indirect_emissions_relevance === 'INCLUDED')
+            ? 'INCLUDED'
+            : 'NOT_RELEVANT';
     const primary = basisResults[0] ?? reportable[0];
 
     return {
         isExample: false,
         productName: primary.product_name,
         cnCode: primary.cn_code,
-        indirectApplicable,
+        indirectRelevance,
         outputMassT: output,
         directEmissions,
         ownIndirectEmissions,

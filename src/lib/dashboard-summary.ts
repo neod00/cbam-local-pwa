@@ -176,9 +176,14 @@ export function createDashboardSummary(input: DashboardSummaryInput): DashboardS
             .map((result) => result.process_id)
     );
     const sourceStreamIssueCount = sourceStreamIssueProcessIds.size;
-    const indirectApplicableCount = results.filter((result) => result.indirect_emissions_applicable).length;
-    const indirectCompleted = results.some((result) => result.indirect_emissions_applicable && result.indirect_see > 0);
-    const indirectNotRequired = results.length > 0 && indirectApplicableCount === 0;
+    // 3상태로 센다. boolean으로 세면 「판정 불가」가 「해당 없음」이 되어 준비도를 올린다 —
+    // 판정하지 못한 제품이 「완료」로 표시되는 것은 사용자를 속이는 것이다(씨밤이 P1).
+    const indirectIncludedCount = results.filter((result) => result.indirect_emissions_relevance === 'INCLUDED').length;
+    const indirectUndetermined = results.some((result) => result.indirect_emissions_relevance === 'UNDETERMINED');
+    const indirectCompleted = results.some(
+        (result) => result.indirect_emissions_relevance === 'INCLUDED' && result.indirect_see > 0
+    );
+    const indirectNotRequired = results.length > 0 && indirectIncludedCount === 0 && !indirectUndetermined;
     const hasOfficialReferences = hasBenchmarkReference && hasDefaultValueReference;
     const completedSteps = [
         productCount > 0,
@@ -202,8 +207,8 @@ export function createDashboardSummary(input: DashboardSummaryInput): DashboardS
         },
         {
             name: '간접배출량',
-            status: indirectNotRequired ? '해당 없음' : indirectCompleted ? '완료' : '입력 필요',
-            tone: indirectNotRequired || indirectCompleted ? 'success' : 'neutral',
+            status: indirectUndetermined ? '판정 불가' : indirectNotRequired ? '해당 없음' : indirectCompleted ? '완료' : '입력 필요',
+            tone: indirectUndetermined ? 'danger' : indirectNotRequired || indirectCompleted ? 'success' : 'neutral',
         },
         { name: '전구물질', status: precursorCount > 0 ? '완료' : '입력 필요', tone: precursorCount > 0 ? 'success' : 'neutral' },
         {
