@@ -548,4 +548,86 @@ const emptyCellReport = reportModule.createCalculationReport({
 const emptyCellXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await emptyCellReport.blob.arrayBuffer()))['word/document.xml']);
 assertTrue(!emptyCellXml.includes('0.00000000'), '미공표 DV가 0.00000000으로 인쇄되지 않음');
 
-console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1 회귀).');
+// ---------------- 재감사 R2 회귀 — 문서가 하지 않은 일을 했다고 말하지 않는지 ----------------
+
+// [P0] 13장 자체평가는 실제 게이트 결과에서 파생돼야 한다. G3 경고가 떠 있는데 「경고 0건」은 거짓이다.
+const okXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await ok.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(ok.issues.some((issue) => issue.gate === 'G3'), '전제: 기본 시나리오는 G3 경고가 있다');
+assertTrue(!okXml.includes('경고 0건'), '경고가 있는데 「경고 0건」이라 말하지 않음');
+assertTrue(/경고 \d+건\(G/.test(okXml.replace(/<[^>]+>/g, '')), '13장이 실제 경고 건수·게이트를 서술');
+
+// [P1] 13장이 하지 않은 export 검증을 했다고 주장하지 않는다.
+assertTrue(!okXml.includes('템플릿 기재 셀 전수 자동 대조 검증'), '수행하지 않은 export 검증을 근거로 올리지 않음');
+// 6.4의 단일 배출원 한계 고지가 13장 정확성 근거에도 전재된다.
+assertTrue(okXml.includes('전기(轉記) 오류 검출에 한정'), '13장 정확성이 6.4의 한계를 함께 전재');
+
+// [P1] 산식 피연산자는 반올림하지 않는다 — 문서가 스스로 선언한 규칙.
+assertTrue(okXml.includes('0.030001158'), '5.4 산식이 피연산자를 원천값으로 인쇄');
+assertTrue(okXml.includes('1.99875'), '5.4 전구물질 피연산자 원천값');
+
+// [P1] 7장에 전력 EF 출처를 채우면 14장이 「미기재」라고 우기면 안 된다.
+const filledXml2 = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await filled.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(filledXml2.includes('Country EF list'), '전제: 7장에 전력 EF 출처가 기재됨');
+assertTrue(!filledXml2.includes('공표 메타데이터 미기재'), '7장에 기재되면 14장이 「미기재」를 주장하지 않음');
+// 반대로 비어 있으면 개선 항목으로 올라온다.
+assertTrue(okXml.includes('공표 메타데이터 미기재'), '7장이 비면 14장에 개선 항목으로 등재');
+
+// [P0] 결과의 대부분이 미검증 값에서 온다는 사실이 표지·요약을 통과해야 한다.
+assertTrue(okXml.includes('주요 한계'), '표지에 「주요 한계」 행');
+assertTrue(okXml.includes('98.5%'), '미검증 전구물질 기여 집중도(98.5%)를 정량 노출');
+assertTrue(okXml.includes('주요 잔여 리스크'), '1장 요약에 잔여 리스크 노출');
+assertTrue(okXml.includes('참고 총 SEE'), '1장에 참고 총 SEE');
+
+// [P1] 앱 버전이 표지에 있어야 재현이 성립한다.
+assertTrue(okXml.includes('CBAM Local v0.1.0'), '표지에 산정 엔진 버전');
+
+// [P1] 전구물질 자료 기간이 보고기간과 다르면 불일치를 말해야 한다.
+assertTrue(okXml.includes('본 보고기간(2026)과 불일치'), '8장 vintage 불일치 고지');
+assertTrue(okXml.includes('전구물질 자료 기간'), '14장에 vintage 불일치 개선 항목');
+
+// [P0] 선언은 확보하지 않은 근거로 준거를 말하지 않는다. 국·영문 보증 수준이 같아야 한다.
+assertTrue(!okXml.includes('and its implementing regulations'), '영문 선언이 미확정 이행규정 준거를 주장하지 않음');
+assertTrue(okXml.includes('Items marked'), '영문 선언에도 「확인 필요」 유보 문구');
+assertTrue(okXml.includes('outstanding items are listed in Chapter 14'), '영문 선언이 미해소 항목 등록부를 가리킴');
+assertTrue(okXml.includes('본인이 아는 범위에서'), '국문 선언 한정 유지');
+
+// [P1] 미해소 항목 등록부 — 열거하지 않은 것은 유보할 수 없다.
+assertTrue(okXml.includes('14.1 미해소 항목 등록부'), '14.1 등록부 존재');
+assertTrue(okXml.includes('미해소 표기는 총'), '등록부가 총 건수를 집계');
+
+// [P1] 8.x 자리표시자가 실제 채번으로 바뀌었는지 (전구물질 2건)
+const twoPrecursors = reportModule.createCalculationReport({
+    ...baseInput(),
+    precursors: [basePrecursor, { ...basePrecursor, id: 'pr2', name: '선재' }],
+});
+const twoPrecXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await twoPrecursors.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(!twoPrecXml.includes('8.x'), '8.x 자리표시자 미치환 없음');
+assertTrue(twoPrecXml.includes('8.1 HRC') && twoPrecXml.includes('8.2 선재'), '전구물질 절 번호 채번');
+
+// [P1] 경계 밖 공정·배출원이 6·7장에 유입되면 안 된다.
+const nonCbamProduct = at({ id: 'pX', name: '비CBAM 제품', hs_code: '9999', cn_code: '99999999', hs_group: '99', product_type_enum: 'OTHER', unit: 'tonne', reporting_scope: 'NON_CBAM' });
+const nonCbamProcess = at({ ...baseProcess, id: 'procX', product_id: 'pX', name: '비CBAM 도장', electricity_mwh: 900 });
+const nonCbamStream = at({ ...baseStream, id: 'sX', process_id: 'procX', name: '경유' });
+const scoped = reportModule.createCalculationReport({
+    ...baseInput(),
+    products: [baseProduct, nonCbamProduct],
+    processes: [baseProcess, nonCbamProcess],
+    sourceStreams: [baseStream, nonCbamStream],
+});
+const scopedXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await scoped.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(!scopedXml.includes('비CBAM 도장'), '7장에 경계 밖 공정이 실리지 않음');
+assertTrue(!scopedXml.includes('경유'), '6장에 경계 밖 배출원이 실리지 않음');
+assertTrue(scopedXml.includes('CBAM 대상 생산공정 1개'), '13장이 경계 안 공정 수만 집계');
+
+// [P2] formatPercentForReport가 `+-0.00%`를 내지 않는다.
+assertEqual(fmt.formatPercentForReport(-0.00001), '0.00%', 'formatPercentForReport -0 정규화');
+
+// [P1] 배분기준을 "도구가 검사한다"가 아니라 "무엇을 썼는가"로 서술
+assertTrue(okXml.includes('제품 배분 기준: 질량 기준(MASS) 단일 적용'), '13장 일관성이 실제 배분기준을 진술');
+assertTrue(!okXml.includes('배분기준 혼용 여부는 도구가 자동 경고'), '「도구가 검사한다」를 방법 진술로 쓰지 않음');
+// 미기재가 있으면 완전성 잔여 한계가 그 사실을 말해야 한다(G3도 「기재 필요」를 남긴다)
+assertTrue(okXml.includes('「기재 필요」로 남은 항목이 있다'), '미기재가 있으면 13장 완전성이 이를 잔여 한계로 서술');
+// 내부 enum이 그대로 새어나가면 안 된다
+assertTrue(!okXml.includes('PROCESS_TOTAL 단일'), '배분기준 내부 enum 노출 없음');
+
+console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2 회귀).');
