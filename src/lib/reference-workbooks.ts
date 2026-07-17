@@ -361,25 +361,62 @@ export async function parseDefaultValueWorkbook(file: File): Promise<ImportedDef
     };
 }
 
-export function findDefaultValueReference(
+/**
+ * 국가 × CN에 생산경로가 갈리는 행이 둘 이상 있는지.
+ * 공식 워크북에는 그런 조합이 실재하며(예: CN 2523 계열), 조회가 경로를 보지 않으면
+ * 워크북 행 순서로 아무 행이나 집게 된다. 조용히 다른 경로의 DV를 쓰는 것은
+ * 대조 자체를 무의미하게 만들므로, 호출부가 이 사실을 알 수 있어야 한다(씨밤이 P1).
+ */
+export function hasAmbiguousDefaultValueRoutes(
     reference: ImportedDefaultValueReference | undefined,
     country: string,
-    cnCode: string,
-    year: '2026' | '2027' | '2028_ONWARDS'
-): DefaultValueReferenceRow | undefined {
+    cnCode: string
+): boolean {
+    const candidates = defaultValueCandidates(reference, country, cnCode);
+
+    if (candidates.length === 0) {
+        return false;
+    }
+
+    const bestLength = candidates[0].cn_code.length;
+    const routes = new Set(
+        candidates
+            .filter((row) => row.cn_code.length === bestLength)
+            .map((row) => (row.production_route ?? '').trim().toLowerCase())
+    );
+
+    return routes.size > 1;
+}
+
+function defaultValueCandidates(
+    reference: ImportedDefaultValueReference | undefined,
+    country: string,
+    cnCode: string
+): DefaultValueReferenceRow[] {
     if (!reference) {
-        return undefined;
+        return [];
     }
 
     const normalizedCountry = normalizeReferenceCountry(country);
     const normalizedCnCode = normalizeCode(cnCode);
-    const candidates = reference.rows
+
+    return reference.rows
         .filter(
             (row) =>
                 normalizeReferenceCountry(row.country) === normalizedCountry &&
                 (row.cn_code === normalizedCnCode || normalizedCnCode.startsWith(row.cn_code))
         )
         .sort((a, b) => b.cn_code.length - a.cn_code.length);
+}
+
+export function findDefaultValueReference(
+    reference: ImportedDefaultValueReference | undefined,
+    country: string,
+    cnCode: string,
+    year: '2026' | '2027' | '2028_ONWARDS',
+    productionRoute?: string
+): DefaultValueReferenceRow | undefined {
+    const candidates = defaultValueCandidates(reference, country, cnCode);
 
     if (candidates.length === 0) {
         return undefined;
@@ -397,7 +434,14 @@ export function findDefaultValueReference(
         return row.markup_2028_onwards;
     };
 
-    return candidates.find((row) => valueForYear(row) !== undefined) ?? candidates[0];
+    // 생산경로가 주어지면 같은 경로 행을 먼저 고른다. 벤치마크 조회는 이미 이렇게 한다.
+    const route = productionRoute?.trim().toLowerCase();
+    const routeMatched = route
+        ? candidates.filter((row) => (row.production_route ?? '').trim().toLowerCase() === route)
+        : [];
+    const ordered = [...routeMatched, ...candidates.filter((row) => !routeMatched.includes(row))];
+
+    return ordered.find((row) => valueForYear(row) !== undefined) ?? ordered[0];
 }
 
 export function getDefaultValueTotalForYear(

@@ -2,8 +2,9 @@ import { cell, createDocx, paragraph, table } from './docx-builder';
 import { checkDisplaySum, formatForReport, formatIntegerForReport, formatPercentForReport, formatRawForReport, roundForReport } from './report-format';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
 import { isCbamReportingScope, getProductReportingScope } from './reporting-scope';
-import { findDefaultValueReference } from './reference-workbooks';
+import { findDefaultValueReference, hasAmbiguousDefaultValueRoutes } from './reference-workbooks';
 import type { DefaultValueReferenceRow, ImportedDefaultValueReference } from './reference-workbooks';
+import { getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
 import { calculateLocalResults } from './calculation-engine';
 import type { LocalCalculationResult } from './calculation-engine';
 import type {
@@ -70,6 +71,10 @@ export interface CalculationReportResult {
 }
 
 const PLACEHOLDER = '기재 필요';
+/** 해당 계수가 이 배출원의 산식에 등장하지 않음. 0과 구분해야 한다. */
+const NOT_APPLICABLE = '해당 없음';
+/** 공식 기본값이 공표되지 않은 조합. 0(=배출 없음)과 반드시 구분한다. */
+const NOT_PUBLISHED = 'N/A (미공표)';
 
 /**
  * 검증인이 6개월 뒤 같은 입력으로 같은 결과를 재현하려면 어떤 소프트웨어였는지 특정해야 한다.
@@ -174,6 +179,9 @@ function precursorContributionShare(input: CalculationReportInput, precursor: Pu
     return contribution / result.see_cbam_basis;
 }
 
+/** 원천자료가 에너지 단위이면 NCV 환산이 산식에서 상쇄된다(제6.1장 고지 판단용). */
+const ENERGY_UNITS = new Set(['MJ', 'GJ', 'TJ', 'KWH', 'MWH', 'GWH']);
+
 const ALLOCATION_BASIS_LABEL: Record<string, string> = {
     PROCESS_TOTAL: '공정 전체(제품 배분 없음 — 공정별 단일 제품)',
     MASS: '질량 기준(MASS)',
@@ -245,7 +253,9 @@ function checkNumericColumns(
         rows.forEach((row) => {
             const value = row[index] ?? '';
 
-            if (value === '' || value === '-' || value === PLACEHOLDER) {
+            // 자리표시·비해당 표기는 숫자가 아니어도 정상이다. 「해당 없음」은 그 계수가
+            // 이 배출원의 산식에 등장하지 않는다는 뜻이므로 0을 쓰면 오히려 거짓이 된다.
+            if (value === '' || value === '-' || value === PLACEHOLDER || value === NOT_APPLICABLE || value === NOT_PUBLISHED || value === '대조 불가' || value === '확인 필요(자료)') {
                 return;
             }
 
@@ -632,8 +642,11 @@ function methodologySection(input: CalculationReportInput) {
         paragraph('산정은 Regulation (EU) 2023/956 및 2026 확정기간 이행규정에 따른다. 본 보고서의 산정방법을 지배하는 이행규정의 번호·적용 조항은 EUR-Lex 원문 대조가 완료되지 않았다 — 확인 필요(규정). 참조 문서는 부속서 B를 따른다.'),
         paragraph('전환기(~2025) Guidance 및 Q&A는 개념 참조용으로만 사용하였으며, 수치·한도를 본 확정기간 산정에 적용하지 않았다.', 'Note'),
         paragraph('5.1 직접배출 (연료 연소)', 'Heading2'),
-        paragraph('E직접 = 활동자료 × 순발열량 NCV(GJ/단위) × 배출계수 EF(tCO2/TJ) ÷ 1,000 × 산화계수'),
-        paragraph('철강 품목의 CBAM 대상 온실가스는 CO2이므로(확인 필요(규정)) tCO2 = tCO2e로 표기한다.', 'Note'),
+        // 산식은 엔진이 실제로 계산하는 것과 같아야 한다. 전환계수·화석분율을 빠뜨리면
+        // 바이오매스가 섞인 배출원에서 인쇄된 산식으로 인쇄된 결과를 재현할 수 없다(씨밤이 P1).
+        paragraph('E직접 = 활동자료 AD × 순발열량 NCV(GJ/단위) × 배출계수 EF(tCO2/TJ) × 산화계수 OxF × 전환계수 CF × 화석 분율 ÷ 1,000'),
+        paragraph('배출계수가 활동자료 단위 기준(tCO2/단위)으로 주어진 경우에는 NCV와 ÷1,000을 적용하지 않는다: E직접 = AD × EF × OxF × CF × 화석 분율. 각 계수의 실제 적용값은 제6.2.1장에 있다.', 'Note'),
+        paragraph('철강 품목의 CBAM 대상 온실가스는 CO2이므로(확인 필요(규정)) tCO2 = tCO2e로 표기한다. 연소에 따른 CH4·N2O는 본 산정의 대상 GHG에 포함되지 않는다 — 확인 필요(규정).', 'Note'),
         paragraph('5.2 간접배출 (전력)', 'Heading2'),
         paragraph('E간접 = 전력 사용량(MWh) × 전력 배출계수(tCO2e/MWh). 인증서 기준 반영 여부는 제3장 근거를 따른다.'),
         paragraph('5.3 전구물질 내재배출', 'Heading2'),
@@ -671,9 +684,31 @@ function transpositionTable(input: CalculationReportInput) {
         ];
     });
 
-    return table(['배출원', '원천자료 (청구서 등)', '환산 근거', '산정 활동자료'], rows, {
+    const body = [table(['배출원', '원천자료 (청구서 등)', '환산 근거', '산정 활동자료'], rows, {
         widths: [2200, 2200, 2600, 2000], headerShade: SOFT, headerBold: true, repeatHeader: true,
+    })];
+
+    // 원천자료가 이미 에너지 단위인데 NCV로 나눠 질량으로 바꾼 뒤 산식에서 같은 NCV를 다시 곱하면
+    // NCV는 상쇄된다. 이를 말하지 않으면 검증인이 NCV의 적정성을 계수 위계 이슈로 오인 추적한다
+    // (실제로는 본 건 배출량에 영향이 없다). v0.3에 있던 고지의 회귀(씨밤이 P1).
+    const cancelling = cbamSourceStreams(input).filter((stream) => {
+        const entry = input.reportInputs?.transpositions?.find((item) => item.source_stream_id === stream.id);
+        const unit = entry?.source_unit?.trim().toUpperCase();
+
+        return Boolean(unit)
+            && ENERGY_UNITS.has(unit as string)
+            && getSourceStreamEmissionFactorBasis(stream) === 'PER_TJ'
+            && stream.ncv_gj_per_unit > 0;
     });
+
+    if (cancelling.length > 0) {
+        body.push(paragraph(
+            `NCV 상쇄 고지: ${cancelling.map((stream) => stream.name).join(', ')}의 원천자료는 이미 에너지 단위이며, 질량 환산에 사용한 순발열량과 제5.1장 산식의 순발열량이 동일하므로 두 값은 상쇄된다. 따라서 순발열량 값의 오차는 본 건 배출량에 영향을 주지 않는다. 다만 산정 활동자료로 표기한 질량은 계량된 값이 아니라 환산으로 얻은 파생값이므로, 환산에 사용한 순발열량의 출처를 제6.2.2장에 밝힌다.`,
+            'Note'
+        ));
+    }
+
+    return body.join('');
 }
 
 /** 6.3 — 측정 방식·데이터 품질. */
@@ -694,24 +729,59 @@ function measurementTable(input: CalculationReportInput) {
 }
 
 function activityDataSection(input: CalculationReportInput) {
+    // 헤더에 단위가 없으면 G7(단위 정합)이 검사할 대상 자체가 없어 공허하게 통과한다.
+    // tCO2/TJ와 tCO2/단위 혼동은 이 도메인의 대표적 결함이라 표에 단위가 박혀 있어야 한다(씨밤이 P1).
     const columns = [
         { header: '배출원' },
         { header: '산정방법' },
         { header: '활동자료', numeric: true },
         { header: '단위' },
-        { header: 'NCV', numeric: true },
+        { header: 'NCV (GJ/단위)', numeric: true },
         { header: 'EF', numeric: true },
-        { header: '계수 출처' },
+        { header: 'EF 기준' },
     ];
-    const rows = cbamSourceStreams(input).map((stream) => [
+    const streams = cbamSourceStreams(input);
+    const rows = streams.map((stream) => {
+        const perActivityUnit = getSourceStreamEmissionFactorBasis(stream) === 'PER_ACTIVITY_UNIT';
+
+        return [
+            stream.name,
+            stream.method,
+            formatRawForReport(stream.activity_data),
+            stream.activity_unit,
+            perActivityUnit ? NOT_APPLICABLE : formatRawForReport(stream.ncv_gj_per_unit),
+            formatRawForReport(stream.emission_factor_tco2e_per_unit),
+            perActivityUnit ? `tCO2/${stream.activity_unit}` : 'tCO2/TJ',
+        ];
+    });
+
+    // 산식에 등장하는 계수는 전부 표에 값이 있어야 검증인이 인쇄된 산식으로 인쇄된 결과를 재현한다.
+    // 종전에는 산화계수가 산식에만 있고 값이 문서 어디에도 없었다(씨밤이 P1).
+    const factorColumns = [
+        { header: '배출원' },
+        { header: '산화계수 (OxF)', numeric: true },
+        { header: '전환계수 (CF)', numeric: true },
+        { header: '화석 분율', numeric: true },
+        { header: '바이오매스 분율', numeric: true },
+    ];
+    const factorRows = streams.map((stream) => [
         stream.name,
-        stream.method,
-        formatForReport(stream.activity_data, 4),
-        stream.activity_unit,
-        formatForReport(stream.ncv_gj_per_unit, 4),
-        formatForReport(stream.emission_factor_tco2e_per_unit, 4),
-        stream.source || PLACEHOLDER,
+        formatRawForReport(stream.oxidation_factor),
+        formatRawForReport(stream.conversion_factor),
+        formatRawForReport(stream.fossil_fraction),
+        formatRawForReport(stream.biomass_fraction),
     ]);
+
+    // 계수 출처는 활동자료 증빙과 다른 문서다. 청구서에는 배출계수가 실리지 않는다(씨밤이 P0).
+    const sourceRows = streams.map((stream) => {
+        const entry = input.reportInputs?.transpositions?.find((item) => item.source_stream_id === stream.id);
+
+        return [
+            stream.name,
+            getSourceStreamEmissionFactorBasis(stream) === 'PER_ACTIVITY_UNIT' ? NOT_APPLICABLE : entry?.ncv_source || PLACEHOLDER,
+            entry?.ef_source || PLACEHOLDER,
+        ];
+    });
     const reportable = reportableResults(input);
 
     const body = [
@@ -721,7 +791,17 @@ function activityDataSection(input: CalculationReportInput) {
         transpositionTable(input),
         paragraph('6.2 배출계수', 'Heading2'),
         table(columns.map((column) => column.header), rows, {
-            widths: [1800, 1300, 1200, 800, 900, 1200, 1800], headerShade: SOFT, headerBold: true, repeatHeader: true,
+            widths: [1700, 1300, 1200, 800, 1300, 1200, 1500], headerShade: SOFT, headerBold: true, repeatHeader: true,
+        }),
+        paragraph('6.2.1 산식 적용 계수', 'Heading2'),
+        paragraph('제5.1장 산식에 대입한 계수의 실제 값이다.'),
+        table(factorColumns.map((column) => column.header), factorRows, {
+            widths: [2200, 1700, 1700, 1700, 1700], headerShade: SOFT, headerBold: true, repeatHeader: true,
+        }),
+        paragraph('6.2.2 계수 출처', 'Heading2'),
+        paragraph('계수의 출처는 활동자료 증빙(제6.3장)과 다른 문서다. 요금청구서 등 거래 증빙에는 순발열량·배출계수가 기재되지 않으므로, 인용 계수의 발행기관·문서명·판본·표번호를 별도로 밝힌다.'),
+        table(['배출원', 'NCV 출처', 'EF 출처'], sourceRows, {
+            widths: [2200, 3400, 3400], headerShade: SOFT, headerBold: true, repeatHeader: true,
         }),
         paragraph('확인 필요(규정): 확정기간 이행규정이 표준계수 위계를 두는 경우 인용 계수의 적격성을 원문 대조로 확인해야 한다.', 'Note'),
         paragraph('6.3 측정 방식 및 데이터 품질', 'Heading2'),
@@ -736,7 +816,32 @@ function activityDataSection(input: CalculationReportInput) {
     body.push(table(['생산공정', '정합 결과'], reconRows, { widths: [2700, 6300], headerShade: SOFT, headerBold: true, repeatHeader: true }));
     body.push(paragraph('본 점검은 산정 도구의 내부 정합성 기준(±1%)에 따른 자체 QC이며, 규정상 허용오차가 아니다. 배출원이 1건인 공정에서는 이 점검이 전기(轉記) 오류 검출에 한정된다.', 'Note'));
 
-    return { xml: body.join(''), gateIssues: checkNumericColumns('제6장 배출계수표', columns, rows) };
+    // 계수 출처·전치·측정 방식이 비면 조용히 「기재 필요」로 인쇄되던 것을 경고로 올린다.
+    // 설계 §8이 6.1·6.3을 /report-inputs 유도 대상으로 명시했는데 게이트가 없었다(씨밤이 P1).
+    const gateIssues: ReportGateIssue[] = [...checkNumericColumns('제6장 배출계수표', columns, rows)];
+
+    for (const stream of streams) {
+        const entry = input.reportInputs?.transpositions?.find((item) => item.source_stream_id === stream.id);
+        const perActivityUnit = getSourceStreamEmissionFactorBasis(stream) === 'PER_ACTIVITY_UNIT';
+
+        if (!entry?.ef_source?.trim() || (!perActivityUnit && !entry?.ncv_source?.trim())) {
+            gateIssues.push({
+                gate: 'G5',
+                severity: 'warn',
+                message: `제6.2.2장: ${stream.name}의 계수 출처(발행기관·문서명·판본)가 비어 있습니다. 활동자료 증빙과 계수 출처는 다른 문서입니다.`,
+            });
+        }
+
+        if (!entry?.measurement_method?.trim()) {
+            gateIssues.push({
+                gate: 'G5',
+                severity: 'warn',
+                message: `제6.3장: ${stream.name}의 측정 방식이 비어 있습니다.`,
+            });
+        }
+    }
+
+    return { xml: body.join(''), gateIssues };
 }
 
 function electricitySection(input: CalculationReportInput) {
@@ -847,6 +952,8 @@ interface PrecursorDvComparison {
     row?: DefaultValueReferenceRow;
     /** heading 상속으로 찾았는지 (CN 8자리 실측 vs 4자리 heading DV) */
     isHeadingInherited: boolean;
+    /** 같은 국가×CN에 생산경로가 다른 DV 행이 둘 이상 있는지 */
+    isRouteAmbiguous: boolean;
     /** 해당 연도의 markup 포함 적용값 */
     appliedDirect?: number;
     /** 실측 − DV(raw) 절대차 */
@@ -860,10 +967,10 @@ function compareWithDefaultValues(input: CalculationReportInput): PrecursorDvCom
     return cbamPrecursors(input).map((precursor) => {
         const year: DefaultValueYear = (precursor.default_value_year as DefaultValueYear) ?? input.defaultValueYear ?? '2026';
         const cnCode = normalizeCnForLookup(precursor.precursor_cn_code);
-        const row = findDefaultValueReference(input.defaultValues, precursor.supplier_country, cnCode, year);
+        const row = findDefaultValueReference(input.defaultValues, precursor.supplier_country, cnCode, year, precursor.production_route);
 
         if (!row) {
-            return { precursor, year, isHeadingInherited: false };
+            return { precursor, year, isHeadingInherited: false, isRouteAmbiguous: false };
         }
 
         const appliedDirect = year === '2026' ? row.markup_2026 : year === '2027' ? row.markup_2027 : row.markup_2028_onwards;
@@ -874,8 +981,10 @@ function compareWithDefaultValues(input: CalculationReportInput): PrecursorDvCom
             year,
             row,
             isHeadingInherited: normalizeCnForLookup(row.cn_code) !== cnCode,
+            isRouteAmbiguous: hasAmbiguousDefaultValueRoutes(input.defaultValues, precursor.supplier_country, cnCode),
             appliedDirect,
-            deltaRaw: row.direct_default === undefined ? undefined : actual - row.direct_default,
+            // null(공표 안 함)과 undefined(값 없음)를 모두 거른다. null을 그냥 두면 actual - null = actual이 된다.
+            deltaRaw: row.direct_default === undefined || row.direct_default === null ? undefined : actual - row.direct_default,
             deltaApplied: appliedDirect === undefined ? undefined : actual - appliedDirect,
             deltaAppliedRatio: appliedDirect === undefined || appliedDirect === 0 ? undefined : (actual - appliedDirect) / appliedDirect,
         };
@@ -945,15 +1054,17 @@ function defaultValueSection(input: CalculationReportInput) {
         }
 
         rows.push([key, '본 산정 실측값 (채택)', formatForReport(precursor.direct_see_tco2e_per_t, 4), formatForReport(precursor.indirect_see_tco2e_per_t, 5), '공급사 제공']);
-        rows.push([key, '공식 DV — raw', row.direct_default === undefined ? PLACEHOLDER : formatForReport(row.direct_default, 8),
-            row.indirect_default === undefined || row.indirect_default === null ? 'N/A (미공표)' : formatForReport(row.indirect_default, 8),
+        rows.push([key, '공식 DV — raw', row.direct_default === undefined || row.direct_default === null ? NOT_PUBLISHED : formatForReport(row.direct_default, 8),
+            row.indirect_default === undefined || row.indirect_default === null ? NOT_PUBLISHED : formatForReport(row.indirect_default, 8),
             `조회 행 CN ${row.cn_code}`]);
         rows.push([key, `공식 DV — ${year} 적용값`, comparison.appliedDirect === undefined ? PLACEHOLDER : formatForReport(comparison.appliedDirect, 9),
-            'N/A (미공표)', 'markup 포함']);
+            NOT_PUBLISHED, 'markup 포함']);
 
         if (comparison.deltaRaw !== undefined) {
+            // raw 행에도 상대차를 준다. 두 차이 행의 정보 수준이 다를 이유가 없다(씨밤이 P2).
+            const rawRatio = row.direct_default ? comparison.deltaRaw / row.direct_default : undefined;
             rows.push([key, '차이: 실측 − DV(raw)', formatForReport(comparison.deltaRaw, 8), '대조 불가',
-                comparison.deltaRaw < 0 ? '실측이 낮음 (유리)' : '실측이 높음 (불리)']);
+                `${rawRatio === undefined ? '' : `${formatPercentForReport(rawRatio)} · `}${comparison.deltaRaw < 0 ? '실측이 낮음 (유리)' : '실측이 높음 (불리)'}`]);
         }
 
         if (comparison.deltaApplied !== undefined) {
@@ -986,7 +1097,22 @@ function defaultValueSection(input: CalculationReportInput) {
         }
 
         if (comparison.row.indirect_default === undefined || comparison.row.indirect_default === null) {
-            notes.push('해당 조합의 간접 기본값은 공표되지 않아(N/A) 간접 실측값은 DV 대조가 불가합니다.');
+            notes.push('해당 조합의 간접 기본값은 공표되지 않아(N/A) 간접 실측값은 DV 대조가 불가하다.');
+        }
+
+        // 같은 국가×CN에 경로가 갈리는 행이 여럿이면, 조회가 어느 행을 골랐는지가 결과를 바꾼다.
+        // 이 사실을 감추면 검증인이 다른 행으로 대조해 다른 결론에 이른다(씨밤이 P1).
+        if (comparison.isRouteAmbiguous) {
+            notes.push(`해당 국가·CN 조합에는 생산경로가 다른 공식 기본값 행이 둘 이상 있다. 본 대조는 그중 「${dvRoute || '경로 미표기'}」 행을 사용했으므로, 적용 경로의 적정성을 원본 워크북으로 확인해야 한다 — 확인 필요(자료).`);
+            gateIssues.push({
+                gate: 'G6',
+                severity: 'warn',
+                message: `${comparison.precursor.name}: ${comparison.precursor.supplier_country} × CN ${comparison.precursor.precursor_cn_code ?? '-'} 조합에 생산경로가 다른 DV 행이 여럿 있습니다. 적용 경로를 확인하세요.`,
+            });
+        }
+
+        if (comparison.row.direct_default === undefined || comparison.row.direct_default === null) {
+            notes.push('해당 조합의 직접 기본값이 공표되지 않아(N/A) raw 기준 대조가 불가하다.');
         }
 
         if (notes.length > 0) {
@@ -1058,6 +1184,17 @@ function defaultValueSection(input: CalculationReportInput) {
             widths: [2200, 2800, 2200, 1800], headerShade: SOFT, headerBold: true, repeatHeader: true,
         }));
         body.push(paragraph('실측이 인정되지 않아 공식 기본값으로 대체될 경우의 영향이다. 전구물질의 제3자 검증 결과 확보가 최우선 과제인 이유를 정량적으로 보여준다(제14장).', 'Note'));
+        // 9.1이 "개연성 참고로만 사용한다"고 유보한 DV로 확정적 단일값을 내면 유보가 증발한다.
+        // markup 적용 여부가 미확정이면 답이 갈리므로, 어느 쪽을 택했는지 밝혀야 한다(씨밤이 P1).
+        body.push(paragraph(
+            `본 민감도는 markup을 포함한 ${[...new Set(comparisons.map((comparison) => comparison.year))].join(' / ')} 적용값을 대체값으로 사용했다. 전구물질에 대한 markup 적용 여부·방식은 확인 필요(규정)이며, markup 미적용(raw) 기준으로는 영향이 더 작다. 두 기준의 차이는 제9.1장 대조표에서 확인할 수 있다. 보수적 판단을 위해 본문은 markup 포함값을 채택했다.`,
+            'Note'
+        ));
+        body.push(paragraph(
+            '제9.1장에 기재한 조회 전제(heading 상속 여부·생산경로 대응 미확인)는 본 민감도에도 그대로 적용된다. 해당 전제가 확인되기 전까지 본 수치는 개연성 참고이다 — 확인 필요(자료).',
+            'Note',
+            { color: AMBER }
+        ));
 
         if (unmatched.length > 0) {
             body.push(paragraph(
@@ -1151,12 +1288,26 @@ function carbonPriceSection(input: CalculationReportInput) {
             message: '제11장(기지불 탄소가격)이 비어 있습니다. 신고인이 인증서 차감을 위해 요구하는 항목이므로 「해당 없음」이라도 사유와 함께 기재해야 합니다.',
         });
     } else {
-        body.push(table(['대상', '해당 여부', '내용 및 증빙 상태'], rows.map((row) => [
-            row.target,
-            CARBON_PRICE_LABEL[row.applicable] ?? row.applicable,
-            [row.note, row.amount ? `지불액: ${row.amount}` : '', `증빙: ${EVIDENCE_STATUS_LABEL[row.evidence_status] ?? row.evidence_status}`]
-                .filter(Boolean).join('\n'),
-        ]), { widths: [2600, 2200, 4200], headerShade: SOFT, headerBold: true, repeatHeader: true }));
+        // 전구물질에 내재된 기지불 탄소가격은 공급사로부터 별도로 받아야 한다.
+        // 사업장 행만 두면 전구물질 몫이 문서에서 사라진다(씨밤이 P1 — v0.3 회귀).
+        const covered = rows.map((row) => row.target ?? '').join(' ');
+        const precursorRows = cbamPrecursors(input)
+            .filter((precursor) => !covered.includes(precursor.name))
+            .map((precursor) => [
+                `전구물질 (${precursor.name})`,
+                CARBON_PRICE_LABEL.TO_CONFIRM ?? '확인 필요(자료)',
+                `공급사(${precursor.supplier_installation || '미기재'})가 원산지국 배출권거래제 할당대상일 수 있다. 전구물질에 내재된 기지불 탄소가격 정보·증빙은 공급사로부터 별도 수령 필요.\n증빙: 미수령(pending) — 자동 초안`,
+            ]);
+
+        body.push(table(['대상', '해당 여부', '내용 및 증빙 상태'], [
+            ...rows.map((row) => [
+                row.target,
+                CARBON_PRICE_LABEL[row.applicable] ?? row.applicable,
+                [row.note, row.amount ? `지불액: ${row.amount}` : '', `증빙: ${EVIDENCE_STATUS_LABEL[row.evidence_status] ?? row.evidence_status}`]
+                    .filter(Boolean).join('\n'),
+            ]),
+            ...precursorRows,
+        ], { widths: [2600, 2200, 4200], headerShade: SOFT, headerBold: true, repeatHeader: true }));
 
         const unconfirmed = rows.filter((row) => row.applicable === 'TO_CONFIRM' || row.evidence_status !== 'confirmed');
 
@@ -1405,6 +1556,70 @@ function improvementSection(input: CalculationReportInput) {
     ].join('');
 }
 
+/**
+ * 15장 자동 초안 — 본 보고서가 본문에서 인용한 문서를 증빙 행으로 만든다.
+ * 검증인의 1순위 요청 대상(모니터링 계획·계수 출처·DV 워크북)이 목록에 없으면
+ * 15장이 스스로 정의한 용도("검증인은 이 목록으로 원천자료를 요청한다")를 못 한다.
+ */
+function seedEvidenceRows(input: CalculationReportInput): string[][] {
+    const rows: string[][] = [];
+    const plan = input.reportInputs?.monitoring_plan;
+
+    if (plan?.doc_no?.trim()) {
+        rows.push([
+            `모니터링 계획서 ${plan.doc_no}${plan.version ? ` ${plan.version}` : ''}`,
+            '본 산정을 지배하는 모니터링 방법론(제12장)',
+            PLACEHOLDER,
+            '자동 초안 — 확인 필요(자료)',
+        ]);
+    }
+
+    if (input.defaultValues) {
+        rows.push([
+            input.defaultValues.summary.filename,
+            '제9장 공식 기본값 대조의 기준자료',
+            PLACEHOLDER,
+            `자동 초안 — 연결일 ${input.defaultValues.summary.imported_at.slice(0, 10)}`,
+        ]);
+    }
+
+    for (const stream of cbamSourceStreams(input)) {
+        const entry = input.reportInputs?.transpositions?.find((item) => item.source_stream_id === stream.id);
+
+        for (const [label, value] of [['NCV', entry?.ncv_source], ['EF', entry?.ef_source]] as const) {
+            if (value?.trim()) {
+                rows.push([value.trim(), `${stream.name} ${label} 계수 출처(제6.2.2장)`, PLACEHOLDER, '자동 초안 — 확인 필요(자료)']);
+            }
+        }
+    }
+
+    for (const meta of input.reportInputs?.electricity_ef_meta ?? []) {
+        if (meta.document?.trim()) {
+            rows.push([
+                [meta.publisher, meta.document, meta.vintage].filter(Boolean).join(' · '),
+                '제7장 전력 배출계수 출처',
+                PLACEHOLDER,
+                '자동 초안 — 확인 필요(자료)',
+            ]);
+        }
+    }
+
+    // 같은 문서가 여러 배출원에 쓰이면 한 행으로 합친다.
+    const byItem = new Map<string, string[]>();
+
+    for (const row of rows) {
+        const existing = byItem.get(row[0]);
+
+        if (existing) {
+            existing[1] = `${existing[1]} · ${row[1]}`;
+        } else {
+            byItem.set(row[0], row);
+        }
+    }
+
+    return [...byItem.values()];
+}
+
 /** 14장은 등록부(14.1)가 본문 스캔 결과를 담으므로 본문 조립 뒤에 완성된다. */
 function improvementSectionWithRegistry(input: CalculationReportInput, scannedXml: string) {
     return improvementSection(input) + outstandingRegistrySection(scannedXml);
@@ -1417,16 +1632,27 @@ function evidenceAndDeclarationSection(input: CalculationReportInput) {
 
     const body = [
         paragraph('15. 증빙 목록   Evidence Register', 'Heading1'),
-        paragraph('각 데이터의 원천 증빙과 그 입증 대상·보관처·상태를 기재한다. 검증인은 이 목록으로 원천자료를 요청한다.'),
+        paragraph('각 데이터의 원천 증빙과 그 입증 대상·보관처·상태를 기재한다. 검증인은 이 목록으로 원천자료를 요청한다. 아래 표는 사용자가 입력한 증빙과, 본 보고서가 본문에서 인용한 문서의 자동 초안을 합친 것이다.'),
+    ];
+
+    // 본문이 인용한 문서가 증빙 목록에 없으면, 검증인은 그 문서를 요청 대상으로 인지하지 못한다.
+    // 설계 §3이 15장을 「자동 초안 + 보관처·상태 입력」으로 명시했는데 자동 초안이 없었다(씨밤이 P1).
+    const seeded = seedEvidenceRows(input);
+    const userItems = new Set(evidence.map((row) => row.item?.trim()).filter(Boolean));
+    const merged = [
+        ...evidence.map((row) => [row.item, row.proves, row.custodian, row.status ?? PLACEHOLDER]),
+        ...seeded.filter((row) => !userItems.has(row[0])),
     ];
 
     if (evidence.length === 0) {
-        body.push(paragraph('기재 필요 — 증빙 목록이 입력되지 않았습니다.', undefined, { color: AMBER }));
-        gateIssues.push({ gate: 'G5', severity: 'warn', message: '제15장(증빙 목록)이 비어 있습니다. 검증인이 원천자료를 요청할 근거가 없습니다.' });
-    } else {
-        body.push(table(['증빙', '입증 대상', '보관', '상태'],
-            evidence.map((row) => [row.item, row.proves, row.custodian, row.status]),
-            { widths: [2700, 3000, 1650, 1650], headerShade: SOFT, headerBold: true, repeatHeader: true }));
+        gateIssues.push({ gate: 'G5', severity: 'warn', message: '제15장(증빙 목록)에 사용자 입력이 없습니다. 자동 초안만으로는 보관처·상태가 채워지지 않습니다.' });
+    }
+
+    body.push(table(['증빙', '입증 대상', '보관', '상태'], merged,
+        { widths: [2700, 3000, 1650, 1650], headerShade: SOFT, headerBold: true, repeatHeader: true }));
+
+    if (seeded.length > 0) {
+        body.push(paragraph('「자동 초안」으로 표시된 행은 본 보고서가 인용한 문서를 산정 도구가 자동으로 등재한 것이다. 보관처와 상태를 확인해 기재해야 한다.', 'Note'));
     }
 
     // 16장 — 국·영문의 보증 수준이 같아야 한다. EU 기관·검증인이 읽는 것은 영문이므로,

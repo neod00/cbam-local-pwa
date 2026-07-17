@@ -164,7 +164,7 @@ const reportModule = (() => {
         .replace(/^import type[\s\S]*?;\r?\n/gm, '')
         .replace(/^export /gm, '');
     const compiled = ts.transpileModule(
-        `${prelude}\n${source}\nglobalThis.__report = { createCalculationReport, createCalculationReportFilename, calculateLocalResults, parseDefaultValueWorkbook };`,
+        `${prelude}\n${source}\nglobalThis.__report = { createCalculationReport, createCalculationReportFilename, calculateLocalResults, parseDefaultValueWorkbook, hasAmbiguousDefaultValueRoutes };`,
         { compilerOptions: { module: ts.ModuleKind.None, target: ts.ScriptTarget.ES2022 } }
     ).outputText;
     const context = { fflate, console, Intl, Math, Number, String, Array, Object, Blob, Date, RegExp, Set, Map, Error, Uint8Array, Promise };
@@ -378,7 +378,7 @@ const filled = reportModule.createCalculationReport({
         rnr: [{ data: '천연가스 사용량', collector: '경영지원팀', transposer: '환경안전팀', approver: '공장장', system: '앱 · 배출원 자료' }],
         carbon_price: [{ target: '본 사업장', applicable: 'TO_CONFIRM', note: '법인 단위 확인 필요', evidence_status: 'pending' }],
         evidence: [{ item: '도시가스 요금청구서', proves: '활동자료 89.13 t', custodian: '경영지원팀', status: '확보' }],
-        transpositions: [{ source_stream_id: 's1', source_unit: 'MJ', source_quantity: '4,278,240', conversion_note: '÷ 48,000 MJ/t', measurement_method: '정산용 계량기', data_quality: '상업 거래용 계량' }],
+        transpositions: [{ source_stream_id: 's1', source_unit: 'MJ', source_quantity: '4,278,240', conversion_note: '÷ 48,000 MJ/t', measurement_method: '정산용 계량기', data_quality: '상업 거래용 계량', ncv_source: 'IPCC 2006 Guidelines Vol.2 Table 1.2', ef_source: 'IPCC 2006 Guidelines Vol.2 Table 1.4' }],
         electricity_ef_meta: [{ process_id: 'proc1', publisher: '집행위', document: 'Country EF list', vintage: '2026' }],
         declaration: { name: '박지훈', position: 'CBAM 담당', date: '2027-01-15' },
     },
@@ -630,4 +630,97 @@ assertTrue(okXml.includes('「기재 필요」로 남은 항목이 있다'), '�
 // 내부 enum이 그대로 새어나가면 안 된다
 assertTrue(!okXml.includes('PROCESS_TOTAL 단일'), '배분기준 내부 enum 노출 없음');
 
-console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2 회귀).');
+// ---------------- 재감사 R3 회귀 — 근거 복원(추적성) ----------------
+
+// [P0] 계수 출처와 활동자료 증빙은 다른 문서다. 청구서에는 배출계수가 실리지 않는다.
+assertTrue(filledXml2.includes('6.2.2 계수 출처'), '6.2.2 계수 출처 절 분리');
+assertTrue(filledXml2.includes('IPCC 2006 Guidelines Vol.2 Table 1.4'), '계수 출처가 사용자 입력에서 렌더');
+assertTrue(filledXml2.includes('6.3 측정 방식 및 데이터 품질'), '6.3 원천 증빙은 별도 절');
+// 계수 출처가 비면 조용히 「기재 필요」로 나가지 말고 경고해야 한다.
+assertTrue(
+    ok.issues.some((issue) => issue.gate === 'G5' && /계수 출처/.test(issue.message)),
+    '계수 출처 미기재 → G5 경고'
+);
+
+// [P1] 산식에 등장하는 계수는 표에 값이 있어야 재현된다. 종전엔 산화계수가 산식에만 있었다.
+assertTrue(filledXml2.includes('6.2.1 산식 적용 계수'), '6.2.1 산식 적용 계수 표');
+assertTrue(filledXml2.includes('산화계수 (OxF)'), '산화계수 열');
+assertTrue(filledXml2.includes('바이오매스 분율'), '바이오매스 분율 열');
+
+// [P1] 단위 없는 헤더는 G7이 검사할 대상이 없어 공허하게 통과한다.
+assertTrue(filledXml2.includes('NCV (GJ/단위)'), 'NCV 헤더에 단위');
+assertTrue(filledXml2.includes('EF 기준'), 'EF 기준(basis) 열');
+assertTrue(filledXml2.includes('tCO2/TJ'), 'EF 단위 명시');
+
+// PER_ACTIVITY_UNIT 배출원은 NCV를 쓰지 않으므로 그렇게 표기해야 한다.
+const perUnit = reportModule.createCalculationReport({
+    ...baseInput(),
+    sourceStreams: [{ ...baseStream, emission_factor_basis: 'PER_ACTIVITY_UNIT', emission_factor_tco2e_per_unit: 2.69 }],
+});
+const perUnitXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await perUnit.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(perUnitXml.includes('tCO2/t'), 'PER_ACTIVITY_UNIT은 활동자료 단위 기준 EF로 표기');
+
+// [P1] 원천자료가 에너지 단위면 NCV가 상쇄된다는 사실을 말해야 한다.
+assertTrue(filledXml2.includes('NCV 상쇄 고지'), '6.1 NCV 상쇄 고지');
+// 질량 단위 원천자료에는 상쇄 고지가 붙으면 안 된다(남발 방지).
+const massSource = reportModule.createCalculationReport({
+    ...baseInput(),
+    reportInputs: { transpositions: [{ source_stream_id: 's1', source_unit: 't', source_quantity: '89.13', ncv_source: 'X', ef_source: 'Y', measurement_method: '계량기' }] },
+});
+const massSourceXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await massSource.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(!massSourceXml.includes('NCV 상쇄 고지'), '질량 원천자료엔 상쇄 고지 없음');
+
+// [P1] 15장 자동 초안 — 본문이 인용한 문서가 증빙 목록에 있어야 한다.
+assertTrue(filledXml2.includes('모니터링 계획서 HB-CBAM-MP-001'), '15장에 모니터링 계획 자동 등재');
+assertTrue(filledXml2.includes('자동 초안'), '자동 초안 표시');
+const withDvXml2 = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await withDv.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(withDvXml2.includes('DVs as adopted_v20260204.xlsx'), '15장에 DV 워크북 자동 등재');
+
+// [P1] 11장 전구물질 탄소가격 행 — 공급사로부터 별도 수령해야 한다.
+assertTrue(filledXml2.includes('전구물질 (HRC)'), '11장 전구물질 행 자동 시딩');
+
+// [P2] 9.1 raw 행에도 상대차를 준다.
+assertTrue(dvXml.includes('-7.95%'), '9.1 raw 상대차(%)');
+
+// [P1] 9.2가 9.1의 유보를 전재하고 markup 채택을 밝힌다.
+assertTrue(dvXml.includes('markup을 포함한'), '9.2 markup 채택 명시');
+assertTrue(dvXml.includes('본 수치는 개연성 참고이다'), '9.2에 9.1 조회 전제 유보 전재');
+
+// [P1] 5.1 산식이 엔진 산식과 같아야 한다(전환계수·화석분율·PER_ACTIVITY_UNIT 분기).
+assertTrue(filledXml2.includes('전환계수 CF × 화석 분율'), '5.1 산식에 CF·화석분율');
+assertTrue(filledXml2.includes('NCV와 ÷1,000을 적용하지 않는다'), '5.1 PER_ACTIVITY_UNIT 분기 명시');
+assertTrue(filledXml2.includes('CH4·N2O는 본 산정의 대상 GHG에 포함되지 않는다'), '5.1 GHG 범위 진술');
+
+// [P1] DV 조회가 생산경로를 무시하면 워크북 행 순서로 아무 행이나 집는다.
+const routeDv = {
+    ...dvReference,
+    rows: [
+        { ...dvReference.rows[0], cn_code: '2523', production_route: '(B)', direct_default: 1.29, total_default: 1.29, markup_2026: 1.42 },
+        { ...dvReference.rows[0], cn_code: '2523', production_route: '(A)', direct_default: 1.24, total_default: 1.24, markup_2026: 1.36 },
+    ],
+};
+const routed = reportModule.createCalculationReport({
+    ...baseInput(),
+    precursors: [{ ...basePrecursor, precursor_cn_code: '25231000', supplier_country: 'South Korea', production_route: '(A)' }],
+    defaultValues: routeDv,
+});
+const routedXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await routed.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(routedXml.includes('1.24'), '생산경로가 같은 DV 행을 우선 조회');
+assertTrue(routedXml.includes('생산경로가 다른 공식 기본값 행이 둘 이상'), '경로 분화 조합임을 고지');
+assertTrue(routed.issues.some((issue) => issue.gate === 'G6' && /생산경로가 다른 DV 행/.test(issue.message)), '경로 모호 → G6 경고');
+
+// [P1] direct_default가 null이면 actual - null = actual이 되면 안 된다.
+const nullDirectDv = { ...dvReference, rows: [{ ...dvReference.rows[0], direct_default: null, markup_2026: null }] };
+const nullDirect = reportModule.createCalculationReport({
+    ...baseInput(),
+    precursors: [{ ...basePrecursor, supplier_country: 'South Korea' }],
+    defaultValues: nullDirectDv,
+});
+const nullDirectXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await nullDirect.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(!nullDirectXml.includes('차이: 실측 − DV(raw)'), 'direct_default가 null이면 raw 차이 행을 만들지 않음');
+assertTrue(nullDirectXml.includes('직접 기본값이 공표되지 않아'), 'direct_default 미공표 고지');
+
+assertTrue(reportModule.hasAmbiguousDefaultValueRoutes(routeDv, 'South Korea', '25231000'), 'hasAmbiguousDefaultValueRoutes 검출');
+assertTrue(!reportModule.hasAmbiguousDefaultValueRoutes(dvReference, 'South Korea', '72083900'), '경로 단일이면 모호하지 않음');
+
+console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3 회귀).');
