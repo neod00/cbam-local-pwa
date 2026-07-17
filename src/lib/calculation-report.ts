@@ -12,6 +12,7 @@ import type {
     ProductOutputLine,
     PurchasedPrecursor,
     ReportingPeriod,
+    ReportInputs,
     SourceStream,
 } from './local-db';
 
@@ -53,6 +54,8 @@ export interface CalculationReportInput {
     defaultValues?: ImportedDefaultValueReference;
     /** 기본값 적용 연도. 전구물질의 default_value_year를 우선하고, 없으면 이 값을 쓴다. */
     defaultValueYear?: DefaultValueYear;
+    /** 산정 데이터로는 알 수 없는 사용자 입력(11·12·15·16장, 6.1·6.3·7 메타). 없으면 「기재 필요」 + G5 경고. */
+    reportInputs?: ReportInputs;
 }
 
 export type DefaultValueYear = '2026' | '2027' | '2028_ONWARDS';
@@ -432,6 +435,40 @@ function methodologySection(input: CalculationReportInput) {
     return body.join('');
 }
 
+/** 6.1 — 원천 단위(청구서 MJ 등) → 산정 활동자료(t) 경로. 없으면 검증인의 첫 점검이 막힌다(씨밤이 P1). */
+function transpositionTable(input: CalculationReportInput) {
+    const rows = input.sourceStreams.map((stream) => {
+        const entry = input.reportInputs?.transpositions?.find((item) => item.source_stream_id === stream.id);
+        return [
+            stream.name,
+            entry?.source_quantity && entry?.source_unit ? `${entry.source_quantity} ${entry.source_unit}` : PLACEHOLDER,
+            entry?.conversion_note || PLACEHOLDER,
+            `${formatForReport(stream.activity_data, 4)} ${stream.activity_unit}`,
+        ];
+    });
+
+    return table(['배출원', '원천자료 (청구서 등)', '환산 근거', '산정 활동자료'], rows, {
+        widths: [2200, 2200, 2600, 2000], headerShade: SOFT, headerBold: true, repeatHeader: true,
+    });
+}
+
+/** 6.3 — 측정 방식·데이터 품질. */
+function measurementTable(input: CalculationReportInput) {
+    const rows = input.sourceStreams.map((stream) => {
+        const entry = input.reportInputs?.transpositions?.find((item) => item.source_stream_id === stream.id);
+        return [
+            stream.name,
+            entry?.measurement_method || PLACEHOLDER,
+            stream.source || PLACEHOLDER,
+            entry?.data_quality || PLACEHOLDER,
+        ];
+    });
+
+    return table(['활동자료', '측정 방식', '원천 증빙', '데이터 품질'], rows, {
+        widths: [1800, 2600, 2400, 2200], headerShade: SOFT, headerBold: true, repeatHeader: true,
+    });
+}
+
 function activityDataSection(input: CalculationReportInput) {
     const columns = [
         { header: '배출원' },
@@ -456,14 +493,15 @@ function activityDataSection(input: CalculationReportInput) {
     const body = [
         paragraph('6. 활동자료 및 배출계수   Activity Data and Emission Factors', 'Heading1'),
         paragraph('6.1 원천자료 → 활동자료 전치(transposition)', 'Heading2'),
-        paragraph('청구서 등 원천자료의 단위가 산정 활동자료의 단위와 다른 경우, 환산 단계와 적용 계수를 기재해야 검증인이 원천 증빙으로 역추적할 수 있다. 원천 단위·수치·환산 근거는 기재 필요 — 본 항목은 사용자 입력이 필요합니다.', 'Note'),
+        paragraph('청구서 등 원천자료의 단위가 산정 활동자료의 단위와 다른 경우, 환산 단계와 적용 계수를 기재해야 검증인이 원천 증빙으로 역추적할 수 있다.'),
+        transpositionTable(input),
         paragraph('6.2 배출계수', 'Heading2'),
         table(columns.map((column) => column.header), rows, {
             widths: [1800, 1300, 1200, 800, 900, 1200, 1800], headerShade: SOFT, headerBold: true, repeatHeader: true,
         }),
         paragraph('확인 필요(규정): 확정기간 이행규정이 표준계수 위계를 두는 경우 인용 계수의 적격성을 원문 대조로 확인해야 한다.', 'Note'),
         paragraph('6.3 측정 방식 및 데이터 품질', 'Heading2'),
-        paragraph('활동자료별 측정 방식(정산용 계량기 등)·원천 증빙·데이터 품질은 기재 필요 — 본 항목은 사용자 입력이 필요합니다.', 'Note'),
+        measurementTable(input),
         paragraph('6.4 정합성 점검', 'Heading2'),
     ];
 
@@ -478,17 +516,39 @@ function activityDataSection(input: CalculationReportInput) {
 }
 
 function electricitySection(input: CalculationReportInput) {
-    const rows: Array<[string, string]> = input.processes.map((process) => [
-        process.name,
-        `전력 ${formatForReport(process.electricity_mwh, 2)} MWh · EF ${formatForReport(process.electricity_ef_tco2e_per_mwh, 4)} tCO2e/MWh · 간접 ${formatForReport(process.electricity_mwh * process.electricity_ef_tco2e_per_mwh, 2)} tCO2e`,
-    ]);
+    const gateIssues: ReportGateIssue[] = [];
+    const rows = input.processes.map((process) => {
+        const meta = input.reportInputs?.electricity_ef_meta?.find((item) => item.process_id === process.id);
+        const source = [meta?.publisher, meta?.document, meta?.vintage].filter(Boolean).join(' · ');
 
-    return [
-        paragraph('7. 전력 사용 및 간접배출   Electricity and Indirect Emissions', 'Heading1'),
-        table(['생산공정', '전력 사용 및 간접배출'], rows, { widths: [2700, 6300], headerShade: SOFT, headerBold: true, repeatHeader: true }),
-        paragraph('전력 배출계수의 공표기관·문서명·공표연도(vintage)는 기재 필요 — 본 항목은 사용자 입력이 필요합니다. 검증인이 값을 대조하려면 출처 메타데이터가 있어야 합니다.', 'Note'),
-        paragraph('전력 배출계수는 시장기반 수단(Guarantees of Origin·녹색인증서 등)으로 낮출 수 없다. 직접 기술적 연결 또는 PPA에 해당하는 경우에만 해당 분류의 계수 적용을 검토한다.', 'Note'),
-    ].join('');
+        if (!source && process.electricity_mwh > 0) {
+            gateIssues.push({
+                gate: 'G5',
+                severity: 'warn',
+                message: `제7장: ${process.name}의 전력 배출계수 출처(공표기관·문서명·공표연도)가 비어 있습니다. 검증인이 계수를 대조할 수 없습니다.`,
+            });
+        }
+
+        return [
+            process.name,
+            `${formatForReport(process.electricity_mwh, 2)} MWh`,
+            `${formatForReport(process.electricity_ef_tco2e_per_mwh, 4)} tCO2e/MWh`,
+            `${formatForReport(process.electricity_mwh * process.electricity_ef_tco2e_per_mwh, 2)} tCO2e`,
+            source || PLACEHOLDER,
+        ];
+    });
+
+    return {
+        xml: [
+            paragraph('7. 전력 사용 및 간접배출   Electricity and Indirect Emissions', 'Heading1'),
+            table(['생산공정', '전력 사용량', '전력 배출계수', '간접배출량', '계수 출처 (기관·문서·공표연도)'], rows, {
+                widths: [1900, 1500, 1900, 1600, 2100], headerShade: SOFT, headerBold: true, repeatHeader: true,
+            }),
+            paragraph('간접배출의 인증서 기준 반영 여부는 제3장 근거를 따른다.'),
+            paragraph('전력 배출계수는 시장기반 수단(Guarantees of Origin·녹색인증서 등)으로 낮출 수 없다. 직접 기술적 연결 또는 PPA에 해당하는 경우에만 해당 분류의 계수 적용을 검토한다.', 'Note'),
+        ].join(''),
+        gateIssues,
+    };
 }
 
 function precursorSection(input: CalculationReportInput) {
@@ -792,16 +852,104 @@ function resultSection(input: CalculationReportInput) {
     };
 }
 
-function userInputPlaceholders() {
-    return [
+const CARBON_PRICE_LABEL: Record<string, string> = {
+    YES: '해당',
+    NO: '해당 없음',
+    TO_CONFIRM: '확인 필요(자료)',
+};
+const EVIDENCE_STATUS_LABEL: Record<string, string> = {
+    pending: '미수령(pending)',
+    estimated: '추정(estimated)',
+    confirmed: '확정(confirmed)',
+};
+
+/** 11장 — 기지불 탄소가격. 신고인이 인증서 차감에 반드시 요구하는 항목(씨밤이 P1: v0.1에 섹션 자체가 없었다). */
+function carbonPriceSection(input: CalculationReportInput) {
+    const rows = input.reportInputs?.carbon_price ?? [];
+    const gateIssues: ReportGateIssue[] = [];
+
+    const body = [
         paragraph('11. 기지불 탄소가격   Carbon Price Paid in Country of Origin', 'Heading1'),
-        paragraph('원산지국에서 이미 지불한 탄소가격은 신고인의 인증서 차감 근거가 될 수 있으므로, 해당 여부와 증빙 상태를 기재한다. 배출권거래제 할당대상 여부는 사업장이 아닌 법인 단위로 판단되므로 본 산정 데이터만으로 단정할 수 없다.'),
-        paragraph('본 항목은 사용자 입력이 필요합니다 — 기재 필요. 확정 전까지 신고인은 본 항목을 근거로 인증서 차감을 적용할 수 없습니다.', 'Note'),
+        paragraph('원산지국에서 이미 지불한 탄소가격은 신고인(수입자)의 인증서 차감 근거가 될 수 있으므로, 해당 여부와 증빙 상태를 기재한다. 배출권거래제 할당대상 여부는 사업장이 아닌 법인 단위 배출량으로 판단되므로, 본 보고서의 사업장 경계 자료만으로 단정할 수 없다.'),
+    ];
+
+    if (rows.length === 0) {
+        body.push(paragraph('기재 필요 — 기지불 탄소가격 해당 여부가 입력되지 않았습니다. 보고서 입력 화면에서 대상별 해당 여부·증빙 상태를 기재하세요.', undefined, { color: AMBER }));
+        gateIssues.push({
+            gate: 'G5',
+            severity: 'warn',
+            message: '제11장(기지불 탄소가격)이 비어 있습니다. 신고인이 인증서 차감을 위해 요구하는 항목이므로 「해당 없음」이라도 사유와 함께 기재해야 합니다.',
+        });
+    } else {
+        body.push(table(['대상', '해당 여부', '내용 및 증빙 상태'], rows.map((row) => [
+            row.target,
+            CARBON_PRICE_LABEL[row.applicable] ?? row.applicable,
+            [row.note, row.amount ? `지불액: ${row.amount}` : '', `증빙: ${EVIDENCE_STATUS_LABEL[row.evidence_status] ?? row.evidence_status}`]
+                .filter(Boolean).join('\n'),
+        ]), { widths: [2600, 2200, 4200], headerShade: SOFT, headerBold: true, repeatHeader: true }));
+
+        const unconfirmed = rows.filter((row) => row.applicable === 'TO_CONFIRM' || row.evidence_status !== 'confirmed');
+
+        if (unconfirmed.length > 0) {
+            body.push(paragraph('확정(confirmed)되지 않은 항목이 있습니다. 확정 전까지 신고인은 본 항목을 근거로 인증서 차감을 적용할 수 없습니다.', undefined, { color: AMBER }));
+        }
+    }
+
+    body.push(paragraph('증빙 상태 구분: 미수령(pending) / 추정(estimated) / 확정(confirmed). 무상할당·간접비용 보조 등 환급·상계 요소가 있는 경우 별도 기재가 필요하다 — 확인 필요(규정).', 'Note'));
+
+    return { xml: body.join(''), gateIssues };
+}
+
+/** 12장 — 모니터링 관리체계. 검증인은 수치보다 이 통제 체계를 먼저 본다(씨밤이 P1). */
+function monitoringSection(input: CalculationReportInput) {
+    const plan = input.reportInputs?.monitoring_plan;
+    const rnr = input.reportInputs?.rnr ?? [];
+    const gateIssues: ReportGateIssue[] = [];
+
+    const body = [
         paragraph('12. 모니터링 방법론 및 데이터 관리   Monitoring Methodology and Data Management', 'Heading1'),
-        paragraph('제3자 검증인은 수치보다 데이터 흐름·책임·품질관리 통제 체계를 먼저 확인한다. 모니터링 계획 문서, 데이터 흐름(수집→전치→집계→입력), 역할·책임(R&R), 검토·승인 절차를 기재한다.'),
-        paragraph('본 항목은 사용자 입력이 필요합니다 — 기재 필요.', 'Note'),
-        paragraph('현 도구의 한계: 산정 도구는 변경이력(audit trail) 기능을 제공하지 않는다. 변경 통제는 검토 절차와 기간별 백업 보관으로 보완하며, 백업 파일은 최종 산정 상태를 재현하되 변경 과정의 이력은 포함하지 않는다.', 'Note'),
-    ].join('');
+        paragraph('제3자 검증인은 수치보다 데이터 흐름·책임·품질관리 통제 체계를 먼저 확인한다.'),
+    ];
+
+    if (plan?.doc_no) {
+        body.push(paragraph(`본 산정을 지배하는 모니터링 방법론 문서: ${plan.doc_no}${plan.version ? ` ${plan.version}` : ''}${plan.approved_at ? ` (승인일 ${plan.approved_at})` : ''}. 본 보고서는 해당 계획에 정의된 데이터 흐름·책임·품질관리 절차에 따라 작성되었다.`));
+
+        // 계획 승인일이 보고기간 시작 이후면 기간 일부가 계획 없이 운영된 셈이다.
+        const period = firstPeriod(input);
+
+        if (plan.approved_at && period && plan.approved_at > period.start_date) {
+            gateIssues.push({
+                gate: 'G2',
+                severity: 'warn',
+                message: `모니터링 계획 승인일(${plan.approved_at})이 보고기간 시작일(${period.start_date}) 이후입니다. 기간 초반의 데이터 관리 근거를 확인하세요.`,
+            });
+        }
+    } else {
+        body.push(paragraph('기재 필요 — 모니터링 계획 문서가 입력되지 않았습니다.', undefined, { color: AMBER }));
+        gateIssues.push({ gate: 'G5', severity: 'warn', message: '제12장: 모니터링 계획 문서번호가 비어 있습니다.' });
+    }
+
+    body.push(paragraph('12.1 데이터 흐름 및 역할·책임 (R&R)', 'Heading2'));
+
+    if (rnr.length === 0) {
+        body.push(paragraph('기재 필요 — 데이터별 수집·전치·검토·승인 책임이 입력되지 않았습니다.', undefined, { color: AMBER }));
+        gateIssues.push({ gate: 'G5', severity: 'warn', message: '제12.1장: 역할·책임(R&R)이 비어 있습니다.' });
+    } else {
+        body.push(table(['데이터', '수집 (1차)', '전치·집계', '검토·승인', '시스템'],
+            rnr.map((row) => [row.data, row.collector, row.transposer, row.approver, row.system]),
+            { widths: [1900, 1900, 1900, 1500, 1800], headerShade: SOFT, headerBold: true, repeatHeader: true }));
+    }
+
+    body.push(paragraph('12.2 품질관리 (QA/QC) 절차', 'Heading2'));
+    body.push(table(['절차', '내용'], [
+        ['검토 분리', '수집 담당자와 검토·승인자를 분리하고, 입력값을 원천 증빙과 대조한 뒤 승인한다.'],
+        ['자동 정합 검사', '산정 도구 내부 검사: 배출원 합계 ↔ 공정 직접배출량(±1%), 생산라인 합계 ↔ 총 생산량, 활동자료 단위 ↔ NCV 정합, 전구물질 질량수지.'],
+        ['보고서 발행 게이트', '표시값 합계 정합·교차참조·단위 정합 검사를 통과해야 보고서가 발행된다. 미기재 항목은 「기재 필요」로 표기된다.'],
+        ['데이터 보존', '산정 데이터는 앱 로컬 데이터베이스에 저장하고, 보고기간별 .cbam 백업과 원천 증빙을 함께 보관한다.'],
+    ], { widths: [2600, 6400], headerShade: SOFT, headerBold: true, repeatHeader: true }));
+    body.push(paragraph('현 도구의 한계: 산정 도구는 변경이력(audit trail) 기능을 제공하지 않는다. 변경 통제는 검토 절차와 기간별 백업 보관으로 보완하며, 백업 파일은 최종 산정 상태를 재현하되 변경 과정의 이력은 포함하지 않는다.', 'Note'));
+
+    return { xml: body.join(''), gateIssues };
 }
 
 function principlesSection(input: CalculationReportInput) {
@@ -870,20 +1018,42 @@ function improvementSection(input: CalculationReportInput) {
     ].join('');
 }
 
-function evidenceAndDeclarationPlaceholders() {
-    return [
+function evidenceAndDeclarationSection(input: CalculationReportInput) {
+    const evidence = input.reportInputs?.evidence ?? [];
+    const declaration = input.reportInputs?.declaration;
+    const gateIssues: ReportGateIssue[] = [];
+
+    const body = [
         paragraph('15. 증빙 목록   Evidence Register', 'Heading1'),
-        paragraph('각 데이터의 원천 증빙과 보관처·상태를 기재한다. 본 항목은 사용자 입력이 필요합니다 — 기재 필요.', 'Note'),
-        paragraph('16. 운영자 선언   Operator Declaration', 'Heading1'),
-        paragraph('본인은 본인이 아는 범위에서(to the best of my knowledge) 본 보고서에 기재된 정보가 완전하고 정확하며, Regulation (EU) 2023/956 및 관련 이행규정과 본 보고서에 기술된 방법론 및 5개 보고원칙에 따라 성실하게 작성되었음을 선언합니다. 「확인 필요」로 표기된 항목은 규정 원문 대조 또는 자료 수령이 완료되지 않았음을 명시합니다.'),
-        paragraph('본 선언의 준거 문안은 국문을 우선한다. (In case of discrepancy, the Korean text prevails.)', 'Note'),
-        table(['항목', '기재'], [
-            ['성명 (Name)', ''],
-            ['직책 (Position)', ''],
-            ['서명 (Signature)', ''],
-            ['일자 (Date)', ''],
-        ], { widths: [2700, 6300], headerShade: SOFT, headerBold: true, repeatHeader: true }),
-    ].join('');
+        paragraph('각 데이터의 원천 증빙과 그 입증 대상·보관처·상태를 기재한다. 검증인은 이 목록으로 원천자료를 요청한다.'),
+    ];
+
+    if (evidence.length === 0) {
+        body.push(paragraph('기재 필요 — 증빙 목록이 입력되지 않았습니다.', undefined, { color: AMBER }));
+        gateIssues.push({ gate: 'G5', severity: 'warn', message: '제15장(증빙 목록)이 비어 있습니다. 검증인이 원천자료를 요청할 근거가 없습니다.' });
+    } else {
+        body.push(table(['증빙', '입증 대상', '보관', '상태'],
+            evidence.map((row) => [row.item, row.proves, row.custodian, row.status]),
+            { widths: [2700, 3000, 1650, 1650], headerShade: SOFT, headerBold: true, repeatHeader: true }));
+    }
+
+    // 16장 — 국문 선언에 「본인이 아는 범위에서」 한정을 넣어 영문과 보증 수준을 맞춘다(씨밤이 P1).
+    body.push(paragraph('16. 운영자 선언   Operator Declaration', 'Heading1'));
+    body.push(paragraph('본인은 본인이 아는 범위에서(to the best of my knowledge) 본 보고서에 기재된 정보가 완전하고 정확하며, Regulation (EU) 2023/956 및 관련 이행규정과 본 보고서에 기술된 방법론 및 5개 보고원칙에 따라 성실하게 작성되었음을 선언합니다. 「확인 필요」로 표기된 항목은 규정 원문 대조 또는 자료 수령이 완료되지 않았음을 명시합니다.'));
+    body.push(paragraph('I declare that, to the best of my knowledge, the information in this report is complete and accurate, and has been prepared in accordance with Regulation (EU) 2023/956 and its implementing regulations, and with the methodology and reporting principles described herein.', 'Note'));
+    body.push(paragraph('본 선언의 준거 문안은 국문을 우선한다. (In case of discrepancy, the Korean text prevails.)', 'Note'));
+    body.push(table(['항목', '기재'], [
+        ['성명 (Name)', declaration?.name || ''],
+        ['직책 (Position)', declaration?.position || ''],
+        ['서명 (Signature)', ''],
+        ['일자 (Date)', declaration?.date || ''],
+    ], { widths: [2700, 6300], headerShade: SOFT, headerBold: true, repeatHeader: true }));
+
+    if (!declaration?.name) {
+        gateIssues.push({ gate: 'G5', severity: 'warn', message: '제16장: 운영자 선언의 성명이 비어 있습니다. 서명 전 기재하세요.' });
+    }
+
+    return { xml: body.join(''), gateIssues };
 }
 
 function annexes() {
@@ -938,9 +1108,13 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
     const summary = summarySection(input);
     const processes = processSection(input);
     const activity = activityDataSection(input);
+    const electricity = electricitySection(input);
     const precursors = precursorSection(input);
     const defaultValues = defaultValueSection(input);
     const results = resultSection(input);
+    const carbonPrice = carbonPriceSection(input);
+    const monitoring = monitoringSection(input);
+    const evidence = evidenceAndDeclarationSection(input);
 
     const bodyXml = [
         coverSection(input, isInterim),
@@ -950,14 +1124,15 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
         processes.xml,
         methodologySection(input),
         activity.xml,
-        electricitySection(input),
+        electricity.xml,
         precursors.xml,
         defaultValues.xml,
         results.xml,
-        userInputPlaceholders(),
+        carbonPrice.xml,
+        monitoring.xml,
         principlesSection(input),
         improvementSection(input),
-        evidenceAndDeclarationPlaceholders(),
+        evidence.xml,
         annexes(),
     ].join('');
 
@@ -969,9 +1144,13 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
         ...summary.gateIssues,
         ...processes.gateIssues,
         ...activity.gateIssues,
+        ...electricity.gateIssues,
         ...precursors.gateIssues,
         ...defaultValues.gateIssues,
         ...results.gateIssues,
+        ...carbonPrice.gateIssues,
+        ...monitoring.gateIssues,
+        ...evidence.gateIssues,
         ...checkCrossReferences(bodyText),
     ];
 

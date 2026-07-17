@@ -21,6 +21,8 @@ import {
 } from '@/lib/eu-template-export';
 import { createDeliveryPackage } from '@/lib/delivery-package';
 import { createCalculationReport } from '@/lib/calculation-report';
+import { REPORT_INPUTS_SETTING_KEY } from '@/lib/local-db';
+import type { ReportInputs } from '@/lib/local-db';
 import {
     CBAM_LAST_BACKUP_AT_KEY,
     exportLocalBackup,
@@ -206,6 +208,7 @@ export default function ExportPage() {
     const [reportError, setReportError] = useState<string | null>(null);
     const [reportNotices, setReportNotices] = useState<string[]>([]);
     const [isReporting, setIsReporting] = useState(false);
+    const [reportInputs, setReportInputs] = useState<ReportInputs | undefined>();
     const [lastExportResult, setLastExportResult] = useState<LastExportResult | undefined>();
     const [lastPackageResult, setLastPackageResult] = useState<LastPackageResult | undefined>();
     const [lastBackupAt, setLastBackupAt] = useState<string | undefined>();
@@ -246,6 +249,7 @@ export default function ExportPage() {
                 defaultValueData,
                 savedScenarioAssumptions,
                 savedExportResponseType,
+                savedReportInputs,
             ] = await Promise.all([
                 listLocalItems('installations'),
                 listLocalItems('periods'),
@@ -258,6 +262,7 @@ export default function ExportPage() {
                 getLocalSetting<ImportedDefaultValueReference>('reference:default-values'),
                 getLocalSetting<ScenarioAssumptions>(SCENARIO_ASSUMPTIONS_SETTING_KEY),
                 getLocalSetting<ExportResponseType>(EXPORT_RESPONSE_TYPE_SETTING_KEY),
+                getLocalSetting<ReportInputs>(REPORT_INPUTS_SETTING_KEY),
             ]);
 
             setInstallations(installationData);
@@ -271,6 +276,7 @@ export default function ExportPage() {
             setDefaultValueReference(defaultValueData);
             setScenarioAssumptions(normalizeScenarioAssumptions(savedScenarioAssumptions));
             setExportResponseType(normalizeExportResponseType(savedExportResponseType));
+            setReportInputs(savedReportInputs);
             setResults(calculateLocalResults({
                 processes: processData,
                 precursors: precursorData,
@@ -645,6 +651,7 @@ export default function ExportPage() {
                 results: reportableResults,
                 generatedAt: new Date(),
                 defaultValues: defaultValueReference,
+                reportInputs,
             });
 
             downloadBlob(report.blob, report.filename);

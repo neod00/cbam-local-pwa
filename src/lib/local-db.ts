@@ -104,6 +104,81 @@ export interface SourceStream extends LocalEntity {
   source: string;
 }
 
+// 산정보고서(Word)에만 쓰이는 사용자 입력. 앱이 산정 데이터로는 알 수 없는 것들
+// (기지불 탄소가격 해당 여부, 모니터링 관리체계, 증빙 보관처, 원천자료 단위 등)을 담는다.
+// 설계: docs/calculation-report-design.md §7
+//
+// 저장 위치는 settings 키 'report:inputs'. 보고기간·사업장 단위 데이터이므로
+// NEW_PROJECT_PRESERVED_SETTING_KEYS에 넣지 않는다 — 새 프로젝트 시작 시 함께 지워져야 한다.
+export type CarbonPriceApplicability = "YES" | "NO" | "TO_CONFIRM";
+export type EvidenceStatus = "pending" | "estimated" | "confirmed";
+
+export interface ReportMonitoringPlan {
+  doc_no?: string;
+  version?: string;
+  approved_at?: string;
+}
+
+export interface ReportRnrRow {
+  data: string;
+  collector: string;
+  transposer: string;
+  approver: string;
+  system: string;
+}
+
+export interface ReportCarbonPriceRow {
+  target: string;
+  /** 배출권거래제 할당대상 여부는 법인 단위 판단이라 사업장 자료만으로 단정할 수 없다 → 기본 TO_CONFIRM */
+  applicable: CarbonPriceApplicability;
+  note: string;
+  amount?: string;
+  evidence_status: EvidenceStatus;
+}
+
+export interface ReportEvidenceRow {
+  item: string;
+  proves: string;
+  custodian: string;
+  status: string;
+}
+
+/** 6.1 원천자료 → 활동자료 전치 · 6.3 측정 방식 (배출원 단위) */
+export interface ReportTranspositionRow {
+  source_stream_id: string;
+  source_unit?: string;
+  source_quantity?: string;
+  conversion_note?: string;
+  measurement_method?: string;
+  data_quality?: string;
+}
+
+/** 7장 전력 배출계수 출처 메타데이터 (생산공정 단위) */
+export interface ReportElectricityEfMetaRow {
+  process_id: string;
+  publisher?: string;
+  document?: string;
+  vintage?: string;
+}
+
+export interface ReportDeclaration {
+  name?: string;
+  position?: string;
+  date?: string;
+}
+
+export interface ReportInputs {
+  monitoring_plan?: ReportMonitoringPlan;
+  rnr?: ReportRnrRow[];
+  carbon_price?: ReportCarbonPriceRow[];
+  evidence?: ReportEvidenceRow[];
+  transpositions?: ReportTranspositionRow[];
+  electricity_ef_meta?: ReportElectricityEfMetaRow[];
+  declaration?: ReportDeclaration;
+}
+
+export const REPORT_INPUTS_SETTING_KEY = "report:inputs";
+
 export interface PrecursorOutputAllocation {
   product_output_line_id?: string;
   product_id?: string;

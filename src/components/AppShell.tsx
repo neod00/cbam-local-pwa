@@ -56,6 +56,7 @@ const pageTitles: Record<string, string> = {
     '/results': '산정 결과',
     '/scenarios': '인증서 비용 시나리오',
     '/export': 'EU Communication Export',
+    '/report-inputs': '산정보고서 입력',
     '/installations': '사업장',
     '/settings': '데이터 안전',
     '/terms': '무료 약관 및 고지',
