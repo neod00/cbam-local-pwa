@@ -1,7 +1,9 @@
 import { cell, createDocx, paragraph, table } from './docx-builder';
-import { checkDisplaySum, formatForReport, formatIntegerForReport, roundForReport } from './report-format';
+import { checkDisplaySum, formatForReport, formatIntegerForReport, formatPercentForReport, roundForReport } from './report-format';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
 import { isCbamReportingScope, getProductReportingScope } from './reporting-scope';
+import { findDefaultValueReference } from './reference-workbooks';
+import type { DefaultValueReferenceRow, ImportedDefaultValueReference } from './reference-workbooks';
 import type { LocalCalculationResult } from './calculation-engine';
 import type {
     Installation,
@@ -47,7 +49,13 @@ export interface CalculationReportInput {
     precursors: PurchasedPrecursor[];
     results: LocalCalculationResult[];
     generatedAt: Date;
+    /** /upload에서 연결한 EU 공식 기본값 기준자료. 없으면 제9장은 「기준자료 미연결」로 출력하고 G6 경고. */
+    defaultValues?: ImportedDefaultValueReference;
+    /** 기본값 적용 연도. 전구물질의 default_value_year를 우선하고, 없으면 이 값을 쓴다. */
+    defaultValueYear?: DefaultValueYear;
 }
+
+export type DefaultValueYear = '2026' | '2027' | '2028_ONWARDS';
 
 export interface CalculationReportResult {
     blob: Blob;
@@ -534,12 +542,222 @@ function precursorSection(input: CalculationReportInput) {
     return { xml: body.join(''), gateIssues: checkNumericColumns('제8장 전구물질표', columns, rows) };
 }
 
-function defaultValueSectionPlaceholder() {
-    return [
+function normalizeCnForLookup(value: string | undefined) {
+    return (value ?? '').replace(/\D/g, '');
+}
+
+interface PrecursorDvComparison {
+    precursor: PurchasedPrecursor;
+    year: DefaultValueYear;
+    row?: DefaultValueReferenceRow;
+    /** heading 상속으로 찾았는지 (CN 8자리 실측 vs 4자리 heading DV) */
+    isHeadingInherited: boolean;
+    /** 해당 연도의 markup 포함 적용값 */
+    appliedDirect?: number;
+    /** 실측 − DV(raw) 절대차 */
+    deltaRaw?: number;
+    /** 실측 − DV(적용값) 절대차 */
+    deltaApplied?: number;
+    deltaAppliedRatio?: number;
+}
+
+function compareWithDefaultValues(input: CalculationReportInput): PrecursorDvComparison[] {
+    return input.precursors.map((precursor) => {
+        const year: DefaultValueYear = (precursor.default_value_year as DefaultValueYear) ?? input.defaultValueYear ?? '2026';
+        const cnCode = normalizeCnForLookup(precursor.precursor_cn_code);
+        const row = findDefaultValueReference(input.defaultValues, precursor.supplier_country, cnCode, year);
+
+        if (!row) {
+            return { precursor, year, isHeadingInherited: false };
+        }
+
+        const appliedDirect = year === '2026' ? row.markup_2026 : year === '2027' ? row.markup_2027 : row.markup_2028_onwards;
+        const actual = precursor.direct_see_tco2e_per_t;
+
+        return {
+            precursor,
+            year,
+            row,
+            isHeadingInherited: normalizeCnForLookup(row.cn_code) !== cnCode,
+            appliedDirect,
+            deltaRaw: row.direct_default === undefined ? undefined : actual - row.direct_default,
+            deltaApplied: appliedDirect === undefined ? undefined : actual - appliedDirect,
+            deltaAppliedRatio: appliedDirect === undefined || appliedDirect === 0 ? undefined : (actual - appliedDirect) / appliedDirect,
+        };
+    });
+}
+
+/**
+ * 9장 — 실측 우선(actual > default)의 근거를 정량 제시. 씨밤이 P1 지적:
+ * 원칙만 서술하고 실제 DV 대조가 없으면 검증인의 개연성 점검 기준선이 끊긴다.
+ * 조회 메타(판본·조회 키·경로 대응)를 반드시 함께 출력해야 한다(v0.2 P1).
+ */
+function defaultValueSection(input: CalculationReportInput) {
+    const body = [
         paragraph('9. 공식 기본값(DV) 대조 및 민감도   Cross-check against Official Default Values', 'Heading1'),
         paragraph('실측 우선(actual > default) 원칙의 적용 근거를 정량적으로 제시하기 위해, 전구물질 실측값을 해당 조합(국가 × CN)의 EU 공식 기본값과 대조한다. 검증인의 개연성(plausibility) 점검 기준선 역할을 한다.'),
-        paragraph('본 항목은 업로드한 EU 공식 기준자료에서 자동 생성됩니다. 현재 버전에서는 아직 제공되지 않습니다 — 기재 필요.', 'Note'),
-    ].join('');
+    ];
+    const gateIssues: ReportGateIssue[] = [];
+
+    if (!input.defaultValues) {
+        body.push(paragraph(
+            'EU 공식 기본값 기준자료가 연결되지 않아 DV 대조를 수행할 수 없습니다. 자료 업로드 화면에서 공식 기본값 워크북을 연결한 뒤 보고서를 다시 생성하세요 — 기재 필요.',
+            undefined,
+            { color: AMBER }
+        ));
+        gateIssues.push({
+            gate: 'G6',
+            severity: 'warn',
+            message: 'EU 공식 기본값 기준자료가 연결되지 않아 제9장(DV 대조)을 생성하지 못했습니다. 자료 업로드 화면에서 기준자료를 연결하세요.',
+        });
+
+        return { xml: body.join(''), gateIssues };
+    }
+
+    const comparisons = compareWithDefaultValues(input);
+    const summary = input.defaultValues.summary;
+
+    // 9.1 조회 메타데이터 — 판본·조회 키가 없으면 검증인이 값을 대조할 수 없다.
+    body.push(paragraph('9.1 DV 조회 메타데이터', 'Heading2'));
+    body.push(table(['항목', '내용'], [
+        ['출처 워크북', `${summary.filename} (연결일 ${summary.imported_at.slice(0, 10)})`],
+        ['수록 행 수', `${formatIntegerForReport(summary.row_count)}행 · CN ${formatIntegerForReport(summary.cn_code_count)}종`],
+        ['법적 근거', 'EU 공식 기본값(default values) 이행규정 — 조항 확인 필요(규정)'],
+        ['markup 적용', '전구물질에 대한 markup 적용 여부·방식은 확인 필요(규정)'],
+    ], { widths: [2700, 6300], headerShade: SOFT, headerBold: true, repeatHeader: true }));
+
+    const columns = [
+        { header: '전구물질 (조회 키)' },
+        { header: '구분' },
+        { header: '직접 (tCO2e/t)', numeric: true },
+        { header: '간접 (tCO2e/t)' },
+        { header: '비고' },
+    ];
+    const rows: string[][] = [];
+
+    for (const comparison of comparisons) {
+        const { precursor, row, year } = comparison;
+        const key = `${precursor.name}\n${precursor.supplier_country} × ${precursor.precursor_cn_code ?? '-'}`;
+
+        if (!row) {
+            rows.push([key, '공식 DV', PLACEHOLDER, PLACEHOLDER, '해당 조합의 기본값을 기준자료에서 찾지 못함 — 확인 필요(자료)']);
+            gateIssues.push({
+                gate: 'G6',
+                severity: 'warn',
+                message: `${precursor.name}: ${precursor.supplier_country} × CN ${precursor.precursor_cn_code ?? '-'} 조합의 공식 기본값을 기준자료에서 찾지 못했습니다. DV 대조 없이는 실측 채택 근거가 정량적으로 제시되지 않습니다.`,
+            });
+            continue;
+        }
+
+        rows.push([key, '본 산정 실측값 (채택)', formatForReport(precursor.direct_see_tco2e_per_t, 4), formatForReport(precursor.indirect_see_tco2e_per_t, 5), '공급사 제공']);
+        rows.push([key, '공식 DV — raw', row.direct_default === undefined ? PLACEHOLDER : formatForReport(row.direct_default, 8),
+            row.indirect_default === undefined || row.indirect_default === null ? 'N/A (미공표)' : formatForReport(row.indirect_default, 8),
+            `조회 행 CN ${row.cn_code}`]);
+        rows.push([key, `공식 DV — ${year} 적용값`, comparison.appliedDirect === undefined ? PLACEHOLDER : formatForReport(comparison.appliedDirect, 9),
+            'N/A (미공표)', 'markup 포함']);
+
+        if (comparison.deltaRaw !== undefined) {
+            rows.push([key, '차이: 실측 − DV(raw)', formatForReport(comparison.deltaRaw, 8), '대조 불가',
+                comparison.deltaRaw < 0 ? '실측이 낮음 (유리)' : '실측이 높음 (불리)']);
+        }
+
+        if (comparison.deltaApplied !== undefined) {
+            rows.push([key, `차이: 실측 − DV(${year})`, formatForReport(comparison.deltaApplied, 9), '대조 불가',
+                `${comparison.deltaAppliedRatio === undefined ? '' : `${formatPercentForReport(comparison.deltaAppliedRatio)} · `}${comparison.deltaApplied < 0 ? '실측이 낮음 (유리)' : '실측이 높음 (불리)'}`]);
+        }
+    }
+
+    body.push(table(columns.map((column) => column.header), rows, {
+        widths: [2100, 1900, 1600, 1500, 1900], headerShade: SOFT, headerBold: true, repeatHeader: true,
+    }));
+
+    // 경로 대응·heading 상속은 개연성 판단의 전제이므로 반드시 고지한다(씨밤이 P1).
+    for (const comparison of comparisons) {
+        if (!comparison.row) {
+            continue;
+        }
+
+        const notes: string[] = [];
+
+        if (comparison.isHeadingInherited) {
+            notes.push(`CN ${comparison.precursor.precursor_cn_code} 실측값을 상위 heading(CN ${comparison.row.cn_code}) 기준 DV와 비교했습니다. heading 상속 조회의 적정성은 원본 워크북 확인 필요(자료).`);
+        }
+
+        const dvRoute = comparison.row.production_route?.trim();
+        const actualRoute = comparison.precursor.production_route?.trim();
+
+        if (dvRoute && dvRoute !== actualRoute) {
+            notes.push(`DV 행의 생산경로 표기는 「${dvRoute}」이고 본 산정 전구물질의 경로는 「${actualRoute || '미기재'}」입니다. 대응 관계가 확인되기 전까지 본 대조는 개연성 참고로만 사용합니다 — 확인 필요(자료).`);
+        }
+
+        if (comparison.row.indirect_default === undefined || comparison.row.indirect_default === null) {
+            notes.push('해당 조합의 간접 기본값은 공표되지 않아(N/A) 간접 실측값은 DV 대조가 불가합니다.');
+        }
+
+        if (notes.length > 0) {
+            body.push(paragraph(`${comparison.precursor.name}: ${notes.join(' ')}`, 'Note'));
+        }
+    }
+
+    // 9.2 민감도 — 실측이 인정되지 않아 DV로 대체될 경우의 영향
+    body.push(paragraph('9.2 민감도 — 실측 불인정 시 DV 대체 영향', 'Heading2'));
+
+    const sensitivityRows: string[][] = [];
+    const sensitivityColumns = [
+        { header: '제품' },
+        { header: '시나리오' },
+        { header: 'CBAM 기준 SEE (tCO2e/t)', numeric: true },
+        { header: '차이' },
+    ];
+    let hasSensitivity = false;
+
+    for (const result of reportableResults(input)) {
+        if (result.see_cbam_basis === null) {
+            continue;
+        }
+
+        // 이 제품에 투입된 전구물질만 골라 DV로 치환했을 때의 기준 SEE를 재구성한다.
+        const related = comparisons.filter((comparison) => comparison.precursor.product_id === result.product_id);
+        const replaceable = related.filter((comparison) => comparison.appliedDirect !== undefined);
+
+        if (replaceable.length === 0 || result.output_mass_t <= 0) {
+            continue;
+        }
+
+        const dvPrecursorDirect = related.reduce((sum, comparison) => {
+            const ratio = comparison.precursor.consumed_mass_t / result.output_mass_t;
+            const value = comparison.appliedDirect ?? comparison.precursor.direct_see_tco2e_per_t;
+            return sum + ratio * value;
+        }, 0);
+        const dvBasis = result.direct_see + dvPrecursorDirect;
+        const delta = dvBasis - result.see_cbam_basis;
+        const ratio = result.see_cbam_basis === 0 ? undefined : delta / result.see_cbam_basis;
+
+        sensitivityRows.push([result.product_name, '실측 채택 (본 산정)', formatForReport(result.see_cbam_basis), '기준']);
+        sensitivityRows.push([
+            result.product_name,
+            '전구물질을 공식 DV로 대체',
+            formatForReport(dvBasis),
+            `${formatForReport(delta)}${ratio === undefined ? '' : ` (${formatPercentForReport(ratio)})`}`,
+        ]);
+        hasSensitivity = true;
+    }
+
+    if (hasSensitivity) {
+        body.push(table(sensitivityColumns.map((column) => column.header), sensitivityRows, {
+            widths: [2200, 2800, 2200, 1800], headerShade: SOFT, headerBold: true, repeatHeader: true,
+        }));
+        body.push(paragraph('실측이 인정되지 않아 공식 기본값으로 대체될 경우의 영향이다. 전구물질의 제3자 검증 결과 확보가 최우선 과제인 이유를 정량적으로 보여준다(제14장).', 'Note'));
+        gateIssues.push(...checkNumericColumns('제9.2장 민감도표', sensitivityColumns, sensitivityRows));
+    } else {
+        body.push(paragraph('대체 가능한 공식 기본값을 찾지 못해 민감도를 산출하지 못했습니다 — 확인 필요(자료).', 'Note'));
+    }
+
+    body.push(paragraph('본 장의 지표는 사전 검토용이며, SEFA·CBAM factor·인증서 수량·기지불 탄소가격 차감 등 최종 인증서 산정은 신고인(수입자) 영역으로 본 보고서의 범위 밖이다.', 'Note'));
+
+    gateIssues.push(...checkNumericColumns('제9장 DV 대조표', columns, rows));
+
+    return { xml: body.join(''), gateIssues };
 }
 
 function resultSection(input: CalculationReportInput) {
@@ -721,6 +939,7 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
     const processes = processSection(input);
     const activity = activityDataSection(input);
     const precursors = precursorSection(input);
+    const defaultValues = defaultValueSection(input);
     const results = resultSection(input);
 
     const bodyXml = [
@@ -733,7 +952,7 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
         activity.xml,
         electricitySection(input),
         precursors.xml,
-        defaultValueSectionPlaceholder(),
+        defaultValues.xml,
         results.xml,
         userInputPlaceholders(),
         principlesSection(input),
@@ -751,6 +970,7 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
         ...processes.gateIssues,
         ...activity.gateIssues,
         ...precursors.gateIssues,
+        ...defaultValues.gateIssues,
         ...results.gateIssues,
         ...checkCrossReferences(bodyText),
     ];
@@ -783,7 +1003,7 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
     };
 }
 
-// 미사용 경고 방지용 — 향후 장에서 사용할 상수/헬퍼
+// 미사용 경고 방지용 — 향후 장(P4)에서 사용할 상수/헬퍼
 void INK;
 void roundForReport;
 void cell;

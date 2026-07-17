@@ -139,6 +139,7 @@ const prelude = [
     'src/lib/docx-builder.ts',
     'src/lib/cbam-product-rules.ts',
     'src/lib/reporting-scope.ts',
+    'src/lib/reference-workbooks.ts',
 ]
     .map((path) => readFileSync(path, 'utf8')
         .replace("import { strToU8, zipSync } from 'fflate';", 'const { strToU8, zipSync } = fflate;')
@@ -251,4 +252,75 @@ assertTrue(steelOnlyXml.includes('10. 산정 결과'), '10장 존재');
 assertTrue(steelOnlyXml.includes('1.9988'), '전구물질 직접 SEE 반올림 1.9988');
 assertTrue(steelOnlyXml.includes('2.0288'), 'CBAM 기준 SEE 2.0288');
 
-console.log('Calculation report verification passed (docx-builder + report-format + report P2 gates).');
+// ---------------- P3: DV 대조 (9장) ----------------
+// 실제 공식 DV와 같은 형태의 기준자료를 넣어 대조·민감도가 자동 생성되는지 확인한다.
+// (수치는 EU 공식 워크북의 South Korea × CN 7208 행과 동일한 구조)
+const dvReference = {
+    summary: {
+        kind: 'DEFAULT_VALUES',
+        filename: 'DVs as adopted_v20260204.xlsx',
+        imported_at: '2026-03-01T00:00:00.000Z',
+        sheet_names: ['DV'],
+        row_count: 131,
+        cn_code_count: 120,
+        sample_rows: [],
+    },
+    rows: [{
+        country: 'South Korea',
+        cn_code: '7208',
+        description: 'Flat-rolled products of iron or non-alloy steel',
+        direct_default: 2.11847619,
+        indirect_default: null,
+        total_default: 2.11847619,
+        markup_2026: 2.330323809,
+        markup_2027: 2.542171428,
+        markup_2028_onwards: 2.754019047,
+        production_route: '(C)',
+    }],
+};
+
+// 게이트 G6 — 기준자료 미연결이면 경고하고, 9장은 「기재 필요」로 출력해야 한다(장을 통째로 빼면 안 됨)
+assertTrue(ok.issues.some((issue) => issue.gate === 'G6' && issue.severity === 'warn'), 'G6 기준자료 미연결 경고');
+assertTrue(steelOnlyXml.includes('기본값 기준자료가 연결되지 않아'), 'G6 미연결 시 9장 안내 문구');
+assertTrue(steelOnlyXml.includes('9. 공식 기본값(DV) 대조'), 'G6 미연결이어도 9장 자체는 존재');
+
+// 기준자료를 연결하면 대조표·민감도가 자동 생성된다
+const withDv = reportModule.createCalculationReport({
+    ...baseInput(),
+    precursors: [{ ...basePrecursor, supplier_country: 'South Korea' }],
+    defaultValues: dvReference,
+});
+const dvXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await withDv.blob.arrayBuffer()))['word/document.xml']);
+
+assertTrue(!withDv.issues.some((issue) => issue.gate === 'G6'), '기준자료 연결 시 G6 경고 없음');
+assertTrue(dvXml.includes('9.1 DV 조회 메타데이터'), '9.1 조회 메타데이터');
+assertTrue(dvXml.includes('DVs as adopted_v20260204.xlsx'), '워크북 판본 기재 (v0.2 P1 지적)');
+assertTrue(dvXml.includes('2.11847619'), 'DV raw 원천 자릿수');
+assertTrue(dvXml.includes('2.330323809'), 'DV 2026 적용값 원천 자릿수 (반올림 금지)');
+assertTrue(dvXml.includes('N/A (미공표)'), '간접 DV 미공표 명시');
+// heading 상속(CN 72083900 실측 → CN 7208 DV) 고지
+assertTrue(dvXml.includes('상위 heading'), 'heading 상속 조회 고지 (v0.2 P1 지적)');
+// 생산경로 대응 미확인 고지 — DV 행 "(C)" vs 실측 "External precursor"
+assertTrue(dvXml.includes('(C)'), 'DV 행 생산경로 표기 노출');
+assertTrue(dvXml.includes('개연성 참고로만'), '경로 대응 미확인 시 개연성 참고 한정 (v0.2 P1 지적)');
+
+// 절대차 — 실측 1.95 − DV raw 2.11847619 = -0.16847619
+assertTrue(dvXml.includes('-0.16847619'), '절대차(raw) 재계산 일치');
+// 실측 1.95 − DV 2026 2.330323809 = -0.380323809
+assertTrue(dvXml.includes('-0.380323809'), '절대차(2026) 재계산 일치');
+assertTrue(dvXml.includes('-16.32%'), '상대차 -16.32%');
+
+// 9.2 민감도 — 전구물질을 DV로 대체하면 CBAM 기준 SEE가 2.0288 → 2.4186 (+19.22%)
+assertTrue(dvXml.includes('9.2 민감도'), '9.2 민감도 절');
+assertTrue(dvXml.includes('2.4186'), '민감도 DV 대체 시 기준 SEE');
+assertTrue(dvXml.includes('+19.22%'), '민감도 상대 증가율');
+
+// 조합을 못 찾으면 조용히 넘기지 말고 G6 경고 + 「확인 필요(자료)」
+const dvMiss = reportModule.createCalculationReport({
+    ...baseInput(),
+    precursors: [{ ...basePrecursor, supplier_country: 'Japan' }],
+    defaultValues: dvReference,
+});
+assertTrue(dvMiss.issues.some((issue) => issue.gate === 'G6' && /찾지 못했습니다/.test(issue.message)), 'DV 조합 미발견 → G6 경고');
+
+console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV 대조).');
