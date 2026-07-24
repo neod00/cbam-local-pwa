@@ -14,6 +14,28 @@ import {
     validateEuTemplateFile,
     type EuExportReadinessIssue,
 } from '@/lib/eu-template-export';
+import {
+    buildElectricityUpdate,
+    buildInstallationPayload,
+    buildInstallationUpdate,
+    buildPeriodPayload,
+    buildPeriodUpdate,
+    buildPrecursorCreate,
+    buildPrecursorUpdate,
+    buildProductPayload,
+    buildProductUpdate,
+    buildSourceStreamUpdate,
+    getPeriodDeleteBlockers,
+    getProductDeleteBlockers,
+    validateElectricityDraft,
+    validateInstallationDraft,
+    validatePeriodDraft,
+    validatePrecursorAllocation,
+    validatePrecursorDraft,
+    validateProductDraft,
+    validateSourceStreamDraft,
+    type PrecursorDraft,
+} from '@/lib/guided-edit';
 import type { GuidedStepId, GuidedStepState } from '@/lib/guided-map';
 import {
     createLocalItem,
@@ -84,6 +106,33 @@ function nextStepId(steps: GuidedStepState[], current: GuidedStepId): GuidedStep
         }
     }
     return null;
+}
+
+const iconButtonClass = 'rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-teal-700';
+const dangerIconButtonClass = 'rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-red-600';
+
+// 목록 한 줄의 수정·삭제 버튼. 여덟 패널이 같은 모양을 쓰도록 한 군데 둔다 —
+// 줄마다 따로 만들면 어떤 목록은 수정이 있고 어떤 목록은 없는 상태가 조용히 굳는다.
+function RowActions({ label, onEdit, onDelete }: { label: string; onEdit?: () => void; onDelete?: () => void }) {
+    return (
+        <span className="flex flex-none items-center gap-1">
+            {onEdit && (
+                <button type="button" aria-label={`${label} 수정`} onClick={onEdit} className={iconButtonClass}>
+                    <Pencil className="h-4 w-4" />
+                </button>
+            )}
+            {onDelete && (
+                <button type="button" aria-label={`${label} 삭제`} onClick={onDelete} className={dangerIconButtonClass}>
+                    <Trash2 className="h-4 w-4" />
+                </button>
+            )}
+        </span>
+    );
+}
+
+/** 참조가 남은 항목의 삭제를 막고 이유를 알린다. 참조를 남긴 채 지우면 화면에서만 사라진다. */
+function alertDeleteBlocked(name: string, reasons: string[], howTo: string) {
+    window.alert(`'${name}'은(는) 다른 자료가 참조하고 있어 삭제할 수 없습니다.\n\n${reasons.join(' · ')}\n\n${howTo}`);
 }
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
@@ -189,9 +238,13 @@ function ProcessSelect({
 // ── 1단계: 사업장·보고기간 ─────────────────────────────────────────────
 function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
     const installation = data.installations[0];
-    const period = data.periods[0];
+    const [editingInstallation, setEditingInstallation] = useState(false);
     const [instName, setInstName] = useState('');
     const [country, setCountry] = useState('KR');
+    // 기간은 여럿일 수 있다(상·하반기 분리 등). 종전엔 periods[0]만 보여줘서 두 번째 기간은
+    // 지도에서 보이지도 고치지도 못했다 — 3단계 공정 패널에서는 선택지로 뜨는데도.
+    const [periodFormOpen, setPeriodFormOpen] = useState(false);
+    const [editingPeriodId, setEditingPeriodId] = useState('');
     const [periodName, setPeriodName] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -205,62 +258,167 @@ function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
         setEndDate(end);
     };
 
+    // 수정은 저장된 값을 폼에 그대로 다시 싣는다. local_name(국문 병기)은 이 패널에 칸이 없으므로
+    // 건드리지 않고, EU 문서에 나가는 name만 고친다.
+    const openInstallationForm = () => {
+        setInstName(installation?.name ?? '');
+        setCountry(installation?.country ?? 'KR');
+        setEditingInstallation(true);
+        setMessage('');
+        setSaved(false);
+    };
+
     const saveInstallation = async () => {
-        if (!instName.trim()) {
-            setMessage('회사·공장 이름을 입력하세요.');
+        const draft = { name: instName, country };
+        const error = validateInstallationDraft(draft);
+        if (error) {
+            setMessage(error);
             return;
         }
-        if (!/^[A-Za-z]{2}$/.test(country.trim())) {
-            setMessage('국가는 2자리 코드로 입력하세요 (예: KR).');
-            return;
+        if (installation) {
+            await updateLocalItem('installations', buildInstallationUpdate(installation, draft));
+        } else {
+            await createLocalItem('installations', buildInstallationPayload(draft));
         }
-        await createLocalItem('installations', { name: instName.trim(), country: country.trim().toUpperCase() });
+        setEditingInstallation(false);
         setMessage('');
         setSaved(true);
         await onSaved();
+    };
+
+    const openPeriodForm = (period?: ReportingPeriod) => {
+        setEditingPeriodId(period?.id ?? '');
+        setPeriodName(period?.name ?? '');
+        setStartDate(period?.start_date ?? '');
+        setEndDate(period?.end_date ?? '');
+        setPeriodFormOpen(true);
+        setMessage('');
+        setSaved(false);
+    };
+
+    const closePeriodForm = () => {
+        setPeriodFormOpen(false);
+        setEditingPeriodId('');
+        setPeriodName('');
+        setStartDate('');
+        setEndDate('');
     };
 
     const savePeriod = async () => {
-        if (!periodName.trim() || !startDate || !endDate) {
-            setMessage('보고기간 이름과 시작·종료일을 입력하세요.');
+        const draft = { name: periodName, startDate, endDate };
+        const error = validatePeriodDraft(draft);
+        if (error) {
+            setMessage(error);
             return;
         }
-        if (endDate < startDate) {
-            setMessage('종료일이 시작일보다 빠릅니다.');
-            return;
+        if (editingPeriodId) {
+            const existing = data.periods.find((period) => period.id === editingPeriodId);
+            if (!existing) {
+                setMessage('수정할 보고기간을 찾지 못했습니다.');
+                return;
+            }
+            await updateLocalItem('periods', buildPeriodUpdate(existing, draft));
+        } else {
+            await createLocalItem('periods', { ...buildPeriodPayload(draft), status: 'DRAFT' as const });
         }
-        await createLocalItem('periods', { name: periodName.trim(), start_date: startDate, end_date: endDate, status: 'DRAFT' });
+        closePeriodForm();
         setMessage('');
         setSaved(true);
         await onSaved();
     };
 
+    // 기간은 공정·배출원·전구물질 셋이 가리킨다. 참조를 남긴 채 지우면 그 자료들은 화면에서
+    // 사라지지 않고 없는 기간을 가리킨 채 남는데, 엔진의 기간 누락 경고는 period_id가
+    // **비었을 때만** 울리므로 아무도 알려주지 않는다.
+    const removePeriod = async (period: ReportingPeriod) => {
+        const blockers = getPeriodDeleteBlockers(period.id, data);
+        if (blockers.total > 0) {
+            alertDeleteBlocked(
+                period.name,
+                blockers.reasons,
+                '먼저 해당 자료의 보고기간을 바꾸거나 지운 뒤 다시 시도하세요.'
+            );
+            return;
+        }
+        if (!window.confirm(`'${period.name}' 보고기간을 삭제할까요?`)) {
+            return;
+        }
+        await deleteLocalItem('periods', period.id);
+        if (editingPeriodId === period.id) closePeriodForm();
+        await onSaved();
+    };
+
+    const showPeriodForm = periodFormOpen || data.periods.length === 0;
+
     return (
         <>
-            {installation ? (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm text-emerald-900">
-                    <span className="font-semibold">사업장:</span> {installation.local_name || installation.name} ({installation.country})
+            {installation && !editingInstallation ? (
+                <div className="flex items-start justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm text-emerald-900">
+                    <span className="min-w-0">
+                        <span className="font-semibold">사업장:</span> {installation.local_name || installation.name} ({installation.country})
+                        {installation.local_name && installation.local_name !== installation.name && (
+                            <span className="ml-2 text-xs text-emerald-700">영문 {installation.name}</span>
+                        )}
+                    </span>
+                    <RowActions label="사업장" onEdit={openInstallationForm} />
                 </div>
             ) : (
                 <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-sm font-semibold text-slate-800">우리 공장 정보</p>
+                    <p className="text-sm font-semibold text-slate-800">
+                        {installation ? <Pencil className="mr-1 inline h-4 w-4" /> : null}
+                        {installation ? '사업장 수정' : '우리 공장 정보'}
+                    </p>
                     <Field label="회사·공장 이름" hint="예: 한국강선 김포공장">
                         <input className={fieldClass} value={instName} onChange={(event) => setInstName(event.target.value)} placeholder="한국강선 김포공장" />
                     </Field>
                     <Field label="국가 (2자리)">
                         <input className={fieldClass} value={country} onChange={(event) => setCountry(event.target.value)} maxLength={2} />
                     </Field>
-                    <Button type="button" onClick={saveInstallation}>사업장 저장</Button>
+                    <div className="flex gap-2">
+                        <Button type="button" onClick={saveInstallation}>{installation ? '수정 저장' : '사업장 저장'}</Button>
+                        {installation && (
+                            <Button type="button" variant="secondary" onClick={() => { setEditingInstallation(false); setMessage(''); }}>취소</Button>
+                        )}
+                    </div>
+                    {installation && (
+                        <p className="text-xs leading-5 text-slate-500">
+                            주소·좌표·담당자·공정 경계 메모는 그대로 유지됩니다. 그 항목들은 상세 입력에서 다룹니다.
+                        </p>
+                    )}
                 </div>
             )}
 
-            {period ? (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm text-emerald-900">
-                    <span className="font-semibold">보고기간:</span> {period.name} ({period.start_date} ~ {period.end_date})
-                </div>
-            ) : (
-                <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-slate-800">보고기간</p>
+                    {data.periods.length > 0 && !showPeriodForm && (
+                        <button type="button" onClick={() => openPeriodForm()} className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 transition hover:text-teal-900">
+                            <Plus className="h-3.5 w-3.5" /> 기간 추가
+                        </button>
+                    )}
+                </div>
+                {data.periods.map((period) => (
+                    <div
+                        key={period.id}
+                        className={`flex items-center justify-between gap-2 rounded-xl border px-4 py-2.5 text-sm ${
+                            editingPeriodId === period.id ? 'border-teal-400 bg-teal-50 text-teal-900' : 'border-emerald-200 bg-emerald-50/60 text-emerald-900'
+                        }`}
+                    >
+                        <span className="min-w-0 truncate">
+                            <span className="font-semibold">{period.name}</span>
+                            <span className="ml-2 text-xs">{period.start_date} ~ {period.end_date}</span>
+                        </span>
+                        <RowActions label={period.name} onEdit={() => openPeriodForm(period)} onDelete={() => removePeriod(period)} />
+                    </div>
+                ))}
+            </div>
+
+            {showPeriodForm && (
+                <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-sm font-semibold text-slate-800">
+                        {editingPeriodId ? <Pencil className="mr-1 inline h-4 w-4" /> : <Plus className="mr-1 inline h-4 w-4" />}
+                        {editingPeriodId ? '보고기간 수정' : '보고기간 추가'}
+                    </p>
                     <div className="flex flex-wrap gap-2">
                         <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => applyPreset(`${year}년 연간`, `${year}-01-01`, `${year}-12-31`)}>
                             {year}년 연간
@@ -283,12 +441,17 @@ function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                             <input type="date" className={fieldClass} value={endDate} onChange={(event) => setEndDate(event.target.value)} />
                         </Field>
                     </div>
-                    <Button type="button" onClick={savePeriod}>보고기간 저장</Button>
+                    <div className="flex gap-2">
+                        <Button type="button" onClick={savePeriod}>{editingPeriodId ? '수정 저장' : '보고기간 저장'}</Button>
+                        {data.periods.length > 0 && (
+                            <Button type="button" variant="secondary" onClick={closePeriodForm}>취소</Button>
+                        )}
+                    </div>
                 </div>
             )}
 
             {message && <p className="text-sm text-amber-700">{message}</p>}
-            {saved && installation && period && (
+            {saved && installation && data.periods.length > 0 && (
                 <SavedNotice message="기본 설정이 끝났습니다." next={nextStepId(steps, 'setup')} onSelectStep={onSelectStep} />
             )}
         </>
@@ -297,6 +460,7 @@ function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
 
 // ── 2단계: 제품·CN ────────────────────────────────────────────────────
 function ProductsPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
+    const [editingProductId, setEditingProductId] = useState('');
     const [name, setName] = useState('');
     const [cn, setCn] = useState('');
     const [message, setMessage] = useState('');
@@ -305,29 +469,61 @@ function ProductsPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
     const cnDigits = cn.replace(/\D/g, '');
     const coverage = cnDigits.length >= 4 ? getCbamCoverage({ cn_code: cnDigits, hs_code: cnDigits.slice(0, 4) }) : null;
 
-    const addProduct = async () => {
-        if (!name.trim()) {
-            setMessage('제품 이름을 입력하세요.');
-            return;
-        }
-        if (cnDigits.length !== 8) {
-            setMessage('CN 코드는 8자리 숫자입니다. 목록에서 골라도 됩니다.');
-            return;
-        }
-        await createLocalItem('products', {
-            installation_id: data.installations[0]?.id,
-            name: name.trim(),
-            hs_code: cnDigits.slice(0, 4),
-            cn_code: cnDigits,
-            hs_group: cnDigits.slice(0, 2),
-            product_type_enum: `HS${cnDigits.slice(0, 2)}_OTHER`,
-            unit: 'tonne',
-            reporting_scope: 'CBAM_GOOD',
-        });
+    const resetForm = () => {
+        setEditingProductId('');
         setName('');
         setCn('');
         setMessage('');
+    };
+
+    const startEdit = (product: Product) => {
+        setEditingProductId(product.id);
+        setName(product.name);
+        setCn(product.cn_code ?? '');
+        setMessage('');
+        setSaved(false);
+    };
+
+    const saveProduct = async () => {
+        const draft = { name, cnDigits };
+        const error = validateProductDraft(draft);
+        if (error) {
+            setMessage(error);
+            return;
+        }
+        if (editingProductId) {
+            const existing = data.products.find((product) => product.id === editingProductId);
+            if (!existing) {
+                setMessage('수정할 제품을 찾지 못했습니다.');
+                return;
+            }
+            await updateLocalItem('products', buildProductUpdate(existing, draft));
+        } else {
+            await createLocalItem('products', buildProductPayload(draft, data.installations[0]?.id));
+        }
+        resetForm();
         setSaved(true);
+        await onSaved();
+    };
+
+    // 공정·생산라인·전구물질이 가리키면 막는다. 특히 생산라인 — 공정의 product_id는 대표 제품
+    // 하나만 가리키므로, 다제품 공정의 두 번째 제품은 공정 참조에 걸리지 않는다. 그대로 지우면
+    // 생산라인이 없는 제품을 가리킨 채 질량을 계속 만들어낸다.
+    const removeProduct = async (product: Product) => {
+        const blockers = getProductDeleteBlockers(product.id, data);
+        if (blockers.total > 0) {
+            alertDeleteBlocked(
+                product.name,
+                blockers.reasons,
+                '먼저 3단계 공정과 ③ 전구물질에서 이 제품을 쓰는 자료를 고치거나 지운 뒤 다시 시도하세요.'
+            );
+            return;
+        }
+        if (!window.confirm(`'${product.name}' 제품을 삭제할까요?`)) {
+            return;
+        }
+        await deleteLocalItem('products', product.id);
+        if (editingProductId === product.id) resetForm();
         await onSaved();
     };
 
@@ -338,13 +534,20 @@ function ProductsPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                     {reportingProducts.map((product) => {
                         const productCoverage = getCbamCoverage(product);
                         const tone = productCoverage.status === 'COVERED' ? 'success' : productCoverage.status === 'NOT_COVERED' ? 'danger' : 'warning';
+                        const isEditing = editingProductId === product.id;
                         return (
-                            <li key={product.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm">
+                            <li
+                                key={product.id}
+                                className={`flex items-center justify-between gap-2 rounded-xl border px-4 py-2.5 text-sm ${isEditing ? 'border-teal-400 bg-teal-50' : 'border-slate-200 bg-white'}`}
+                            >
                                 <span className="min-w-0 truncate font-semibold text-slate-900">
                                     {product.name}
                                     <span className="ml-2 font-normal text-slate-500">CN {product.cn_code || '미입력'}</span>
                                 </span>
-                                <StatusBadge tone={tone}>{productCoverage.label}</StatusBadge>
+                                <span className="flex flex-none items-center gap-1">
+                                    <StatusBadge tone={tone}>{productCoverage.label}</StatusBadge>
+                                    <RowActions label={product.name} onEdit={() => startEdit(product)} onDelete={() => removeProduct(product)} />
+                                </span>
                             </li>
                         );
                     })}
@@ -353,8 +556,8 @@ function ProductsPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
 
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-800">
-                    <Plus className="mr-1 inline h-4 w-4" />
-                    수출 제품 추가
+                    {editingProductId ? <Pencil className="mr-1 inline h-4 w-4" /> : <Plus className="mr-1 inline h-4 w-4" />}
+                    {editingProductId ? '제품 수정' : '수출 제품 추가'}
                 </p>
                 <Field label="제품 이름" hint="예: 아연도금 강선">
                     <input className={fieldClass} value={name} onChange={(event) => setName(event.target.value)} placeholder="아연도금 강선" />
@@ -378,11 +581,21 @@ function ProductsPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                         {coverage.label} — {coverage.reason}
                     </div>
                 )}
-                <Button type="button" onClick={addProduct}>제품 추가</Button>
+                <div className="flex gap-2">
+                    <Button type="button" onClick={saveProduct}>{editingProductId ? '수정 저장' : '제품 추가'}</Button>
+                    {editingProductId && (
+                        <Button type="button" variant="secondary" onClick={resetForm}>취소</Button>
+                    )}
+                </div>
+                {editingProductId && (
+                    <p className="text-xs leading-5 text-slate-500">
+                        CN을 그대로 두면 상세 입력에서 고른 제품군 설정이 유지됩니다.
+                    </p>
+                )}
             </div>
 
             {message && <p className="text-sm text-amber-700">{message}</p>}
-            {saved && <SavedNotice message="제품을 추가했습니다. 더 추가하거나 다음으로 이동하세요." next={nextStepId(steps, 'products')} onSelectStep={onSelectStep} />}
+            {saved && <SavedNotice message="제품을 저장했습니다. 더 추가하거나 다음으로 이동하세요." next={nextStepId(steps, 'products')} onSelectStep={onSelectStep} />}
         </>
     );
 }
@@ -563,14 +776,7 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                                         {fmt(process.output_mass_t, 1)} t · 제품 {lines.length > 0 ? lines.length : 1}개
                                     </span>
                                 </span>
-                                <span className="flex flex-none items-center gap-1">
-                                    <button type="button" aria-label={`${process.name} 수정`} onClick={() => startEdit(process)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-teal-700">
-                                        <Pencil className="h-4 w-4" />
-                                    </button>
-                                    <button type="button" aria-label={`${process.name} 삭제`} onClick={() => removeProcess(process)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-red-600">
-                                        <Trash2 className="h-4 w-4" />
-                                    </button>
-                                </span>
+                                <RowActions label={process.name} onEdit={() => startEdit(process)} onDelete={() => removeProcess(process)} />
                             </li>
                         );
                     })}
@@ -671,6 +877,9 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
     const process = data.processes.find((item) => item.id === processId) ?? pickProcess(data, selectedProcessId);
     const [presetKey, setPresetKey] = useState(FUEL_PRESETS[0].key);
     const [amount, setAmount] = useState('');
+    // 수정 중인 배출원. 프리셋이 아니라 저장된 값을 고치므로 이름 칸이 따로 필요하다.
+    const [editingStreamId, setEditingStreamId] = useState('');
+    const [editingName, setEditingName] = useState('');
     const [message, setMessage] = useState('');
     const [saved, setSaved] = useState(false);
     const preset = FUEL_PRESETS.find((item) => item.key === presetKey) ?? FUEL_PRESETS[0];
@@ -721,60 +930,128 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
         await onSaved();
     };
 
+    const resetForm = () => {
+        setEditingStreamId('');
+        setEditingName('');
+        setAmount('');
+        setMessage('');
+    };
+
+    const startEdit = (stream: SourceStream) => {
+        setEditingStreamId(stream.id);
+        setEditingName(stream.name);
+        setAmount(String(stream.activity_data));
+        setMessage('');
+        setSaved(false);
+    };
+
+    const saveEdit = async () => {
+        const existing = data.sourceStreams.find((stream) => stream.id === editingStreamId);
+        if (!existing) {
+            setMessage('수정할 배출원을 찾지 못했습니다.');
+            return;
+        }
+        const draft = { name: editingName, activityData: num(amount) };
+        const error = validateSourceStreamDraft(draft);
+        if (error) {
+            setMessage(error);
+            return;
+        }
+        const updated = await updateLocalItem('source_streams', buildSourceStreamUpdate(existing, draft));
+        // 공정의 직접배출은 배출원 합계를 캐시한 값이다. 다시 맞추지 않으면 지도의 ①이 옛 숫자를 인쇄한다.
+        await syncProcessDirectEmissions(
+            process,
+            data.sourceStreams.map((stream) => (stream.id === updated.id ? updated : stream))
+        );
+        resetForm();
+        setSaved(true);
+        await onSaved();
+    };
+
     const removeStream = async (stream: SourceStream) => {
-        if (!window.confirm(`${stream.name} 배출원을 삭제할까요?`)) {
+        if (!window.confirm(`'${stream.name}' 배출원을 삭제할까요? 지도의 ① 직접배출에서 빠집니다.`)) {
             return;
         }
         await deleteLocalItem('source_streams', stream.id);
         await syncProcessDirectEmissions(process, data.sourceStreams.filter((item) => item.id !== stream.id));
+        if (editingStreamId === stream.id) resetForm();
         await onSaved();
     };
 
     return (
         <>
-            <ProcessSelect data={data} value={process.id} onChange={setProcessId} />
+            {/* 공정을 바꾸면 수정 세션을 닫는다 — 목록에서 사라진 줄을 계속 편집하고 있으면 안 된다. */}
+            <ProcessSelect data={data} value={process.id} onChange={(id) => { setProcessId(id); resetForm(); }} />
 
             {processStreams.length > 0 && (
                 <ul className="space-y-2">
-                    {processStreams.map((stream) => (
-                        <li key={stream.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm">
-                            <span className="min-w-0 truncate">
-                                <span className="font-semibold text-slate-900">{stream.name}</span>
-                                <span className="ml-2 text-slate-500">
-                                    {fmt(stream.activity_data, 1)} {stream.activity_unit} → {fmt(calculateSourceStreamEmissions(stream))} tCO₂e
+                    {processStreams.map((stream) => {
+                        const isEditing = editingStreamId === stream.id;
+                        return (
+                            <li
+                                key={stream.id}
+                                className={`flex items-center justify-between gap-2 rounded-xl border px-4 py-2.5 text-sm ${isEditing ? 'border-teal-400 bg-teal-50' : 'border-slate-200 bg-white'}`}
+                            >
+                                <span className="min-w-0 truncate">
+                                    <span className="font-semibold text-slate-900">{stream.name}</span>
+                                    <span className="ml-2 text-slate-500">
+                                        {fmt(stream.activity_data, 1)} {stream.activity_unit} → {fmt(calculateSourceStreamEmissions(stream))} tCO₂e
+                                    </span>
                                 </span>
-                            </span>
-                            <button type="button" aria-label={`${stream.name} 삭제`} onClick={() => removeStream(stream)} className="flex-none text-slate-400 transition hover:text-red-600">
-                                <Trash2 className="h-4 w-4" />
-                            </button>
-                        </li>
-                    ))}
+                                <RowActions label={stream.name} onEdit={() => startEdit(stream)} onDelete={() => removeStream(stream)} />
+                            </li>
+                        );
+                    })}
                 </ul>
             )}
 
-            <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-800">
-                    <Plus className="mr-1 inline h-4 w-4" />
-                    고지서에서 옮겨 적기
-                </p>
-                <Field label="연료 종류">
-                    <select className={fieldClass} value={presetKey} onChange={(event) => setPresetKey(event.target.value)}>
-                        {FUEL_PRESETS.map((item) => (
-                            <option key={item.key} value={item.key}>{item.label}</option>
-                        ))}
-                    </select>
-                </Field>
-                <Field
-                    label={`연간 사용량 (${preset.activity_unit})`}
-                    hint={preset.key === 'city-gas' ? '도시가스 고지서의 사용량(Nm³) 12개월 합계' : '연료 구매대장의 연간 사용량(t)'}
-                >
-                    <input className={fieldClass} inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="128400" />
-                </Field>
-                <p className="text-xs leading-5 text-slate-500">
-                    발열량·배출계수는 표준값이 자동 적용됩니다. 자가 측정값이 있거나 공정 원료·물질수지가 필요하면 상세 입력을 이용하세요.
-                </p>
-                <Button type="button" onClick={addFuel}>배출원 저장</Button>
-            </div>
+            {editingStreamId ? (
+                <div className="space-y-3 rounded-xl border border-teal-200 bg-teal-50/40 p-4">
+                    <p className="text-sm font-semibold text-slate-800">
+                        <Pencil className="mr-1 inline h-4 w-4" />
+                        배출원 수정
+                    </p>
+                    <Field label="배출원 이름">
+                        <input className={fieldClass} value={editingName} onChange={(event) => setEditingName(event.target.value)} />
+                    </Field>
+                    <Field label="연간 사용량" hint="고지서·구매대장의 연간 합계">
+                        <input className={fieldClass} inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} />
+                    </Field>
+                    {/* 계수는 손대지 않는다. 상세 입력에서 자가 측정값을 넣은 배출원도 이 목록에 뜨는데,
+                        프리셋 값을 덮어쓰면 그 측정값이 조용히 표준값으로 바뀐다. */}
+                    <p className="text-xs leading-5 text-slate-500">
+                        발열량·배출계수·산화계수는 저장된 값을 그대로 씁니다. 연료 종류 자체가 바뀌었다면 지우고 다시 등록하세요 — 계수 세트가 통째로 달라집니다.
+                    </p>
+                    <div className="flex gap-2">
+                        <Button type="button" onClick={saveEdit}>수정 저장</Button>
+                        <Button type="button" variant="secondary" onClick={resetForm}>취소</Button>
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-sm font-semibold text-slate-800">
+                        <Plus className="mr-1 inline h-4 w-4" />
+                        고지서에서 옮겨 적기
+                    </p>
+                    <Field label="연료 종류">
+                        <select className={fieldClass} value={presetKey} onChange={(event) => setPresetKey(event.target.value)}>
+                            {FUEL_PRESETS.map((item) => (
+                                <option key={item.key} value={item.key}>{item.label}</option>
+                            ))}
+                        </select>
+                    </Field>
+                    <Field
+                        label={`연간 사용량 (${preset.activity_unit})`}
+                        hint={preset.key === 'city-gas' ? '도시가스 고지서의 사용량(Nm³) 12개월 합계' : '연료 구매대장의 연간 사용량(t)'}
+                    >
+                        <input className={fieldClass} inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="128400" />
+                    </Field>
+                    <p className="text-xs leading-5 text-slate-500">
+                        발열량·배출계수는 표준값이 자동 적용됩니다. 자가 측정값이 있거나 공정 원료·물질수지가 필요하면 상세 입력을 이용하세요.
+                    </p>
+                    <Button type="button" onClick={addFuel}>배출원 저장</Button>
+                </div>
+            )}
 
             {message && <p className="text-sm text-amber-700">{message}</p>}
             {saved && <SavedNotice message="저장했습니다. 지도의 ① 상자에 반영됩니다." next={nextStepId(steps, 'fuel')} onSelectStep={onSelectStep} />}
@@ -795,11 +1072,6 @@ function ElectricityPanel({ data, steps, selectedProcessId, onSaved, onSelectSte
     const initial = pickProcess(data, selectedProcessId);
     const [processId, setProcessId] = useState(initial?.id ?? '');
     const process = data.processes.find((item) => item.id === processId) ?? initial;
-    const [mwh, setMwh] = useState(process && process.electricity_mwh > 0 ? String(process.electricity_mwh) : '');
-    const [ef, setEf] = useState(process ? String(process.electricity_ef_tco2e_per_mwh || 0.47) : '0.47');
-    const [efSource, setEfSource] = useState(process?.electricity_ef_source ?? 'COUNTRY_GRID_DEFAULT');
-    const [message, setMessage] = useState('');
-    const [saved, setSaved] = useState(false);
 
     if (!process) {
         return (
@@ -812,23 +1084,46 @@ function ElectricityPanel({ data, steps, selectedProcessId, onSaved, onSelectSte
         );
     }
 
+    return (
+        <>
+            <ProcessSelect data={data} value={process.id} onChange={setProcessId} />
+            {/*
+             * key로 공정을 묶는다 — 공정을 바꾸면 폼이 그 공정의 저장값으로 다시 만들어진다.
+             *
+             * 종전엔 useState 초깃값이 **처음 연 공정**의 값으로 한 번 고정됐다. 공정을 바꿔도
+             * 입력칸은 그대로였고, 그 상태로 저장하면 A공정의 전력이 B공정에 기록됐다.
+             * 화면에는 아무 이상이 없어 보이므로 사용자가 알아챌 방법이 없었다.
+             */}
+            <ElectricityForm key={process.id} process={process} steps={steps} onSaved={onSaved} onSelectStep={onSelectStep} />
+        </>
+    );
+}
+
+function ElectricityForm({
+    process,
+    steps,
+    onSaved,
+    onSelectStep,
+}: {
+    process: ProductionProcess;
+    steps: GuidedStepState[];
+    onSaved: () => Promise<void> | void;
+    onSelectStep: (id: GuidedStepId) => void;
+}) {
+    const [mwh, setMwh] = useState(process.electricity_mwh > 0 ? String(process.electricity_mwh) : '');
+    const [ef, setEf] = useState(String(process.electricity_ef_tco2e_per_mwh || 0.47));
+    const [efSource, setEfSource] = useState(process.electricity_ef_source ?? 'COUNTRY_GRID_DEFAULT');
+    const [message, setMessage] = useState('');
+    const [saved, setSaved] = useState(false);
+
     const saveElectricity = async () => {
-        const electricityMwh = num(mwh);
-        const electricityEf = num(ef);
-        if (electricityMwh <= 0) {
-            setMessage('전력 사용량(MWh)을 입력하세요. 전기요금 고지서의 연간 kWh ÷ 1,000 입니다.');
+        const draft = { mwh: num(mwh), ef: num(ef), efSource };
+        const error = validateElectricityDraft(draft);
+        if (error) {
+            setMessage(error);
             return;
         }
-        if (electricityEf <= 0) {
-            setMessage('전력 배출계수를 입력하세요. 모르면 국가 기본계수를 쓰되 출처·연도를 확인하세요(임의로 낮추지 마세요).');
-            return;
-        }
-        await updateLocalItem('processes', {
-            ...process,
-            electricity_mwh: electricityMwh,
-            electricity_ef_tco2e_per_mwh: electricityEf,
-            electricity_ef_source: efSource || undefined,
-        });
+        await updateLocalItem('processes', buildElectricityUpdate(process, draft));
         setMessage('');
         setSaved(true);
         await onSaved();
@@ -836,7 +1131,13 @@ function ElectricityPanel({ data, steps, selectedProcessId, onSaved, onSelectSte
 
     return (
         <>
-            <ProcessSelect data={data} value={process.id} onChange={setProcessId} />
+            {/* 저장된 값을 함께 보여준다 — 공정마다 다른 값이 들어간다는 사실이 화면에 드러나야 한다. */}
+            {process.electricity_mwh > 0 && (
+                <p className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-2.5 text-sm text-emerald-900">
+                    <span className="font-semibold">{process.name}</span>에 저장된 값: {fmt(process.electricity_mwh, 1)} MWh
+                    × {fmt(process.electricity_ef_tco2e_per_mwh, 4)} = {fmt(process.electricity_mwh * process.electricity_ef_tco2e_per_mwh, 1)} tCO₂e
+                </p>
+            )}
 
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <Field label="연간 전력 사용량 (MWh)" hint="전기요금 고지서의 12개월 사용량(kWh) 합계 ÷ 1,000">
@@ -869,6 +1170,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
     const initial = pickProcess(data, selectedProcessId);
     const [processId, setProcessId] = useState(initial?.id ?? '');
     const process = data.processes.find((item) => item.id === processId) ?? initial;
+    const [editingPrecursorId, setEditingPrecursorId] = useState('');
     const [name, setName] = useState('');
     const [cn, setCn] = useState('');
     const [consumed, setConsumed] = useState('');
@@ -1061,66 +1363,8 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         );
     };
 
-    const addPrecursor = async () => {
-        const cnDigits = cn.replace(/\D/g, '');
-        const consumedMass = num(consumed);
-        if (!name.trim()) {
-            setMessage('원료 이름을 입력하세요. 예: 선재(와이어로드)');
-            return;
-        }
-        if (cnDigits.length < 4) {
-            setMessage('원료의 CN 코드(4자리 이상)를 입력하세요.');
-            return;
-        }
-        if (consumedMass <= 0) {
-            setMessage('소비량(t)을 입력하세요. 만든 양이 아니라 이 공정에 투입한 양입니다.');
-            return;
-        }
-        if (!source.trim()) {
-            setMessage('SEE 값의 출처를 적어주세요. 예: 공급사 회신 메일, EU 기본값 파일');
-            return;
-        }
-        if (dataMode === 'DEFAULT' && !justification.trim()) {
-            setMessage('기본값 사용 사유를 적어주세요.');
-            return;
-        }
-        // 제품별 직접 배분을 골랐으면 합계가 소비량과 맞아야 한다(엔진도 불일치 시 경고).
-        let outputAllocations: PurchasedPrecursor['output_allocations'];
-        if (hasMultipleProducts && allocMode === 'manual') {
-            const tolerance = Math.max(0.01, consumedMass * 0.01);
-            if (Math.abs(allocSum - consumedMass) > tolerance) {
-                setMessage(`제품별 배분 합계(${fmt(allocSum, 1)} t)가 소비량(${fmt(consumedMass, 1)} t)과 다릅니다. 합계를 맞춰주세요.`);
-                return;
-            }
-            outputAllocations = outputLines
-                .map((line) => ({ product_output_line_id: line.id, allocated_mass_t: num(allocMasses[line.id] ?? '') }))
-                .filter((allocation) => allocation.allocated_mass_t > 0);
-        }
-        await createLocalItem('precursors', {
-            period_id: process.period_id,
-            process_id: process.id,
-            product_id: process.product_id,
-            name: name.trim(),
-            precursor_cn_code: cnDigits,
-            aggregated_goods_category: 'Iron or steel products',
-            production_route: supplierRoute.trim(),
-            supplier_country: 'South Korea',
-            supplier_installation: supplierInstallation.trim(),
-            supplier_reporting_period: supplierPeriod.trim() || undefined,
-            data_mode: dataMode,
-            verification_status: 'UNVERIFIED' as const,
-            default_value_year: '2026' as const,
-            purchased_mass_t: num(purchased),
-            consumed_mass_t: consumedMass,
-            consumed_for_non_cbam_mass_t: 0,
-            direct_see_tco2e_per_t: num(directSee),
-            indirect_see_tco2e_per_t: num(indirectSee),
-            indirect_electricity_mwh_per_t: bridgeUsage > 0 && bridgeFactor > 0 ? bridgeUsage : undefined,
-            indirect_electricity_factor_tco2e_per_mwh: bridgeUsage > 0 && bridgeFactor > 0 ? bridgeFactor : undefined,
-            source: source.trim(),
-            default_value_justification: justification.trim(),
-            output_allocations: outputAllocations,
-        });
+    const resetForm = () => {
+        setEditingPrecursorId('');
         setName('');
         setCn('');
         setConsumed('');
@@ -1145,15 +1389,114 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         setCompareResult(null);
         setCompareMessage('');
         setMessage('');
+    };
+
+    // 저장된 값을 폼에 그대로 다시 싣는다. 전력 분해·제품별 배분처럼 접힌 영역에 있는 값도
+    // 함께 되살리고 그 영역을 펼친다 — 되살리지 않으면 저장할 때 조용히 지워진다.
+    const startEdit = (precursor: PurchasedPrecursor) => {
+        setEditingPrecursorId(precursor.id);
+        setName(precursor.name);
+        setCn(precursor.precursor_cn_code ?? '');
+        setConsumed(String(precursor.consumed_mass_t));
+        setPurchased(precursor.purchased_mass_t > 0 ? String(precursor.purchased_mass_t) : '');
+        setDirectSee(String(precursor.direct_see_tco2e_per_t));
+        setIndirectSee(String(precursor.indirect_see_tco2e_per_t));
+        const bridgeMwhValue = precursor.indirect_electricity_mwh_per_t;
+        const bridgeFactorValue = precursor.indirect_electricity_factor_tco2e_per_mwh;
+        setIndirectMwh(bridgeMwhValue != null ? String(bridgeMwhValue) : '');
+        setIndirectFactor(bridgeFactorValue != null ? String(bridgeFactorValue) : '');
+        setBridgeOpen(bridgeMwhValue != null && bridgeFactorValue != null);
+        setSource(precursor.source);
+        setDataMode(precursor.data_mode);
+        setJustification(precursor.default_value_justification);
+        setSupplierInstallation(precursor.supplier_installation);
+        setSupplierRoute(precursor.production_route);
+        setSupplierPeriod(precursor.supplier_reporting_period ?? '');
+        setDetailOpen(Boolean(precursor.supplier_installation || precursor.production_route || precursor.supplier_reporting_period));
+        const allocations = precursor.output_allocations ?? [];
+        if (allocations.length > 0) {
+            const masses: Record<string, string> = {};
+            allocations.forEach((allocation) => {
+                if (allocation.product_output_line_id) {
+                    masses[allocation.product_output_line_id] = String(allocation.allocated_mass_t);
+                }
+            });
+            setAllocMasses(masses);
+            setAllocMode('manual');
+        } else {
+            setAllocMasses({});
+            setAllocMode('auto');
+        }
+        setMixOpen(false);
+        setCompareOpen(false);
+        setCompareResult(null);
+        setCompareMessage('');
+        setMessage('');
+        setSaved(false);
+    };
+
+    const savePrecursor = async () => {
+        const cnDigits = cn.replace(/\D/g, '');
+        const consumedMass = num(consumed);
+        const baseDraft: PrecursorDraft = {
+            name,
+            cnDigits,
+            consumedMass,
+            purchasedMass: num(purchased),
+            directSee: num(directSee),
+            indirectSee: num(indirectSee),
+            bridgeUsage,
+            bridgeFactor,
+            source,
+            dataMode,
+            justification,
+            supplierInstallation,
+            supplierRoute,
+            supplierPeriod,
+            outputAllocations: undefined,
+        };
+        const error = validatePrecursorDraft(baseDraft);
+        if (error) {
+            setMessage(error);
+            return;
+        }
+        // 제품별 직접 배분을 골랐으면 합계가 소비량과 맞아야 한다(엔진도 불일치 시 경고).
+        let draft = baseDraft;
+        if (hasMultipleProducts && allocMode === 'manual') {
+            const allocationError = validatePrecursorAllocation(allocSum, consumedMass);
+            if (allocationError) {
+                setMessage(allocationError);
+                return;
+            }
+            draft = {
+                ...baseDraft,
+                outputAllocations: outputLines
+                    .map((line) => ({ product_output_line_id: line.id, allocated_mass_t: num(allocMasses[line.id] ?? '') }))
+                    .filter((allocation) => allocation.allocated_mass_t > 0),
+            };
+        }
+        const link = { period_id: process.period_id, process_id: process.id, product_id: process.product_id };
+        if (editingPrecursorId) {
+            const existing = data.precursors.find((precursor) => precursor.id === editingPrecursorId);
+            if (!existing) {
+                setMessage('수정할 전구물질을 찾지 못했습니다.');
+                return;
+            }
+            await updateLocalItem('precursors', buildPrecursorUpdate(existing, draft, link));
+        } else {
+            await createLocalItem('precursors', buildPrecursorCreate(draft, link));
+        }
+        resetForm();
         setSaved(true);
         await onSaved();
     };
 
     const removePrecursor = async (precursor: PurchasedPrecursor) => {
-        if (!window.confirm(`${precursor.name} 전구물질을 삭제할까요?`)) {
+        if (!window.confirm(`'${precursor.name}' 전구물질을 삭제할까요? 지도의 ③에서 빠집니다.`)) {
             return;
         }
         await deleteLocalItem('precursors', precursor.id);
+        if (editingPrecursorId === precursor.id) resetForm();
         await onSaved();
     };
 
@@ -1169,30 +1512,35 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
 
     return (
         <>
-            <ProcessSelect data={data} value={process.id} onChange={setProcessId} />
+            {/* 공정을 바꾸면 수정 세션을 닫는다 — 목록에서 사라진 줄을 계속 편집하고 있으면 안 된다. */}
+            <ProcessSelect data={data} value={process.id} onChange={(id) => { setProcessId(id); resetForm(); }} />
 
             {processPrecursors.length > 0 && (
                 <ul className="space-y-2">
-                    {processPrecursors.map((precursor) => (
-                        <li key={precursor.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm">
-                            <span className="min-w-0 truncate">
-                                <span className="font-semibold text-slate-900">{precursor.name}</span>
-                                <span className="ml-2 text-slate-500">
-                                    {fmt(precursor.consumed_mass_t, 1)} t · SEE {fmt(precursor.direct_see_tco2e_per_t)}+{fmt(precursor.indirect_see_tco2e_per_t)}
+                    {processPrecursors.map((precursor) => {
+                        const isEditing = editingPrecursorId === precursor.id;
+                        return (
+                            <li
+                                key={precursor.id}
+                                className={`flex items-center justify-between gap-2 rounded-xl border px-4 py-2.5 text-sm ${isEditing ? 'border-teal-400 bg-teal-50' : 'border-slate-200 bg-white'}`}
+                            >
+                                <span className="min-w-0 truncate">
+                                    <span className="font-semibold text-slate-900">{precursor.name}</span>
+                                    <span className="ml-2 text-slate-500">
+                                        {fmt(precursor.consumed_mass_t, 1)} t · SEE {fmt(precursor.direct_see_tco2e_per_t)}+{fmt(precursor.indirect_see_tco2e_per_t)}
+                                    </span>
                                 </span>
-                            </span>
-                            <button type="button" aria-label={`${precursor.name} 삭제`} onClick={() => removePrecursor(precursor)} className="flex-none text-slate-400 transition hover:text-red-600">
-                                <Trash2 className="h-4 w-4" />
-                            </button>
-                        </li>
-                    ))}
+                                <RowActions label={precursor.name} onEdit={() => startEdit(precursor)} onDelete={() => removePrecursor(precursor)} />
+                            </li>
+                        );
+                    })}
                 </ul>
             )}
 
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-800">
-                    <Plus className="mr-1 inline h-4 w-4" />
-                    구매한 CBAM 원료 추가
+                    {editingPrecursorId ? <Pencil className="mr-1 inline h-4 w-4" /> : <Plus className="mr-1 inline h-4 w-4" />}
+                    {editingPrecursorId ? '전구물질 수정' : '구매한 CBAM 원료 추가'}
                 </p>
                 <p className="text-xs leading-5 text-slate-500">
                     선재·빌릿처럼 CBAM 대상인 강재 원료만 해당합니다. 고철·스크랩(CN 7204)·윤활유·소모품 같은 비대상·부자재는 넣지 않습니다(내재배출 0).
@@ -1461,7 +1809,17 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                         </div>
                     )}
                 </div>
-                <Button type="button" onClick={addPrecursor}>원료 저장</Button>
+                <div className="flex gap-2">
+                    <Button type="button" onClick={savePrecursor}>{editingPrecursorId ? '수정 저장' : '원료 저장'}</Button>
+                    {editingPrecursorId && (
+                        <Button type="button" variant="secondary" onClick={resetForm}>취소</Button>
+                    )}
+                </div>
+                {editingPrecursorId && (
+                    <p className="text-xs leading-5 text-slate-500">
+                        검증 상태·공급국가·비CBAM 소비량은 그대로 유지됩니다. 그 항목들은 상세 입력에서 다룹니다.
+                    </p>
+                )}
             </div>
 
             {message && <p className="text-sm text-amber-700">{message}</p>}
