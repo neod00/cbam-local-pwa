@@ -24,7 +24,6 @@ import {
     buildPrecursorUpdate,
     buildProductPayload,
     buildProductUpdate,
-    buildSourceStreamUpdate,
     getOutputLineDeleteBlockers,
     getPeriodDeleteBlockers,
     getProductDeleteBlockers,
@@ -34,7 +33,6 @@ import {
     validatePrecursorAllocation,
     validatePrecursorDraft,
     validateProductDraft,
-    validateSourceStreamDraft,
     type PrecursorDraft,
 } from '@/lib/guided-edit';
 import type { GuidedStepId, GuidedStepState } from '@/lib/guided-map';
@@ -61,6 +59,12 @@ import {
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { describeSeeFlowIndirect, type SeeFlowBinding } from '@/lib/see-flow';
 import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
+import {
+    createSourceStreamValidationErrors,
+    firstSourceStreamError,
+    GUIDED_STREAM_KINDS,
+    matchGuidedStreamKind,
+} from '@/lib/source-stream-input';
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ExternalLink, Lock, Pencil, Plus, Sparkles, Trash2, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -71,6 +75,8 @@ export interface GuidedData {
     periods: ReportingPeriod[];
     /** EU 사본이 다룰 기간. 미지정이면 기간이 하나일 때만 자동으로 그것을 쓴다. */
     reportingPeriodId?: string;
+    /** 저장된 자료를 읽지 못했을 때의 사유. 빈 프로젝트와 구분해 화면이 말해야 한다. */
+    loadError?: string;
     products: Product[];
     processes: ProductionProcess[];
     productOutputLines: ProductOutputLine[];
@@ -906,26 +912,9 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
 }
 
 // ── 4단계: ① 연료 연소 (배출원) ──────────────────────────────────────
-const FUEL_PRESETS = [
-    {
-        key: 'city-gas',
-        label: '도시가스 (LNG)',
-        activity_unit: 'Nm3',
-        ncv_gj_per_unit: 0.037,
-        emission_factor_tco2e_per_unit: 56.1,
-        factor_source_type: 'NATIONAL_INVENTORY' as const,
-        source: '도시가스 고지서 사용량 합계',
-    },
-    {
-        key: 'fuel-generic',
-        label: '기타 연료 (경유 등, t)',
-        activity_unit: 't',
-        ncv_gj_per_unit: 48,
-        emission_factor_tco2e_per_unit: 73,
-        factor_source_type: 'EU_OR_IPCC_DEFAULT' as const,
-        source: '연료 구매대장 사용량 합계',
-    },
-];
+// 배출원 입력 유형은 공유 모듈(source-stream-input.ts)에 있다 — 상세 화면과 같은 규칙을 쓴다.
+// 종전엔 여기 연료 프리셋 두 개뿐이라, 전기로 사업장의 물질수지·공정배출을 넣을 자리가
+// 없는데도 8단계에서 EU 문서가 생성됐다(씨밤이 P1-run08-02).
 
 async function syncProcessDirectEmissions(process: ProductionProcess, streams: SourceStream[]) {
     const total = streams
@@ -937,14 +926,16 @@ async function syncProcessDirectEmissions(process: ProductionProcess, streams: S
 function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: PanelProps) {
     const [processId, setProcessId] = useState(pickProcess(data, selectedProcessId)?.id ?? '');
     const process = data.processes.find((item) => item.id === processId) ?? pickProcess(data, selectedProcessId);
-    const [presetKey, setPresetKey] = useState(FUEL_PRESETS[0].key);
+    const [kindKey, setKindKey] = useState(GUIDED_STREAM_KINDS[0].key);
     const [amount, setAmount] = useState('');
-    // 수정 중인 배출원. 프리셋이 아니라 저장된 값을 고치므로 이름 칸이 따로 필요하다.
+    const [streamName, setStreamName] = useState('');
+    const [factor, setFactor] = useState('');
+    const [ncv, setNcv] = useState('');
+    const [streamSource, setStreamSource] = useState('');
     const [editingStreamId, setEditingStreamId] = useState('');
-    const [editingName, setEditingName] = useState('');
     const [message, setMessage] = useState('');
     const [saved, setSaved] = useState(false);
-    const preset = FUEL_PRESETS.find((item) => item.key === presetKey) ?? FUEL_PRESETS[0];
+    const kind = GUIDED_STREAM_KINDS.find((item) => item.key === kindKey) ?? GUIDED_STREAM_KINDS[0];
     const processStreams = useMemo(
         () => data.sourceStreams.filter((stream) => stream.process_id === process?.id),
         [data.sourceStreams, process?.id]
@@ -961,32 +952,31 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
         );
     }
 
-    const addFuel = async () => {
-        const activityData = num(amount);
-        if (activityData <= 0) {
-            setMessage('사용량을 입력하세요. 고지서의 연간 합계를 그대로 적으면 됩니다.');
+    /** 지금 폼 값으로 저장할 배출원 한 벌. 신규·수정이 같은 매핑을 쓴다. */
+    const buildDraft = () => ({
+        ...kind.defaults,
+        period_id: process.period_id,
+        process_id: process.id,
+        name: streamName.trim() || kind.label,
+        activity_data: num(amount),
+        ncv_gj_per_unit: kind.needsNcv ? num(ncv) : kind.defaults.ncv_gj_per_unit,
+        emission_factor_tco2e_per_unit: num(factor),
+        source: streamSource.trim(),
+    });
+
+    const addStream = async () => {
+        const draft = buildDraft();
+        // 검증은 상세 화면과 **같은 함수**를 쓴다. 여기에 따로 규칙을 적으면 한쪽만 고쳐진다.
+        const error = firstSourceStreamError(createSourceStreamValidationErrors(draft));
+        if (error) {
+            setMessage(error);
             return;
         }
-        const created = await createLocalItem('source_streams', {
-            period_id: process.period_id,
-            process_id: process.id,
-            name: preset.label,
-            stream_type: 'FUEL' as const,
-            method: 'Combustion',
-            activity_data: activityData,
-            activity_unit: preset.activity_unit,
-            ncv_gj_per_unit: preset.ncv_gj_per_unit,
-            emission_factor_tco2e_per_unit: preset.emission_factor_tco2e_per_unit,
-            emission_factor_basis: 'PER_TJ' as const,
-            oxidation_factor: 1,
-            conversion_factor: 1,
-            fossil_fraction: 1,
-            biomass_fraction: 0,
-            factor_source_type: preset.factor_source_type,
-            source: preset.source,
-        });
+        const created = await createLocalItem('source_streams', draft);
         await syncProcessDirectEmissions(process, [...data.sourceStreams, created]);
         setAmount('');
+        setStreamName('');
+        setStreamSource('');
         setMessage('');
         setSaved(true);
         await onSaved();
@@ -994,20 +984,25 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
 
     const resetForm = () => {
         setEditingStreamId('');
-        setEditingName('');
+        setStreamName('');
         setAmount('');
+        setFactor('');
+        setNcv('');
+        setStreamSource('');
         setMessage('');
     };
 
-    const editingStream = data.sourceStreams.find((stream) => stream.id === editingStreamId);
-    // 수정 폼의 단위는 프리셋이 아니라 **저장된 배출원**의 단위다. 프리셋 단위를 쓰면
-    // 상세 입력에서 만든 배출원(예: kg 단위)을 고칠 때 화면이 틀린 단위를 말한다.
-    const editingUnit = editingStream?.activity_unit ?? '';
-
+    // 저장된 배출원이 어느 입력 유형인지 되짚어 알맞은 칸을 그린다. 되짚지 않으면
+    // 물질수지 배출원을 열었을 때 연료 칸(순발열량)이 뜨고, 계수 의미가 어긋난다.
     const startEdit = (stream: SourceStream) => {
+        const matched = matchGuidedStreamKind(stream);
+        setKindKey(matched.key);
         setEditingStreamId(stream.id);
-        setEditingName(stream.name);
+        setStreamName(stream.name);
         setAmount(String(stream.activity_data));
+        setFactor(String(stream.emission_factor_tco2e_per_unit));
+        setNcv(String(stream.ncv_gj_per_unit));
+        setStreamSource(stream.source);
         setMessage('');
         setSaved(false);
     };
@@ -1018,13 +1013,15 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
             setMessage('수정할 배출원을 찾지 못했습니다.');
             return;
         }
-        const draft = { name: editingName, activityData: num(amount) };
-        const error = validateSourceStreamDraft(draft);
+        // 수정도 신규와 같은 매핑·검증을 쓴다. 기존을 펼쳐 패널에 칸이 없는 필드를 지키고,
+        // 그 위에 폼 값을 덮는다.
+        const draft = { ...existing, ...buildDraft() };
+        const error = firstSourceStreamError(createSourceStreamValidationErrors(draft));
         if (error) {
             setMessage(error);
             return;
         }
-        const updated = await updateLocalItem('source_streams', buildSourceStreamUpdate(existing, draft));
+        const updated = await updateLocalItem('source_streams', draft);
         // 공정의 직접배출은 배출원 합계를 캐시한 값이다. 다시 맞추지 않으면 지도의 ①이 옛 숫자를 인쇄한다.
         await syncProcessDirectEmissions(
             process,
@@ -1055,7 +1052,7 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
                 data={data}
                 value={process.id}
                 onChange={(id) => {
-                    const hasDraft = Boolean(amount.trim() || editingStreamId);
+                    const hasDraft = Boolean(amount.trim() || streamName.trim() || streamSource.trim() || editingStreamId);
                     if (hasDraft && !window.confirm('입력 중인 내용이 있습니다. 공정을 바꾸면 지워집니다. 계속할까요?')) {
                         return;
                     }
@@ -1086,53 +1083,84 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
                 </ul>
             )}
 
-            {editingStreamId ? (
-                <div className="space-y-3 rounded-xl border border-teal-200 bg-teal-50/40 p-4">
-                    <p className="text-sm font-semibold text-slate-800">
-                        <Pencil className="mr-1 inline h-4 w-4" />
-                        배출원 수정
-                    </p>
-                    <Field label="배출원 이름">
-                        <input className={fieldClass} value={editingName} onChange={(event) => setEditingName(event.target.value)} />
-                    </Field>
-                    <Field label={`연간 사용량 (${editingUnit})`} hint="고지서·구매대장의 연간 합계">
-                        <input className={fieldClass} inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} />
-                    </Field>
-                    {/* 계수는 손대지 않는다. 상세 입력에서 자가 측정값을 넣은 배출원도 이 목록에 뜨는데,
-                        프리셋 값을 덮어쓰면 그 측정값이 조용히 표준값으로 바뀐다. */}
-                    <p className="text-xs leading-5 text-slate-500">
-                        발열량·배출계수·산화계수는 저장된 값을 그대로 씁니다. 연료 종류 자체가 바뀌었다면 지우고 다시 등록하세요 — 계수 세트가 통째로 달라집니다.
-                    </p>
-                    <div className="flex gap-2">
-                        <Button type="button" onClick={saveEdit}>수정 저장</Button>
-                        <Button type="button" variant="secondary" onClick={resetForm}>취소</Button>
-                    </div>
-                </div>
-            ) : (
-                <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-sm font-semibold text-slate-800">
-                        <Plus className="mr-1 inline h-4 w-4" />
-                        고지서에서 옮겨 적기
-                    </p>
-                    <Field label="연료 종류">
-                        <select className={fieldClass} value={presetKey} onChange={(event) => setPresetKey(event.target.value)}>
-                            {FUEL_PRESETS.map((item) => (
-                                <option key={item.key} value={item.key}>{item.label}</option>
-                            ))}
-                        </select>
-                    </Field>
-                    <Field
-                        label={`연간 사용량 (${preset.activity_unit})`}
-                        hint={preset.key === 'city-gas' ? '도시가스 고지서의 사용량(Nm³) 12개월 합계' : '연료 구매대장의 연간 사용량(t)'}
+            {/* 신규·수정이 **같은 폼**을 쓴다. 유형에 따라 칸이 달라지므로 폼을 두 벌 두면
+                한쪽만 고쳐진다. 수정일 때 유형 선택만 잠근다 — 유형이 바뀌면 계수의 의미가
+                통째로 달라지므로, 그건 지우고 다시 등록하는 편이 안전하다. */}
+            <div className={`space-y-3 rounded-xl border p-4 ${editingStreamId ? 'border-teal-200 bg-teal-50/40' : 'border-slate-200 bg-slate-50'}`}>
+                <p className="text-sm font-semibold text-slate-800">
+                    {editingStreamId ? <Pencil className="mr-1 inline h-4 w-4" /> : <Plus className="mr-1 inline h-4 w-4" />}
+                    {editingStreamId ? '배출원 수정' : '배출원 추가'}
+                </p>
+
+                <Field label="어떤 배출원인가요?" hint={kind.hint}>
+                    <select
+                        className={fieldClass}
+                        value={kindKey}
+                        disabled={Boolean(editingStreamId)}
+                        onChange={(event) => {
+                            const next = GUIDED_STREAM_KINDS.find((item) => item.key === event.target.value);
+                            setKindKey(event.target.value);
+                            // 유형을 바꾸면 계수·발열량 자리값도 그 유형 것으로 갈아준다 —
+                            // 남겨두면 물질수지 칸에 연료 계수가 남는다.
+                            if (next) {
+                                setFactor(String(next.defaults.emission_factor_tco2e_per_unit));
+                                setNcv(String(next.defaults.ncv_gj_per_unit));
+                            }
+                        }}
                     >
-                        <input className={fieldClass} inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="128400" />
-                    </Field>
+                        {GUIDED_STREAM_KINDS.map((item) => (
+                            <option key={item.key} value={item.key}>{item.label}</option>
+                        ))}
+                    </select>
+                </Field>
+                {editingStreamId && (
                     <p className="text-xs leading-5 text-slate-500">
-                        발열량·배출계수는 표준값이 자동 적용됩니다. 자가 측정값이 있거나 공정 원료·물질수지가 필요하면 상세 입력을 이용하세요.
+                        유형은 바꿀 수 없습니다. 종류가 통째로 달라졌다면 지우고 다시 등록하세요.
                     </p>
-                    <Button type="button" onClick={addFuel}>배출원 저장</Button>
+                )}
+
+                <Field label="배출원 이름" hint="나중에 알아볼 이름. 비우면 유형 이름을 씁니다.">
+                    <input className={fieldClass} value={streamName} onChange={(event) => setStreamName(event.target.value)} placeholder={kind.label} />
+                </Field>
+
+                <Field label={kind.activityLabel} hint={kind.activityHint}>
+                    <input
+                        className={fieldClass}
+                        inputMode="decimal"
+                        value={amount}
+                        onChange={(event) => setAmount(event.target.value)}
+                        placeholder={kind.allowsNegative ? '-2234000' : '128400'}
+                    />
+                </Field>
+
+                {kind.needsNcv && (
+                    <Field label="순발열량 (GJ/단위)" hint="성적서 값이 있으면 그것으로. 없으면 자리값을 그대로 두세요.">
+                        <input className={fieldClass} inputMode="decimal" value={ncv} onChange={(event) => setNcv(event.target.value)} />
+                    </Field>
+                )}
+
+                <Field label={kind.factorLabel} hint={kind.factorHint}>
+                    <input className={fieldClass} inputMode="decimal" value={factor} onChange={(event) => setFactor(event.target.value)} />
+                </Field>
+
+                <Field label="출처" hint="검증기관이 묻습니다. 예: 도시가스 고지서 2025, 성분분석표 2025-03">
+                    <input className={fieldClass} value={streamSource} onChange={(event) => setStreamSource(event.target.value)} placeholder="원료 투입대장·성분분석표" />
+                </Field>
+
+                {kind.allowsNegative && (
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                        <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+                        물질수지 차감은 활동량을 <span className="font-semibold">음수</span>로 적습니다. 양수로 적으면 배출이 더해집니다.
+                    </p>
+                )}
+
+                <div className="flex gap-2">
+                    <Button type="button" onClick={editingStreamId ? saveEdit : addStream}>
+                        {editingStreamId ? '수정 저장' : '배출원 저장'}
+                    </Button>
+                    {editingStreamId && <Button type="button" variant="secondary" onClick={resetForm}>취소</Button>}
                 </div>
-            )}
+            </div>
 
             {message && <p className="text-sm text-amber-700">{message}</p>}
             {saved && !message && <SavedNotice message="저장했습니다. 지도의 ① 상자에 반영됩니다." next={nextStepId(steps, 'fuel')} onSelectStep={onSelectStep} />}
@@ -2319,3 +2347,4 @@ export function GuidedStepPanel({
         </PanelShell>
     );
 }
+

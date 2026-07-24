@@ -38,7 +38,6 @@ const EXPECTED_EXPORTS = [
   'getProductDeleteBlockers', 'validateProductDraft', 'buildProductPayload', 'buildProductUpdate',
   'validateInstallationDraft', 'buildInstallationPayload', 'buildInstallationUpdate',
   'validatePeriodDraft', 'buildPeriodPayload', 'buildPeriodUpdate', 'getPeriodDeleteBlockers',
-  'validateSourceStreamDraft', 'buildSourceStreamUpdate',
   'validateElectricityDraft', 'buildElectricityUpdate',
   'validatePrecursorDraft', 'validatePrecursorAllocation',
   'buildPrecursorPayload', 'buildPrecursorCreate', 'buildPrecursorUpdate',
@@ -318,46 +317,7 @@ for (const [key, label] of [['processes', '생산공정 1건'], ['sourceStreams'
   assert.deepEqual(host(only.reasons), [label]);
 }
 
-// ══ 배출원(연료) ══════════════════════════════════════════════════════
-
-// 이 패널은 프리셋으로만 만들지만, 백스테이지에서 자가 측정 발열량·배출계수를 넣은 배출원도
-// 같은 목록에 뜬다. 수정이 프리셋 값을 덮어쓰면 그 측정값이 조용히 표준값이 된다.
-const measuredStream = {
-  ...entity('source_stream_1'),
-  period_id: 'period_1',
-  process_id: 'process_1',
-  name: '도시가스 (LNG)',
-  stream_type: 'FUEL',
-  method: 'Combustion',
-  activity_data: 128400,
-  activity_unit: 'Nm3',
-  ncv_gj_per_unit: 0.0412,                    // 자가 측정값 (표준 0.037이 아니다)
-  emission_factor_tco2e_per_unit: 55.3,       // 자가 측정값 (표준 56.1이 아니다)
-  emission_factor_basis: 'PER_TJ',
-  oxidation_factor: 0.995,
-  conversion_factor: 1,
-  fossil_fraction: 0.98,
-  biomass_fraction: 0.02,
-  factor_source_type: 'SUPPLIER_OR_LAB',
-  source: '자가 측정 성적서 2026-03',
-};
-
-const updatedStream = G.buildSourceStreamUpdate(measuredStream, { name: '  도시가스(당진)  ', activityData: 131000 });
-assert.equal(updatedStream.name, '도시가스(당진)');
-assert.equal(updatedStream.activity_data, 131000);
-for (const field of [
-  'id', 'created_at', 'ncv_gj_per_unit', 'emission_factor_tco2e_per_unit', 'emission_factor_basis',
-  'oxidation_factor', 'conversion_factor', 'fossil_fraction', 'biomass_fraction',
-  'factor_source_type', 'source', 'activity_unit', 'method', 'stream_type', 'period_id', 'process_id',
-]) {
-  assert.equal(updatedStream[field], measuredStream[field], `배출원 수정이 ${field}를 덮어쓰면 안 된다`);
-}
-assert.deepEqual(hostKeys(updatedStream), hostKeys(measuredStream), '배출원 수정이 키 집합을 바꾸면 안 된다');
-
-assert.match(G.validateSourceStreamDraft({ name: '', activityData: 100 }), /이름/);
-assert.match(G.validateSourceStreamDraft({ name: '도시가스', activityData: 0 }), /사용량/);
-assert.match(G.validateSourceStreamDraft({ name: '도시가스', activityData: -5 }), /사용량/, '음수 사용량은 막는다');
-assert.equal(G.validateSourceStreamDraft({ name: '도시가스', activityData: 1 }), null);
+// 배출원 입력·검증은 source-stream-input.ts로 옮겼다(verify-source-stream-input.mjs가 본다).
 
 // ══ 전력 ══════════════════════════════════════════════════════════════
 
@@ -554,7 +514,6 @@ const UPDATE_BUILDERS = [
   ['buildProductUpdate', () => G.buildProductUpdate(product, { name: 'x', cnDigits: '72172010' }), product],
   ['buildInstallationUpdate', () => G.buildInstallationUpdate(installation, { name: 'x', country: 'KR' }), installation],
   ['buildPeriodUpdate', () => G.buildPeriodUpdate(period, { name: 'x', startDate: '2026-01-01', endDate: '2026-12-31' }), period],
-  ['buildSourceStreamUpdate', () => G.buildSourceStreamUpdate(measuredStream, { name: 'x', activityData: 1 }), measuredStream],
   ['buildElectricityUpdate', () => G.buildElectricityUpdate(process, { mwh: 1, ef: 1, efSource: '' }), process],
   ['buildPrecursorUpdate', () => G.buildPrecursorUpdate(existingPrecursor, precursorDraft), existingPrecursor],
 ];
@@ -563,6 +522,6 @@ for (const [name, run, source] of UPDATE_BUILDERS) {
   assert.equal(result.id, source.id, `${name}가 id를 잃으면 새 행이 생긴다`);
   assert.equal(result.created_at, source.created_at, `${name}가 created_at을 잃으면 안 된다`);
 }
-assert.equal(UPDATE_BUILDERS.length, 6, '수정 빌더가 늘면 이 구조 검사도 확장할 것');
+assert.equal(UPDATE_BUILDERS.length, 5, '수정 빌더가 늘면 이 구조 검사도 확장할 것');
 
 console.log('Guided edit verification passed (매핑 리터럴 대조 · 펼치기 보존 · 링크 보존 · 삭제 참조 차단 · 검증 규칙 · export 목록 동기).');

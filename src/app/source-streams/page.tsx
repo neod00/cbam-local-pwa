@@ -16,14 +16,26 @@ import {
     getSourceStreamEmissionFactorBasis,
     getSourceStreamUnitWarnings,
 } from '@/lib/source-stream-calculation';
+// 검증·상수·라벨은 공유 모듈에 있다. 여기에 사본을 두면 지도 패널과 갈라진다.
+import {
+    ACTIVITY_UNITS as activityUnits,
+    createSourceStreamValidationErrors,
+    EMISSION_FACTOR_BASIS_OPTIONS as emissionFactorBasisOptions,
+    emissionFactorBasisLabel,
+    FACTOR_SOURCE_TYPE_OPTIONS as factorSourceTypeOptions,
+    factorSourceTypeLabel,
+    resolveUiEmissionFactorBasis,
+    SOURCE_STREAM_METHODS as sourceStreamMethods,
+    streamTypeLabel,
+    type SourceStreamDraft,
+    type SourceStreamErrors,
+} from '@/lib/source-stream-input';
 import { Term } from '@/components/ux/Term';
 import { FieldHelp } from '@/components/ux/FieldHelp';
 import { AlertTriangle, ArrowRight, Flame, Gauge, Pencil, Plus, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
-type SourceStreamDraft = Omit<SourceStream, 'id' | 'created_at' | 'updated_at'>;
-type SourceStreamErrors = Partial<Record<keyof SourceStreamDraft, string>>;
 type SourceStreamPreset = {
     key: string;
     title: string;
@@ -52,19 +64,6 @@ const emptyDraft: SourceStreamDraft = {
 
 const fieldClass =
     'mt-1 block h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100';
-
-const sourceStreamMethods = ['Combustion', 'Process Emissions', 'Mass balance'] as const;
-const activityUnits = ['t', 'Nm3'] as const;
-const emissionFactorBasisOptions = [
-    { value: 'PER_TJ', label: '에너지 기준 (tCO2e/TJ)' },
-    { value: 'PER_ACTIVITY_UNIT', label: '활동자료 단위 기준 (tCO2e/단위)' },
-] as const;
-const factorSourceTypeOptions = [
-    { value: 'UNCLASSIFIED', label: '분류 전' },
-    { value: 'EU_OR_IPCC_DEFAULT', label: 'EU/IPCC 기본계수' },
-    { value: 'NATIONAL_INVENTORY', label: '국가 인벤토리·공공 통계' },
-    { value: 'SUPPLIER_OR_LAB', label: '공급사 보증값·시험분석' },
-] as const;
 
 const sourceStreamPresets: SourceStreamPreset[] = [
     {
@@ -140,132 +139,6 @@ function toNumber(value: string) {
 
 function formatNumber(value: number) {
     return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value);
-}
-
-function streamTypeLabel(streamType: SourceStream['stream_type']) {
-    if (streamType === 'FUEL') {
-        return '연료';
-    }
-
-    if (streamType === 'PROCESS_MATERIAL') {
-        return '공정 원료';
-    }
-
-    return '기타';
-}
-
-function resolveUiEmissionFactorBasis(sourceStream: Pick<SourceStream, 'stream_type' | 'emission_factor_basis'>) {
-    return sourceStream.stream_type === 'FUEL'
-        ? getSourceStreamEmissionFactorBasis(sourceStream)
-        : 'PER_ACTIVITY_UNIT';
-}
-
-function emissionFactorBasisLabel(sourceStream: Pick<SourceStream, 'stream_type' | 'emission_factor_basis'>) {
-    const basis = resolveUiEmissionFactorBasis(sourceStream);
-    return emissionFactorBasisOptions.find((option) => option.value === basis)?.label ?? '에너지 기준 (tCO2e/TJ)';
-}
-
-function factorSourceTypeLabel(sourceStream: Pick<SourceStream, 'factor_source_type'>) {
-    return factorSourceTypeOptions.find((option) => option.value === sourceStream.factor_source_type)?.label ?? '분류 전';
-}
-
-function createSourceStreamValidationErrors(sourceStream: SourceStreamDraft): SourceStreamErrors {
-    const nextErrors: SourceStreamErrors = {};
-
-    if (!sourceStream.name.trim()) {
-        nextErrors.name = '배출원 이름을 입력하세요.';
-    }
-
-    if (!sourceStream.period_id) {
-        nextErrors.period_id = '보고기간을 선택하세요.';
-    }
-
-    if (!sourceStream.process_id) {
-        nextErrors.process_id = '연결할 생산공정을 선택하세요.';
-    }
-
-    if (!sourceStreamMethods.includes(sourceStream.method as (typeof sourceStreamMethods)[number])) {
-        nextErrors.method = 'EU 템플릿에서 지원하는 산정방법을 선택하세요.';
-    }
-
-    if (sourceStream.stream_type === 'FUEL' && sourceStream.method !== 'Combustion') {
-        nextErrors.method = '연료 배출원은 Combustion 방식으로 입력하세요.';
-    }
-
-    if (sourceStream.stream_type === 'PROCESS_MATERIAL' && sourceStream.method === 'Combustion') {
-        nextErrors.method = '공정 원료는 Process Emissions 또는 Mass balance로 입력하세요.';
-    }
-
-    if (sourceStream.stream_type === 'OTHER') {
-        nextErrors.stream_type = '기타 배출원은 아직 EU Export 대상이 아닙니다. 연료 또는 공정 원료로 분류할 수 있는지 확인하세요.';
-    }
-
-    if (sourceStream.activity_data < 0 && sourceStream.method !== 'Mass balance') {
-        nextErrors.activity_data = '활동자료는 0 이상이어야 합니다. (산출물 차감은 물질수지 방법에서만 음수로 입력)';
-    }
-
-    if (!activityUnits.includes(sourceStream.activity_unit as (typeof activityUnits)[number])) {
-        nextErrors.activity_unit = 'EU 템플릿에서 지원하는 활동자료 단위를 선택하세요.';
-    }
-
-    if (sourceStream.ncv_gj_per_unit < 0) {
-        nextErrors.ncv_gj_per_unit = '순발열량은 0 이상이어야 합니다.';
-    }
-
-    if (sourceStream.stream_type === 'FUEL' && sourceStream.ncv_gj_per_unit <= 0) {
-        nextErrors.ncv_gj_per_unit = '연료 배출원은 순발열량을 0보다 크게 입력하세요.';
-    }
-
-    if (sourceStream.emission_factor_tco2e_per_unit < 0) {
-        nextErrors.emission_factor_tco2e_per_unit = '배출계수는 0 이상이어야 합니다.';
-    }
-
-    if (sourceStream.stream_type !== 'FUEL' && sourceStream.emission_factor_tco2e_per_unit <= 0) {
-        nextErrors.emission_factor_tco2e_per_unit = '공정 원료 배출원은 배출계수를 0보다 크게 입력하세요.';
-    }
-
-    const emissionFactorBasis = resolveUiEmissionFactorBasis(sourceStream);
-    if (!emissionFactorBasisOptions.some((option) => option.value === emissionFactorBasis)) {
-        nextErrors.emission_factor_basis = '배출계수 기준을 선택하세요.';
-    }
-
-    if (sourceStream.stream_type !== 'FUEL' && emissionFactorBasis === 'PER_TJ') {
-        nextErrors.emission_factor_basis = 'tCO2e/TJ 기준은 연료 연소 배출원에만 사용하세요. 공정 원료는 활동자료 단위 기준으로 입력하세요.';
-    }
-
-    if (
-        sourceStream.factor_source_type
-        && !factorSourceTypeOptions.some((option) => option.value === sourceStream.factor_source_type)
-    ) {
-        nextErrors.factor_source_type = '배출계수 출처 유형을 선택하세요.';
-    }
-
-    if (sourceStream.oxidation_factor < 0 || sourceStream.oxidation_factor > 1) {
-        nextErrors.oxidation_factor = '산화계수는 0부터 1 사이로 입력하세요.';
-    }
-
-    if (sourceStream.conversion_factor < 0 || sourceStream.conversion_factor > 1) {
-        nextErrors.conversion_factor = '전환계수는 0부터 1 사이로 입력하세요.';
-    }
-
-    if (sourceStream.fossil_fraction < 0 || sourceStream.fossil_fraction > 1) {
-        nextErrors.fossil_fraction = '화석탄소 비율은 0부터 1 사이로 입력하세요.';
-    }
-
-    if (sourceStream.biomass_fraction < 0 || sourceStream.biomass_fraction > 1) {
-        nextErrors.biomass_fraction = '바이오매스 비율은 0부터 1 사이로 입력하세요.';
-    }
-
-    if (sourceStream.fossil_fraction + sourceStream.biomass_fraction > 1) {
-        nextErrors.fossil_fraction = '화석탄소 비율과 바이오매스 비율의 합은 1을 넘을 수 없습니다.';
-        nextErrors.biomass_fraction = '화석탄소 비율과 바이오매스 비율의 합은 1을 넘을 수 없습니다.';
-    }
-
-    if (!sourceStream.source.trim()) {
-        nextErrors.source = '출처를 입력하세요. 예: 연료 청구서, 계측기 검침표, 배출계수 근거자료';
-    }
-
-    return nextErrors;
 }
 
 export default function SourceStreamsPage() {

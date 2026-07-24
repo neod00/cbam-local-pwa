@@ -124,9 +124,13 @@ export function GuidedWorkspace() {
                     setData(nextData);
                 }
             })
-            .catch(() => {
+            .catch((error) => {
+                // 삼키면 안 된다. 종전엔 조용히 loaded: true만 세워서, 자료를 못 읽었을 때
+                // 화면이 **빈 프로젝트와 똑같이** 보였다 — 사용자는 자기 데이터가 날아간 줄 안다.
+                // (실제로 이 침묵 때문에 원인을 못 찾고 한참 헤맸다.)
+                console.error('[CBAM] 저장된 자료를 읽지 못했습니다', error);
                 if (active) {
-                    setData((current) => ({ ...current, loaded: true }));
+                    setData((current) => ({ ...current, loaded: true, loadError: String(error) }));
                 }
             });
         return () => {
