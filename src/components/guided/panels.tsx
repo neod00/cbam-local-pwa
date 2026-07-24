@@ -62,6 +62,7 @@ import { describeSeeFlowIndirect, type SeeFlowBinding } from '@/lib/see-flow';
 import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
 import {
     createSourceStreamValidationErrors,
+    FACTOR_SOURCE_TYPE_OPTIONS,
     firstSourceStreamError,
     GUIDED_STREAM_KINDS,
     matchGuidedStreamKind,
@@ -985,6 +986,10 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
     const [factor, setFactor] = useState('');
     const [ncv, setNcv] = useState('');
     const [streamSource, setStreamSource] = useState('');
+    // 계수의 **출처 유형**. 유형별 자리값이 있지만 화면에 드러내 사용자가 고치게 한다 —
+    // 숨겨두면 앱이 「공급사 시험분석」 같은 근거를 사용자 대신 주장하게 되고,
+    // 「출처 유형 미분류」 경고까지 조용히 꺼진다(씨밤이 run09 자체 발견).
+    const [factorSource, setFactorSource] = useState<SourceStream['factor_source_type']>('UNCLASSIFIED');
     const [editingStreamId, setEditingStreamId] = useState('');
     const [message, setMessage] = useState('');
     const [saved, setSaved] = useState(false);
@@ -1014,6 +1019,7 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
         activity_data: num(amount),
         ncv_gj_per_unit: kind.needsNcv ? num(ncv) : kind.defaults.ncv_gj_per_unit,
         emission_factor_tco2e_per_unit: num(factor),
+        factor_source_type: factorSource,
         source: streamSource.trim(),
     });
 
@@ -1042,6 +1048,7 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
         setFactor('');
         setNcv('');
         setStreamSource('');
+        setFactorSource(kind.defaults.factor_source_type);
         setMessage('');
     };
 
@@ -1056,6 +1063,7 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
         setFactor(String(stream.emission_factor_tco2e_per_unit));
         setNcv(String(stream.ncv_gj_per_unit));
         setStreamSource(stream.source);
+        setFactorSource(stream.factor_source_type ?? 'UNCLASSIFIED');
         setMessage('');
         setSaved(false);
     };
@@ -1158,6 +1166,7 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
                             if (next) {
                                 setFactor(String(next.defaults.emission_factor_tco2e_per_unit));
                                 setNcv(String(next.defaults.ncv_gj_per_unit));
+                                setFactorSource(next.defaults.factor_source_type);
                             }
                         }}
                     >
@@ -1196,6 +1205,17 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
                     <input className={fieldClass} inputMode="decimal" value={factor} onChange={(event) => setFactor(event.target.value)} />
                 </Field>
 
+                <Field label="계수 출처 유형" hint="이 계수가 어디서 온 값인지. 모르면 「분류 전」으로 두세요 — 앱이 대신 정하지 않습니다.">
+                    <select
+                        className={fieldClass}
+                        value={factorSource ?? 'UNCLASSIFIED'}
+                        onChange={(event) => setFactorSource(event.target.value as SourceStream['factor_source_type'])}
+                    >
+                        {FACTOR_SOURCE_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                    </select>
+                </Field>
                 <Field label="출처" hint="검증기관이 묻습니다. 예: 도시가스 고지서 2025, 성분분석표 2025-03">
                     <input className={fieldClass} value={streamSource} onChange={(event) => setStreamSource(event.target.value)} placeholder="원료 투입대장·성분분석표" />
                 </Field>
