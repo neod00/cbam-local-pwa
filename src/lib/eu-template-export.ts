@@ -40,6 +40,11 @@ export interface EuTemplateValidationResult {
 export interface EuTemplateExportData {
     installations?: Installation[];
     periods?: ReportingPeriod[];
+    /**
+     * 이 사본이 다루는 보고기간. 지정하지 않으면 정렬상 **첫 기간**을 쓴다.
+     * 기간이 둘 이상인데 지정이 없으면 readiness가 오류를 낸다 — 앱이 대신 고르지 않는다.
+     */
+    reportingPeriodId?: string;
     processes: ProductionProcess[];
     productOutputLines?: ProductOutputLine[];
     sourceStreams?: SourceStream[];
@@ -52,9 +57,41 @@ type ReportableExportScope = {
     productOutputLines: ProductOutputLine[];
     sourceStreams: SourceStream[];
     precursors: PurchasedPrecursor[];
+    /** 이 사본이 다룬다고 선언한 기간. 기간이 없으면 undefined. */
+    period?: ReportingPeriod;
+    /** 다른 기간에 속해 제외된 행 수 — 화면에 알려야 한다. */
+    excludedByPeriod: { processes: number; sourceStreams: number; precursors: number };
+    /** 기간이 지정되지 않은 행 — 기간이 여럿일 때는 어디 속하는지 알 수 없다. */
+    unassignedPeriod: { processes: number; sourceStreams: number; precursors: number };
 };
 
+/**
+ * 이 사본이 다루는 보고기간을 정한다.
+ *
+ * EU Communication Template은 **한 보고기간**을 다루는 문서다. 종전에는 periods[0]을
+ * 말없이 A_InstData에 찍었는데, 저장소가 UUID 순으로 돌려주므로 그 「[0]」이 무작위였다.
+ * 이제 정렬은 local-db가 확정하고, 여러 기간이 있으면 호출부가 **명시적으로 고른다**.
+ */
+export function resolveExportPeriod(
+    periods: ReportingPeriod[] = [],
+    reportingPeriodId?: string
+): ReportingPeriod | undefined {
+    if (reportingPeriodId) {
+        return periods.find((period) => period.id === reportingPeriodId);
+    }
+    return periods[0];
+}
+
 function createReportableExportScope(data: EuTemplateExportData): ReportableExportScope {
+    const periods = data.periods ?? [];
+    const period = resolveExportPeriod(periods, data.reportingPeriodId);
+    // 기간이 하나뿐이면 period_id가 비어 있어도 모호하지 않다(속할 곳이 하나다).
+    // 둘 이상이면 비어 있는 행을 어느 쪽에도 넣을 수 없다 — 세어서 오류로 올린다.
+    const singlePeriod = periods.length <= 1;
+    const inPeriod = (row: { period_id?: string }) =>
+        !period || row.period_id === period.id || (singlePeriod && !row.period_id);
+    const unassigned = (row: { period_id?: string }) => !singlePeriod && !row.period_id;
+
     const productById = new Map(data.products.map((product) => [product.id, product]));
     const products = data.products.filter((product) => isCbamReportingScope(getProductReportingScope(product)));
     const productIds = new Set(products.map((product) => product.id));
@@ -70,11 +107,23 @@ function createReportableExportScope(data: EuTemplateExportData): ReportableExpo
         }
     }
 
-    const processes = data.processes.filter((process) => processIds.has(process.id));
-    const sourceStreams = (data.sourceStreams ?? []).filter((sourceStream) =>
+    // 보고범위(CBAM 대상인가)와 보고기간(이 문서가 다루는 기간인가)은 **다른 조건**이다.
+    // 종전에는 앞의 것만 걸러서, 기간이 둘이면 2025·2026 자료가 섞인 문서에 한쪽 날짜만
+    // 찍혔다. 문서가 스스로에 대해 거짓을 말하는 상태였다.
+    const scopedProcesses = data.processes.filter((process) => processIds.has(process.id));
+    const processes = scopedProcesses.filter(inPeriod);
+    const inPeriodProcessIds = new Set(processes.map((process) => process.id));
+
+    const scopedSourceStreams = (data.sourceStreams ?? []).filter((sourceStream) =>
         Boolean(sourceStream.process_id && processIds.has(sourceStream.process_id))
     );
-    const precursors = data.precursors.filter((precursor) => {
+    // 배출원·전구물질은 자기 period_id와 **소속 공정**이 둘 다 이 기간이어야 한다.
+    // 공정이 빠졌는데 그 자식만 남으면 EU 시트에서 갈 곳 없는 행이 된다.
+    const sourceStreams = scopedSourceStreams.filter(
+        (sourceStream) => inPeriod(sourceStream) && inPeriodProcessIds.has(sourceStream.process_id ?? '')
+    );
+
+    const isReportablePrecursor = (precursor: PurchasedPrecursor) => {
         const allocations = precursor.output_allocations ?? [];
 
         if (allocations.length > 0) {
@@ -89,9 +138,30 @@ function createReportableExportScope(data: EuTemplateExportData): ReportableExpo
             (precursor.product_id && productIds.has(precursor.product_id))
             || (precursor.process_id && processIds.has(precursor.process_id))
         );
-    });
+    };
+    const scopedPrecursors = data.precursors.filter(isReportablePrecursor);
+    const precursors = scopedPrecursors.filter(
+        (precursor) => inPeriod(precursor) && (!precursor.process_id || inPeriodProcessIds.has(precursor.process_id))
+    );
 
-    return { products, processes, productOutputLines, sourceStreams, precursors };
+    return {
+        products,
+        processes,
+        productOutputLines,
+        sourceStreams,
+        precursors,
+        period,
+        excludedByPeriod: {
+            processes: scopedProcesses.length - processes.length,
+            sourceStreams: scopedSourceStreams.length - sourceStreams.length,
+            precursors: scopedPrecursors.length - precursors.length,
+        },
+        unassignedPeriod: {
+            processes: scopedProcesses.filter(unassigned).length,
+            sourceStreams: scopedSourceStreams.filter(unassigned).length,
+            precursors: scopedPrecursors.filter(unassigned).length,
+        },
+    };
 }
 
 
@@ -138,7 +208,7 @@ export type EuExportIssueTarget =
 
 export interface EuExportReadinessIssue {
     severity: 'error' | 'warning';
-    area: '제품' | '생산공정' | '구매 전구물질' | '템플릿 한계';
+    area: '제품' | '생산공정' | '구매 전구물질' | '템플릿 한계' | '보고기간';
     message: string;
     target?: EuExportIssueTarget;
 }
@@ -415,6 +485,65 @@ export function evaluateEuExportReadiness(
     const productById = new Map(data.products.map((product) => [product.id, product]));
     const sourceStreamsByProcess = new Map<string, SourceStream[]>();
     const outputLinesByProcess = new Map<string, ProductOutputLine[]>();
+
+    // ── 보고기간 ──────────────────────────────────────────────────────
+    // EU Communication Template은 **한 보고기간**을 다루는 문서다. 앱이 대신 고르면
+    // 사용자는 어느 기간이 나갔는지 모른 채 제출한다 — 종전엔 UUID 순서로 정해졌다.
+    //
+    // periods를 **넘기지 않은** 호출부(대시보드 요약 등)는 기간을 판단할 재료가 없다.
+    // 그런 곳에 「보고기간이 없습니다」를 띄우면 자료가 멀쩡한데도 오류로 보인다.
+    // 그래서 「안 넘김(undefined)」과 「없음([])」을 구분한다.
+    const allPeriods = data.periods;
+
+    if (allPeriods && allPeriods.length > 1 && !data.reportingPeriodId) {
+        issues.push({
+            severity: 'error',
+            area: '보고기간',
+            message: `보고기간이 ${allPeriods.length}개입니다. 이 사본이 다룰 기간을 먼저 고르세요 — 문서에는 한 기간만 기재됩니다.`,
+        });
+    } else if (data.reportingPeriodId && !exportScope.period) {
+        issues.push({
+            severity: 'error',
+            area: '보고기간',
+            message: '고른 보고기간을 찾지 못했습니다. 1단계에서 보고기간을 다시 확인하세요.',
+        });
+    } else if (allPeriods && allPeriods.length === 0) {
+        issues.push({
+            severity: 'error',
+            area: '보고기간',
+            message: '보고기간이 없습니다. 1단계에서 보고기간을 등록하세요 — A_InstData의 신고 범위가 비어 나갑니다.',
+        });
+    }
+
+    // 기간이 여럿인데 소속이 비어 있는 자료는 어느 쪽에도 넣을 수 없다.
+    // 넣으면 다른 기간의 배출이 이 문서에 섞이고, 빼면 이 기간의 배출이 빠진다.
+    const unassignedTotal = exportScope.unassignedPeriod.processes
+        + exportScope.unassignedPeriod.sourceStreams
+        + exportScope.unassignedPeriod.precursors;
+
+    if (unassignedTotal > 0) {
+        issues.push({
+            severity: 'error',
+            area: '보고기간',
+            message: `보고기간이 지정되지 않은 자료가 ${unassignedTotal}건 있습니다`
+                + ` (공정 ${exportScope.unassignedPeriod.processes} · 배출원 ${exportScope.unassignedPeriod.sourceStreams} · 전구물질 ${exportScope.unassignedPeriod.precursors}).`
+                + ' 기간이 둘 이상이라 어느 기간에 속하는지 앱이 판단할 수 없습니다 — 상세 입력에서 지정하세요.',
+        });
+    }
+
+    const excludedTotal = exportScope.excludedByPeriod.processes
+        + exportScope.excludedByPeriod.sourceStreams
+        + exportScope.excludedByPeriod.precursors;
+
+    if (exportScope.period && excludedTotal > unassignedTotal) {
+        issues.push({
+            severity: 'warning',
+            area: '보고기간',
+            message: `'${exportScope.period.name}' 밖의 자료 ${excludedTotal - unassignedTotal}건은 이 사본에서 제외됩니다`
+                + ` (공정 ${exportScope.excludedByPeriod.processes} · 배출원 ${exportScope.excludedByPeriod.sourceStreams} · 전구물질 ${exportScope.excludedByPeriod.precursors} 중 기간 밖 분).`
+                + ' 의도한 것인지 확인하세요.',
+        });
+    }
 
     for (const sourceStream of exportScope.sourceStreams) {
         if (!sourceStream.process_id) {
@@ -1400,11 +1529,12 @@ function resolveCountryName(input: string | undefined, maps?: EuCountryMaps): st
 
 function createInstallationCellWrites(
     installations: Installation[] = [],
-    periods: ReportingPeriod[] = [],
+    // 이 사본이 다룬다고 선언한 기간을 **그대로** 받는다. 여기서 periods[0]을 다시 고르면
+    // 자료를 거른 기준(createReportableExportScope)과 문서에 찍히는 날짜가 갈라질 수 있다.
+    period: ReportingPeriod | undefined,
     countryMaps?: EuCountryMaps
 ): EuTemplateExportCellWrite[] {
     const installation = installations[0];
-    const period = periods[0];
     const writes: EuTemplateExportCellWrite[] = [];
 
     if (period) {
@@ -1869,7 +1999,7 @@ export function createEuTemplateExportCellWrites(
     const exportScope = createReportableExportScope(data);
     const exportData: EuTemplateExportData = { ...data, ...exportScope };
     return [
-        ...createInstallationCellWrites(data.installations, data.periods, countryMaps),
+        ...createInstallationCellWrites(data.installations, exportScope.period, countryMaps),
         ...createAggregatedGoodsAndBoundaryCellWrites(exportData, cnCodeMap, countryMaps),
         ...createSourceStreamCellWrites(exportScope.sourceStreams),
         ...createEmissionsEnergyCellWrites(exportScope.processes, exportScope.products),

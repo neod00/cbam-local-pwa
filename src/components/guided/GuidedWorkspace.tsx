@@ -5,7 +5,7 @@ import { GuidedStepPanel, type GuidedData } from '@/components/guided/panels';
 import { calculateLocalResults } from '@/lib/calculation-engine';
 import { evaluateEuExportReadiness } from '@/lib/eu-template-export';
 import { deriveGuidedSteps, getGuidedProgress, type GuidedStepId } from '@/lib/guided-map';
-import { CBAM_LAST_BACKUP_AT_KEY, exportLocalBackup, listLocalItems, startNewProject } from '@/lib/local-db';
+import { CBAM_LAST_BACKUP_AT_KEY, EXPORT_PERIOD_SETTING_KEY, exportLocalBackup, getLocalSetting, listLocalItems, startNewProject } from '@/lib/local-db';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { buildSeeFlowBinding } from '@/lib/see-flow';
 import { BarChart3, CircleHelp, FilePlus, Map as MapIcon, ShieldCheck, Upload } from 'lucide-react';
@@ -46,12 +46,18 @@ async function fetchGuidedData(): Promise<GuidedData> {
         listLocalItems('precursors'),
     ]);
     const results = calculateLocalResults({ products, periods, processes, productOutputLines, sourceStreams, precursors });
-    const readiness = evaluateEuExportReadiness({ products, processes, productOutputLines, sourceStreams, precursors });
+    // periods와 고른 기간을 함께 넘긴다 — 이걸 넘기지 않으면 「어느 기간이 나가는가」를
+    // 아무도 검사하지 않고, 8단계에서야(그것도 조용히) 정해진다.
+    const reportingPeriodId = await getLocalSetting<string>(EXPORT_PERIOD_SETTING_KEY);
+    const readiness = evaluateEuExportReadiness({
+        periods, reportingPeriodId, products, processes, productOutputLines, sourceStreams, precursors,
+    });
 
     return {
         loaded: true,
         installations,
         periods,
+        reportingPeriodId,
         products,
         processes,
         productOutputLines,

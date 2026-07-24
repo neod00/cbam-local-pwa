@@ -186,6 +186,15 @@ export interface ReportInputs {
 
 export const REPORT_INPUTS_SETTING_KEY = "report:inputs";
 
+/**
+ * EU Communication 사본이 다룰 보고기간의 id.
+ *
+ * 화면에 남는 상태가 아니라 **프로젝트 자료**로 저장한다. 화면 상태로 두면 지도의
+ * 준비도(어느 기간이 나갈지 정해졌는가)와 8단계의 실제 선택이 갈라지는데,
+ * 그러면 「맨 위 기간이 나갑니다」 같은 안내가 다시 거짓이 된다.
+ */
+export const EXPORT_PERIOD_SETTING_KEY = "export:reporting-period";
+
 export interface PrecursorOutputAllocation {
   product_output_line_id?: string;
   product_id?: string;
@@ -345,10 +354,44 @@ async function runTransaction<T>(
   });
 }
 
+/**
+ * 보고기간 정렬 — 시작일 → 종료일 → 이름 → id.
+ *
+ * IndexedDB의 getAll()은 키(`period_<uuid>`) 사전순으로 돌려준다. 즉 목록 순서가
+ * **UUID 운으로 정해진다.** 나중에 만든 2026년 기간이 2025년 위로 올라가는 일이
+ * 실제로 일어났고, EU Communication 사본은 그 「맨 위」 기간의 날짜를 A_InstData에
+ * 찍는다 — 2025년을 산정하는 중에 문서에는 2026년이 적힐 수 있었다.
+ *
+ * id를 마지막 기준으로 두는 이유: 시작일·종료일·이름이 모두 같은 두 기간이 있어도
+ * 순서가 흔들리지 않아야 한다(같은 입력이면 같은 문서가 나와야 한다).
+ */
+export function sortReportingPeriods<T extends Pick<ReportingPeriod, "start_date" | "end_date" | "name" | "id">>(
+  periods: T[]
+): T[] {
+  return [...periods].sort((a, b) =>
+    a.start_date.localeCompare(b.start_date)
+    || a.end_date.localeCompare(b.end_date)
+    || a.name.localeCompare(b.name)
+    || a.id.localeCompare(b.id)
+  );
+}
+
 export async function listLocalItems<TStoreName extends StoreName>(
   storeName: TStoreName
 ): Promise<StoreEntityMap[TStoreName][]> {
-  return runTransaction(storeName, "readonly", (store) => store.getAll());
+  const rows = await runTransaction<StoreEntityMap[TStoreName][]>(
+    storeName,
+    "readonly",
+    (store) => store.getAll()
+  );
+
+  // 정렬은 **여기서만** 한다. 화면마다 따로 정렬하면 목록에 보이는 순서와 Export가
+  // 고르는 순서가 갈라지는데, 그 둘이 갈라지면 화면의 「맨 위 기간이 나갑니다」가 거짓이 된다.
+  if (storeName === "periods") {
+    return sortReportingPeriods(rows as ReportingPeriod[]) as StoreEntityMap[TStoreName][];
+  }
+
+  return rows;
 }
 
 export async function createLocalItem<TStoreName extends StoreName>(
