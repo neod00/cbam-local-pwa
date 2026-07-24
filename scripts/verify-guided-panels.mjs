@@ -64,8 +64,20 @@ const lineOf = (index) => source.slice(0, index).split('\n').length;
 const updates = callsTo('updateLocalItem');
 assert.ok(updates.length >= 8, `updateLocalItem 호출이 너무 적다(${updates.length}) — 패널이 수정을 잃었는지 확인할 것`);
 
+// 인자를 변수로 넘기는 경우도 있다 — 저장 전에 검증을 돌려야 해서 한 줄 앞에서 만든다.
+// 그 변수가 **기존 엔티티를 펼쳐** 만들어졌으면 안전하다. 이걸 알아보지 못하면
+// 게이트를 만족시키려고 의미 없는 재-스프레드를 덧붙이게 된다(코드가 게이트에 맞춰 휘는 것).
+const safeSpreadVars = new Set(
+  [...source.matchAll(/const ([A-Za-z0-9_]+) = \{\s*\.\.\./g)].map((match) => match[1])
+);
+for (const match of source.matchAll(/const ([A-Za-z0-9_]+) = build[A-Za-z]+Update\(/g)) {
+  safeSpreadVars.add(match[1]);
+}
+
 for (const call of updates) {
-  const ok = /^\s*'[a-z_]+',\s*(build[A-Za-z]+Update\(|\{\s*\.\.\.)/.test(call.args);
+  const identifier = call.args.match(/^\s*'[a-z_]+',\s*([A-Za-z0-9_]+)\s*$/)?.[1];
+  const ok = /^\s*'[a-z_]+',\s*(build[A-Za-z]+Update\(|\{\s*\.\.\.)/.test(call.args)
+    || Boolean(identifier && safeSpreadVars.has(identifier));
   assert.ok(
     ok,
     `panels.tsx:${lineOf(call.index)} updateLocalItem이 기존 엔티티를 펼치지도, build*Update()를 쓰지도 않는다.\n`
@@ -89,6 +101,40 @@ for (const call of callsTo('createLocalItem')) {
     + '매핑을 여기서 다시 적으면 신규와 수정이 갈라지고, 한쪽만 고쳐진다.\n'
     + `  인자: ${call.args.replace(/\s+/g, ' ').slice(0, 120)}`
   );
+}
+
+// 배출원 저장은 **신규·수정 두 경로 모두** 공유 검증을 거친다.
+//
+// 「파일 어딘가에 검증 호출이 있는가」로 보면, 한 경로에서만 빼도 통과한다.
+// 실제로 그렇게 새어나갔다 — 신규 경로에서만 검증을 지운 변형이 잡히지 않았다.
+// 경로별로 본다.
+function bodyOf(name) {
+  const at = source.indexOf(`const ${name} = async (`);
+  assert.ok(at > 0, `${name}이 사라졌다`);
+  const bodyStart = source.indexOf('{', at + `const ${name} = async (`.length);
+  let depth = 0;
+  for (let i = bodyStart; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}') {
+      depth--;
+      if (depth === 0) return source.slice(bodyStart, i + 1);
+    }
+  }
+  throw new Error(`${name} 본문이 닫히지 않았다`);
+}
+
+for (const name of ['addStream', 'saveEdit']) {
+  assert.match(
+    bodyOf(name),
+    /createSourceStreamValidationErrors\(/,
+    `${name}이 공유 검증(createSourceStreamValidationErrors)을 거치지 않는다.\n`
+    + '지도에서 물질수지·공정배출까지 넣게 됐으므로, 상세 화면과 같은 규칙을 써야 한다 —\n'
+    + '여기서 규칙을 따로 적으면 화석+바이오 비율 합 같은 것이 지도에서만 새어나간다.'
+  );
+}
+// 신규·수정이 같은 payload 빌더를 쓰는가(필드 매핑이 두 벌이 되지 않도록).
+for (const name of ['addStream', 'saveEdit']) {
+  assert.match(bodyOf(name), /buildDraft\(\)/, `${name}이 공유 payload 빌더를 쓰지 않는다`);
 }
 
 // ── 2) 삭제는 확인을 거치고, 참조가 있으면 먼저 막는다 ──────────────────

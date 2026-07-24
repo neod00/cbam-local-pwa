@@ -12,7 +12,7 @@
     "rehearse:steel-product": "node scripts/rehearse-steel-product.mjs",
     "rehearse:steel-complex": "node scripts/rehearse-steel-product.mjs --complex",
     "release:status": "node scripts/release-status.mjs",
-    "verify": "npm run verify:cn-master && npm run verify:ui-claims && npm run verify:source-streams && npm run verify:calculation && npm run verify:calculation-report && npm run verify:scenarios && npm run verify:dashboard && npm run verify:see-flow && npm run verify:guided-edit && npm run verify:guided-panels && npm run verify:reporting-period && npm run verify:export && npm run verify:backup && npm run verify:activity-template && npm run verify:pwa && npm run verify:mvp-flow && npm run verify:design-system && npm run verify:update-policy && npm run verify:contact && npm run verify:ai-staff && npm run verify:admin-boundary && npm run verify:license-api && npm run verify:deployment && npm run lint && npm run build && npm run verify:routes",
+    "verify": "npm run verify:cn-master && npm run verify:ui-claims && npm run verify:source-streams && npm run verify:source-stream-input && npm run verify:calculation && npm run verify:calculation-report && npm run verify:scenarios && npm run verify:dashboard && npm run verify:see-flow && npm run verify:guided-edit && npm run verify:guided-panels && npm run verify:reporting-period && npm run verify:export && npm run verify:backup && npm run verify:activity-template && npm run verify:pwa && npm run verify:mvp-flow && npm run verify:design-system && npm run verify:update-policy && npm run verify:contact && npm run verify:ai-staff && npm run verify:admin-boundary && npm run verify:license-api && npm run verify:deployment && npm run lint && npm run build && npm run verify:routes",
     "verify:backup": "node scripts/verify-local-backup.mjs",
     "verify:calculation-report": "node scripts/verify-calculation-report.mjs",
     "verify:cn-master": "node scripts/verify-cn-master.mjs",
@@ -41,6 +41,7 @@
     "verify:mvp-flow": "node scripts/verify-mvp-flow.mjs",
     "verify:scenarios": "node scripts/verify-scenario-risks.mjs",
     "verify:source-streams": "node scripts/verify-source-stream-calculation.mjs",
+    "verify:source-stream-input": "node scripts/verify-source-stream-input.mjs",
     "verify:update-policy": "node scripts/verify-update-policy.mjs"
   },
   "dependencies": {

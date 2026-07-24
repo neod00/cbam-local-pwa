@@ -224,38 +224,9 @@ export function getPeriodDeleteBlockers(
     ]);
 }
 
-// ── 배출원(연료) ──────────────────────────────────────────────────────
-
-export interface SourceStreamDraft {
-    name: string;
-    activityData: number;
-}
-
-export function validateSourceStreamDraft(draft: SourceStreamDraft): string | null {
-    if (!draft.name.trim()) {
-        return '배출원 이름을 입력하세요.';
-    }
-    if (draft.activityData <= 0) {
-        return '사용량을 입력하세요. 고지서의 연간 합계를 그대로 적으면 됩니다.';
-    }
-    return null;
-}
-
-/**
- * 배출원 수정 — **이름과 사용량만** 바꾼다.
- *
- * 발열량·배출계수·산화계수·화석/바이오 비율은 손대지 않는다. 이 패널은 프리셋으로만
- * 만들지만 백스테이지(/source-streams)에서 자가 측정값을 넣은 배출원도 같은 목록에 뜨는데,
- * 프리셋 값을 덮어쓰면 그 측정값이 조용히 표준값으로 바뀐다. 연료 종류를 바꾸려면
- * 지우고 다시 등록하는 편이 안전하다(계수 세트가 통째로 달라지므로).
- */
-export function buildSourceStreamUpdate(existing: SourceStream, draft: SourceStreamDraft): SourceStream {
-    return {
-        ...existing,
-        name: draft.name.trim(),
-        activity_data: draft.activityData,
-    };
-}
+// 배출원 입력·검증은 source-stream-input.ts로 옮겼다.
+// 지도 패널이 세 산정방법(연소·공정배출·물질수지)을 모두 다루게 되면서, 상세 화면과
+// **같은 검증 함수**를 써야 했기 때문이다. 여기 사본을 남겨두면 둘이 갈라진다.
 
 // ── 전력 ──────────────────────────────────────────────────────────────
 
