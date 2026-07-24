@@ -314,6 +314,17 @@ assert.equal(
 assert.match(source, /value=\{factor\}/, '배출계수 입력 칸이 없다 — 프리셋 값을 자기 실측으로 바꿀 수 없다');
 assert.match(source, /kind\.needsNcv && \(/, '순발열량 칸이 유형에 따라 나타나지 않는다');
 
+// [run09 자체 발견] 계수 출처 유형을 앱이 사용자 대신 정하면 안 된다.
+// 유형별 자리값이 숨어 있으면 (a) 앱이 「공급사 시험분석」 같은 근거를 대신 주장하고,
+// (b) readiness의 「출처 유형 미분류」 경고가 조용히 꺼져 사용자가 분류할 기회를 잃는다.
+assert.match(source, /계수 출처 유형/, '계수 출처 유형 칸이 없다 — 앱이 근거를 대신 주장하게 된다');
+assert.match(source, /factor_source_type: factorSource/, '고른 출처 유형이 저장되지 않는다');
+assert.match(
+  source,
+  /FACTOR_SOURCE_TYPE_OPTIONS\.map/,
+  '출처 유형 선택지를 공유 목록에서 그리지 않는다 — 여기서 목록을 따로 적으면 상세 화면과 갈라진다'
+);
+
 // [P2-run08-05] 저장하면 화면이 다음 단계로 떠나 방금 넣은 값을 확인할 수 없었다.
 const workspace = readFileSync('src/components/guided/GuidedWorkspace.tsx', 'utf8');
 assert.match(
