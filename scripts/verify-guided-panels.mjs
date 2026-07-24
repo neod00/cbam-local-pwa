@@ -140,6 +140,19 @@ for (const name of ['removeProduct', 'removePeriod', 'removeProcess', 'removeStr
   );
 }
 
+// 공정 수정으로 생산라인이 지워지기 전에 전구물질 배분을 확인한다.
+// 이 삭제는 삭제 버튼이 아니라 saveProcess 안에 숨어 있어(생산량 0/공란) 위 remove* 검사에
+// 걸리지 않는다. 배분이 갈 곳을 잃으면 엔진이 조용히 건너뛰어 질량이 사라진다.
+const saveProcessStart = source.indexOf('const saveProcess = async ()');
+assert.ok(saveProcessStart > 0, 'saveProcess가 사라졌다');
+const outputLineDeleteAt = source.indexOf("deleteLocalItem('product_output_lines'", saveProcessStart);
+const outputLineGuardAt = source.indexOf('getOutputLineDeleteBlockers', saveProcessStart);
+assert.ok(outputLineGuardAt > 0, 'saveProcess가 getOutputLineDeleteBlockers로 배분을 확인하지 않는다');
+assert.ok(
+  outputLineGuardAt < outputLineDeleteAt,
+  'saveProcess는 생산라인을 지우기 **전에** 전구물질 배분을 확인해야 한다'
+);
+
 // ── 3) 공정별 값을 읽는 폼은 공정 id로 key잉한다 ────────────────────────
 // key가 없으면 useState 초깃값이 처음 연 공정 값으로 굳는다 → 공정을 바꾼 뒤 저장하면
 // 다른 공정의 전력이 이 공정에 기록된다. 화면에는 이상이 없어 보인다.
@@ -148,6 +161,16 @@ assert.match(
   /<ElectricityForm\s+key=\{process\.id\}/,
   'ElectricityForm은 key={process.id}로 렌더해야 한다 — 없으면 공정 전환 시 옛 값이 남아 다른 공정에 기록된다'
 );
+
+// 상단 공정 탭이 권위를 갖는다. 공정에 매인 패널의 processId는 useState 초깃값이라
+// 탭을 바꿔도 따라가지 않는다 — key가 없으면 지도는 공정 2를, 패널은 공정 1을 보여준다.
+for (const panel of ['FuelPanel', 'ElectricityPanel', 'PrecursorPanel']) {
+  assert.match(
+    source,
+    new RegExp(`<${panel}\\s+key=\\{selectedProcessId\\}`),
+    `${panel}은 key={selectedProcessId}로 렌더해야 한다 — 없으면 상단 공정 탭과 패널이 다른 공정을 가리킨다`
+  );
+}
 
 // 공정별 저장값을 useState 초깃값으로 읽는 곳은 키잉된 ElectricityForm 안에만 있어야 한다.
 const electricityFormStart = source.indexOf('function ElectricityForm(');

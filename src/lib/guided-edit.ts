@@ -63,6 +63,32 @@ export function getProductDeleteBlockers(
     ]);
 }
 
+/**
+ * 생산라인 삭제를 막는 참조.
+ *
+ * 전구물질의 제품별 배분(output_allocations)이 이 라인을 가리키면 막는다. 그냥 지우면
+ * 배분이 없는 라인을 가리킨 채 남는데, 엔진은 못 찾은 배분을 **조용히 건너뛴다** —
+ * 즉 그 전구물질의 배분 질량이 경고 하나 없이 계산에서 사라진다.
+ *
+ * 이 경로는 삭제 버튼이 아니라 3단계 공정 수정에서 열린다. 제품 생산량을 0이나 공란으로
+ * 두면 그 제품의 생산라인이 지워지기 때문이다.
+ */
+export function getOutputLineDeleteBlockers(
+    lineId: string,
+    data: { precursors: PurchasedPrecursor[] }
+): DeleteBlockers {
+    return blockers([
+        [
+            '전구물질 제품별 배분',
+            data.precursors.filter((precursor) =>
+                (precursor.output_allocations ?? []).some(
+                    (allocation) => allocation.product_output_line_id === lineId
+                )
+            ).length,
+        ],
+    ]);
+}
+
 export interface ProductDraft {
     name: string;
     /** 숫자만 남긴 CN — 호출부에서 replace(/\D/g, '') 후 넘긴다 */
@@ -357,11 +383,19 @@ export function buildPrecursorCreate(draft: PrecursorDraft, link: PrecursorLink)
 /**
  * 전구물질 수정. 펼치기로 verification_status·supplier_country·비CBAM 소비량을 보존한다 —
  * 백스테이지에서 「검증됨」으로 올려둔 값이 패널 저장 한 번에 UNVERIFIED로 떨어지면 안 된다.
+ *
+ * 링크(기간·공정·제품)는 **기존 값을 쓴다.** 호출부가 넘기지 못하도록 인자에서 뺐다.
+ * 이 패널에는 제품·기간 선택 칸이 없으므로 수정이 그걸 정해선 안 된다 — 상세 입력에서
+ * 부제품에 붙여둔 전구물질을 공정의 대표 제품으로 옮기면 EU goods category 매핑이 바뀐다
+ * (eu-template-export가 precursor.product_id로 품목을 찾아 매핑 근거로 쓴다).
  */
-export function buildPrecursorUpdate(
-    existing: PurchasedPrecursor,
-    draft: PrecursorDraft,
-    link: PrecursorLink
-): PurchasedPrecursor {
-    return { ...existing, ...buildPrecursorPayload(draft, link) };
+export function buildPrecursorUpdate(existing: PurchasedPrecursor, draft: PrecursorDraft): PurchasedPrecursor {
+    return {
+        ...existing,
+        ...buildPrecursorPayload(draft, {
+            period_id: existing.period_id,
+            process_id: existing.process_id,
+            product_id: existing.product_id,
+        }),
+    };
 }

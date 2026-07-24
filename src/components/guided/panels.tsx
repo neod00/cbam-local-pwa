@@ -25,6 +25,7 @@ import {
     buildProductPayload,
     buildProductUpdate,
     buildSourceStreamUpdate,
+    getOutputLineDeleteBlockers,
     getPeriodDeleteBlockers,
     getProductDeleteBlockers,
     validateElectricityDraft,
@@ -692,6 +693,22 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             const preservedOutsideMass = existingLines
                 .filter((line) => !reportingIds.has(line.product_id ?? ''))
                 .reduce((sum, line) => sum + line.output_mass_t, 0);
+            // 생산량을 0/공란으로 두면 그 제품의 생산라인이 지워진다. 전구물질의 제품별 배분이
+            // 그 라인을 가리키고 있으면 배분이 갈 곳을 잃는데, 엔진은 못 찾은 배분을 조용히
+            // 건너뛴다 — 그 질량이 경고 없이 계산에서 사라진다. 지우기 전에 막는다.
+            for (const product of reportingProducts) {
+                if (num(masses[product.id] ?? '') > 0) continue;
+                const doomed = existingLines.find((line) => line.product_id === product.id);
+                if (!doomed) continue;
+                const lineBlockers = getOutputLineDeleteBlockers(doomed.id, data);
+                if (lineBlockers.total > 0) {
+                    setMessage(
+                        `'${product.name}'의 생산량을 비우면 그 생산라인이 지워지는데, ${lineBlockers.reasons.join(' · ')}이 이 라인을 가리키고 있습니다. `
+                        + '먼저 6단계에서 해당 전구물질의 제품별 배분을 고친 뒤 다시 시도하세요.'
+                    );
+                    return;
+                }
+            }
             // 보고범위 제품: 생산량>0이면 기존 라인 갱신 또는 신규, 0/공란이면 기존 라인 삭제(배분·비고는 보존).
             await Promise.all(
                 reportingProducts.map((product) => {
@@ -1475,16 +1492,20 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                     .filter((allocation) => allocation.allocated_mass_t > 0),
             };
         }
-        const link = { period_id: process.period_id, process_id: process.id, product_id: process.product_id };
         if (editingPrecursorId) {
             const existing = data.precursors.find((precursor) => precursor.id === editingPrecursorId);
             if (!existing) {
                 setMessage('수정할 전구물질을 찾지 못했습니다.');
                 return;
             }
-            await updateLocalItem('precursors', buildPrecursorUpdate(existing, draft, link));
+            // 링크(기간·공정·제품)는 넘기지 않는다 — buildPrecursorUpdate가 기존 값을 지킨다.
+            await updateLocalItem('precursors', buildPrecursorUpdate(existing, draft));
         } else {
-            await createLocalItem('precursors', buildPrecursorCreate(draft, link));
+            await createLocalItem('precursors', buildPrecursorCreate(draft, {
+                period_id: process.period_id,
+                process_id: process.id,
+                product_id: process.product_id,
+            }));
         }
         resetForm();
         setSaved(true);
@@ -2132,12 +2153,15 @@ export function GuidedStepPanel({
             ? <ProductsPanel {...props} />
             : step === 'process'
                 ? <ProcessPanel {...props} />
+                // 공정에 매인 패널은 상단 공정 탭(selectedProcessId)으로 key잉한다.
+                // 패널 안의 processId는 useState 초깃값이라 탭을 바꿔도 따라가지 않았다 —
+                // 왼쪽 지도는 공정 2의 숫자를 보여주는데 오른쪽 패널은 공정 1을 편집했다.
                 : step === 'fuel'
-                    ? <FuelPanel {...props} />
+                    ? <FuelPanel key={selectedProcessId} {...props} />
                     : step === 'electricity'
-                        ? <ElectricityPanel {...props} />
+                        ? <ElectricityPanel key={selectedProcessId} {...props} />
                         : step === 'precursors'
-                            ? <PrecursorPanel {...props} />
+                            ? <PrecursorPanel key={selectedProcessId} {...props} />
                             : step === 'results'
                                 ? <ResultsPanel {...props} />
                                 : <ExportPanel {...props} />;
