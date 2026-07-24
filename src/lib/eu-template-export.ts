@@ -6,6 +6,7 @@ import { summarizeProductOutputLines } from './calculation-engine';
 import { calculateSourceStreamEmissions, getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
 import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';
+import { CN_MASTER } from './cn-master.generated';
 
 export const REQUIRED_EU_TEMPLATE_SHEETS = [
     '0_Versions',
@@ -300,6 +301,13 @@ const EU_GOODS = [
 ];
 
 const EU_GOODS_SET = new Set(EU_GOODS);
+/**
+ * **Export 시트가 실제로 다룰 수 있는 품목군.** 이름은 「STEEL」이지만 의미는
+ * 「지금 이 앱이 EU 문서를 만들어 줄 수 있는 범위」다 — 시멘트·비료·알루미늄·수소는
+ * CN 마스터에 있고 2단계에서 「CBAM 대상」으로 조회되지만 여기 없으면 문서가 안 나온다.
+ * 그 사실을 화면이 **2단계에서** 말해야 한다(7단계에서 「매핑할 수 없습니다」로 만나면
+ * 원인도 해법도 알 수 없다 — 씨밤이 P1-run09-01).
+ */
 const STEEL_EU_GOODS_SET = new Set([
     'Iron or steel products',
     'Crude steel',
@@ -323,16 +331,46 @@ function getProductCnOrHsCode(product: Product): string {
     return normalizeHsCode(product.cn_code?.trim() || product.hs_code);
 }
 
+/**
+ * CN → EU 품목군. **조회가 먼저, 접두 규칙은 최후 수단.**
+ *
+ * 종전엔 접두 사슬(7201·7203·7206·72xx·73)만 있었다. 그래서 소결광(CN 2601 12 00)이
+ * 어디에도 안 걸려 「EU goods category로 매핑할 수 없습니다」로 Export가 막혔다 —
+ * 2단계는 같은 CN을 「Sintered Ore로 조회됨」이라 말하고 있었는데도(씨밤이 P1-run09-01).
+ *
+ * CN 마스터는 공식 템플릿 숨김시트에서 뽑은 569개 CN의 권위 자료다. 워크북 업로드
+ * 여부와 무관하게 답을 안다. 앱의 나머지가 이미 이걸로 판정하는데 Export 경로만
+ * 접두 규칙에 남아 있었다.
+ */
+export function lookupEuGoodForCn(cnDigits: string, cnCodeMap?: EuCnCodeMap): string | undefined {
+    // 1) 사용자가 올린 워크북의 맵 — 그 판본이 가장 정확하다.
+    const fromTemplate = cnCodeMap?.get(cnDigits);
+    if (fromTemplate) {
+        return fromTemplate;
+    }
+    // 2) 내장 CN 마스터 — 업로드가 없어도(=화면 준비도 계산 시) 같은 답을 낸다.
+    return CN_MASTER[cnDigits];
+}
+
+/** 이 CN으로 EU 문서를 만들 수 있는가. 없으면 품목군 이름과 함께 이유를 돌려준다. */
+export function getEuExportGoodsSupport(
+    cnDigits: string,
+    cnCodeMap?: EuCnCodeMap
+): { good?: string; supported: boolean } {
+    const good = lookupEuGoodForCn(cnDigits, cnCodeMap);
+    return { good, supported: Boolean(good && STEEL_EU_GOODS_SET.has(good)) };
+}
+
 function mapProductToEuGood(product: Product | undefined, cnCodeMap?: EuCnCodeMap): string | undefined {
     if (!product) {
         return undefined;
     }
 
     const hsCode = getProductCnOrHsCode(product);
-    const templateGood = cnCodeMap?.get(hsCode);
+    const looked = lookupEuGoodForCn(hsCode, cnCodeMap);
 
-    if (templateGood && STEEL_EU_GOODS_SET.has(templateGood)) {
-        return templateGood;
+    if (looked && STEEL_EU_GOODS_SET.has(looked)) {
+        return looked;
     }
 
     if (EU_GOODS_SET.has(product.product_type_enum) && STEEL_EU_GOODS_SET.has(product.product_type_enum)) {
@@ -355,6 +393,8 @@ function mapProductToEuGood(product: Product | undefined, cnCodeMap?: EuCnCodeMa
         return 'Iron or steel products';
     }
 
+    // 여기까지 왔다면 CN이 마스터에도, 업로드 워크북에도, 접두 사슬에도 없다.
+    // 매핑을 지어내지 않는다 — readiness가 오류로 올리고 사용자가 CN을 확인한다.
     return undefined;
 }
 
@@ -624,7 +664,10 @@ export function evaluateEuExportReadiness(
             issues.push({
                 severity: 'error',
                 area: '제품',
-                message: `${product.name}: EU CBAM goods category로 매핑할 수 없습니다.`,
+                message: `${product.name}: EU 문서를 만들 수 없는 품목입니다`
+                    + (lookupEuGoodForCn(getProductCnOrHsCode(product), cnCodeMap)
+                        ? ` — 품목군 「${lookupEuGoodForCn(getProductCnOrHsCode(product), cnCodeMap)}」은 아직 EU 문서 생성이 지원되지 않습니다(현재 철강 계열만).`
+                        : ' — CN 코드가 EU 공식 목록에서 조회되지 않습니다. 2단계에서 CN을 확인하세요.'),
                 target: { type: 'product', id: product.id },
             });
         }
