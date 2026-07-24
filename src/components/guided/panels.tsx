@@ -41,7 +41,9 @@ import type { GuidedStepId, GuidedStepState } from '@/lib/guided-map';
 import {
     createLocalItem,
     deleteLocalItem,
+    EXPORT_PERIOD_SETTING_KEY,
     getLocalSetting,
+    setLocalSetting,
     updateLocalItem,
     type Installation,
     type Product,
@@ -67,6 +69,8 @@ export interface GuidedData {
     loaded: boolean;
     installations: Installation[];
     periods: ReportingPeriod[];
+    /** EU 사본이 다룰 기간. 미지정이면 기간이 하나일 때만 자동으로 그것을 쓴다. */
+    reportingPeriodId?: string;
     products: Product[];
     processes: ProductionProcess[];
     productOutputLines: ProductOutputLine[];
@@ -252,6 +256,15 @@ function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
     const [message, setMessage] = useState('');
     const [saved, setSaved] = useState(false);
     const year = new Date().getFullYear();
+    // 8단계에서 고른 기간. 기간이 하나면 자동 확정이라 여기서도 그 규칙을 그대로 쓴다 —
+    // 두 화면이 다른 규칙을 쓰면 안내가 곧 거짓이 된다.
+    const exportPeriodName = (data.periods.length === 1
+        ? data.periods[0]
+        : data.periods.find((period) => period.id === data.reportingPeriodId))?.name;
+    const chooseExportPeriod = async (periodId: string) => {
+        await setLocalSetting(EXPORT_PERIOD_SETTING_KEY, periodId || undefined);
+        await onSaved();
+    };
 
     const applyPreset = (name: string, start: string, end: string) => {
         setPeriodName(name);
@@ -400,16 +413,33 @@ function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                         </button>
                     )}
                 </div>
-                {/* EU Communication 사본은 첫 번째 보고기간만 A_InstData에 기재한다
-                    (eu-template-export.ts의 createInstallationCellWrites가 periods[0]을 쓴다).
-                    이 패널에서 기간을 여럿 만들기 쉬워졌으므로, 그 사실을 화면에서 말한다 —
-                    말하지 않으면 두 번째 기간의 자료가 첫 기간 이름으로 제출된다. */}
+                {/* EU Communication 사본은 **한 보고기간**을 다루는 문서다. 기간이 여럿이면
+                    8단계에서 사용자가 고르고, 고르기 전에는 Export가 막힌다. 예전에는 앱이
+                    periods[0]을 말없이 골랐고 그 순서가 UUID 운이라, 2025년을 산정하는 중에
+                    2026년 날짜가 찍힐 수 있었다(씨밤이 P1-run08-01). */}
+                {/* 고르는 자리는 **여기**다. 8단계에 두면, 미선택 오류가 8단계를 잠가서
+                    고치러 갈 수 없는 막다른 길이 된다(실제로 한 번 그렇게 만들었다). */}
                 {data.periods.length > 1 && (
-                    <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs leading-5 text-amber-900">
-                        <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
-                        8단계 EU 문서에는 맨 위 기간(<span className="font-semibold">{data.periods[0].name}</span>)만 기재됩니다.
-                        다른 기간을 제출하려면 그 기간만 남기거나 별도 프로젝트로 나누세요.
-                    </p>
+                    <div className={`space-y-2 rounded-xl border px-4 py-3 ${exportPeriodName ? 'border-emerald-200 bg-emerald-50/60' : 'border-amber-200 bg-amber-50'}`}>
+                        <p className="text-xs font-semibold text-slate-800">
+                            {!exportPeriodName && <AlertTriangle className="mr-1 inline h-3.5 w-3.5 text-amber-700" />}
+                            EU 문서에 나갈 기간
+                        </p>
+                        <select className={fieldClass} value={data.reportingPeriodId ?? ''} onChange={(event) => chooseExportPeriod(event.target.value)}>
+                            <option value="">— 고르세요 —</option>
+                            {data.periods.map((period) => (
+                                <option key={period.id} value={period.id}>
+                                    {period.name} ({period.start_date} ~ {period.end_date})
+                                </option>
+                            ))}
+                        </select>
+                        <p className="text-xs leading-5 text-slate-600">
+                            EU 문서에는 <span className="font-semibold">한 기간만</span> 기재됩니다.
+                            {exportPeriodName
+                                ? ' 고른 기간 밖의 공정·배출원·전구물질은 사본에서 제외됩니다.'
+                                : ' 앱이 대신 고르지 않습니다 — 고르기 전에는 8단계가 열리지 않습니다.'}
+                        </p>
+                    </div>
                 )}
                 {data.periods.map((period) => (
                     <div
@@ -2020,7 +2050,13 @@ function ResultsPanel({ data, binding, selectedProcessId, onSelectStep }: PanelP
 }
 
 // ── 8단계: EU 문서 생성 ──────────────────────────────────────────────
-function ExportPanel({ data }: PanelProps) {
+function ExportPanel({ data, onSelectStep }: PanelProps) {
+    // 이 사본이 다룰 기간. 기간이 하나면 그것으로 확정되고, 여럿이면 **사용자가 고르기 전까지
+    // 정해지지 않는다.** 종전에는 앱이 periods[0]을 말없이 골랐고, 그 순서가 UUID 순이라
+    // 2025년을 산정하는 중에 2026년 날짜가 문서에 찍힐 수 있었다.
+    const exportPeriod = data.periods.length === 1
+        ? data.periods[0]
+        : data.periods.find((period) => period.id === data.reportingPeriodId);
     const [templateFile, setTemplateFile] = useState<File | null>(null);
     const [validation, setValidation] = useState<Awaited<ReturnType<typeof validateEuTemplateFile>> | null>(null);
     const [usingDefault, setUsingDefault] = useState(false);
@@ -2078,6 +2114,7 @@ function ExportPanel({ data }: PanelProps) {
             const result = await createEuTemplateExportCopyResult(templateFile, {
                 installations: data.installations,
                 periods: data.periods,
+                reportingPeriodId: exportPeriod?.id,
                 processes: data.processes,
                 productOutputLines: data.productOutputLines,
                 sourceStreams: data.sourceStreams,
@@ -2102,6 +2139,41 @@ function ExportPanel({ data }: PanelProps) {
                     해결해야 할 오류가 {data.exportErrorCount}건 있습니다. 7단계에서 먼저 해결하세요.
                 </div>
             )}
+
+            {/* 어느 기간이 문서에 찍히는지 화면이 먼저 말한다. 이 문서는 한 보고기간을 다룬다. */}
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-800">0) 이 사본이 다룰 보고기간</p>
+                {data.periods.length === 0 ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        보고기간이 없습니다. 1단계에서 등록하세요.
+                        <Button type="button" variant="secondary" className="ml-3 min-h-9 px-3 py-1.5" onClick={() => onSelectStep('setup')}>
+                            1단계로
+                        </Button>
+                    </div>
+                ) : data.periods.length === 1 ? (
+                    <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900">
+                        <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
+                        {data.periods[0].name} ({data.periods[0].start_date} ~ {data.periods[0].end_date})
+                    </p>
+                ) : exportPeriod ? (
+                    <>
+                        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900">
+                            <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
+                            {exportPeriod.name} ({exportPeriod.start_date} ~ {exportPeriod.end_date})
+                        </p>
+                        <p className="text-xs leading-5 text-slate-500">
+                            기간이 {data.periods.length}개 등록돼 있습니다. 이 사본에는 위 기간만 담기며, 밖의 자료는 제외됩니다. 바꾸려면 1단계에서 고르세요.
+                        </p>
+                    </>
+                ) : (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        보고기간이 {data.periods.length}개인데 아직 고르지 않았습니다. 1단계에서 어느 기간을 제출할지 정하세요.
+                        <Button type="button" variant="secondary" className="ml-3 min-h-9 px-3 py-1.5" onClick={() => onSelectStep('setup')}>
+                            1단계로
+                        </Button>
+                    </div>
+                )}
+            </div>
 
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-800">
