@@ -282,4 +282,51 @@ for (const match of source.matchAll(/<RowActions([\s\S]{0,220}?)\/>/g)) {
   assert.match(match[1], /label=\{?/, 'RowActions에 label이 없으면 스크린리더가 어느 줄인지 못 읽는다');
 }
 
-console.log('Guided panel wiring verification passed (수정 펼치기 · 삭제 차단·확인 · 공정 키잉 · 직접배출 재계산 · 목록 수정·삭제).');
+// ── 6) 씨밤이 run08 나머지 회귀 ──────────────────────────────────────
+
+// [P2-run08-04] EU 문서 D_Processes는 시장 출하량·내부 소비량을 따로 묻는다.
+// 지도가 둘 다 0으로 만들면 총 생산량이 있는데도 「시장 0 · 내부 0」이 문서에 나간다.
+// 입력은 **하나만** 받고 나머지를 빼서 구한다 — 그러면 합이 어긋날 수가 없다.
+assert.ok(
+  !/market_output_mass_t: 0,/.test(source),
+  '지도가 시장 출하량을 0으로 굳혀 만든다 — EU 문서에 총 생산량과 앞뒤가 안 맞는 값이 나간다'
+);
+assert.match(source, /internal_consumption_mass_t: num\(internalMass\)/, '사내 이송량 입력이 저장되지 않는다');
+assert.match(
+  source,
+  /market_output_mass_t: (totalMass|editedTotal) - num\(internalMass\)/,
+  '시장 출하량을 총량에서 빼서 구하지 않는다 — 둘 다 받으면 합이 총량과 어긋날 수 있다'
+);
+// 신규·수정 두 경로 모두에서.
+for (const branch of ['totalMass - num(internalMass)', 'editedTotal - num(internalMass)']) {
+  assert.ok(source.includes(branch), `시장 출하량 산출이 한쪽 경로에만 있다: ${branch}`);
+}
+
+// [P2-run08-03] 배출계수를 지도에서 고칠 수 있어야 한다.
+// 종전 수정 폼은 이름·사용량만 받고 계수는 저장값을 그대로 썼다. 프리셋이 클라이언트
+// 실측(예: LNG 56.1 tCO2/TJ)과 다르면 지우고 다시 등록하는 수밖에 없었다.
+// 지금은 신규·수정이 같은 폼이라 계수 칸이 양쪽에 있다 — 그 폼이 하나임을 못 박는다.
+assert.equal(
+  [...source.matchAll(/onClick=\{editingStreamId \? saveEdit : addStream\}/g)].length,
+  1,
+  '배출원 신규·수정이 한 폼을 쓰지 않는다 — 폼이 두 벌이면 계수 칸이 한쪽에만 생긴다'
+);
+assert.match(source, /value=\{factor\}/, '배출계수 입력 칸이 없다 — 프리셋 값을 자기 실측으로 바꿀 수 없다');
+assert.match(source, /kind\.needsNcv && \(/, '순발열량 칸이 유형에 따라 나타나지 않는다');
+
+// [P2-run08-05] 저장하면 화면이 다음 단계로 떠나 방금 넣은 값을 확인할 수 없었다.
+const workspace = readFileSync('src/components/guided/GuidedWorkspace.tsx', 'utf8');
+assert.match(
+  workspace,
+  /setSelectedStep\(\(current\) => current \?\? activeStepRef\.current\)/,
+  '저장 후 보고 있던 단계를 고정하지 않는다 — 저장하는 순간 화면이 다음 단계로 떠난다'
+);
+
+// [P3-run08-06] 빈 지도가 예시 생산량(1,000 t)을 예시 표시 없이 보여줬다.
+assert.match(
+  workspace,
+  /binding\.isExample \? '생산량 미입력'/,
+  '데이터가 없을 때 예시 생산량을 그대로 인쇄한다 — 사용자가 자기 값으로 읽는다'
+);
+
+console.log('Guided panel wiring verification passed (수정 펼치기 · 삭제 차단·확인 · 공정 키잉 · 직접배출 재계산 · 목록 수정·삭제 · run08 잔여 회귀).');
