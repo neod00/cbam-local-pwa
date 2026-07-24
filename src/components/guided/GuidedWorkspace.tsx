@@ -81,7 +81,14 @@ export function GuidedWorkspace() {
     const [newProjectBusy, setNewProjectBusy] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
 
+    // 저장 직후 머물 단계. activeStep은 「사용자가 고르기 전에는 첫 미완료 단계」로 파생되는데,
+    // 저장하면 그 단계가 완료로 바뀌어 화면이 즉시 다음 단계로 떠났다. 방금 넣은 값을
+    // 확인할 새도, 새로 생긴 수정 버튼을 볼 새도 없었다(씨밤이 P2-run08-05).
+    const activeStepRef = useRef<GuidedStepId | null>(null);
+
     const reload = useCallback(async () => {
+        // 저장으로 화면이 떠나지 않도록, 보고 있던 단계를 고정한다.
+        setSelectedStep((current) => current ?? activeStepRef.current);
         const nextData = await fetchGuidedData();
         setData(nextData);
     }, []);
@@ -169,6 +176,7 @@ export function GuidedWorkspace() {
     // 사용자가 상자를 고르기 전에는 '지금 여기' 단계를 자동으로 보여준다(파생값 — effect 불필요).
     const activeStep: GuidedStepId | null = selectedStep
         ?? (data.loaded ? (steps.find((step) => step.status === 'current')?.id ?? 'setup') : null);
+    activeStepRef.current = activeStep;
 
     const progress = getGuidedProgress(steps);
     const period = data.periods[0];
@@ -255,7 +263,9 @@ export function GuidedWorkspace() {
                         steps={steps}
                         selected={activeStep}
                         onSelect={handleSelect}
-                        outputLabel={`${fmtT(binding.outputMassT)} t`}
+                        // 데이터가 없으면 예시(강선 1,000 t) 숫자가 그대로 뜬다. 다른 상자는
+                        // 「수출 제품을 등록하세요」 같은 안내인데 이 노드만 숫자여서 자기 값으로 읽힌다.
+                        outputLabel={binding.isExample ? '생산량 미입력' : `${fmtT(binding.outputMassT)} t`}
                     />
                 </section>
                 <div ref={panelRef} className="min-w-0 xl:sticky xl:top-20 xl:self-start">

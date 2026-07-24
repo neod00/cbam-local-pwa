@@ -659,6 +659,9 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
     const [route, setRoute] = useState('');
     const [periodId, setPeriodId] = useState(data.periods[0]?.id ?? '');
     const [masses, setMasses] = useState<Record<string, string>>({});
+    // 사내 다른 공정으로 넘기는 양. **이것 하나만** 받고 시장 출하량은 총량에서 뺀다 —
+    // 둘 다 받으면 합이 총량과 어긋난 채 EU 문서(D_Processes)에 나갈 수 있다.
+    const [internalMass, setInternalMass] = useState('');
     const [message, setMessage] = useState('');
     const [saved, setSaved] = useState(false);
 
@@ -669,6 +672,7 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
         setName('');
         setRoute('');
         setMasses({});
+        setInternalMass('');
         setMessage('');
     };
 
@@ -685,6 +689,7 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
         setRoute(process.production_route);
         setPeriodId(process.period_id ?? data.periods[0]?.id ?? '');
         setMasses(massMap);
+        setInternalMass(process.internal_consumption_mass_t > 0 ? String(process.internal_consumption_mass_t) : '');
         setMessage('');
         setSaved(false);
     };
@@ -728,6 +733,15 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             .filter((line) => line.mass > 0);
         if (lines.length === 0) {
             setMessage('이 공정에서 만든 제품의 생산량을 1개 이상 입력하세요.');
+            return;
+        }
+        const internal = num(internalMass);
+        if (internal < 0) {
+            setMessage('사내 이송량은 0 이상이어야 합니다.');
+            return;
+        }
+        if (internal > totalMass + 1e-9) {
+            setMessage(`사내 이송량(${fmt(internal, 1)} t)이 총 생산량(${fmt(totalMass, 1)} t)보다 많습니다.`);
             return;
         }
         const primary = lines.reduce((best, line) => (line.mass > best.mass ? line : best), lines[0]);
@@ -788,13 +802,16 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                     return existing ? deleteLocalItem('product_output_lines', existing.id) : Promise.resolve();
                 })
             );
+            const editedTotal = totalMass + preservedOutsideMass;
             await updateLocalItem('processes', {
                 ...existingProcess,
                 period_id: activePeriodId,
                 product_id: primary.product.id,
                 name: name.trim(),
                 production_route: route.trim() || existingProcess.production_route || '가공(압연·신선·열처리)',
-                output_mass_t: totalMass + preservedOutsideMass,
+                output_mass_t: editedTotal,
+                internal_consumption_mass_t: num(internalMass),
+                market_output_mass_t: editedTotal - num(internalMass),
             });
         } else {
             const process = await createLocalItem('processes', {
@@ -803,8 +820,10 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                 name: name.trim(),
                 production_route: route.trim() || '가공(압연·신선·열처리)',
                 output_mass_t: totalMass,
-                market_output_mass_t: 0,
-                internal_consumption_mass_t: 0,
+                // 둘 다 0으로 두면 EU 문서 D_Processes에 「시장 0 · 내부 0」이 나간다 —
+                // 총 생산량이 있는데도. 문서가 거짓을 말하게 된다.
+                internal_consumption_mass_t: num(internalMass),
+                market_output_mass_t: totalMass - num(internalMass),
                 direct_attributable_emissions_tco2e: 0,
                 electricity_mwh: 0,
                 electricity_ef_tco2e_per_mwh: 0.47,
@@ -896,6 +915,26 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                         ))}
                         {totalMass > 0 && <p className="text-xs font-semibold text-slate-600">합계 {fmt(totalMass, 1)} t</p>}
                     </div>
+                    {/* EU 문서(D_Processes)는 시장 출하량과 내부 소비량을 따로 묻는다.
+                        입력을 하나만 받고 나머지를 빼서 구하면, 둘의 합이 총량과 어긋날 수 없다. */}
+                    <Field
+                        label="이 중 사내 다른 공정으로 넘기는 양 (t)"
+                        hint="예: 전기로 조강 일부를 압연으로 이송. 전량 외부 판매면 비워두세요."
+                    >
+                        <input
+                            className={fieldClass}
+                            inputMode="decimal"
+                            value={internalMass}
+                            onChange={(event) => setInternalMass(event.target.value)}
+                            placeholder="0"
+                        />
+                    </Field>
+                    {totalMass > 0 && (
+                        <p className="text-xs leading-5 text-slate-600">
+                            EU 문서에 기재됩니다 — 시장 출하 <span className="font-semibold">{fmt(Math.max(0, totalMass - num(internalMass)), 1)} t</span>
+                            {' · '}사내 이송 <span className="font-semibold">{fmt(num(internalMass), 1)} t</span>
+                        </p>
+                    )}
                     <div className="flex gap-2">
                         <Button type="button" onClick={saveProcess}>{editingProcessId ? '수정 저장' : '공정 저장'}</Button>
                         {editingProcessId && (

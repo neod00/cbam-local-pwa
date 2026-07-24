@@ -679,6 +679,22 @@ export function evaluateEuExportReadiness(
             });
         }
 
+        // D_Processes는 시장 출하량(L+16)과 내부 소비량(L+21)을 따로 묻는다.
+        // 둘의 합이 총 생산량과 맞지 않으면, 문서가 스스로 앞뒤가 안 맞는 말을 하게 된다.
+        // (지도가 만든 옛 공정은 둘 다 0이었다 — 총 생산량이 있는데도.)
+        const splitTotal = process.market_output_mass_t + process.internal_consumption_mass_t;
+        const splitDelta = Math.abs(splitTotal - process.output_mass_t);
+        if (process.output_mass_t > 0 && splitDelta > Math.max(0.01, process.output_mass_t * 0.001)) {
+            issues.push({
+                severity: 'warning',
+                area: '생산공정',
+                message: `${process.name}: 시장 출하량(${process.market_output_mass_t.toFixed(1)} t) + 내부 소비량(${process.internal_consumption_mass_t.toFixed(1)} t)이`
+                    + ` 총 생산량(${process.output_mass_t.toFixed(1)} t)과 ${splitDelta.toFixed(1)} t 차이납니다.`
+                    + ' EU 문서에 두 값이 그대로 기재되므로 3단계에서 사내 이송량을 확인하세요.',
+                target: { type: 'process', id: process.id },
+            });
+        }
+
         if (outputLineSummary.hasMixedAllocationBasis) {
             issues.push({
                 severity: 'warning',
