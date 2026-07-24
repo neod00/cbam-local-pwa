@@ -1,7 +1,7 @@
 'use client';
 
 import { glossaryText } from '@/lib/cbam-glossary';
-import { buildSeeFlowBinding, EXAMPLE_SEE_FLOW, type SeeFlowBinding } from '@/lib/see-flow';
+import { buildSeeFlowBinding, describeSeeFlowIndirect, EXAMPLE_SEE_FLOW, type SeeFlowBinding } from '@/lib/see-flow';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useMemo } from 'react';
@@ -90,35 +90,12 @@ export function SeeFlowDiagram({
 
     const push = (href: string) => router.push(href);
 
-    const indirectIncluded = indirectRelevance === 'INCLUDED';
     const indirectUndetermined = indirectRelevance === 'UNDETERMINED';
 
-    const basisSub = indirectUndetermined
-        ? (basisExcludesUndetermined ? '= 판정된 제품만 · 판정 불가 제품 제외' : '판정 전이라 산출하지 않음')
-        : indirectIncluded
-            ? '= ① + ② + ③ 전부'
-            : indirectRelevance === 'MIXED'
-                ? '= 제품마다 다름 · 제품별 결과 참조'
-                : '= ① 전부 + ③의 태운 몫';
-    // 「철강(CN 72/73) 규칙 기준」은 접두 규칙 진술이다. 판정은 공식 CN 목록 조회로 한다.
-    const basisNote = indirectUndetermined
-        ? '간접배출 관련성 판정 불가 — 확인 필요'
-        : indirectIncluded
-            ? '간접 포함 품목 기준'
-            : indirectRelevance === 'MIXED'
-                ? '제품별 간접배출 관련성 상이'
-                : 'EU 공식 CN 목록상 간접배출 비관련';
-    // 3상태 위에 2상태 삼항식을 쓰면 판정 불가가 「보고용」(=제외 확정 함의)으로 표시된다(씨밤이 D4).
-    const indirectLabel = indirectIncluded
-        ? '간접 SEE (기준에 포함)'
-        : indirectUndetermined
-            ? '간접 SEE (기준 반영 여부 확인 필요)'
-            : '간접 SEE (보고용)';
-    const indirectNote = indirectUndetermined
-        ? '인증서 기준 반영 여부 확인 필요'
-        : indirectIncluded
-            ? '인증서 계산에도 포함'
-            : '인증서 계산에서만 제외 · 입력 필수';
+    // 문안은 컴포넌트가 삼항식으로 만들지 않는다. 상태가 늘 때마다 else 팔이 조용히
+    // 거짓을 단정했다 — 판정 불가가 「보고용」으로, MIXED가 「제외」로 떨어졌다(씨밤이 D4·N1).
+    const { basisSub, basisNote, indirectLabel, indirectNote, showTotalIdentity: identityAllowed } =
+        describeSeeFlowIndirect(indirectRelevance, basisExcludesUndetermined);
     // seeCbamBasis가 null인 이유는 ①범위 밖 ②판정 불가 둘이다. 둘을 뭉개면 판정 못 한 제품에
     // 「신고 대상 아님」을 단정하게 된다 — CN 목록은 포함 목록이라 부재가 곧 배제가 아니다(씨밤이 P1).
     const basisValue = seeCbamBasis !== null
@@ -126,10 +103,7 @@ export function SeeFlowDiagram({
         : indirectUndetermined
             ? '판정 불가 — 산출 안 함'
             : '신고 대상 아님';
-    // 총 SEE = 기준 + 간접 항등식은 **전부 비관련일 때만** 성립한다. 포함·비관련이 섞이면
-    // 포함 제품의 기준 SEE에 이미 간접이 들어 있어 우변이 이중계상된다 — 산술이 틀린 등식을
-    // 인쇄하게 된다(씨밤이 D5). MIXED·UNDETERMINED에서는 항등식을 쓰지 않는다.
-    const showTotalIdentity = indirectRelevance === 'NOT_RELEVANT' && seeCbamBasis !== null;
+    const showTotalIdentity = identityAllowed && seeCbamBasis !== null;
     const totalText = showTotalIdentity
         ? `총 SEE (내부 검토용) ${fmtSee(seeTotal)} tCO₂e/t = ${fmtSee(seeCbamBasis!)} + ${fmtSee(seeIndirect)}`
         : `총 SEE (내부 검토용) ${fmtSee(seeTotal)} tCO₂e/t`;

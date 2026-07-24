@@ -16,7 +16,7 @@ function loadSeeFlowModule() {
     .replace(/^import .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
   const compiled = ts.transpileModule(
-    `${source}\nglobalThis.seeFlow = { buildSeeFlowBinding, EXAMPLE_SEE_FLOW };`,
+    `${source}\nglobalThis.seeFlow = { buildSeeFlowBinding, describeSeeFlowIndirect, EXAMPLE_SEE_FLOW };`,
     { compilerOptions: { module: ts.ModuleKind.None, target: ts.ScriptTarget.ES2022 } }
   ).outputText;
   const context = vm.createContext({});
@@ -24,7 +24,7 @@ function loadSeeFlowModule() {
   return context.seeFlow;
 }
 
-const { buildSeeFlowBinding, EXAMPLE_SEE_FLOW } = loadSeeFlowModule();
+const { buildSeeFlowBinding, describeSeeFlowIndirect, EXAMPLE_SEE_FLOW } = loadSeeFlowModule();
 
 /** 결과 하나. see_cbam_basis는 relevance에 맞춰 호출부가 정한다(엔진과 같은 규칙). */
 function makeResult(overrides) {
@@ -114,4 +114,63 @@ assert.equal(
   '포함이 섞여도 판정 불가가 있으면 판정 불가'
 );
 
-console.log('SEE flow verification passed (집계 4상태 · 항등식 성립 조건 · 판정 불가 우선).');
+// --- 문안 전수 검사 (씨밤이 N1·N2·N3) ---
+// 종전 테스트는 집계(see-flow.ts)만 검사하고 그 4상태를 **소비하는 문안**은 한 줄도 안 봤다.
+// 그런데 D2~D5·N1~N3이 전부 소비자 쪽 결함이었다. 문안을 상태 타입 옆으로 옮겨 전수 검사한다.
+const VIEWS = ['INCLUDED', 'NOT_RELEVANT', 'UNDETERMINED', 'MIXED'];
+
+// 「제외/보고용」은 「간접분이 인증서 기준에서 빠진다」는 단정이다.
+// NOT_RELEVANT에서만 참이고, 나머지 3상태에서 나오면 근거 없는 단정이다.
+const EXCLUSION_CLAIM = /보고용|계산에서만 제외|기준에서 빠지지만/;
+
+for (const view of VIEWS) {
+  const labels = describeSeeFlowIndirect(view, false);
+  const fields = ['basisSub', 'basisNote', 'indirectLabel', 'indirectNote', 'basisVsTotalNote'];
+
+  for (const field of fields) {
+    assert.equal(typeof labels[field], 'string', `${view}.${field}는 문자열`);
+    assert.ok(labels[field].length > 0, `${view}.${field}가 비어 있으면 안 된다`);
+  }
+
+  if (view === 'NOT_RELEVANT') {
+    assert.ok(EXCLUSION_CLAIM.test(labels.indirectLabel), 'NOT_RELEVANT는 「보고용」이 맞다');
+    assert.equal(labels.showTotalIdentity, true, 'NOT_RELEVANT에서만 항등식 허용');
+  } else {
+    // 3상태 위 2상태 삼항식의 else 팔이 조용히 여기로 떨어졌다 — 다섯 번.
+    for (const field of fields) {
+      assert.ok(
+        !EXCLUSION_CLAIM.test(labels[field]),
+        `${view}.${field}가 「간접분은 기준에서 빠진다」를 단정하면 안 된다: ${labels[field]}`
+      );
+    }
+    assert.equal(labels.showTotalIdentity, false, `${view}에서는 항등식을 쓰면 안 된다`);
+  }
+}
+
+// 「철강 일괄 규칙」·「Annex II 등재」를 어느 상태에서도 단정하지 않는다 — 확인하지 못한 진술이다.
+for (const view of VIEWS) {
+  const labels = describeSeeFlowIndirect(view, false);
+
+  for (const [field, text] of Object.entries(labels)) {
+    if (typeof text !== 'string') continue;
+    assert.ok(!/철강\(Annex II\)|Annex II direct-only|CN 72\/73/.test(text), `${view}.${field}: 확인하지 못한 등재를 단정`);
+  }
+}
+
+// UNDETERMINED의 basisSub만 basisExcludesUndetermined에 반응한다.
+assert.notEqual(
+  describeSeeFlowIndirect('UNDETERMINED', true).basisSub,
+  describeSeeFlowIndirect('UNDETERMINED', false).basisSub,
+  '판정 불가 제품이 기준에서 빠졌으면 그 사실을 말해야 한다'
+);
+assert.match(describeSeeFlowIndirect('UNDETERMINED', true).basisSub, /판정 불가 제품 제외/);
+
+// MIXED는 어느 쪽으로도 단정하지 않는다 — 제품마다 다르다.
+assert.match(describeSeeFlowIndirect('MIXED', false).indirectLabel, /제품마다 다름/);
+assert.match(describeSeeFlowIndirect('MIXED', false).basisVsTotalNote, /한 줄로 말할 수 없습니다/);
+
+// 상태가 늘면 이 검사가 새 상태를 강제로 다루게 한다(exhaustive switch → 컴파일러가 잡지만,
+// 문안 검사는 여기서만 강제된다).
+assert.equal(VIEWS.length, 4, '집계 상태가 늘면 문안 검사도 확장할 것');
+
+console.log('SEE flow verification passed (집계 4상태 · 항등식 성립 조건 · 판정 불가 우선 · 문안 4상태 전수).');

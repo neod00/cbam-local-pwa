@@ -7,6 +7,79 @@ import type { LocalCalculationResult } from './calculation-engine';
  */
 export type SeeFlowIndirectView = 'INCLUDED' | 'NOT_RELEVANT' | 'UNDETERMINED' | 'MIXED';
 
+/** 흐름도·패널이 인쇄할 문안. 상태 타입 옆에 두어 4상태 전수 검사가 가능하게 한다. */
+export interface SeeFlowIndirectLabels {
+    /** 기준 SEE 상자의 산식 설명 */
+    basisSub: string;
+    /** 기준 SEE 상자의 판정 근거 */
+    basisNote: string;
+    /** 간접 SEE 상자 제목 */
+    indirectLabel: string;
+    /** 간접 SEE 상자 설명 */
+    indirectNote: string;
+    /** 기준 SEE와 총 SEE의 관계 서술(패널 하단 안내) */
+    basisVsTotalNote: string;
+    /** 총 SEE = 기준 + 간접 항등식을 인쇄해도 되는가 */
+    showTotalIdentity: boolean;
+}
+
+/**
+ * 집계 상태 → 문안. **컴포넌트가 직접 삼항식으로 만들지 않는다.**
+ *
+ * 왜 여기 있는가: 문안을 .tsx에 두면 상태가 늘 때마다 「N상태 위의 2상태 삼항식」이 생기고,
+ * else 팔이 조용히 거짓을 단정한다. 실제로 그렇게 다섯 번 났다 —
+ * 판정 불가가 「보고용」(제외 확정)으로, MIXED가 「제외」로 떨어졌다.
+ * 상태 타입 옆에 두면 4상태 전수 검사가 가능하고, 소비자는 렌더만 한다.
+ *
+ * 그리고 「간접배출이 인증서 기준에서 빠진다」를 **판정 없이** 말하는 컴포넌트가 없어진다 —
+ * 그 문장을 쓰려면 이 함수를 부르고, 이 함수는 상태를 요구한다.
+ */
+export function describeSeeFlowIndirect(
+    view: SeeFlowIndirectView,
+    basisExcludesUndetermined = false
+): SeeFlowIndirectLabels {
+    switch (view) {
+        case 'INCLUDED':
+            return {
+                basisSub: '= ① + ② + ③ 전부',
+                basisNote: '간접 포함 품목 기준',
+                indirectLabel: '간접 SEE (기준에 포함)',
+                indirectNote: '인증서 계산에도 포함',
+                basisVsTotalNote: '이 품목은 간접분이 인증서 산정 기준에 포함되므로 기준 SEE와 총 SEE가 같습니다.',
+                showTotalIdentity: false,
+            };
+        case 'NOT_RELEVANT':
+            return {
+                basisSub: '= ① 전부 + ③의 태운 몫',
+                basisNote: 'EU 공식 CN 목록상 간접배출 비관련',
+                indirectLabel: '간접 SEE (보고용)',
+                indirectNote: '인증서 계산에서만 제외 · 입력 필수',
+                basisVsTotalNote: '이 품목은 간접분이 인증서 산정 기준에서 빠지지만 보고에는 반드시 포함됩니다 — 그래서 기준과 총 SEE가 다릅니다.',
+                // 항등식은 「전부 비관련」일 때만 성립한다. 포함이 섞이면 그 제품의 기준 SEE에
+                // 이미 간접이 들어 있어 우변이 이중계상된다.
+                showTotalIdentity: true,
+            };
+        case 'UNDETERMINED':
+            return {
+                basisSub: basisExcludesUndetermined ? '= 판정된 제품만 · 판정 불가 제품 제외' : '판정 전이라 산출하지 않음',
+                basisNote: '간접배출 관련성 판정 불가 — 확인 필요',
+                indirectLabel: '간접 SEE (기준 반영 여부 확인 필요)',
+                indirectNote: '인증서 기준 반영 여부 확인 필요',
+                basisVsTotalNote: '간접배출 관련성을 판정하지 못한 제품이 있어 기준 SEE와 총 SEE의 관계를 확정할 수 없습니다 — 확인 필요.',
+                showTotalIdentity: false,
+            };
+        case 'MIXED':
+            return {
+                basisSub: '= 제품마다 다름 · 제품별 결과 참조',
+                basisNote: '제품별 간접배출 관련성 상이',
+                indirectLabel: '간접 SEE (제품마다 다름)',
+                indirectNote: '제품별 결과 참조 — 일부는 기준에 포함',
+                basisVsTotalNote: '제품마다 간접분의 인증서 기준 반영 여부가 달라, 기준 SEE와 총 SEE의 관계를 한 줄로 말할 수 없습니다 — 제품별 결과를 확인하세요.',
+                showTotalIdentity: false,
+            };
+    }
+}
+
 // SEE 산정 흐름도(SeeFlowDiagram)에 바인딩할 값. 절대배출(tCO₂e)과 SEE(tCO₂e/t)를 함께 담는다.
 // 다이어그램은 이 순수 구조만 받아 그리므로, 예시/실데이터 전환과 화면 렌더링이 분리된다.
 export interface SeeFlowBinding {
