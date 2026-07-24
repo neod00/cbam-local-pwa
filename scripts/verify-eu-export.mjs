@@ -88,10 +88,11 @@ function loadEuExportModule() {
       "import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';",
       'const { strFromU8, strToU8, unzipSync, zipSync } = fflate;'
     )
-    .replace("import { summarizeProductOutputLines } from './calculation-engine';", '')
-    .replace("import { calculateSourceStreamEmissions, getSourceStreamEmissionFactorBasis } from './source-stream-calculation';", '')
-    .replace("import { getIndirectEmissionsApplicability } from './cbam-product-rules';", '')
-    .replace("import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';", '')
+    // 상대경로 import는 **통째로** 걷어낸다. 의존 모듈 소스는 아래에서 앞에 붙이므로,
+    // 남겨두면 require로 컴파일돼 vm에서 「exports is not defined」로 죽는다.
+    // 종전엔 import 줄을 정확한 문자열로 하나씩 지웠는데, 새 의존을 추가할 때마다 이
+    // 하네스가 깨졌다. 목록을 손으로 관리하지 않는다.
+    .replace(/^import \{[\s\S]*?\} from '\.\/[^']*';\r?\n/gm, '')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
   const compiled = ts.transpileModule(

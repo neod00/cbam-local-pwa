@@ -9,6 +9,7 @@ import {
     createEuTemplateExportCopyResult,
     DEFAULT_EU_TEMPLATE_VERSION,
     downloadBlob,
+    getEuExportGoodsSupport,
     getEuExportIssueEditHref,
     loadDefaultEuTemplateFile,
     validateEuTemplateFile,
@@ -518,6 +519,9 @@ function ProductsPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
     const reportingProducts = data.products.filter((product) => isCbamReportingScope(getProductReportingScope(product)));
     const cnDigits = cn.replace(/\D/g, '');
     const coverage = cnDigits.length >= 4 ? getCbamCoverage({ cn_code: cnDigits, hs_code: cnDigits.slice(0, 4) }) : null;
+    // EU 문서 생성 범위. 판정은 Export와 **같은 함수**로 한다 — 여기서 따로 목록을 적으면
+    // 화면과 실제 Export가 갈라진다.
+    const exportSupport = getEuExportGoodsSupport(cnDigits);
 
     const resetForm = () => {
         setEditingProductId('');
@@ -621,6 +625,16 @@ function ProductsPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                         ))}
                     </datalist>
                 </Field>
+                {/* 범위 밖 품목군은 **여기서** 말한다. 7단계에서 「매핑할 수 없습니다」로
+                    만나면 원인도 해법도 알 수 없다(씨밤이 P1-run09-01). */}
+                {cnDigits.length === 8 && !exportSupport.supported && (
+                    <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                        <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+                        {exportSupport.good
+                            ? <>품목군 「{exportSupport.good}」은 <span className="font-semibold">아직 EU 문서 생성이 지원되지 않습니다</span>(현재 철강 계열만). 산정과 결과 확인은 됩니다.</>
+                            : <>이 CN은 EU 공식 목록에서 조회되지 않습니다. CN을 다시 확인하세요.</>}
+                    </div>
+                )}
                 {coverage && (
                     <div className={`rounded-lg px-3 py-2 text-xs leading-5 ${
                         coverage.status === 'COVERED'
