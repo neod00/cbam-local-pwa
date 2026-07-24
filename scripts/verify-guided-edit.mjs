@@ -128,6 +128,24 @@ assert.equal(recoded.hs_code, '7306', 'CN이 바뀌면 hs_code는 앞 4자리');
 assert.equal(recoded.hs_group, '73', 'CN이 바뀌면 hs_group은 앞 2자리');
 assert.equal(recoded.product_type_enum, 'HS73_OTHER', 'CN이 바뀌면 제품군도 다시 파생한다');
 
+// [핵심] 저장된 CN에 구분자가 있어도 표기만 다른 것은 변경이 아니다.
+// /upload의 활동자료 템플릿은 CN을 정규화 없이 그대로 저장한다(activity-data-template.ts가
+// 값을 trim만 한다). EU가 공표하는 표기는 「7217 20 10」이므로 그런 행이 실제로 들어온다.
+// 이걸 변경으로 보면, 사용자가 CN을 건드리지도 않았는데 제품군이 되돌아가고 —
+// 화면은 바로 그 순간 「CN을 그대로 두면 제품군 설정이 유지됩니다」라고 말하고 있다.
+const spacedRenamed = G.buildProductUpdate(
+  { ...product, cn_code: '7217 20 10' },
+  { name: '아연도금 강선 2종', cnDigits: '72172010' }
+);
+assert.equal(
+  spacedRenamed.product_type_enum, 'HS72_WIRE_GALVANISED',
+  '구분자만 다른 CN은 변경이 아니다 — 제품군을 되돌리면 패널 문안이 거짓이 된다'
+);
+assert.equal(spacedRenamed.hs_code, '7217');
+assert.equal(spacedRenamed.hs_group, '72');
+// 표기가 달랐던 CN은 이 기회에 정규화해 저장한다(값은 같고 형식만 정리).
+assert.equal(spacedRenamed.cn_code, '7217 20 10', '변경이 아니면 저장된 표기를 그대로 둔다');
+
 // cn_code가 비어 있던 제품(옛 자료)에 CN을 넣으면 파생이 돌아야 한다.
 const backfilled = G.buildProductUpdate({ ...product, cn_code: undefined }, { name: '강선', cnDigits: '72172010' });
 assert.equal(backfilled.cn_code, '72172010');

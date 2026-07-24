@@ -134,7 +134,10 @@ export function buildProductPayload(draft: ProductDraft, installationId?: string
  * 「HS72_OTHER」로 조용히 되돌아가면 안 되기 때문이다.
  */
 export function buildProductUpdate(existing: Product, draft: ProductDraft): Product {
-    const cnChanged = (existing.cn_code ?? '') !== draft.cnDigits;
+    // 저장된 CN도 정규화해서 비교한다. 다른 화면에서 「7217 2010」처럼 구분자를 넣어 저장했다면
+    // 사용자가 CN을 건드리지 않았는데도 「바뀜」으로 보여 제품군이 되돌아간다 —
+    // 화면에 「CN을 그대로 두면 제품군 설정이 유지됩니다」라고 적어놓고 어기는 셈이다.
+    const cnChanged = (existing.cn_code ?? '').replace(/\D/g, '') !== draft.cnDigits;
     return {
         ...existing,
         name: draft.name.trim(),

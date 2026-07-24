@@ -345,6 +345,8 @@ function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             return;
         }
         await deleteLocalItem('periods', period.id);
+        // 삭제는 저장이 아니다. 초록 「저장했습니다」가 남으면 방금 한 동작과 반대를 말한다.
+        setSaved(false);
         if (editingPeriodId === period.id) closePeriodForm();
         await onSaved();
     };
@@ -369,7 +371,7 @@ function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                         {installation ? <Pencil className="mr-1 inline h-4 w-4" /> : null}
                         {installation ? '사업장 수정' : '우리 공장 정보'}
                     </p>
-                    <Field label="회사·공장 이름" hint="예: 한국강선 김포공장">
+                    <Field label="회사·공장 이름" hint="EU 문서에 이 이름이 그대로 나갑니다. 영문명이 있으면 영문으로 적으세요 (예: Hankuk Steel Gimpo Plant).">
                         <input className={fieldClass} value={instName} onChange={(event) => setInstName(event.target.value)} placeholder="한국강선 김포공장" />
                     </Field>
                     <Field label="국가 (2자리)">
@@ -383,7 +385,7 @@ function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                     </div>
                     {installation && (
                         <p className="text-xs leading-5 text-slate-500">
-                            주소·좌표·담당자·공정 경계 메모는 그대로 유지됩니다. 그 항목들은 상세 입력에서 다룹니다.
+                            주소·좌표·담당자 등 여기에 칸이 없는 항목은 그대로 유지됩니다. 주소·연락처는 상세 입력에서 고칠 수 있습니다.
                         </p>
                     )}
                 </div>
@@ -398,6 +400,17 @@ function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                         </button>
                     )}
                 </div>
+                {/* EU Communication 사본은 첫 번째 보고기간만 A_InstData에 기재한다
+                    (eu-template-export.ts의 createInstallationCellWrites가 periods[0]을 쓴다).
+                    이 패널에서 기간을 여럿 만들기 쉬워졌으므로, 그 사실을 화면에서 말한다 —
+                    말하지 않으면 두 번째 기간의 자료가 첫 기간 이름으로 제출된다. */}
+                {data.periods.length > 1 && (
+                    <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs leading-5 text-amber-900">
+                        <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+                        8단계 EU 문서에는 맨 위 기간(<span className="font-semibold">{data.periods[0].name}</span>)만 기재됩니다.
+                        다른 기간을 제출하려면 그 기간만 남기거나 별도 프로젝트로 나누세요.
+                    </p>
+                )}
                 {data.periods.map((period) => (
                     <div
                         key={period.id}
@@ -452,7 +465,7 @@ function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             )}
 
             {message && <p className="text-sm text-amber-700">{message}</p>}
-            {saved && installation && data.periods.length > 0 && (
+            {saved && !message && installation && data.periods.length > 0 && (
                 <SavedNotice message="기본 설정이 끝났습니다." next={nextStepId(steps, 'setup')} onSelectStep={onSelectStep} />
             )}
         </>
@@ -524,6 +537,7 @@ function ProductsPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             return;
         }
         await deleteLocalItem('products', product.id);
+        setSaved(false);
         if (editingProductId === product.id) resetForm();
         await onSaved();
     };
@@ -596,7 +610,7 @@ function ProductsPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             </div>
 
             {message && <p className="text-sm text-amber-700">{message}</p>}
-            {saved && <SavedNotice message="제품을 저장했습니다. 더 추가하거나 다음으로 이동하세요." next={nextStepId(steps, 'products')} onSelectStep={onSelectStep} />}
+            {saved && !message && <SavedNotice message="제품을 저장했습니다. 더 추가하거나 다음으로 이동하세요." next={nextStepId(steps, 'products')} onSelectStep={onSelectStep} />}
         </>
     );
 }
@@ -658,6 +672,7 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                 .map((line) => deleteLocalItem('product_output_lines', line.id))
         );
         await deleteLocalItem('processes', process.id);
+        setSaved(false);
         if (editingProcessId === process.id) resetForm();
         await onSaved();
     };
@@ -855,7 +870,7 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             )}
 
             {message && <p className="text-sm text-amber-700">{message}</p>}
-            {saved && <SavedNotice message="공정을 저장했습니다." next={nextStepId(steps, 'process')} onSelectStep={onSelectStep} />}
+            {saved && !message && <SavedNotice message="공정을 저장했습니다." next={nextStepId(steps, 'process')} onSelectStep={onSelectStep} />}
         </>
     );
 }
@@ -954,6 +969,11 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
         setMessage('');
     };
 
+    const editingStream = data.sourceStreams.find((stream) => stream.id === editingStreamId);
+    // 수정 폼의 단위는 프리셋이 아니라 **저장된 배출원**의 단위다. 프리셋 단위를 쓰면
+    // 상세 입력에서 만든 배출원(예: kg 단위)을 고칠 때 화면이 틀린 단위를 말한다.
+    const editingUnit = editingStream?.activity_unit ?? '';
+
     const startEdit = (stream: SourceStream) => {
         setEditingStreamId(stream.id);
         setEditingName(stream.name);
@@ -986,19 +1006,33 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
     };
 
     const removeStream = async (stream: SourceStream) => {
-        if (!window.confirm(`'${stream.name}' 배출원을 삭제할까요? 지도의 ① 직접배출에서 빠집니다.`)) {
+        // 프리셋 이름이 같은 행이 여럿일 수 있다 — 사용량을 함께 보여 어느 줄인지 알 수 있게 한다.
+        if (!window.confirm(`'${stream.name}' (${fmt(stream.activity_data, 1)} ${stream.activity_unit}) 배출원을 삭제할까요? 지도의 ① 직접배출에서 빠집니다.`)) {
             return;
         }
         await deleteLocalItem('source_streams', stream.id);
         await syncProcessDirectEmissions(process, data.sourceStreams.filter((item) => item.id !== stream.id));
+        setSaved(false);
         if (editingStreamId === stream.id) resetForm();
         await onSaved();
     };
 
     return (
         <>
-            {/* 공정을 바꾸면 수정 세션을 닫는다 — 목록에서 사라진 줄을 계속 편집하고 있으면 안 된다. */}
-            <ProcessSelect data={data} value={process.id} onChange={(id) => { setProcessId(id); resetForm(); }} />
+            {/* 공정을 바꾸면 수정 세션을 닫는다 — 목록에서 사라진 줄을 계속 편집하고 있으면 안 된다.
+                입력 중인 값이 있으면 조용히 버리지 않고 먼저 묻는다. */}
+            <ProcessSelect
+                data={data}
+                value={process.id}
+                onChange={(id) => {
+                    const hasDraft = Boolean(amount.trim() || editingStreamId);
+                    if (hasDraft && !window.confirm('입력 중인 내용이 있습니다. 공정을 바꾸면 지워집니다. 계속할까요?')) {
+                        return;
+                    }
+                    setProcessId(id);
+                    resetForm();
+                }}
+            />
 
             {processStreams.length > 0 && (
                 <ul className="space-y-2">
@@ -1015,7 +1049,7 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
                                         {fmt(stream.activity_data, 1)} {stream.activity_unit} → {fmt(calculateSourceStreamEmissions(stream))} tCO₂e
                                     </span>
                                 </span>
-                                <RowActions label={stream.name} onEdit={() => startEdit(stream)} onDelete={() => removeStream(stream)} />
+                                <RowActions label={`${stream.name} ${fmt(stream.activity_data, 1)} ${stream.activity_unit}`} onEdit={() => startEdit(stream)} onDelete={() => removeStream(stream)} />
                             </li>
                         );
                     })}
@@ -1031,7 +1065,7 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
                     <Field label="배출원 이름">
                         <input className={fieldClass} value={editingName} onChange={(event) => setEditingName(event.target.value)} />
                     </Field>
-                    <Field label="연간 사용량" hint="고지서·구매대장의 연간 합계">
+                    <Field label={`연간 사용량 (${editingUnit})`} hint="고지서·구매대장의 연간 합계">
                         <input className={fieldClass} inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} />
                     </Field>
                     {/* 계수는 손대지 않는다. 상세 입력에서 자가 측정값을 넣은 배출원도 이 목록에 뜨는데,
@@ -1071,7 +1105,7 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
             )}
 
             {message && <p className="text-sm text-amber-700">{message}</p>}
-            {saved && <SavedNotice message="저장했습니다. 지도의 ① 상자에 반영됩니다." next={nextStepId(steps, 'fuel')} onSelectStep={onSelectStep} />}
+            {saved && !message && <SavedNotice message="저장했습니다. 지도의 ① 상자에 반영됩니다." next={nextStepId(steps, 'fuel')} onSelectStep={onSelectStep} />}
         </>
     );
 }
@@ -1177,7 +1211,11 @@ function ElectricityForm({
             </div>
 
             {message && <p className="text-sm text-amber-700">{message}</p>}
-            {saved && <SavedNotice message="저장했습니다. 철강은 이 값이 인증서 계산에서 빠지지만 보고에는 꼭 들어갑니다." next={nextStepId(steps, 'electricity')} onSelectStep={onSelectStep} />}
+            {/* 종전 문안: 「철강은 이 값이 인증서 계산에서 빠지지만 보고에는 꼭 들어갑니다」.
+                판정을 거치지 않고 규정 사실을 단정했다 — 소결광(CN 2601 12 00)처럼 간접이
+                기준에 **포함되는** 품목에서는 그냥 거짓이고, 판정 불가일 땐 알 수 없다.
+                이 폼에는 품목 판정이 없으므로 사실만 말하고, 판정은 7단계로 넘긴다. */}
+            {saved && !message && <SavedNotice message="저장했습니다. 지도의 ② 간접배출에 반영됩니다. 이 값이 인증서 산정 기준에 들어가는지는 품목마다 달라 7단계에서 확인합니다." next={nextStepId(steps, 'electricity')} onSelectStep={onSelectStep} />}
         </>
     );
 }
@@ -1434,9 +1472,14 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         if (allocations.length > 0) {
             const masses: Record<string, string> = {};
             allocations.forEach((allocation) => {
-                if (allocation.product_output_line_id) {
-                    masses[allocation.product_output_line_id] = String(allocation.allocated_mass_t);
-                }
+                if (!allocation.product_output_line_id) return;
+                // 다른 화면은 배분을 **퍼센트로만** 남기기도 한다(products 화면의 제품군 산정 초안은
+                // allocated_mass_t: 0, allocation_percent: 100으로 만든다). 질량만 읽으면 0으로
+                // 되살아나 합계가 소비량과 안 맞고, 사용자는 이유를 모른 채 저장이 막힌다.
+                const mass = allocation.allocated_mass_t > 0
+                    ? allocation.allocated_mass_t
+                    : ((allocation.allocation_percent ?? 0) / 100) * precursor.consumed_mass_t;
+                masses[allocation.product_output_line_id] = String(Math.round(mass * 1000) / 1000);
             });
             setAllocMasses(masses);
             setAllocMode('manual');
@@ -1485,10 +1528,25 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                 setMessage(allocationError);
                 return;
             }
+            // 기존 배분의 product_id·비고는 살리고, 퍼센트는 질량에서 다시 계산한다 —
+            // 남겨두면 질량과 퍼센트가 서로 다른 얘기를 하게 된다.
+            const existingAllocations = editingPrecursorId
+                ? (data.precursors.find((precursor) => precursor.id === editingPrecursorId)?.output_allocations ?? [])
+                : [];
             draft = {
                 ...baseDraft,
                 outputAllocations: outputLines
-                    .map((line) => ({ product_output_line_id: line.id, allocated_mass_t: num(allocMasses[line.id] ?? '') }))
+                    .map((line) => {
+                        const previous = existingAllocations.find((allocation) => allocation.product_output_line_id === line.id);
+                        const mass = num(allocMasses[line.id] ?? '');
+                        return {
+                            product_output_line_id: line.id,
+                            product_id: previous?.product_id ?? line.product_id,
+                            allocated_mass_t: mass,
+                            allocation_percent: consumedMass > 0 ? Math.round((mass / consumedMass) * 1e6) / 1e4 : undefined,
+                            note: previous?.note,
+                        };
+                    })
                     .filter((allocation) => allocation.allocated_mass_t > 0),
             };
         }
@@ -1517,6 +1575,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
             return;
         }
         await deleteLocalItem('precursors', precursor.id);
+        setSaved(false);
         if (editingPrecursorId === precursor.id) resetForm();
         await onSaved();
     };
@@ -1533,8 +1592,24 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
 
     return (
         <>
-            {/* 공정을 바꾸면 수정 세션을 닫는다 — 목록에서 사라진 줄을 계속 편집하고 있으면 안 된다. */}
-            <ProcessSelect data={data} value={process.id} onChange={(id) => { setProcessId(id); resetForm(); }} />
+            {/* 공정을 바꾸면 수정 세션을 닫는다 — 목록에서 사라진 줄을 계속 편집하고 있으면 안 된다.
+                이 폼은 칸이 스무 개 가까이 된다. 입력 중인 값이 있으면 먼저 묻는다. */}
+            <ProcessSelect
+                data={data}
+                value={process.id}
+                onChange={(id) => {
+                    const hasDraft = Boolean(
+                        editingPrecursorId
+                        || name.trim() || cn.trim() || consumed.trim() || purchased.trim()
+                        || directSee.trim() || indirectSee.trim() || source.trim() || justification.trim()
+                    );
+                    if (hasDraft && !window.confirm('입력 중인 전구물질 내용이 있습니다. 공정을 바꾸면 지워집니다. 계속할까요?')) {
+                        return;
+                    }
+                    setProcessId(id);
+                    resetForm();
+                }}
+            />
 
             {processPrecursors.length > 0 && (
                 <ul className="space-y-2">
@@ -1844,7 +1919,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
             </div>
 
             {message && <p className="text-sm text-amber-700">{message}</p>}
-            {saved && <SavedNotice message="저장했습니다. 원료가 지니고 온 배출이 지도에 더해집니다." next={nextStepId(steps, 'precursors')} onSelectStep={onSelectStep} />}
+            {saved && !message && <SavedNotice message="저장했습니다. 원료가 지니고 온 배출이 지도에 더해집니다." next={nextStepId(steps, 'precursors')} onSelectStep={onSelectStep} />}
         </>
     );
 }

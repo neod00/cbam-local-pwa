@@ -74,6 +74,23 @@ for (const call of updates) {
   );
 }
 
+// guided-edit가 담당하는 스토어는 **신규도** 빌더를 거친다.
+// 이걸 막지 않으면 panels.tsx가 매핑을 다시 인라인할 수 있는데, 그게 바로 이 저장소가
+// 아홉 번 반복한 실패 모양이다 — 같은 필드 매핑이 두 곳에 살고 한쪽만 고쳐진다.
+// (source_streams·processes·product_output_lines는 아직 빌더가 없어 제외한다.)
+const BUILDER_OWNED_STORES = ['installations', 'periods', 'products', 'precursors'];
+for (const call of callsTo('createLocalItem')) {
+  const store = call.args.match(/^\s*'([a-z_]+)'/)?.[1];
+  if (!store || !BUILDER_OWNED_STORES.includes(store)) continue;
+  assert.match(
+    call.args,
+    /build[A-Za-z]+(Payload|Create)\(/,
+    `panels.tsx:${lineOf(call.index)} '${store}' 신규 저장이 guided-edit의 빌더를 쓰지 않는다.\n`
+    + '매핑을 여기서 다시 적으면 신규와 수정이 갈라지고, 한쪽만 고쳐진다.\n'
+    + `  인자: ${call.args.replace(/\s+/g, ' ').slice(0, 120)}`
+  );
+}
+
 // ── 2) 삭제는 확인을 거치고, 참조가 있으면 먼저 막는다 ──────────────────
 // remove*로 시작하는 화살표 함수 본문을 잘라 검사한다.
 const removers = [];

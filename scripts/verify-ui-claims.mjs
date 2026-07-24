@@ -51,13 +51,29 @@ const FORBIDDEN = [
         pattern: /접두 규칙 기반|접두 규칙으로 판정|접두 규칙에 따른/,
         why: '앱은 접두 규칙으로 판정하지 않는다. 조회 사실을 쓸 것.',
     },
+    {
+        // 5단계 저장 안내가 「저장했습니다. 철강은 이 값이 인증서 계산에서 빠지지만…」이라고
+        // 말하고 있었다. 위 두 패턴은 "CN 72/73"이나 "Annex II"를 요구해서 이걸 놓쳤다.
+        // 품목 이름만으로 배제를 단정하는 문장은 전부 막는다.
+        pattern: /철강[^\n]{0,60}(빠지지만|빠집니다|제외됩니다|제외된다|제외돼)/,
+        why: '품목군 이름만으로 간접배출 배제를 단정한다. 소결광(CN 2601 12 00)처럼 간접이 '
+            + '기준에 포함되는 품목이 있고, 판정 불가도 있다. describeSeeFlowIndirect의 상태에서 '
+            + '파생하거나, 판정을 7단계로 넘기고 사실만 쓸 것.',
+    },
 ];
 
-/** 주석 줄인가 — 금지 문안을 「왜 금지인지」 설명하는 것은 허용한다. */
+/**
+ * 주석 줄인가 — 금지 문안을 「왜 금지인지」 설명하는 것은 허용한다.
+ * JSX 주석 `{/* … *␘/}`도 포함한다. 빠뜨리면 「이 문장을 쓰면 안 되는 이유」를 코드 옆에
+ * 남길 수 없고, 그러면 다음 사람이 같은 문장을 다시 쓴다.
+ */
 function isComment(line) {
     const trimmed = line.trim();
 
-    return trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*');
+    return trimmed.startsWith('//')
+        || trimmed.startsWith('*')
+        || trimmed.startsWith('/*')
+        || trimmed.startsWith('{/*');
 }
 
 const failures = [];
