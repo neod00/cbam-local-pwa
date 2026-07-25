@@ -129,7 +129,7 @@ export interface ReportRnrRow {
 
 export interface ReportCarbonPriceRow {
   target: string;
-  /** 배출권거래제 할당대상 여부는 법인 단위 판단이라 사업장 자료만으로 단정할 수 없다 → 기본 TO_CONFIRM */
+  /** 원산지국 배출권거래제의 할당대상 판정 기준을 앱이 보유하지 않는다 → 기본 TO_CONFIRM */
   applicable: CarbonPriceApplicability;
   note: string;
   amount?: string;

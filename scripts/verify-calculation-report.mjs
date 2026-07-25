@@ -854,4 +854,152 @@ assertTrue(!okXml.includes('「기재 필요」로 남은 항목이 있다'), '1
 // 다만 의미는 남아야 한다 — 미기재가 있다는 사실 자체는 계속 말해야 한다.
 assertTrue(okXml.includes('미기재 항목이 남아 있다'), '13장이 미기재 잔존 사실은 계속 진술');
 
-console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4·R5 회귀).');
+// ---------------- 재감사 R6 회귀 — 「문서가 자기 자신을 부정하지 않는지」 ----------------
+// run09 산출물(소결광 + 강관 혼재)을 4렌즈로 감사한 결과 확인된 것들. 공통 모양은 하나다:
+// **고정 문안이 데이터와 무관하게 인쇄돼, 같은 문서의 다른 곳과 정면으로 어긋난다.**
+// 숫자는 전부 맞았는데도 검증인이 첫 문장에서 신뢰를 잃는 종류다.
+
+// [P0] 13장 자체평가는 실제 게이트 결과에서 파생돼야 한다.
+// 출처 칸이 전부 「기재 필요」인 발행본에서 「모든 수치에 출처를 병기」라고 쓰면,
+// 문서가 자기 표기를 부정한다. 검증인이 이 한 줄을 잡으면 자동 생성 장 전체를 못 믿는다.
+assertTrue(
+    ok.issues.some((issue) => issue.gate === 'G5' && /제6\.2\.2장:/.test(issue.message)),
+    'R6 전제: 출처 미기재 케이스에 G5 경고가 실제로 뜬다'
+);
+assertTrue(!okXml.includes('모든 수치에 출처를 병기'), '13장 투명성이 미기재 상태에서 「모든 수치에 출처를 병기」를 인쇄하지 않음');
+assertTrue(okXml.includes('아직 채워지지 않았다'), '13장 투명성이 출처 공백을 진술');
+// 반대 방향도 잠근다 — 다 채운 보고서에서까지 공백을 말하면 그것도 거짓이다.
+assertTrue(filledXml2.includes('모든 수치에 출처를 병기'), '출처가 모두 채워지면 13장 투명성이 원래 문안으로 돌아옴');
+assertTrue(!filledXml2.includes('아직 채워지지 않았다'), '채워진 보고서에 출처 공백 문구가 남지 않음');
+
+// [P1] 13장 정확성도 같다 — 6.1 전치가 비었는데 「제6.1장에 기재」를 근거로 들면 안 된다.
+assertTrue(!okXml.includes('원천자료→활동자료 전치 경로를 제6.1장에 기재.'), '13장 정확성이 빈 6.1을 근거로 들지 않음');
+assertTrue(okXml.includes('역추적할 수 없다'), '13장 정확성이 전치 경로 공백을 진술');
+assertTrue(filledXml2.includes('원천자료→활동자료 전치 경로를 제6.1장에 기재.'), '전치가 채워지면 원래 문안으로 복귀');
+// 6.2.2·6.3에는 게이트가 있는데 6.1만 없어 통째로 비어도 아무도 이의를 제기하지 않았다.
+assertTrue(ok.issues.some((issue) => issue.gate === 'G5' && /제6\.1장:/.test(issue.message)), '6.1 전치 공백에 G5 경고');
+
+// [P1] 간접 포함 품목(소결광)의 인증서 기준값을 「정보 목적」으로 라벨하지 않는다.
+// 0.2066은 그 품목에서 참고값이 아니라 기준 그 자체다. 1장 표의 「CBAM 기준 SEE」 열과 정면 모순이었다.
+assertTrue(!ironOreXml.includes('참고 총 SEE(직접+간접, 정보 목적)'), '1장 각주가 일괄 「정보 목적」 라벨을 쓰지 않음');
+assertTrue(ironOreXml.includes('= CBAM 인증서 산정 기준)'), '간접 포함 품목의 총 SEE에 기준 라벨');
+assertTrue(okXml.includes('정보 목적 — 인증서 기준 제외)'), '간접 비관련 품목의 총 SEE는 정보 목적으로 라벨');
+// 10장 — 간접 포함 품목에서는 이 행이 기준값을 담은 유일한 행이다(직접 소계의 기준 표기는 일부러 비운다).
+assertTrue(ironOreXml.includes('직접 + 간접 = CBAM 인증서 산정 기준'), '10장 총 SEE 행이 간접 포함 품목의 기준값임을 표기');
+assertTrue(okXml.includes('참고 총 SEE'), '간접 비관련 품목은 10장에서 「참고 총 SEE」 유지');
+// 5.4 — 장 제목이 「제품 SEE 및 인증서 기준」인데 기준값이 없었다.
+assertTrue(ironOreXml.includes('CBAM 인증서 산정 기준 SEE = SEE(직접) + SEE(간접)'), '5.4가 간접 포함 품목의 기준 산식을 제시');
+assertTrue(okXml.includes('CBAM 인증서 산정 기준 SEE = SEE(직접) ='), '5.4가 간접 비관련 품목의 기준 산식을 제시');
+// 3.1 포함 분기가 「무엇에 포함되는지」를 말해야 한다(제외 분기는 이미 말한다).
+assertTrue(ironOreXml.includes('CBAM 인증서 산정 기준 SEE에 포함해 산정한다'), '3.1 포함 분기가 귀결을 명시');
+
+// [P1] 고철(CN 7204)을 규정 사실로 단정하지 않는다.
+// 앱의 규칙 엔진은 「공식 목록에 없다」는 조회 사실만 말하고 확정기간 근거를 유보하는데,
+// 보고서가 그 유보를 벗겨 「제외되어」로 인쇄했다.
+assertTrue(!okXml.includes('CBAM 전구물질 범위에서 제외되어'), '고철 제외를 규정 사실로 단정하지 않음');
+assertTrue(okXml.includes('CN 목록에 없어 본 산정에서 전구물질로 가산하지 않았다'), '고철은 조회 사실만 진술');
+assertTrue(okXml.includes('부재가 곧 명시적 배제는 아니며'), '고철 서술이 목록 부재의 한계를 유지');
+
+// [P1] 12.2 QA/QC — 도구가 실행하는 검사와, 도구가 확인한 적 없는 사업장 절차를 구분한다.
+assertTrue(okXml.includes('사업장 (권고)'), '12.2가 사업장 절차를 권고로 구분');
+assertTrue(okXml.includes('본 사업장의 실제 적용 여부는 확인되지 않았다'), '12.2가 실사하지 않은 사실을 밝힘');
+assertTrue(okXml.includes('도구 내부 검사 + 권고 절차'), '부속서 C가 12.2를 고정 문안으로 분류');
+assertTrue(!okXml.includes('12 모니터링 / 15 증빙'), '부속서 C가 12.2를 「사용자 입력」에 묶지 않음');
+
+// [P1] 9장 — 전구물질 0건은 「찾지 못했다」가 아니다. 수행하지 않은 조회를 실패한 조회로 쓰면
+// 닫을 수 없는 「확인 필요(자료)」가 등록부에 등재된다.
+const noPrecursorDv = reportModule.createCalculationReport({
+    ...baseInput(), precursors: [],
+    results: [{ ...baseResult, precursor_see: 0, precursor_direct_see: 0, precursor_indirect_see: 0,
+        see_direct_incl_precursor: 240.009264 / 8000, see_indirect_incl_precursor: 734.4 / 8000,
+        see_cbam_basis: 240.009264 / 8000, see_informational_total: 240.009264 / 8000 + 734.4 / 8000 }],
+    defaultValues: dvReference,
+});
+const noPrecursorXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await noPrecursorDv.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(!noPrecursorXml.includes('대체 가능한 공식 기본값을 찾지 못해'), '전구물질 0건에서 조회 실패를 진술하지 않음');
+assertTrue(noPrecursorXml.includes('DV 대체 민감도의 대상이 없다'), '전구물질 0건은 해당 없음으로 진술');
+assertTrue(noPrecursorXml.includes('구매 전구물질이 없어 공식 기본값(DV) 대조 대상이 없다'), '9장 서문이 하지 않은 대조를 서술하지 않음');
+assertTrue(!noPrecursorXml.includes('markup 적용 여부·방식은 확인 필요(규정)'), '적용하지 않은 DV의 규정 공백을 등록부에 올리지 않음');
+// 반대 방향 — 전구물질이 있는데 DV 행을 못 찾은 경우는 **진짜** 조회 실패이므로 그 문장이 남아야 한다.
+assertTrue(dvXml.includes('markup을 포함한'), 'R6 전제: 전구물질이 있으면 9.2 민감도가 정상 산출');
+// 대조 대상이 0건이면 워크북 미연결도 결손이 아니다. 채울 수 없는 항목을 등록부에 남기지 않는다.
+const noPrecursorNoDv = reportModule.createCalculationReport({
+    ...baseInput(), precursors: [],
+    results: [{ ...baseResult, precursor_see: 0, precursor_direct_see: 0, precursor_indirect_see: 0,
+        see_direct_incl_precursor: 240.009264 / 8000, see_indirect_incl_precursor: 734.4 / 8000,
+        see_cbam_basis: 240.009264 / 8000, see_informational_total: 240.009264 / 8000 + 734.4 / 8000 }],
+});
+const noPrecursorNoDvXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await noPrecursorNoDv.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(!noPrecursorNoDvXml.includes('공식 기본값 워크북을 연결한 뒤 보고서를 다시 생성하세요'), '전구물질 0건에서 워크북 미연결을 결손으로 세지 않음');
+assertTrue(!noPrecursorNoDv.issues.some((issue) => issue.gate === 'G6'), '전구물질 0건에서 G6 경고를 띄우지 않음');
+// 전구물질이 있는데 워크북이 없으면 그건 **진짜** 결손이다 — 반대 방향도 잠근다.
+const withPrecursorNoDv = reportModule.createCalculationReport(baseInput());
+assertTrue(withPrecursorNoDv.issues.some((issue) => issue.gate === 'G6'), '전구물질이 있으면 워크북 미연결에 G6 경고');
+
+// [P2] 6.4 정합성 점검의 한계 고지 — 지도 흐름에서 직접배출량은 배출원 합계의 캐시라 이 대조는 항등식이다.
+assertTrue(okXml.includes('이 점검은 항등식이며 어떤 오류도 검출하지 않는다'), '6.4가 항등식 가능성을 고지');
+assertTrue(!okXml.includes('배출원이 1건인 공정에서는 이 점검이 전기(轉記) 오류 검출에 한정된다(제6.4장). '), '13장 정확성도 같은 한계로 갱신');
+
+// [P2] 부속서 A의 연소 산식은 제5.1장과 **같은 상수**여야 한다. 따로 적으면 CF·화석 분율이 또 빠진다.
+assertTrue(okXml.includes('연소 배출: E직접 = 활동자료 AD'), '부속서 A 연소식이 5.1과 같은 문안');
+assertTrue(okXml.includes('전환계수 CF × 화석 분율'), '부속서 A 연소식에 CF·화석 분율 포함');
+assertTrue(!okXml.includes('E = AD × NCV × EF ÷ 1,000 × OxF'), '부속서 A의 옛 축약식 제거');
+const combustionCount = (okXml.match(/전환계수 CF × 화석 분율 ÷ 1,000/g) ?? []).length;
+assertEqual(combustionCount, 2, '연소식이 5.1과 부속서 A 두 곳에 같은 문자열로 인쇄');
+
+// [P2] 1장이 제공하지 않는 추적 경로를 제공한다고 선언하지 않는다.
+assertTrue(!okXml.includes('증빙의 추적 경로를 제공한다'), '1장이 추적 경로 제공을 완료형으로 선언하지 않음');
+assertTrue(okXml.includes('등록부가 해소되기 전에는 추적 경로가 완결되지 않는다'), '1장이 등록부를 가리킴');
+
+// [P3] 7장 배출량 자릿수 — 표지가 선언한 4자리 규칙을 같은 문서가 어기고 있었다.
+assertTrue(okXml.includes('734.4000 tCO2e'), '7장 간접배출량이 소수 4자리');
+assertTrue(okXml.includes('1,600.0000 MWh'), '7장 전력 사용량이 소수 4자리');
+
+// [P3] 표지·5.1의 대상 GHG는 조회된 품목군 분야에서 파생돼야 한다.
+// 문서 전체에서 문자열만 찾으면 **한 곳만 되돌려도 다른 곳이 대신 통과시킨다** — 실제로
+// 이 게이트의 첫 판이 표지 전용 변형을 놓쳤다. 두 자리를 각각 잘라서 본다.
+const coverSlice = okXml.slice(0, okXml.indexOf('1. 요약'));
+const methodSlice = okXml.slice(okXml.indexOf('5.1 직접배출'), okXml.indexOf('5.2 간접배출'));
+assertTrue(coverSlice.length > 0 && methodSlice.length > 0, 'R6 전제: 표지·5.1 구간 파싱');
+assertTrue(coverSlice.includes('조회된 품목군이 모두 Iron and steel 분야'), '표지 GHG 범위가 품목군 조회에서 파생');
+assertTrue(methodSlice.includes('조회된 품목군이 모두 Iron and steel 분야'), '5.1 GHG 범위도 품목군 조회에서 파생');
+assertTrue(!okXml.includes('철강 품목의 CBAM 대상 GHG'), '표지가 「철강 품목」 고정 리터럴을 쓰지 않음');
+assertTrue(!okXml.includes('철강 품목의 CBAM 대상 온실가스는 CO2'), '5.1도 같은 고정 리터럴을 쓰지 않음');
+// 비철강 품목이 섞이면 두 곳 모두 단정을 거둬야 한다(CH4·N2O 배제까지 인쇄하면 그 자체가 근거 없는 단정).
+const nonSteelProduct = at({ id: 'p7', name: '요소', hs_code: '3102', cn_code: '31021010', hs_group: '31', product_type_enum: 'OTHER', unit: 'tonne', reporting_scope: 'CBAM_GOOD' });
+const nonSteelXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await reportModule.createCalculationReport({
+    ...baseInput(), precursors: [],
+    products: [baseProduct, nonSteelProduct],
+    processes: [baseProcess, at({ ...baseProcess, id: 'proc7', product_id: 'p7' })],
+    sourceStreams: [baseStream, at({ ...baseStream, id: 's7', process_id: 'proc7' })],
+    results: [
+        { ...baseResult, precursor_see: 0, precursor_direct_see: 0, precursor_indirect_see: 0,
+            see_direct_incl_precursor: 240.009264 / 8000, see_indirect_incl_precursor: 734.4 / 8000,
+            see_cbam_basis: 240.009264 / 8000, see_informational_total: 240.009264 / 8000 + 734.4 / 8000 },
+        { ...baseResult, id: 'r7', process_id: 'proc7', product_id: 'p7', product_name: '요소', cn_code: '31021010',
+            precursor_see: 0, precursor_direct_see: 0, precursor_indirect_see: 0,
+            see_direct_incl_precursor: 240.009264 / 8000, see_indirect_incl_precursor: 734.4 / 8000,
+            see_cbam_basis: 240.009264 / 8000, see_informational_total: 240.009264 / 8000 + 734.4 / 8000 },
+    ],
+}).blob.arrayBuffer()))['word/document.xml']);
+assertTrue(!nonSteelXml.includes('조회된 품목군이 모두 Iron and steel 분야'), '비철강 품목이 섞이면 철강 단정을 거둠');
+assertTrue(!nonSteelXml.includes('CH4·N2O는 본 산정의 대상 GHG에 포함되지 않는다'), '분야 미확정에서 CH4·N2O 배제를 단정하지 않음');
+assertTrue(nonSteelXml.includes('N2O·PFC 등 다른 대상 GHG가 요구되는지 확인해야 한다'), '분야 미확정 시 다른 GHG 확인을 요구');
+
+// [P3] 11장 — 원산지국 ETS 할당대상 판정 기준은 앱이 보유하지 않는 규정 사실이다.
+assertTrue(!okXml.includes('법인 단위 배출량으로 판단되므로'), '11장이 원산지국 규정을 단정하지 않음');
+assertTrue(okXml.includes('할당대상 판정 기준을 보유하지 않으므로'), '11장이 앱이 아는 사실로 근거를 바꿈');
+
+// [P3] 3.1 — 「하드코딩이 아니다」를 하드코딩 문안으로 주장하지 않는다(조회하지 않은 6종 landscape).
+assertTrue(!okXml.includes('철강계 품목군 6종 중'), '3.1이 조회하지 않은 품목군 landscape를 주장하지 않음');
+assertTrue(okXml.includes('품목군 이름으로 일반화한 고정 규칙이 아니다'), '3.1이 개별 판정 사실은 계속 진술');
+
+// [P3] 1장 요약표 반올림 각주 — 구성 항목 합과 기준값이 어긋나 보이는데 설명이 없었다.
+// 각주 판단만 가져오고 issues는 합치지 않는다(10장이 이미 밀어 넣어 13장 경고 건수가 두 번 세진다).
+const summaryRoundingXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await roundingCase.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(summaryRoundingXml.includes('소계·총계 표시값과 마지막 자리에서 다를 수 있다'), '1장 요약표에 반올림 각주');
+assertTrue(!okXml.includes('소계·총계 표시값과 마지막 자리에서 다를 수 있다'), '반올림 차이가 없으면 요약 각주도 없음(남발 방지)');
+const summaryRoundingWarns = roundingCase.issues.filter((issue) => issue.gate === 'G1' && /반올림 표기/.test(issue.message)).length;
+assertEqual(summaryRoundingWarns, 1, '반올림 경고가 요약장 추가로 중복 계상되지 않음(10장이 이미 밀어 넣는다)');
+
+console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4·R5·R6 회귀).');
