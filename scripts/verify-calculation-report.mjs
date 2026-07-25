@@ -377,6 +377,13 @@ assertTrue(steelOnlyXml.includes('기재 필요'), '미입력 시 본문에 「�
 // 입력을 채우면 실제 내용으로 채워지고 해당 G5 경고가 사라진다
 const filled = reportModule.createCalculationReport({
     ...baseInput(),
+    // 「완전 입력」이 진짜 완전하려면 제2장 법정 식별정보·폐가스도 채워야 G5=0이 된다(식별정보 도입 후).
+    installations: [at({
+        id: 'i1', name: 'Hanbit Steel', local_name: '한빛스틸', country: 'KR', city: 'Incheon', economic_activity: 'Tubes',
+        authorized_representative_name: 'Park', email: 'a@b.c',
+        operator_name: '한빛제철(주)', operator_reg_number: '123-45-67890', operator_address: 'Seoul, KR',
+        cbam_registry_id: 'CBAM-KR-0001', unlocode: 'KRINC', latitude: '37.456', longitude: '126.705', waste_gases: 'NO',
+    })],
     reportInputs: {
         monitoring_plan: { doc_no: 'HB-CBAM-MP-001', version: 'v1.0', approved_at: '2026-01-05' },
         rnr: [{ data: '천연가스 사용량', collector: '경영지원팀', transposer: '환경안전팀', approver: '공장장', system: '앱 · 배출원 자료' }],
@@ -1183,4 +1190,48 @@ const multiBad = reportModule.createCalculationReport({
 });
 assertTrue(multiBad.issues.some((i) => i.gate === 'G6' && /어긋납니다/.test(i.message)), '가중평균이 공정 계수와 어긋나면 G6');
 
-console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4·R5·R6 회귀 + 부문특정 파라미터 + 전력 EF 산정근거).');
+// ---------------- 운영자 식별·UN/LOCODE·좌표·폐가스 (제2장, 2025/2547 ANNEX IV 1.1 / A.5) ----------------
+// 씨밤이 2547 검증심사 3+4-1: 운영자(법인)와 사업장을 구분 안 하고, 법정 식별정보(등록번호·
+// Registry ID·UN/LOCODE·좌표)와 철강 폐가스가 없어 검증인이 「누구·어디·무엇」을 못 받았다.
+
+// baseInput 사업장 = 법인·등록번호·Registry·UN/LOCODE·좌표·폐가스 전부 미입력.
+assertTrue(okXml.includes('운영자 (법인) 명'), '제2장에 운영자(법인) 식별 행');
+assertTrue(okXml.includes('CBAM Registry 설비식별자'), '제2장에 CBAM Registry 식별자 행');
+assertTrue(okXml.includes('주 배출원 좌표'), '제2장에 좌표 행');
+assertTrue(okXml.includes('폐가스 (waste gases)'), '제2.1장에 폐가스 행');
+// 법정 식별정보 미입력 → G5 (5건: 법인명·등록번호·Registry·UN/LOCODE·좌표).
+for (const label of ['운영자(법인)명', '법인/활동 등록번호', 'CBAM Registry 설비식별자', 'UN/LOCODE', '주 배출원 좌표']) {
+    assertTrue(ok.issues.some((i) => i.gate === 'G5' && i.message.includes(label) && /법정 식별정보/.test(i.message)), `법정 식별정보 「${label}」 미입력에 G5`);
+}
+// 철강 사업장(용접강관) + 폐가스 미기재 → G5.
+assertTrue(ok.issues.some((i) => i.gate === 'G5' && /폐가스/.test(i.message)), '철강 사업장 폐가스 미기재에 G5');
+
+// 채우면 값이 인쇄되고 해당 G5가 사라진다.
+const instFilled = reportModule.createCalculationReport({
+    ...baseInput(),
+    installations: [at({
+        id: 'i1', name: 'Pohang Works', local_name: '포항', country: 'KR', economic_activity: 'Iron and steel',
+        operator_name: '한빛제철(주)', operator_reg_number: '123-45-67890', operator_address: 'Seoul, KR',
+        cbam_registry_id: 'CBAM-KR-0001', unlocode: 'KRPOH', latitude: '36.019', longitude: '129.343',
+        waste_gases: 'YES', waste_gases_note: '고로가스 자가소비',
+    })],
+});
+const instFilledXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await instFilled.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(instFilledXml.includes('한빛제철(주)'), '운영자명이 인쇄됨');
+assertTrue(instFilledXml.includes('CBAM-KR-0001'), 'CBAM Registry 식별자가 인쇄됨');
+assertTrue(instFilledXml.includes('KRPOH'), 'UN/LOCODE가 인쇄됨');
+assertTrue(instFilledXml.includes('36.019, 129.343'), '좌표가 인쇄됨');
+assertTrue(/있음.{0,20}고로가스 자가소비/.test(instFilledXml.replace(/<[^>]+>/g, ' ')), '폐가스 있음+상세가 인쇄됨');
+assertTrue(!instFilled.issues.some((i) => i.gate === 'G5' && /법정 식별정보/.test(i.message)), '식별정보 채우면 G5 없음');
+assertTrue(!instFilled.issues.some((i) => i.gate === 'G5' && /폐가스/.test(i.message)), '폐가스 채우면 G5 없음');
+
+// 폐가스 「없음」도 유효한 답 — 경고 없이 「없음」 표기.
+const wasteNo = reportModule.createCalculationReport({
+    ...baseInput(),
+    installations: [at({ id: 'i1', name: 'X', local_name: 'X', country: 'KR', operator_name: 'A', operator_reg_number: 'B', cbam_registry_id: 'C', unlocode: 'D', latitude: '1', longitude: '2', waste_gases: 'NO' })],
+});
+const wasteNoXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await wasteNo.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(wasteNoXml.includes('폐가스를 생산·사용하지 않는다'), '폐가스 「없음」이 명시적으로 표기됨');
+assertTrue(!wasteNo.issues.some((i) => i.gate === 'G5' && /폐가스/.test(i.message)), '폐가스 「없음」 선택 시 경고 없음');
+
+console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4·R5·R6 회귀 + 부문특정 파라미터 + 전력 EF 산정근거 + 운영자 식별·폐가스).');
