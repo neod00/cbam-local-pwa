@@ -150,6 +150,7 @@ const prelude = ['const { strToU8, zipSync, strFromU8, unzipSync } = fflate;'].c
     // cbam-product-rules 가 import 하므로 반드시 그 앞에 온다.
     'src/lib/cn-master.generated.ts',
     'src/lib/cbam-product-rules.ts',
+    'src/lib/sector-parameters.ts',
     'src/lib/reporting-scope.ts',
     'src/lib/reference-workbooks.ts',
     'src/lib/source-stream-calculation.ts',
@@ -382,6 +383,14 @@ const filled = reportModule.createCalculationReport({
         evidence: [{ item: '도시가스 요금청구서', proves: '활동자료 89.13 t', custodian: '경영지원팀', status: '확보' }],
         transpositions: [{ source_stream_id: 's1', source_unit: 'MJ', source_quantity: '4,278,240', conversion_note: '÷ 48,000 MJ/t', measurement_method: '정산용 계량기', data_quality: '상업 거래용 계량', ncv_source: 'IPCC 2006 Guidelines Vol.2 Table 1.2', ef_source: 'IPCC 2006 Guidelines Vol.2 Table 1.4' }],
         electricity_ef_meta: [{ process_id: 'proc1', publisher: '집행위', document: 'Country EF list', vintage: '2026' }],
+        // baseProduct(용접강관)는 「Iron or steel products」라 부문특정 파라미터 4건을 요구한다 —
+        // 「완전 입력」이 진짜 완전하려면 이것도 채워야 G5가 0이 된다(제6.5장 도입 후).
+        sector_parameters: [
+            { product_id: 'p1', param_key: 'reducing_agent', value: '코크스' },
+            { product_id: 'p1', param_key: 'alloy_mn_cr_ni', value: '1.2' },
+            { product_id: 'p1', param_key: 'scrap_per_t', value: '0.15' },
+            { product_id: 'p1', param_key: 'preconsumer_scrap_pct', value: '80' },
+        ],
         declaration: { name: '박지훈', position: 'CBAM 담당', date: '2027-01-15' },
     },
 });
@@ -897,8 +906,43 @@ assertTrue(ironOreXml.includes('CBAM 인증서 산정 기준 SEE에 포함해 �
 // 앱의 규칙 엔진은 「공식 목록에 없다」는 조회 사실만 말하고 확정기간 근거를 유보하는데,
 // 보고서가 그 유보를 벗겨 「제외되어」로 인쇄했다.
 assertTrue(!okXml.includes('CBAM 전구물질 범위에서 제외되어'), '고철 제외를 규정 사실로 단정하지 않음');
-assertTrue(okXml.includes('CN 목록에 없어 본 산정에서 전구물질로 가산하지 않았다'), '고철은 조회 사실만 진술');
-assertTrue(okXml.includes('부재가 곧 명시적 배제는 아니며'), '고철 서술이 목록 부재의 한계를 유지');
+// 고철이 **실제로 입력됐을 때만** 쓴다. 없는 프로젝트에서 「가산하지 않았다」고 쓰면 하지 않은 판정을
+// 서술하는 것이고, 「확인 필요(규정)」까지 붙어 존재하지 않는 규정 공백이 14.1 등록부를 부풀린다.
+// 첫 판이 이 조건을 빠뜨려, 제9장에서 고친 실패를 제5장에서 되풀이했다(R6 자체 결함).
+assertTrue(!okXml.includes('CN 목록에 없어 본 산정에서 전구물질로 가산하지 않았다'), '고철이 없으면 고철 문단도 없음');
+const scrapPrecursor = at({ ...basePrecursor, id: 'prScrap', name: '고철', precursor_cn_code: '72044100' });
+const scrapXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await reportModule.createCalculationReport({
+    ...baseInput(), precursors: [basePrecursor, scrapPrecursor],
+}).blob.arrayBuffer()))['word/document.xml']);
+assertTrue(scrapXml.includes('CN 목록에 없어 본 산정에서 전구물질로 가산하지 않았다'), '고철이 있으면 조회 사실을 진술');
+assertTrue(scrapXml.includes('부재가 곧 명시적 배제는 아니며'), '고철 서술이 목록 부재의 한계를 유지');
+
+// 제8장도 헤더만 있는 빈 표로 두지 않는다 — 제9장에만 이 처리를 넣고 바로 위 장은 빠뜨렸었다.
+assertTrue(scrapXml.includes('전구물질 (CN)'), '전구물질이 있으면 제8장 표는 그대로');
+
+// 13장 「N건」은 **빈 칸 수**여야 한다. G5 경고를 세면 6.2.2가 배출원당 1건만 내므로
+// 「4건」이라 말하고 표에는 6칸이 비어 있다 — 등록부를 가리키는 문장이 대조되지 않는다.
+const gapMatch = okXml.replace(/<[^>]+>/g, '').match(/전력 배출계수 출처\(제7장\) (\d+)건이 아직/);
+assertTrue(Boolean(gapMatch), '13장 투명성이 출처 공백 건수를 인쇄');
+assertEqual(gapMatch[1], '3', '13장 출처 공백 건수가 빈 칸 수(배출원 2칸 + 전력 1칸)와 일치');
+
+// 12.2 「증빙 보관」 행의 표기는 12.1이 채워지면 닫혀야 한다. 무조건이면 앱 어디에도 그것을
+// 지울 입력이 없어, 세 줄 위의 「제12.1장 입력으로 확인한다」가 거짓이 된다.
+assertTrue(okXml.includes('본 사업장의 보관 실태는 확인되지 않았다'), '12.1 미기재면 증빙 보관도 미확인 표기');
+assertTrue(!filledXml2.includes('본 사업장의 보관 실태는 확인되지 않았다'), '12.1이 채워지면 증빙 보관 표기도 닫힘');
+// 12.2가 「실제 실행하는 검사」로 소개하는 정합 검사의 한계를 6.4로 넘긴다(두 장이 어긋나지 않게).
+assertTrue(okXml.includes('직접배출량 대조의 한계는 제6.4장을 따른다'), '12.2가 6.4의 한계를 참조');
+
+// 11장의 해법은 원문 대조가 아니라 사업장 기재다 — 범례상 「확인 필요(규정)」이 아니다.
+assertTrue(!okXml.includes('사업장이 직접 확인해 기재해야 한다 — 확인 필요(규정)'), '11장이 기재 항목을 규정 칸에 올리지 않음');
+assertTrue(okXml.includes('할당대상 판정 기준을 보유하지 않으므로'), '11장 근거는 앱 사실로 유지');
+
+// 부속서 A가 5.4의 기준 SEE 산식을 담는다 — 없으면 「인쇄된 산식으로 기준값이 안 나온다」가 그대로 남는다.
+assertTrue(okXml.includes('제품 SEE(간접) = 자체 간접배출'), '부속서 A에 간접 SEE 산식');
+assertTrue(okXml.includes('CBAM 인증서 산정 기준 SEE = SEE(직접) [간접 비관련]'), '부속서 A에 기준 SEE 유도');
+
+// 1장 마무리 문장이 라벨 3종을 모두 덮는다(UNDETERMINED 누락 방지).
+assertTrue(okXml.includes('비관련·판정 불가 품목에서만 정보 목적 값이다'), '1장 문장이 판정 불가 분기까지 설명');
 
 // [P1] 12.2 QA/QC — 도구가 실행하는 검사와, 도구가 확인한 적 없는 사업장 절차를 구분한다.
 assertTrue(okXml.includes('사업장 (권고)'), '12.2가 사업장 절차를 권고로 구분');
@@ -920,6 +964,14 @@ assertTrue(!noPrecursorXml.includes('대체 가능한 공식 기본값을 찾지
 assertTrue(noPrecursorXml.includes('DV 대체 민감도의 대상이 없다'), '전구물질 0건은 해당 없음으로 진술');
 assertTrue(noPrecursorXml.includes('구매 전구물질이 없어 공식 기본값(DV) 대조 대상이 없다'), '9장 서문이 하지 않은 대조를 서술하지 않음');
 assertTrue(!noPrecursorXml.includes('markup 적용 여부·방식은 확인 필요(규정)'), '적용하지 않은 DV의 규정 공백을 등록부에 올리지 않음');
+// 제8장도 헤더만 있는 빈 표로 두지 않는다 — 제9장에만 이 처리를 넣고 바로 위 장은 빠뜨렸었다.
+assertTrue(noPrecursorXml.includes('구매 전구물질이 없다 — 해당 없음'), '제8장이 전구물질 0건을 명시');
+// 같은 사실을 장 안에서 되풀이하지 않는다(서문 + 9.2로 충분).
+assertEqual(
+    (noPrecursorXml.replace(/<[^>]+>/g, '').match(/구매 전구물질이 없어/g) ?? []).length,
+    2,
+    '제9장이 「전구물질 없음」을 서문·9.2 두 번만 말함'
+);
 // 반대 방향 — 전구물질이 있는데 DV 행을 못 찾은 경우는 **진짜** 조회 실패이므로 그 문장이 남아야 한다.
 assertTrue(dvXml.includes('markup을 포함한'), 'R6 전제: 전구물질이 있으면 9.2 민감도가 정상 산출');
 // 대조 대상이 0건이면 워크북 미연결도 결손이 아니다. 채울 수 없는 항목을 등록부에 남기지 않는다.
@@ -931,6 +983,12 @@ const noPrecursorNoDv = reportModule.createCalculationReport({
 });
 const noPrecursorNoDvXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await noPrecursorNoDv.blob.arrayBuffer()))['word/document.xml']);
 assertTrue(!noPrecursorNoDvXml.includes('공식 기본값 워크북을 연결한 뒤 보고서를 다시 생성하세요'), '전구물질 0건에서 워크북 미연결을 결손으로 세지 않음');
+// 워크북 미연결 분기에서도 「전구물질 없음」을 되풀이하지 않는다 — 서문이 이미 말했다.
+assertEqual(
+    (noPrecursorNoDvXml.replace(/<[^>]+>/g, '').match(/구매 전구물질이 없어/g) ?? []).length,
+    1,
+    '워크북 미연결 + 전구물질 0건에서 제9장이 같은 사실을 한 번만 말함'
+);
 assertTrue(!noPrecursorNoDv.issues.some((issue) => issue.gate === 'G6'), '전구물질 0건에서 G6 경고를 띄우지 않음');
 // 전구물질이 있는데 워크북이 없으면 그건 **진짜** 결손이다 — 반대 방향도 잠근다.
 const withPrecursorNoDv = reportModule.createCalculationReport(baseInput());
@@ -1002,4 +1060,51 @@ assertTrue(!okXml.includes('소계·총계 표시값과 마지막 자리에서 �
 const summaryRoundingWarns = roundingCase.issues.filter((issue) => issue.gate === 'G1' && /반올림 표기/.test(issue.message)).length;
 assertEqual(summaryRoundingWarns, 1, '반올림 경고가 요약장 추가로 중복 계상되지 않음(10장이 이미 밀어 넣는다)');
 
-console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4·R5·R6 회귀).');
+// ---------------- 부문특정 파라미터 (제6.5장, 2025/2547 ANNEX IV point 2) ----------------
+// 씨밤이 2547 검증심사의 단일 최대 결함: 철강제품에 규정이 요구하는 파라미터가 보고서에 없었고
+// 14.1 등록부에도 안 잡혀 앱이 「빠진 사실 자체를 몰랐다」. 이 장은 요구를 조회해 표기하고
+// 미입력값을 「기재 필요」로 등록부에 흘려보낸다.
+
+// baseInput 제품 = 용접강관 CN 73063077 → 품목군 「Iron or steel products」 → 4개 파라미터 요구.
+assertTrue(okXml.includes('6.5 부문특정 파라미터'), '제6.5장이 존재');
+assertTrue(okXml.includes('품목군 「Iron or steel products」'), '철강제품의 품목군을 표기');
+for (const label of ['주 환원제', 'Mn·Cr·Ni', '스크랩', 'pre-consumer 스크랩']) {
+    assertTrue(okXml.includes(label), `철강제품 부문특정 파라미터 「${label}」가 인쇄됨`);
+}
+// 원문 근거를 verbatim으로 병기해 검증인이 대조 가능해야 한다.
+assertTrue(okXml.includes('% of scrap that is pre-consumer scrap.'), '규정 원문 근거를 verbatim 병기');
+// 미입력이면 「기재 필요」 → scanOutstandingItems가 등록부에 집계 → G5 경고.
+assertTrue(ok.issues.some((i) => i.gate === 'G5' && /제6\.5장:/.test(i.message)), '부문특정 파라미터 미입력에 G5 경고');
+
+// [핵심 회귀] 이 4건이 14.1 등록부에 **실제로 집계**돼야 한다 — 정직성 그물을 빠져나가지 않도록.
+const sectorRegisterOk = okXml.replace(/<[^>]+>/g, ' ').match(/미해소 표기는 총 (\d+)건/);
+const withoutSectorInput = reportModule.createCalculationReport({
+    ...baseInput(),
+    reportInputs: { sector_parameters: [
+        { product_id: 'p1', param_key: 'reducing_agent', value: '코크스' },
+        { product_id: 'p1', param_key: 'alloy_mn_cr_ni', value: '1.2' },
+        { product_id: 'p1', param_key: 'scrap_per_t', value: '0.15' },
+        { product_id: 'p1', param_key: 'preconsumer_scrap_pct', value: '80' },
+    ] },
+});
+const filledSectorXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await withoutSectorInput.blob.arrayBuffer()))['word/document.xml']);
+const sectorRegisterFilled = filledSectorXml.replace(/<[^>]+>/g, ' ').match(/미해소 표기는 총 (\d+)건/);
+assertTrue(Boolean(sectorRegisterOk) && Boolean(sectorRegisterFilled), '등록부 총계 파싱');
+assertEqual(
+    Number(sectorRegisterOk[1]) - Number(sectorRegisterFilled[1]),
+    4,
+    '부문특정 파라미터 4건이 등록부에 집계됨(채우면 4건 감소)',
+);
+// 채우면 값이 인쇄되고 그 파라미터의 G5 경고가 사라진다.
+assertTrue(filledSectorXml.includes('코크스'), '입력한 부문특정 파라미터 값이 인쇄됨');
+assertTrue(!withoutSectorInput.issues.some((i) => i.gate === 'G5' && /제6\.5장:/.test(i.message)), '채우면 부문특정 G5 경고 없음');
+
+// 소결광(Sintered Ore)은 point 2에서 요구 파라미터가 없다 — 「해당 없음」이지 「기재 필요」가 아니다.
+assertTrue(ironOreXml.includes('6.5 부문특정 파라미터'), '간접 포함 품목 보고서에도 제6.5장 존재');
+assertTrue(
+    /Sintered Ore.{0,80}요구되는 부문특정 파라미터가 없다 — 해당 없음/.test(ironOreXml.replace(/<[^>]+>/g, ' ')),
+    '소결광은 부문특정 파라미터 「해당 없음」',
+);
+assertTrue(!ironOreXml.includes('pre-consumer 스크랩'), '소결광에 철강제품 파라미터가 새지 않음');
+
+console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4·R5·R6 회귀 + 부문특정 파라미터).');

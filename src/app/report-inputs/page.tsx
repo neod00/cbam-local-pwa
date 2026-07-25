@@ -8,6 +8,7 @@ import {
     setLocalSetting,
 } from '@/lib/local-db';
 import type {
+    Product,
     ProductionProcess,
     ReportCarbonPriceRow,
     ReportEvidenceRow,
@@ -15,6 +16,8 @@ import type {
     ReportRnrRow,
     SourceStream,
 } from '@/lib/local-db';
+import { getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
+import { getSectorParameters, SECTOR_PARAM_CITATION } from '@/lib/sector-parameters';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -33,6 +36,7 @@ export default function ReportInputsPage() {
     const [inputs, setInputs] = useState<ReportInputs>(emptyInputs);
     const [sourceStreams, setSourceStreams] = useState<SourceStream[]>([]);
     const [processes, setProcesses] = useState<ProductionProcess[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [savedAt, setSavedAt] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -42,10 +46,11 @@ export default function ReportInputsPage() {
 
         async function load() {
             try {
-                const [stored, streams, processList] = await Promise.all([
+                const [stored, streams, processList, productList] = await Promise.all([
                     getLocalSetting<ReportInputs>(REPORT_INPUTS_SETTING_KEY),
                     listLocalItems('source_streams'),
                     listLocalItems('processes'),
+                    listLocalItems('products'),
                 ]);
 
                 if (cancelled) {
@@ -55,6 +60,7 @@ export default function ReportInputsPage() {
                 setInputs({ ...emptyInputs(), ...(stored ?? {}) });
                 setSourceStreams(streams);
                 setProcesses(processList);
+                setProducts(productList);
             } catch {
                 if (!cancelled) {
                     setError('보고서 입력을 불러오지 못했습니다.');
@@ -289,6 +295,57 @@ export default function ReportInputsPage() {
                                     <input className={inputClass} value={entry.document ?? ''} placeholder="문서명" onChange={(event) => update({ document: event.target.value })} />
                                     <input className={inputClass} value={entry.vintage ?? ''} placeholder="공표연도" onChange={(event) => update({ vintage: event.target.value })} />
                                 </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </SectionCard>
+
+            <SectionCard title="부문특정 파라미터 (제6.5장)" description={`품목군마다 배출량보고서에 반드시 포함해야 하는 값입니다(${SECTOR_PARAM_CITATION}). 어떤 값이 필요한지는 제품의 품목군이 정합니다. 미입력이면 보고서 제14.1장 등록부에 집계됩니다.`}>
+                {products.length === 0 && <p className="text-sm text-slate-500">등록된 제품이 없습니다. 먼저 제품·CN을 등록하세요.</p>}
+                <div className="space-y-4">
+                    {products.map((product) => {
+                        const applicability = getIndirectEmissionsApplicability(product);
+                        const good = applicability.good ?? (applicability.goods?.length === 1 ? applicability.goods[0] : undefined);
+                        const params = getSectorParameters(good);
+
+                        if (!good) {
+                            return (
+                                <div key={product.id} className="rounded-xl border border-slate-200 p-3">
+                                    <p className="text-sm font-semibold text-slate-900">{product.name}</p>
+                                    <p className="text-xs text-amber-700">품목군이 단일하게 확정되지 않았습니다 — 8자리 CN을 기재하면 요구 파라미터가 표시됩니다.</p>
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <div key={product.id} className="rounded-xl border border-slate-200 p-3">
+                                <p className="text-sm font-semibold text-slate-900">{product.name} <span className="font-normal text-slate-500">· 품목군 「{good}」</span></p>
+                                {params.length === 0 ? (
+                                    <p className="text-xs text-slate-500">이 품목군은 요구되는 부문특정 파라미터가 없습니다 — 해당 없음.</p>
+                                ) : (
+                                    <div className="mt-2 space-y-2">
+                                        {params.map((param) => {
+                                            const entry = inputs.sector_parameters?.find((row) => row.product_id === product.id && row.param_key === param.key);
+
+                                            // 함수형 업데이트 — 한 제품의 여러 파라미터를 빠르게 입력해도
+                                            // stale closure로 서로 덮어쓰지 않도록 current에서 계산한다.
+                                            function update(value: string) {
+                                                setInputs((current) => {
+                                                    const rows = (current.sector_parameters ?? []).filter((row) => !(row.product_id === product.id && row.param_key === param.key));
+                                                    return { ...current, sector_parameters: [...rows, { product_id: product.id, param_key: param.key, value }] };
+                                                });
+                                            }
+
+                                            return (
+                                                <div key={param.key}>
+                                                    <label className={labelClass}>{param.label}{param.unit ? ` (${param.unit})` : ''}</label>
+                                                    <input className={inputClass} value={entry?.value ?? ''} placeholder="기재 필요" onChange={(event) => update(event.target.value)} />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         );
                     })}
