@@ -18,6 +18,8 @@ import type {
 } from '@/lib/local-db';
 import { getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
 import { getSectorParameters, SECTOR_PARAM_CITATION } from '@/lib/sector-parameters';
+import { ELECTRICITY_EF_BASIS_LABEL, isActualBasis } from '@/lib/electricity-ef-basis';
+import type { ElectricityEfBasis } from '@/lib/local-db';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -275,26 +277,94 @@ export default function ReportInputsPage() {
                 </div>
             </SectionCard>
 
-            <SectionCard title="전력 배출계수 출처 (제7장)" description="공표기관·문서명·공표연도가 없으면 검증인이 계수를 대조할 수 없습니다.">
+            <SectionCard title="전력 배출계수 산정근거·출처 (제7장)" description="전력계수가 계통 평균(default)인지 실측(actual)인지 밝혀야 검증인이 대조합니다(2025/2547 D.4·Article 9). 간접배출이 인증서 기준에 포함되는 품목(예: 소결광)에서는 이 계수가 기준값에 직접 들어갑니다.">
                 {processes.length === 0 && <p className="text-sm text-slate-500">등록된 생산공정이 없습니다.</p>}
                 <div className="space-y-4">
                     {processes.map((process) => {
                         const entry = inputs.electricity_ef_meta?.find((item) => item.process_id === process.id) ?? { process_id: process.id };
+                        const basis: ElectricityEfBasis = entry.basis ?? 'UNCLASSIFIED';
 
+                        // 함수형 업데이트 — 같은 공정의 여러 칸을 빠르게 바꿔도 서로 덮어쓰지 않는다.
                         function update(next: Partial<typeof entry>) {
-                            const rows = (inputs.electricity_ef_meta ?? []).filter((item) => item.process_id !== process.id);
-                            patch({ electricity_ef_meta: [...rows, { ...entry, ...next }] });
+                            setInputs((current) => {
+                                const rows = (current.electricity_ef_meta ?? []).filter((item) => item.process_id !== process.id);
+                                const prev = current.electricity_ef_meta?.find((item) => item.process_id === process.id) ?? { process_id: process.id };
+                                return { ...current, electricity_ef_meta: [...rows, { ...prev, ...next }] };
+                            });
+                        }
+
+                        const sources = entry.sources ?? [];
+
+                        function updateSource(index: number, next: Partial<(typeof sources)[number]>) {
+                            setInputs((current) => {
+                                const rows = (current.electricity_ef_meta ?? []).filter((item) => item.process_id !== process.id);
+                                const prev = current.electricity_ef_meta?.find((item) => item.process_id === process.id) ?? { process_id: process.id };
+                                const list = [...(prev.sources ?? [])];
+                                list[index] = { ...list[index], ...next };
+                                return { ...current, electricity_ef_meta: [...rows, { ...prev, sources: list }] };
+                            });
+                        }
+
+                        function addSource() {
+                            setInputs((current) => {
+                                const rows = (current.electricity_ef_meta ?? []).filter((item) => item.process_id !== process.id);
+                                const prev = current.electricity_ef_meta?.find((item) => item.process_id === process.id) ?? { process_id: process.id };
+                                return { ...current, electricity_ef_meta: [...rows, { ...prev, sources: [...(prev.sources ?? []), {}] }] };
+                            });
+                        }
+
+                        function removeSource(index: number) {
+                            setInputs((current) => {
+                                const rows = (current.electricity_ef_meta ?? []).filter((item) => item.process_id !== process.id);
+                                const prev = current.electricity_ef_meta?.find((item) => item.process_id === process.id) ?? { process_id: process.id };
+                                return { ...current, electricity_ef_meta: [...rows, { ...prev, sources: (prev.sources ?? []).filter((_, i) => i !== index) }] };
+                            });
                         }
 
                         return (
                             <div key={process.id} className="rounded-xl border border-slate-200 p-3">
                                 <p className="text-sm font-semibold text-slate-900">{process.name}</p>
                                 <p className="text-xs text-slate-500">전력 {process.electricity_mwh} MWh · EF {process.electricity_ef_tco2e_per_mwh} tCO2e/MWh</p>
+
+                                <div className="mt-2">
+                                    <label className={labelClass}>산정근거 (electricity EF basis)</label>
+                                    <select className={inputClass} value={basis} onChange={(event) => update({ basis: event.target.value as ElectricityEfBasis })}>
+                                        {(['UNCLASSIFIED', 'GRID_AVERAGE', 'DIRECT_LINK', 'PPA', 'SELF_GENERATION', 'MULTI_SOURCE'] as ElectricityEfBasis[]).map((value) => (
+                                            <option key={value} value={value}>{ELECTRICITY_EF_BASIS_LABEL[value]}</option>
+                                        ))}
+                                    </select>
+                                    <p className="mt-1 text-xs text-slate-500">기본은 계통 평균입니다. 실측(직접연결·PPA)은 D.4.3 증빙이 있을 때만. 모르면 「미분류」로 두세요 — 앱이 대신 정하지 않습니다.</p>
+                                </div>
+
                                 <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
                                     <input className={inputClass} value={entry.publisher ?? ''} placeholder="공표기관" onChange={(event) => update({ publisher: event.target.value })} />
                                     <input className={inputClass} value={entry.document ?? ''} placeholder="문서명" onChange={(event) => update({ document: event.target.value })} />
                                     <input className={inputClass} value={entry.vintage ?? ''} placeholder="공표연도" onChange={(event) => update({ vintage: event.target.value })} />
                                 </div>
+
+                                {isActualBasis(basis) && (
+                                    <label className="mt-3 flex items-start gap-2 text-xs text-slate-700">
+                                        <input type="checkbox" className="mt-0.5" checked={entry.evidence_confirmed ?? false} onChange={(event) => update({ evidence_confirmed: event.target.checked })} />
+                                        <span>D.4.3 증빙(단선도·양쪽 스마트미터·계약 등)을 검증인에게 제출했습니다. 미체크 시 보고서에 「확인 필요(자료)」로 표기됩니다.</span>
+                                    </label>
+                                )}
+
+                                {basis === 'MULTI_SOURCE' && (
+                                    <div className="mt-3 space-y-2">
+                                        <p className="text-xs font-semibold text-slate-600">공급원별 내역 (Article 9 가중평균)</p>
+                                        {sources.length === 0 && <p className="text-xs text-slate-500">공급원을 추가하세요. 앱이 가중평균 계수를 자동 계산합니다.</p>}
+                                        {sources.map((row, index) => (
+                                            <div key={index} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto]">
+                                                <input className={inputClass} value={row.name ?? ''} placeholder="공급원명" onChange={(event) => updateSource(index, { name: event.target.value })} />
+                                                <input className={inputClass} value={row.country ?? ''} placeholder="원산지국" onChange={(event) => updateSource(index, { country: event.target.value })} />
+                                                <input className={inputClass} value={row.mwh ?? ''} placeholder="전력량 MWh" onChange={(event) => updateSource(index, { mwh: event.target.value })} />
+                                                <input className={inputClass} value={row.ef ?? ''} placeholder="공급원 EF" onChange={(event) => updateSource(index, { ef: event.target.value })} />
+                                                <button type="button" className="rounded-lg border border-slate-200 px-2 text-slate-500 hover:text-red-600" onClick={() => removeSource(index)}><Trash2 className="h-4 w-4" /></button>
+                                            </div>
+                                        ))}
+                                        <Button variant="ghost" onClick={addSource}><Plus className="mr-1 h-4 w-4" />공급원 추가</Button>
+                                    </div>
+                                )}
                             </div>
                         );
                     })}

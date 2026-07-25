@@ -151,6 +151,7 @@ const prelude = ['const { strToU8, zipSync, strFromU8, unzipSync } = fflate;'].c
     'src/lib/cn-master.generated.ts',
     'src/lib/cbam-product-rules.ts',
     'src/lib/sector-parameters.ts',
+    'src/lib/electricity-ef-basis.ts',
     'src/lib/reporting-scope.ts',
     'src/lib/reference-workbooks.ts',
     'src/lib/source-stream-calculation.ts',
@@ -382,7 +383,7 @@ const filled = reportModule.createCalculationReport({
         carbon_price: [{ target: '본 사업장', applicable: 'TO_CONFIRM', note: '법인 단위 확인 필요', evidence_status: 'pending' }],
         evidence: [{ item: '도시가스 요금청구서', proves: '활동자료 89.13 t', custodian: '경영지원팀', status: '확보' }],
         transpositions: [{ source_stream_id: 's1', source_unit: 'MJ', source_quantity: '4,278,240', conversion_note: '÷ 48,000 MJ/t', measurement_method: '정산용 계량기', data_quality: '상업 거래용 계량', ncv_source: 'IPCC 2006 Guidelines Vol.2 Table 1.2', ef_source: 'IPCC 2006 Guidelines Vol.2 Table 1.4' }],
-        electricity_ef_meta: [{ process_id: 'proc1', publisher: '집행위', document: 'Country EF list', vintage: '2026' }],
+        electricity_ef_meta: [{ process_id: 'proc1', basis: 'GRID_AVERAGE', publisher: '집행위', document: 'Country EF list', vintage: '2026' }],
         // baseProduct(용접강관)는 「Iron or steel products」라 부문특정 파라미터 4건을 요구한다 —
         // 「완전 입력」이 진짜 완전하려면 이것도 채워야 G5가 0이 된다(제6.5장 도입 후).
         sector_parameters: [
@@ -926,6 +927,18 @@ const gapMatch = okXml.replace(/<[^>]+>/g, '').match(/전력 배출계수 출처
 assertTrue(Boolean(gapMatch), '13장 투명성이 출처 공백 건수를 인쇄');
 assertEqual(gapMatch[1], '3', '13장 출처 공백 건수가 빈 칸 수(배출원 2칸 + 전력 1칸)와 일치');
 
+// 전력 산정근거 도입으로 제7장 G5 경고가 늘어, ok 픽스처에선 「칸 수」와 「경고 수」가 우연히 같아졌다.
+// 산정근거를 채워 산정근거 경고를 없앤 픽스처로 둘을 갈라, 「칸 수여야 한다」는 불변식을 다시 잠근다.
+const basisSet = reportModule.createCalculationReport({
+    ...baseInput(),
+    reportInputs: { electricity_ef_meta: [{ process_id: 'proc1', basis: 'GRID_AVERAGE' }] },
+});
+const basisSetXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await basisSet.blob.arrayBuffer()))['word/document.xml']);
+const basisGap = basisSetXml.replace(/<[^>]+>/g, '').match(/전력 배출계수 출처\(제7장\) (\d+)건이 아직/);
+assertTrue(Boolean(basisGap), '산정근거만 채운 픽스처도 출처 공백 건수를 인쇄');
+// 칸 수 = 6.2.2 2칸 + 전력 출처 1칸 = 3. 경고 수(옛 방식)라면 6.2.2 1건 + 전력 출처 1건 = 2 (산정근거 경고 없음).
+assertEqual(basisGap[1], '3', '13장 건수는 칸 수(3) — 경고 수(2)로 되돌리면 어긋난다');
+
 // 12.2 「증빙 보관」 행의 표기는 12.1이 채워지면 닫혀야 한다. 무조건이면 앱 어디에도 그것을
 // 지울 입력이 없어, 세 줄 위의 「제12.1장 입력으로 확인한다」가 거짓이 된다.
 assertTrue(okXml.includes('본 사업장의 보관 실태는 확인되지 않았다'), '12.1 미기재면 증빙 보관도 미확인 표기');
@@ -1107,4 +1120,67 @@ assertTrue(
 );
 assertTrue(!ironOreXml.includes('pre-consumer 스크랩'), '소결광에 철강제품 파라미터가 새지 않음');
 
-console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4·R5·R6 회귀 + 부문특정 파라미터).');
+// ---------------- 전력 EF 산정근거 (제7장, 2025/2547 D.4 / Article 9) ----------------
+// 씨밤이 2547 검증심사 P1: 소결광은 간접이 인증서 기준에 포함되므로 전력계수가 기준값의 6.7%.
+// 그런데 그 계수가 계통(default)인지 실측(actual)인지 밝히지 않아 검증 불가였다.
+
+// 기본(미분류): 산정근거 열이 「미분류」, 간접 포함 품목(소결광)은 강조 경고, G5.
+// 헤더 순서로 검사 — 본문 산문에도 「산정근거」가 나오므로 단순 포함으론 열 삭제를 못 잡는다.
+assertTrue(
+    /전력 배출계수[\s\S]{0,30}산정근거[\s\S]{0,30}간접배출량/.test(okXml.replace(/<[^>]+>/g, ' ')),
+    '제7장 표 헤더에 산정근거 열(전력 배출계수↔간접배출량 사이)',
+);
+assertTrue(ironOreXml.includes('미분류'), '산정근거 미입력이면 「미분류」');
+assertTrue(
+    /인증서 기준 SEE에 포함되므로.{0,40}기준값에 직접 들어간다/.test(ironOreXml.replace(/<[^>]+>/g, ' ')),
+    '간접 포함 품목은 계수 공백이 기준값 미검증임을 강조',
+);
+assertTrue(ironOreReport.issues.some((i) => i.gate === 'G5' && /산정근거가 분류되지 않았/.test(i.message)), '산정근거 미분류에 G5 경고');
+
+// 계통 평균 + 출처 → 강조 경고 없이 대조 가능.
+const gridReport = reportModule.createCalculationReport({
+    ...baseInput(),
+    reportInputs: { electricity_ef_meta: [{ process_id: 'proc1', basis: 'GRID_AVERAGE', publisher: '환경부', document: '국가 전력 EF', vintage: '2025' }] },
+});
+const gridXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await gridReport.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(gridXml.includes('원산지국 계통 평균 계수를 적용했다(D.4)'), '계통 평균 안내');
+assertTrue(!gridReport.issues.some((i) => i.gate === 'G5' && /산정근거가 분류되지 않았/.test(i.message)), '계통 선택 시 미분류 경고 없음');
+
+// 직접연결(actual) → D.4.3 증빙 목록(원문 verbatim) + 제출 미확인 시 G6.
+const linkReport = reportModule.createCalculationReport({
+    ...baseInput(),
+    reportInputs: { electricity_ef_meta: [{ process_id: 'proc1', basis: 'DIRECT_LINK', publisher: '자가', document: '단선도', vintage: '2026' }] },
+});
+const linkXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await linkReport.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(linkXml.includes('D.4.3 증빙'), '직접연결 시 D.4.3 증빙 목록 인쇄');
+assertTrue(linkXml.includes('single line diagram demonstrating the existence of a direct technical link'), 'D.4.3 증빙 원문 verbatim');
+assertTrue(linkReport.issues.some((i) => i.gate === 'G6' && /D\.4\.3/.test(i.message)), '증빙 제출 미확인 시 G6');
+// 증빙 제출 표시하면 G6 사라진다.
+const linkConfirmed = reportModule.createCalculationReport({
+    ...baseInput(),
+    reportInputs: { electricity_ef_meta: [{ process_id: 'proc1', basis: 'DIRECT_LINK', publisher: '자가', document: '단선도', vintage: '2026', evidence_confirmed: true }] },
+});
+assertTrue(!linkConfirmed.issues.some((i) => i.gate === 'G6' && /D\.4\.3/.test(i.message)), '증빙 제출 표시하면 G6 없음');
+
+// 다출처 → Article 9 가중평균 자동계산 + 공정 계수와 대조.
+const baseEf = baseResult.own_indirect_see; // 참고용
+const multiOk = reportModule.createCalculationReport({
+    ...baseInput(),
+    reportInputs: { electricity_ef_meta: [{ process_id: 'proc1', basis: 'MULTI_SOURCE', publisher: 'X', document: 'Y', vintage: '2026',
+        sources: [{ name: 'A', country: 'KR', mwh: '1000', ef: '0.459' }, { name: 'B', country: 'KR', mwh: '600', ef: '0.459' }] }] },
+});
+const multiOkXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await multiOk.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(multiOkXml.includes('Article 9 가중평균'), '다출처 시 Article 9 가중평균 인쇄');
+// baseProcess EF = 0.459 → 두 공급원 모두 0.459라 가중평균 0.459, 정합.
+assertTrue(multiOkXml.includes('두 값이 정합한다'), '가중평균이 공정 계수와 정합하면 정합 표기');
+assertTrue(!multiOk.issues.some((i) => i.gate === 'G6' && /어긋납니다/.test(i.message)), '정합 시 불일치 경고 없음');
+
+// 다출처 불일치 → G6.
+const multiBad = reportModule.createCalculationReport({
+    ...baseInput(),
+    reportInputs: { electricity_ef_meta: [{ process_id: 'proc1', basis: 'MULTI_SOURCE', publisher: 'X', document: 'Y', vintage: '2026',
+        sources: [{ name: 'A', country: 'KR', mwh: '1000', ef: '0.9' }, { name: 'B', country: 'KR', mwh: '600', ef: '0.1' }] }] },
+});
+assertTrue(multiBad.issues.some((i) => i.gate === 'G6' && /어긋납니다/.test(i.message)), '가중평균이 공정 계수와 어긋나면 G6');
+
+console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4·R5·R6 회귀 + 부문특정 파라미터 + 전력 EF 산정근거).');
