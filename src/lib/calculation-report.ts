@@ -594,24 +594,62 @@ function summarySection(input: CalculationReportInput) {
     };
 }
 
-function installationSection(input: CalculationReportInput) {
+function installationSection(input: CalculationReportInput, gateIssues: ReportGateIssue[]) {
     const installation = input.installations[0];
+    // 운영자(법인)와 사업장(공장)은 별개 당사자다. ANNEX IV point 1.1이 둘을 나눠 요구한다.
+    const coords = installation?.latitude && installation?.longitude ? `${installation.latitude}, ${installation.longitude}` : '';
     const rows: Array<[string, string]> = [
+        ['운영자 (법인) 명', installation?.operator_name || PLACEHOLDER],
+        ['법인/활동 등록번호', installation?.operator_reg_number || PLACEHOLDER],
+        ['운영자 주소 (영문)', installation?.operator_address || PLACEHOLDER],
         ['사업장명 (국문 / 영문)', `${installation?.local_name ?? '-'} / ${installation?.name ?? PLACEHOLDER}`],
+        ['CBAM Registry 설비식별자', installation?.cbam_registry_id || PLACEHOLDER],
         ['경제활동', installation?.economic_activity || PLACEHOLDER],
-        ['주소', [installation?.street, installation?.city, installation?.postcode, installation?.country].filter(Boolean).join(', ') || PLACEHOLDER],
-        ['UN/LOCODE · 좌표', [installation?.unlocode, installation?.latitude && installation?.longitude ? `${installation.latitude}, ${installation.longitude}` : ''].filter(Boolean).join(' · ') || PLACEHOLDER],
+        ['사업장 주소', [installation?.street, installation?.city, installation?.postcode, installation?.country].filter(Boolean).join(', ') || PLACEHOLDER],
+        ['UN/LOCODE', installation?.unlocode || PLACEHOLDER],
+        ['주 배출원 좌표 (위도, 경도)', coords || PLACEHOLDER],
         ['CBAM 담당자', [installation?.authorized_representative_name, installation?.email, installation?.telephone].filter(Boolean).join(' · ') || PLACEHOLDER],
     ];
+
+    // 법정 식별정보 미기재 → 검증인이 반드시 요구하는 항목(ANNEX IV point 1.1). 등록부에 흘려보낸다.
+    const missing: Array<[string, boolean]> = [
+        ['운영자(법인)명', !installation?.operator_name?.trim()],
+        ['법인/활동 등록번호', !installation?.operator_reg_number?.trim()],
+        ['CBAM Registry 설비식별자', !installation?.cbam_registry_id?.trim()],
+        ['UN/LOCODE', !installation?.unlocode?.trim()],
+        ['주 배출원 좌표', !coords],
+    ];
+    for (const [label, isMissing] of missing) {
+        if (isMissing) {
+            gateIssues.push({ gate: 'G5', severity: 'warn', message: `제2장: 법정 식별정보 「${label}」가 비어 있습니다(2025/2547 ANNEX IV point 1.1). 검증인이 반드시 요구합니다.` });
+        }
+    }
+
+    // 폐가스 — 철강은 고로가스·코크스로가스가 핵심이라 반드시 명시해야 한다(없어도 「없음」).
+    const steel = isIronSteelOnly(input);
+    const wasteGases = installation?.waste_gases;
+    let wasteLine: string;
+    if (wasteGases === 'YES') {
+        wasteLine = `있음 — ${installation?.waste_gases_note?.trim() || '상세 기재 필요'}`;
+    } else if (wasteGases === 'NO') {
+        wasteLine = '없음 — 본 사업장은 폐가스를 생산·사용하지 않는다.';
+    } else {
+        wasteLine = '기재 필요 — 폐가스(고로가스·코크스로가스 등) 생산·사용 여부';
+        if (steel) {
+            gateIssues.push({ gate: 'G5', severity: 'warn', message: '제2.1장: 폐가스(고로가스·코크스로가스 등) 생산·사용 여부가 기재되지 않았습니다(2025/2547 A.5·ANNEX II item 5). 철강 사업장은 반드시 명시해야 합니다.' });
+        }
+    }
 
     return [
         paragraph('2. 사업장 정보   Installation Identification', 'Heading1'),
         table(['항목', '내용'], rows, { widths: [2700, 6300], headerShade: SOFT, headerBold: true, repeatHeader: true }),
+        paragraph('운영자(법인)와 사업장(설비)은 별개 당사자로 각각 식별한다(2025/2547 ANNEX IV point 1.1).', 'Note'),
         paragraph('2.1 조직경계 및 산정경계', 'Heading2'),
         paragraph('조직경계는 위 사업장이다. 산정경계는 EU ETS 포괄범위에 기반한 cradle-to-gate의 부분집합이며, 귀속 단위는 생산공정(production process)이다.'),
         table(['구분', '내용'], [
             ['포함', 'CBAM 대상 제품 생산에 귀속되는 연료 연소 배출, 전력 사용에 따른 간접배출, 구매 전구물질의 내재배출'],
             ['제외', '상류 원료 채굴·정련, 사업장 간 운송, 제품 사용·폐기 단계 (CBAM 산정경계 밖 — CFP의 전과정 경계보다 좁음)'],
+            ['폐가스 (waste gases)', wasteLine],
         ], { widths: [2200, 6800], headerShade: SOFT, headerBold: true, repeatHeader: true }),
     ].join('');
 }
@@ -2208,6 +2246,8 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
     }
 
     const { isInterim, issues: dateIssues } = checkIssueDate(input);
+    const installationIssues: ReportGateIssue[] = [];
+    const installationXml = installationSection(input, installationIssues);
     const summary = summarySection(input);
     const processes = processSection(input);
     const activity = activityDataSection(input);
@@ -2228,6 +2268,7 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
         ...checkSinglePeriod(input),
         ...collectEngineWarnings(reportable),
         ...checkBoundaryConsistency(input),
+        ...installationIssues,
         ...summary.gateIssues,
         ...processes.gateIssues,
         ...activity.gateIssues,
@@ -2245,7 +2286,7 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
     const beforeImprovement = [
         coverSection(input, isInterim),
         summary.xml,
-        installationSection(input),
+        installationXml,
         productSection(input),
         processes.xml,
         methodologySection(input),

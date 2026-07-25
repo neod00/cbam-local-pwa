@@ -30,6 +30,15 @@ export interface Installation extends LocalEntity {
   email?: string;
   telephone?: string;
   boundary_json?: Record<string, unknown>;
+  // 운영자(법인) 식별 — 2025/2547 ANNEX IV point 1.1. 사업장(공장)과 별개 당사자다.
+  // 지금까지 앱은 사업장명만 받아 「누구의 보고서인가」를 검증인이 알 수 없었다(씨밤이 검증심사 3번).
+  operator_name?: string;
+  operator_reg_number?: string;
+  operator_address?: string;
+  cbam_registry_id?: string;
+  // 폐가스(고로가스·코크스로가스 등) — 철강 필수 서술(ANNEX II item 5 / A.5(20)). 씨밤이 검증심사 4-1.
+  waste_gases?: 'YES' | 'NO';
+  waste_gases_note?: string;
 }
 
 export type ProductReportingScope =

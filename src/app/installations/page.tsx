@@ -24,6 +24,12 @@ type InstallationDraft = Pick<
     | 'authorized_representative_name'
     | 'email'
     | 'telephone'
+    | 'operator_name'
+    | 'operator_reg_number'
+    | 'operator_address'
+    | 'cbam_registry_id'
+    | 'waste_gases'
+    | 'waste_gases_note'
 >;
 type InstallationErrors = Partial<Record<keyof InstallationDraft, string>>;
 
@@ -42,6 +48,12 @@ const emptyDraft: InstallationDraft = {
     authorized_representative_name: '',
     email: '',
     telephone: '',
+    operator_name: '',
+    operator_reg_number: '',
+    operator_address: '',
+    cbam_registry_id: '',
+    waste_gases: undefined,
+    waste_gases_note: '',
 };
 
 function optionalValue(value: string | undefined): string | undefined {
@@ -65,6 +77,12 @@ function toDraft(installation: Installation): InstallationDraft {
         authorized_representative_name: installation.authorized_representative_name ?? '',
         email: installation.email ?? '',
         telephone: installation.telephone ?? '',
+        operator_name: installation.operator_name ?? '',
+        operator_reg_number: installation.operator_reg_number ?? '',
+        operator_address: installation.operator_address ?? '',
+        cbam_registry_id: installation.cbam_registry_id ?? '',
+        waste_gases: installation.waste_gases,
+        waste_gases_note: installation.waste_gases_note ?? '',
     };
 }
 
@@ -84,6 +102,12 @@ function normalizeDraft(draft: InstallationDraft): Omit<Installation, keyof Inst
         authorized_representative_name: optionalValue(draft.authorized_representative_name),
         email: optionalValue(draft.email),
         telephone: optionalValue(draft.telephone),
+        operator_name: optionalValue(draft.operator_name),
+        operator_reg_number: optionalValue(draft.operator_reg_number),
+        operator_address: optionalValue(draft.operator_address),
+        cbam_registry_id: optionalValue(draft.cbam_registry_id),
+        waste_gases: draft.waste_gases,
+        waste_gases_note: optionalValue(draft.waste_gases_note),
     };
 }
 
@@ -248,6 +272,70 @@ export default function InstallationsPage() {
                                 placeholder="KR"
                                 onChange={(value) => setNewItem({ ...newItem, country: value.toUpperCase() })}
                             />
+                            <FormInput
+                                id="installation-cbam-registry-id"
+                                label="CBAM Registry 설비식별자"
+                                value={newItem.cbam_registry_id ?? ''}
+                                placeholder="CBAM 등록부에 등록된 경우"
+                                onChange={(value) => setNewItem({ ...newItem, cbam_registry_id: value })}
+                            />
+                        </FormSection>
+
+                        <FormSection
+                            title="운영자(법인) 정보"
+                            description="사업장(공장)과 별개로, 보고 책임 주체인 법인을 식별합니다(2025/2547 ANNEX IV). 검증인이 반드시 확인합니다."
+                            badge={<StatusBadge tone="warning">법정 필수</StatusBadge>}
+                        >
+                            <FormInput
+                                id="installation-operator-name"
+                                label="운영자(법인)명"
+                                value={newItem.operator_name ?? ''}
+                                placeholder="예: 현대제철 주식회사"
+                                onChange={(value) => setNewItem({ ...newItem, operator_name: value })}
+                            />
+                            <FormInput
+                                id="installation-operator-reg-number"
+                                label="법인/활동 등록번호"
+                                value={newItem.operator_reg_number ?? ''}
+                                placeholder="사업자등록번호 등"
+                                onChange={(value) => setNewItem({ ...newItem, operator_reg_number: value })}
+                            />
+                            <FormInput
+                                id="installation-operator-address"
+                                label="운영자 주소 (영문)"
+                                value={newItem.operator_address ?? ''}
+                                placeholder="법인 본사 영문 주소"
+                                onChange={(value) => setNewItem({ ...newItem, operator_address: value })}
+                            />
+                        </FormSection>
+
+                        <FormSection
+                            title="폐가스 (waste gases)"
+                            description="고로가스·코크스로가스 등. 철강 사업장은 반드시 명시해야 합니다(없어도 「없음」)."
+                            badge={<StatusBadge tone="neutral">철강 필수</StatusBadge>}
+                        >
+                            <div>
+                                <label htmlFor="installation-waste-gases" className="block text-sm font-medium text-slate-700">폐가스 생산·사용 여부</label>
+                                <select
+                                    id="installation-waste-gases"
+                                    className={fieldClass}
+                                    value={newItem.waste_gases ?? ''}
+                                    onChange={(event) => setNewItem({ ...newItem, waste_gases: (event.target.value || undefined) as Installation['waste_gases'] })}
+                                >
+                                    <option value="">미기재</option>
+                                    <option value="NO">없음</option>
+                                    <option value="YES">있음</option>
+                                </select>
+                            </div>
+                            {newItem.waste_gases === 'YES' && (
+                                <FormInput
+                                    id="installation-waste-gases-note"
+                                    label="폐가스 상세 (종류·연계 설비)"
+                                    value={newItem.waste_gases_note ?? ''}
+                                    placeholder="예: 고로가스 자가소비, 코크스로가스 일부 인접설비 수출"
+                                    onChange={(value) => setNewItem({ ...newItem, waste_gases_note: value })}
+                                />
+                            )}
                         </FormSection>
 
                         <FormSection
