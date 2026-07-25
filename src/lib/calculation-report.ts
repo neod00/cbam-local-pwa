@@ -510,7 +510,7 @@ function coverSection(input: CalculationReportInput, isInterim: boolean) {
             : PLACEHOLDER],
         // 품목군 분야를 조회해 분기한다. 고정 리터럴이면 비철강 품목에서 거짓이 된다(씨밤이 P3).
         ['대상 온실가스 (GHG scope)', isIronSteelOnly(input)
-            ? 'CO2 (조회된 품목군이 모두 Iron and steel 분야 — 해당 분야의 대상 GHG가 CO2인지는 확인 필요(규정)). 본문 tCO2e = tCO2'
+            ? 'CO2 (조회된 품목군이 모두 Iron and steel 분야이며, 2025/2547 ANNEX I Table 1이 철강계 품목군의 대상 온실가스를 Carbon dioxide로 명시한다). 본문 tCO2e = tCO2'
             : '조회된 품목군이 단일 철강 분야로 확정되지 않아 대상 GHG를 단정하지 않는다 — 확인 필요(규정). 제3.1장 품목군 조회 결과를 확인하세요.'],
         ['간접배출 취급', labels.length === 1 ? labels[0] : `제품별 상이 — 제3.1장 참조 (${labels.join(' / ')})`],
         ['문서 상태 (Status)', isInterim
@@ -707,7 +707,7 @@ function productSection(input: CalculationReportInput) {
         // 전반부(접두 규칙)는 CN 마스터 도입으로 거짓이 되므로 교체한다.
         // 후반부(Annex II 등재 목록을 조회한 것이 아니다)는 **여전히 참**이므로 삭제하면 안 된다 —
         // 원본 워크북에 "Annex II" 문자열이 0건이라 그 법적 동치를 우리는 확인하지 못했다(씨밤이 P0).
-        `판정 방법: 본 판정은 ${CN_MASTER_CITATION}의 CN 목록과 확정기간 간접배출 관련성 플래그를 CN 단위로 조회한 결과이며, CN 접두 규칙을 사용하지 않았다. 다만 이는 Regulation (EU) 2023/956 Annex II 등재 목록 원본을 조회한 결과가 아니다 — 해당 워크북은 「Annex II」를 인용하지 않으며, 이 플래그가 Annex II 등재와 법적으로 동치인지는 EUR-Lex 원문 대조가 완료되지 않았다. 확인 필요(규정). 또한 본 템플릿은 2024-12-13 배포본으로, 2026 확정기간 최종 채택본과 이 플래그가 일치하는지 확인되지 않았다 — 확인 필요(자료).`,
+        `판정 규칙의 근거: 2025/2547 Art 3(2)는 시스템 경계가 "direct emissions, indirect emissions for goods **not listed in Annex II** to Regulation (EU) 2023/956, and the embedded emissions of any precursor"를 포함한다고 규정한다 — 즉 간접배출은 Annex II **미등재** 품목에만 인증서 기준에 포함된다. 이 규칙 자체는 확정된다. 판정 방법: 본 판정은 ${CN_MASTER_CITATION}의 CN 목록과 확정기간 간접배출 관련성 플래그를 CN 단위로 조회한 결과이며, CN 접두 규칙을 사용하지 않았다. 다만 이는 Regulation (EU) 2023/956 Annex II 등재 목록 원본을 조회한 결과가 아니다 — 해당 워크북은 「Annex II」를 인용하지 않으며, 이 플래그가 Annex II 등재와 법적으로 동치인지는 EUR-Lex 원문 대조가 완료되지 않았다. 확인 필요(규정). 또한 본 템플릿은 2024-12-13 배포본으로, 2026 확정기간 최종 채택본과 이 플래그가 일치하는지 확인되지 않았다 — 확인 필요(자료).`,
         'Note',
         { color: AMBER }
     ));
@@ -774,6 +774,8 @@ function processSection(input: CalculationReportInput) {
             widths: [2700, 2100, 1400, 1400, 1400], headerShade: SOFT, headerBold: true, repeatHeader: true,
         }),
         paragraph(`본 보고서의 CBAM 대상 생산공정은 ${scope.length}개이다. ${describeAllocationBasis(input)} SEE 산정의 분모는 각 공정의 총생산량이다.`),
+        // 검증인이 「왜 All production routes냐」를 반드시 묻는다 — 규정 근거를 밝혀 그 여지를 없앤다.
+        paragraph('생산경로가 「All production routes」인 것은 2025/2547 Art 4(6)에 따른다: 동일 기능단위(functional unit) 재화가 사업장 내 여러 생산경로로 생산되면 "a single production process shall be used encompassing all production routes"이며, 배출량은 전 경로의 가중평균이다(전례 7). 분모(총생산량)는 점 F에 따라 "the total mass of the goods leaving the production process"로, 판매되거나 다른 생산공정의 전구물질로 직접 쓰일 수 있는 재화만 포함한다.', 'Note'),
     ];
 
     if (hasInternal) {
@@ -792,7 +794,7 @@ function methodologySection(input: CalculationReportInput) {
 
     const body = [
         paragraph('5. 산정방법론   Calculation Methodology', 'Heading1'),
-        paragraph('산정은 Regulation (EU) 2023/956 및 2026 확정기간 이행규정에 따른다. 본 보고서의 산정방법을 지배하는 이행규정의 번호·적용 조항은 EUR-Lex 원문 대조가 완료되지 않았다 — 확인 필요(규정). 참조 문서는 부속서 B를 따른다.'),
+        paragraph('산정은 Regulation (EU) 2023/956 및 그 산정방법 이행규정에 따른다. 확정기간 산정방법 이행규정의 유력한 후보는 Commission Implementing Regulation (EU) 2025/2547(근거 Art 7(7))이며, 본 보고서의 규정 인용은 이 규정을 적용할 경우의 근거로 표기한다. 다만 이 규정이 본 산정을 지배함의 최종 확정은 사업장·컨설턴트·검증인의 확인 사항이다 — 확인 필요(규정). 참조 문서는 부속서 B를 따른다.'),
         paragraph('전환기(~2025) Guidance 및 Q&A는 개념 참조용으로만 사용하였으며, 수치·한도를 본 확정기간 산정에 적용하지 않았다.', 'Note'),
         paragraph('5.1 직접배출 (연료 연소)', 'Heading2'),
         // 산식은 엔진이 실제로 계산하는 것과 같아야 한다. 전환계수·화석분율을 빠뜨리면
@@ -801,7 +803,7 @@ function methodologySection(input: CalculationReportInput) {
         paragraph(`배출계수가 활동자료 단위 기준(tCO2/단위)으로 주어진 경우에는 NCV와 ÷1,000을 적용하지 않는다: ${COMBUSTION_FORMULA_PER_UNIT}. 각 계수의 실제 적용값은 제6.2.1장에 있다.`, 'Note'),
         // 분야가 확정되지 않았는데 「CH4·N2O는 대상이 아니다」를 인쇄하면, 그 배제 자체가 근거 없는 단정이 된다(씨밤이 P3).
         paragraph(isIronSteelOnly(input)
-            ? '조회된 품목군이 모두 Iron and steel 분야이며, 해당 분야의 CBAM 대상 온실가스는 CO2이므로(확인 필요(규정)) tCO2 = tCO2e로 표기한다. 연소에 따른 CH4·N2O는 본 산정의 대상 GHG에 포함되지 않는다 — 확인 필요(규정).'
+            ? '조회된 품목군이 모두 Iron and steel 분야이며, 2025/2547 ANNEX I Table 1이 철강계 품목군(소결광·선철·합금철·조강·철강제품 등)의 대상 온실가스를 Carbon dioxide로 명시하므로 tCO2 = tCO2e로 표기한다. 연소에 따른 CH4·N2O는 철강계 품목군의 대상 GHG에 포함되지 않는다(같은 표). (질산·복합비료 등 일부 품목군은 N2O가 포함되나 본 산정 품목군에는 해당하지 않는다.)'
             : '조회된 품목군이 단일 철강 분야로 확정되지 않았다. 본 도구는 연소 CO2만 산정하므로, 해당 품목군에 N2O·PFC 등 다른 대상 GHG가 요구되는지 확인해야 한다 — 확인 필요(규정).', 'Note'),
         paragraph('5.2 간접배출 (전력)', 'Heading2'),
         paragraph('E간접 = 전력 사용량(MWh) × 전력 배출계수(tCO2e/MWh). 인증서 기준 반영 여부는 제3장 근거를 따른다.'),
@@ -981,7 +983,7 @@ function activityDataSection(input: CalculationReportInput) {
         table(['배출원', 'NCV 출처', 'EF 출처'], sourceRows, {
             widths: [2200, 3400, 3400], headerShade: SOFT, headerBold: true, repeatHeader: true,
         }),
-        paragraph('확인 필요(규정): 확정기간 이행규정이 표준계수 위계를 두는 경우 인용 계수의 적격성을 원문 대조로 확인해야 한다.', 'Note'),
+        paragraph('계수 위계: 2025/2547 점 B.5.2는 표준값 위계를 둔다 — Type II(국가 인벤토리·공표값·공급사 보증값 등) 우선, Type I(표준계수·IPCC·5년 내 실험분석)은 Type II가 없을 때만, 둘 다 없으면 Annex IV(2023/956) 공식 기본값. 각 계수의 위계 등급과 발행기관·문서·판본을 위 표에 기재한다.', 'Note'),
         paragraph('6.3 측정 방식 및 데이터 품질', 'Heading2'),
         measurementTable(input),
         paragraph('6.4 정합성 점검', 'Heading2'),
@@ -2024,7 +2026,7 @@ function improvementSection(input: CalculationReportInput) {
     rows.push([
         '이행규정 특정',
         '본 산정을 지배하는 이행규정의 번호·적용 조항 미확정',
-        'EUR-Lex 원문으로 번호·조항을 확정해 제5장·부속서 B에 기재 — 확인 필요(규정). 확정 전까지 제16장 선언의 준거 범위는 Regulation (EU) 2023/956과 본문 기술 방법론으로 한정된다.',
+        '유력한 후보는 Commission Implementing Regulation (EU) 2025/2547(산정방법 이행규정, 근거 Art 7(7))이다. 이 규정이 본 산정을 지배함을 사업장·컨설턴트·검증인이 확정하면 제5장·부속서 B에 확정 기재한다 — 확인 필요(규정). 확정 전까지 제16장 선언의 준거 범위는 Regulation (EU) 2023/956과 본문 기술 방법론으로 한정된다.',
     ]);
 
     // 제7장에 출처를 채웠는데도 14장이 「미기재」를 주장하면 문서가 자기와 싸운다(씨밤이 P1).
@@ -2210,7 +2212,7 @@ function annexes() {
         paragraph('B. 부속서 B — 참조 문서   Annex B', 'Heading1'),
         paragraph('B.1 규범적 근거 (확정기간)', 'Heading2'),
         paragraph('· Regulation (EU) 2023/956 — CBAM 기본규정'),
-        paragraph('· 2026 확정기간 이행규정(내재배출 산정방법·기본값 등) — 번호·적용 조항은 EUR-Lex 원문 확인 필요(규정)'),
+        paragraph('· 산정방법 이행규정 후보: Commission Implementing Regulation (EU) 2025/2547 (내재배출 산정방법·기본값 등, 근거 Regulation (EU) 2023/956 Art 7(7)). 본 산정을 지배함의 최종 확정은 사업장·검증인 확인 사항 — 확인 필요(규정)'),
         paragraph('B.2 개념 참조 (전환기 문서 — 수치·한도 비적용)', 'Heading2'),
         paragraph('· EU Commission CBAM Guidance for installation operators outside the EU (전환기 문서)'),
         paragraph('개념 정의의 참조로만 사용하였으며, 그 수치·한도를 본 확정기간 산정에 적용하지 않았다.', 'Note'),
