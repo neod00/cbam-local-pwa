@@ -168,6 +168,18 @@ export interface ReportElectricityEfMetaRow {
   vintage?: string;
 }
 
+/**
+ * 6.5장 부문특정 파라미터 (제품 × 파라미터 단위).
+ * 2025/2547 ANNEX IV point 2가 품목군별로 요구하는 값. 어떤 파라미터가 필요한지는 제품의 품목군이
+ * 정하며(sector-parameters.ts), 여기에는 사용자가 채운 값만 담는다. 미입력이면 보고서가
+ * 「기재 필요」로 표기하고 14.1 등록부에 집계한다 — 요구 사실 자체를 앱이 안다는 것이 이 필드의 핵심.
+ */
+export interface ReportSectorParameterRow {
+  product_id: string;
+  param_key: string;
+  value?: string;
+}
+
 export interface ReportDeclaration {
   name?: string;
   position?: string;
@@ -181,6 +193,7 @@ export interface ReportInputs {
   evidence?: ReportEvidenceRow[];
   transpositions?: ReportTranspositionRow[];
   electricity_ef_meta?: ReportElectricityEfMetaRow[];
+  sector_parameters?: ReportSectorParameterRow[];
   declaration?: ReportDeclaration;
 }
 

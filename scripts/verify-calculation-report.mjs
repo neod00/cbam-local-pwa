@@ -150,6 +150,7 @@ const prelude = ['const { strToU8, zipSync, strFromU8, unzipSync } = fflate;'].c
     // cbam-product-rules 가 import 하므로 반드시 그 앞에 온다.
     'src/lib/cn-master.generated.ts',
     'src/lib/cbam-product-rules.ts',
+    'src/lib/sector-parameters.ts',
     'src/lib/reporting-scope.ts',
     'src/lib/reference-workbooks.ts',
     'src/lib/source-stream-calculation.ts',
@@ -382,6 +383,14 @@ const filled = reportModule.createCalculationReport({
         evidence: [{ item: '도시가스 요금청구서', proves: '활동자료 89.13 t', custodian: '경영지원팀', status: '확보' }],
         transpositions: [{ source_stream_id: 's1', source_unit: 'MJ', source_quantity: '4,278,240', conversion_note: '÷ 48,000 MJ/t', measurement_method: '정산용 계량기', data_quality: '상업 거래용 계량', ncv_source: 'IPCC 2006 Guidelines Vol.2 Table 1.2', ef_source: 'IPCC 2006 Guidelines Vol.2 Table 1.4' }],
         electricity_ef_meta: [{ process_id: 'proc1', publisher: '집행위', document: 'Country EF list', vintage: '2026' }],
+        // baseProduct(용접강관)는 「Iron or steel products」라 부문특정 파라미터 4건을 요구한다 —
+        // 「완전 입력」이 진짜 완전하려면 이것도 채워야 G5가 0이 된다(제6.5장 도입 후).
+        sector_parameters: [
+            { product_id: 'p1', param_key: 'reducing_agent', value: '코크스' },
+            { product_id: 'p1', param_key: 'alloy_mn_cr_ni', value: '1.2' },
+            { product_id: 'p1', param_key: 'scrap_per_t', value: '0.15' },
+            { product_id: 'p1', param_key: 'preconsumer_scrap_pct', value: '80' },
+        ],
         declaration: { name: '박지훈', position: 'CBAM 담당', date: '2027-01-15' },
     },
 });
@@ -1051,4 +1060,51 @@ assertTrue(!okXml.includes('소계·총계 표시값과 마지막 자리에서 �
 const summaryRoundingWarns = roundingCase.issues.filter((issue) => issue.gate === 'G1' && /반올림 표기/.test(issue.message)).length;
 assertEqual(summaryRoundingWarns, 1, '반올림 경고가 요약장 추가로 중복 계상되지 않음(10장이 이미 밀어 넣는다)');
 
-console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4·R5·R6 회귀).');
+// ---------------- 부문특정 파라미터 (제6.5장, 2025/2547 ANNEX IV point 2) ----------------
+// 씨밤이 2547 검증심사의 단일 최대 결함: 철강제품에 규정이 요구하는 파라미터가 보고서에 없었고
+// 14.1 등록부에도 안 잡혀 앱이 「빠진 사실 자체를 몰랐다」. 이 장은 요구를 조회해 표기하고
+// 미입력값을 「기재 필요」로 등록부에 흘려보낸다.
+
+// baseInput 제품 = 용접강관 CN 73063077 → 품목군 「Iron or steel products」 → 4개 파라미터 요구.
+assertTrue(okXml.includes('6.5 부문특정 파라미터'), '제6.5장이 존재');
+assertTrue(okXml.includes('품목군 「Iron or steel products」'), '철강제품의 품목군을 표기');
+for (const label of ['주 환원제', 'Mn·Cr·Ni', '스크랩', 'pre-consumer 스크랩']) {
+    assertTrue(okXml.includes(label), `철강제품 부문특정 파라미터 「${label}」가 인쇄됨`);
+}
+// 원문 근거를 verbatim으로 병기해 검증인이 대조 가능해야 한다.
+assertTrue(okXml.includes('% of scrap that is pre-consumer scrap.'), '규정 원문 근거를 verbatim 병기');
+// 미입력이면 「기재 필요」 → scanOutstandingItems가 등록부에 집계 → G5 경고.
+assertTrue(ok.issues.some((i) => i.gate === 'G5' && /제6\.5장:/.test(i.message)), '부문특정 파라미터 미입력에 G5 경고');
+
+// [핵심 회귀] 이 4건이 14.1 등록부에 **실제로 집계**돼야 한다 — 정직성 그물을 빠져나가지 않도록.
+const sectorRegisterOk = okXml.replace(/<[^>]+>/g, ' ').match(/미해소 표기는 총 (\d+)건/);
+const withoutSectorInput = reportModule.createCalculationReport({
+    ...baseInput(),
+    reportInputs: { sector_parameters: [
+        { product_id: 'p1', param_key: 'reducing_agent', value: '코크스' },
+        { product_id: 'p1', param_key: 'alloy_mn_cr_ni', value: '1.2' },
+        { product_id: 'p1', param_key: 'scrap_per_t', value: '0.15' },
+        { product_id: 'p1', param_key: 'preconsumer_scrap_pct', value: '80' },
+    ] },
+});
+const filledSectorXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await withoutSectorInput.blob.arrayBuffer()))['word/document.xml']);
+const sectorRegisterFilled = filledSectorXml.replace(/<[^>]+>/g, ' ').match(/미해소 표기는 총 (\d+)건/);
+assertTrue(Boolean(sectorRegisterOk) && Boolean(sectorRegisterFilled), '등록부 총계 파싱');
+assertEqual(
+    Number(sectorRegisterOk[1]) - Number(sectorRegisterFilled[1]),
+    4,
+    '부문특정 파라미터 4건이 등록부에 집계됨(채우면 4건 감소)',
+);
+// 채우면 값이 인쇄되고 그 파라미터의 G5 경고가 사라진다.
+assertTrue(filledSectorXml.includes('코크스'), '입력한 부문특정 파라미터 값이 인쇄됨');
+assertTrue(!withoutSectorInput.issues.some((i) => i.gate === 'G5' && /제6\.5장:/.test(i.message)), '채우면 부문특정 G5 경고 없음');
+
+// 소결광(Sintered Ore)은 point 2에서 요구 파라미터가 없다 — 「해당 없음」이지 「기재 필요」가 아니다.
+assertTrue(ironOreXml.includes('6.5 부문특정 파라미터'), '간접 포함 품목 보고서에도 제6.5장 존재');
+assertTrue(
+    /Sintered Ore.{0,80}요구되는 부문특정 파라미터가 없다 — 해당 없음/.test(ironOreXml.replace(/<[^>]+>/g, ' ')),
+    '소결광은 부문특정 파라미터 「해당 없음」',
+);
+assertTrue(!ironOreXml.includes('pre-consumer 스크랩'), '소결광에 철강제품 파라미터가 새지 않음');
+
+console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4·R5·R6 회귀 + 부문특정 파라미터).');

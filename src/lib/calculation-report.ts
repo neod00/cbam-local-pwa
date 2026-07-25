@@ -1,6 +1,7 @@
 import { cell, createDocx, paragraph, table } from './docx-builder';
 import { checkDisplaySum, formatForReport, formatIntegerForReport, formatPercentForReport, formatRawForReport, roundForReport } from './report-format';
 import { getCbamGoodsMetadata, getIndirectEmissionsApplicability } from './cbam-product-rules';
+import { getSectorParameters, SECTOR_PARAM_CITATION } from './sector-parameters';
 import { CN_MASTER_TEMPLATE_VERSION } from './cn-master.generated';
 import { isCbamReportingScope, getProductReportingScope } from './reporting-scope';
 import { findDefaultValueReference, hasAmbiguousDefaultValueRoutes } from './reference-workbooks';
@@ -989,6 +990,72 @@ function activityDataSection(input: CalculationReportInput) {
                 message: `제6.1장: ${stream.name}의 원천자료·환산 근거가 비어 있습니다. 검증인이 원천 증빙으로 역추적할 수 없습니다.`,
             });
         }
+    }
+
+    return { xml: body.join(''), gateIssues };
+}
+
+/**
+ * 6.5 부문특정 파라미터 — 2025/2547 ANNEX IV point 2.
+ *
+ * 씨밤이 검증심사(2547 대조)의 단일 최대 결함: 철강제품에 규정이 요구하는 파라미터(주 환원제·합금
+ * 함량·스크랩 등)가 보고서에 없었고 14.1 등록부에도 안 잡혀 **앱이 빠진 사실 자체를 몰랐다.**
+ * 여기서 품목군별 요구를 조회해 표로 인쇄하고, 미입력값은 「기재 필요」로 표기한다 — 그러면
+ * scanOutstandingItems가 자동으로 등록부에 집계한다(요구를 안다는 것이 이 장의 핵심).
+ */
+function sectorParameterSection(input: CalculationReportInput) {
+    const gateIssues: ReportGateIssue[] = [];
+    const body = [
+        paragraph('6.5 부문특정 파라미터   Sector-specific Parameters', 'Heading2'),
+        paragraph(`품목군별로 배출량보고서에 반드시 포함해야 하는 값이다(${SECTOR_PARAM_CITATION}). 어떤 값이 필요한지는 제품의 품목군이 정하며, 아래는 본 보고서 제품에 요구되는 항목이다.`),
+    ];
+
+    const values = input.reportInputs?.sector_parameters ?? [];
+    let anyRequired = false;
+
+    for (const product of reportableProducts(input)) {
+        const applicability = getIndirectEmissionsApplicability(product);
+        const label = `${product.name}(CN ${product.cn_code ?? '미기재'})`;
+
+        // good이 undefined면 하위 품목군이 여럿이라 대표를 못 고른 것 — 요구 파라미터를 판정할 수 없다.
+        // 임의로 하나를 고르지 않고 판정 불가로 둔다(상시 원칙).
+        if (applicability.relevance === 'UNDETERMINED' || (!applicability.good && (applicability.goods?.length ?? 0) !== 1)) {
+            body.push(paragraph(`${label}: 품목군이 단일하게 확정되지 않아 요구 파라미터를 판정할 수 없다 — 8자리 CN 확정 후 재판정. 확인 필요(자료).`, 'Note', { color: AMBER }));
+            continue;
+        }
+
+        const good = applicability.good ?? applicability.goods?.[0];
+        const params = getSectorParameters(good);
+
+        if (params.length === 0) {
+            body.push(paragraph(`${label} — 품목군 「${good}」: 요구되는 부문특정 파라미터가 없다 — ${NOT_APPLICABLE}.`, 'Note'));
+            continue;
+        }
+
+        anyRequired = true;
+        const rows = params.map((param) => {
+            const entry = values.find((row) => row.product_id === product.id && row.param_key === param.key);
+            const filled = entry?.value?.trim();
+
+            if (!filled) {
+                gateIssues.push({
+                    gate: 'G5',
+                    severity: 'warn',
+                    message: `제6.5장: ${product.name}의 부문특정 파라미터 「${param.label}」가 비어 있습니다(${SECTOR_PARAM_CITATION}). 검증인이 요구하는 필수 값입니다.`,
+                });
+            }
+
+            return [param.label, param.unit ?? '서술', filled || PLACEHOLDER, param.source];
+        });
+
+        body.push(paragraph(`${label} — 품목군 「${good}」`, 'Note'));
+        body.push(table(['파라미터', '단위', '값', '규정 근거(원문)'], rows, {
+            widths: [2600, 1100, 1600, 3700], headerShade: SOFT, headerBold: true, repeatHeader: true,
+        }));
+    }
+
+    if (!anyRequired) {
+        body.push(paragraph('본 보고서 제품에는 요구되는 부문특정 파라미터가 없다.', 'Note'));
     }
 
     return { xml: body.join(''), gateIssues };
@@ -2040,6 +2107,7 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
     const summary = summarySection(input);
     const processes = processSection(input);
     const activity = activityDataSection(input);
+    const sectorParams = sectorParameterSection(input);
     const electricity = electricitySection(input);
     const precursors = precursorSection(input);
     const defaultValues = defaultValueSection(input);
@@ -2059,6 +2127,7 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
         ...summary.gateIssues,
         ...processes.gateIssues,
         ...activity.gateIssues,
+        ...sectorParams.gateIssues,
         ...electricity.gateIssues,
         ...precursors.gateIssues,
         ...defaultValues.gateIssues,
@@ -2077,6 +2146,7 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
         processes.xml,
         methodologySection(input),
         activity.xml,
+        sectorParams.xml,
         electricity.xml,
         precursors.xml,
         defaultValues.xml,
