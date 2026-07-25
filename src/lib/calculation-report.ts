@@ -2,6 +2,7 @@ import { cell, createDocx, paragraph, table } from './docx-builder';
 import { checkDisplaySum, formatForReport, formatIntegerForReport, formatPercentForReport, formatRawForReport, roundForReport } from './report-format';
 import { getCbamGoodsMetadata, getIndirectEmissionsApplicability } from './cbam-product-rules';
 import { getSectorParameters, SECTOR_PARAM_CITATION } from './sector-parameters';
+import { D43_EVIDENCE, ELECTRICITY_EF_BASIS_LABEL, ELECTRICITY_EF_CITATION, weightedAverageEf } from './electricity-ef-basis';
 import { CN_MASTER_TEMPLATE_VERSION } from './cn-master.generated';
 import { isCbamReportingScope, getProductReportingScope } from './reporting-scope';
 import { findDefaultValueReference, hasAmbiguousDefaultValueRoutes } from './reference-workbooks';
@@ -1061,42 +1062,145 @@ function sectorParameterSection(input: CalculationReportInput) {
     return { xml: body.join(''), gateIssues };
 }
 
+/**
+ * 7장 전력 — 산정근거(계통/직접연결/PPA/자가발전/다출처)를 밝히는 것이 핵심(2547 D.4/Art 9).
+ * 소결광처럼 간접이 인증서 기준에 포함되는 품목에서는 이 계수가 기준값에 직접 들어가므로,
+ * 출처·산정근거 공백을 일반 경고보다 강하게 표시한다(씨밤이 P1).
+ */
 function electricitySection(input: CalculationReportInput) {
     const gateIssues: ReportGateIssue[] = [];
+    // 이 공정의 간접배출이 인증서 기준에 들어가는가 — 들어가면 계수 공백이 기준값을 미검증으로 만든다.
+    const includedProcessIds = new Set(
+        reportableResults(input).filter((result) => result.indirect_emissions_relevance === 'INCLUDED').map((result) => result.process_id)
+    );
+
     const rows = cbamProcesses(input).map((process) => {
         const meta = input.reportInputs?.electricity_ef_meta?.find((item) => item.process_id === process.id);
         const source = [meta?.publisher, meta?.document, meta?.vintage].filter(Boolean).join(' · ');
+        const basis = meta?.basis ?? 'UNCLASSIFIED';
 
-        if (!source && process.electricity_mwh > 0) {
-            gateIssues.push({
-                gate: 'G5',
-                severity: 'warn',
-                message: `제7장: ${process.name}의 전력 배출계수 출처(공표기관·문서명·공표연도)가 비어 있습니다. 검증인이 계수를 대조할 수 없습니다.`,
-            });
-        }
-
-        // 표지가 선언한 규칙은 「배출량·SEE는 소수 4자리」다. 여기만 2자리로 인쇄하면 같은 성격의 값이
-        // 제6.4장(4자리)과 자릿수가 갈려 문서가 자기 규칙을 어긴다(씨밤이 P3).
         return [
             process.name,
             `${formatForReport(process.electricity_mwh, 4)} MWh`,
             `${formatForReport(process.electricity_ef_tco2e_per_mwh, 4)} tCO2e/MWh`,
+            ELECTRICITY_EF_BASIS_LABEL[basis],
             `${formatForReport(process.electricity_mwh * process.electricity_ef_tco2e_per_mwh)} tCO2e`,
             source || PLACEHOLDER,
         ];
     });
 
-    return {
-        xml: [
-            paragraph('7. 전력 사용 및 간접배출   Electricity and Indirect Emissions', 'Heading1'),
-            table(['생산공정', '전력 사용량', '전력 배출계수', '간접배출량', '계수 출처 (기관·문서·공표연도)'], rows, {
-                widths: [1900, 1500, 1900, 1600, 2100], headerShade: SOFT, headerBold: true, repeatHeader: true,
-            }),
-            paragraph('간접배출의 인증서 기준 반영 여부는 제3장 근거를 따른다.'),
-            paragraph('전력 배출계수는 시장기반 수단(Guarantees of Origin·녹색인증서 등)으로 낮출 수 없다. 직접 기술적 연결 또는 PPA에 해당하는 경우에만 해당 분류의 계수 적용을 검토한다.', 'Note'),
-        ].join(''),
-        gateIssues,
-    };
+    const body = [
+        paragraph('7. 전력 사용 및 간접배출   Electricity and Indirect Emissions', 'Heading1'),
+        table(['생산공정', '전력 사용량', '전력 배출계수', '산정근거', '간접배출량', '계수 출처 (기관·문서·공표연도)'], rows, {
+            widths: [1650, 1350, 1550, 1550, 1350, 1550], headerShade: SOFT, headerBold: true, repeatHeader: true,
+        }),
+        paragraph('간접배출의 인증서 기준 반영 여부는 제3장 근거를 따른다.'),
+        paragraph(`전력 배출계수의 기본 유형은 원산지국 계통 평균이며(${ELECTRICITY_EF_CITATION}), 시장기반 수단(Guarantees of Origin·녹색인증서 등)으로 낮출 수 없다. 실측(특정 공급원) 계수는 직접 기술연결 또는 PPA에 D.4.3 증빙이 제출될 때만 인정된다.`, 'Note'),
+    ];
+
+    // 공정별 산정근거 상세 — 유형에 따라 필요한 것이 다르다.
+    for (const process of cbamProcesses(input)) {
+        if (process.electricity_mwh <= 0) {
+            continue;
+        }
+
+        const meta = input.reportInputs?.electricity_ef_meta?.find((item) => item.process_id === process.id);
+        const source = [meta?.publisher, meta?.document, meta?.vintage].filter(Boolean).join(' · ');
+        const basis = meta?.basis ?? 'UNCLASSIFIED';
+        const included = includedProcessIds.has(process.id);
+        const stress = included ? ' 이 공정의 간접배출은 인증서 기준 SEE에 포함되므로(제3.1장), 이 계수가 기준값에 직접 들어간다 — 검증인이 대조할 수 없으면 기준값의 해당 부분이 미검증으로 남는다.' : '';
+
+        // 산정근거 미분류 — 앱이 대신 정하지 않는다. 다만 무엇을 골라야 하는지 안내한다.
+        if (basis === 'UNCLASSIFIED') {
+            body.push(paragraph(`${process.name}: 전력 배출계수의 산정근거가 분류되지 않았다(미분류). 계통 평균 / 직접 기술연결 / PPA / 자가발전 / 다출처 중 하나로 확정해야 검증인이 계수 유형↔출처 정합을 확인할 수 있다.${stress} 기재 필요.`, 'Note', included ? { color: AMBER } : undefined));
+            gateIssues.push({
+                gate: 'G5',
+                severity: 'warn',
+                message: `제7장: ${process.name}의 전력 배출계수 산정근거가 분류되지 않았습니다(${ELECTRICITY_EF_CITATION}).${included ? ' 간접 포함 품목이라 기준값에 직접 영향합니다.' : ''}`,
+            });
+        }
+
+        // 출처 공백 — 모든 유형에서 검증인이 계수를 대조하려면 출처가 필요하다.
+        if (!source) {
+            gateIssues.push({
+                gate: 'G5',
+                severity: 'warn',
+                message: `제7장: ${process.name}의 전력 배출계수 출처(공표기관·문서명·공표연도)가 비어 있습니다. 검증인이 계수를 대조할 수 없습니다.${included ? ' 간접 포함 품목이라 기준값에 직접 영향합니다.' : ''}`,
+            });
+
+            if (included) {
+                body.push(paragraph(`${process.name}: 계수 출처가 비어 있다.${stress}`, 'Note', { color: AMBER }));
+            }
+        }
+
+        // 계통 평균 — 검증이 가장 쉽다. 출처 한 줄이면 D.4 첫 근거로 곧바로 대조된다.
+        if (basis === 'GRID_AVERAGE') {
+            body.push(paragraph(`${process.name}: 원산지국 계통 평균 계수를 적용했다(D.4). 공표기관·문서명·공표연도를 계수 출처에 기재하면 검증인이 대조한다.`, 'Note'));
+        }
+
+        // 자가발전 — D.4.1·D.4.2 산정 경로 안내.
+        if (basis === 'SELF_GENERATION') {
+            body.push(paragraph(`${process.name}: 사업장 내 자가발전 전력이다. 배출계수는 연소·열병합 기준(D.4.1·D.4.2)으로 산정하며, 연료·발전 방식을 모니터링 계획에 기재한다 — 확인 필요(규정).`, 'Note'));
+        }
+
+        // 직접연결·PPA — 실측 계수. D.4.3 증빙 목록을 인쇄하고 제출 여부를 확인한다.
+        if (basis === 'DIRECT_LINK' || basis === 'PPA') {
+            const items = D43_EVIDENCE[basis];
+            body.push(paragraph(`${process.name}: 실측(특정 공급원) 계수를 적용했다(${basis === 'PPA' ? 'PPA' : '직접 기술연결'}). 이 계수를 인정받으려면 아래 D.4.3 증빙을 검증인에게 제출해야 한다.`, 'Note'));
+            body.push(table(['D.4.3 증빙 (원문)'], items.map((item) => [item]), {
+                widths: [9000], headerShade: SOFT, headerBold: true, repeatHeader: true,
+            }));
+
+            if (!meta?.evidence_confirmed) {
+                body.push(paragraph(`${process.name}: 위 D.4.3 증빙의 검증인 제출 여부가 확인되지 않았다 — 확인 필요(자료).${stress}`, 'Note', { color: AMBER }));
+                gateIssues.push({
+                    gate: 'G6',
+                    severity: 'warn',
+                    message: `제7장: ${process.name}의 실측 전력 계수(${basis === 'PPA' ? 'PPA' : '직접 기술연결'})에 필요한 D.4.3 증빙의 제출 여부가 확인되지 않았습니다.`,
+                });
+            }
+        }
+
+        // 다출처 — Article 9 가중평균. 공급원별 내역 + 가중평균을 인쇄하고 공정 계수와 대조한다.
+        if (basis === 'MULTI_SOURCE') {
+            const sources = meta?.sources ?? [];
+            const detailRows = sources.map((item) => [
+                item.name?.trim() || PLACEHOLDER,
+                item.country?.trim() || PLACEHOLDER,
+                item.mwh?.trim() ? `${formatForReport(Number(item.mwh.replace(/,/g, '')), 4)} MWh` : PLACEHOLDER,
+                item.ef?.trim() ? `${formatForReport(Number(item.ef.replace(/,/g, '')), 4)} tCO2e/MWh` : PLACEHOLDER,
+            ]);
+            body.push(paragraph(`${process.name}: 다출처 전력이다. 공급원별 계수를 소비 비중으로 가중평균한다(Article 9(1)).`, 'Note'));
+
+            if (sources.length === 0) {
+                body.push(paragraph(`${process.name}: 공급원별 내역(공급원·원산지국·전력량·계수)이 기재되지 않았다 — 기재 필요. Article 9 가중평균을 검증인이 재현할 수 없다.${stress}`, 'Note', included ? { color: AMBER } : undefined));
+                gateIssues.push({ gate: 'G5', severity: 'warn', message: `제7장: ${process.name}의 다출처 전력 공급원별 내역이 비어 있습니다(Article 9(1)).` });
+            } else {
+                body.push(table(['공급원', '원산지국', '전력량', '공급원 EF'], detailRows, {
+                    widths: [2400, 1800, 2400, 2400], headerShade: SOFT, headerBold: true, repeatHeader: true,
+                }));
+
+                const wa = weightedAverageEf(sources);
+
+                if (wa.droppedRows > 0) {
+                    body.push(paragraph(`${process.name}: 공급원 ${wa.droppedRows}건의 전력량·계수가 비어 있거나 숫자가 아니어서 가중평균에서 제외했다 — 기재 필요.`, 'Note', { color: AMBER }));
+                    gateIssues.push({ gate: 'G5', severity: 'warn', message: `제7장: ${process.name}의 다출처 전력 공급원 ${wa.droppedRows}건이 미기재입니다.` });
+                }
+
+                if (wa.ef !== undefined) {
+                    const delta = Math.abs(wa.ef - process.electricity_ef_tco2e_per_mwh);
+                    const consistent = process.electricity_ef_tco2e_per_mwh === 0 ? false : delta / process.electricity_ef_tco2e_per_mwh <= 0.01;
+                    body.push(paragraph(`${process.name}: Article 9 가중평균 = ${formatForReport(wa.ef, 4)} tCO2e/MWh (Σ EF×MWh ÷ Σ MWh, ${formatForReport(wa.totalMwh, 4)} MWh 기준). 본 산정에 적용한 공정 계수는 ${formatForReport(process.electricity_ef_tco2e_per_mwh, 4)}이다. ${consistent ? '두 값이 정합한다(±1%).' : `두 값이 어긋난다(차이 ${formatForReport(delta, 4)}) — 공정 계수와 공급원 내역을 대조해 확인 필요(자료).`}`, 'Note', consistent ? undefined : { color: AMBER }));
+
+                    if (!consistent) {
+                        gateIssues.push({ gate: 'G6', severity: 'warn', message: `제7장: ${process.name}의 다출처 가중평균(${formatForReport(wa.ef, 4)})이 적용 공정 계수(${formatForReport(process.electricity_ef_tco2e_per_mwh, 4)})와 어긋납니다.` });
+                    }
+                }
+            }
+        }
+    }
+
+    return { xml: body.join(''), gateIssues };
 }
 
 function precursorSection(input: CalculationReportInput) {

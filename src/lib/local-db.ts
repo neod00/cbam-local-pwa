@@ -160,12 +160,40 @@ export interface ReportTranspositionRow {
   ef_source?: string;
 }
 
+/**
+ * 전력 배출계수의 산정근거 — 2025/2547 D.4/Article 9.
+ * 기본은 원산지국 계통 평균(GRID_AVERAGE). 실측(특정 공급원)은 직접 기술연결·PPA에
+ * D.4.3 증빙이 있을 때만. 다출처는 Article 9 가중평균. 자가발전은 D.4.1·D.4.2.
+ * UNCLASSIFIED = 사용자가 아직 고르지 않음(앱이 대신 정하지 않는다).
+ */
+export type ElectricityEfBasis =
+  | 'GRID_AVERAGE'
+  | 'DIRECT_LINK'
+  | 'PPA'
+  | 'SELF_GENERATION'
+  | 'MULTI_SOURCE'
+  | 'UNCLASSIFIED';
+
+/** 다출처 전력의 공급원별 내역 (Article 9(1) 가중평균 산정용, ANNEX II item 12 기재항목). */
+export interface ReportElectricitySourceRow {
+  name?: string;
+  country?: string;
+  mwh?: string;
+  ef?: string;
+}
+
 /** 7장 전력 배출계수 출처 메타데이터 (생산공정 단위) */
 export interface ReportElectricityEfMetaRow {
   process_id: string;
   publisher?: string;
   document?: string;
   vintage?: string;
+  /** 산정근거 유형. 없으면 UNCLASSIFIED로 다룬다. */
+  basis?: ElectricityEfBasis;
+  /** MULTI_SOURCE일 때 공급원별 내역. */
+  sources?: ReportElectricitySourceRow[];
+  /** DIRECT_LINK·PPA일 때: D.4.3 증빙을 검증인에게 제출했다고 사용자가 표시. */
+  evidence_confirmed?: boolean;
 }
 
 /**
