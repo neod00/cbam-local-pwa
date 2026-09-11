@@ -5,6 +5,7 @@ import { getSectorParameters, SECTOR_PARAM_CITATION } from './sector-parameters'
 import { D43_EVIDENCE, ELECTRICITY_EF_BASIS_LABEL, ELECTRICITY_EF_CITATION, weightedAverageEf } from './electricity-ef-basis';
 import { CN_MASTER_TEMPLATE_VERSION } from './cn-master.generated';
 import { isCbamReportingScope, getProductReportingScope } from './reporting-scope';
+import { ALLOCATION_RULES, DIRECT_EMISSIONS_INPUT_MODE_LABEL } from './allocation-rules';
 import { findDefaultValueReference, hasAmbiguousDefaultValueRoutes } from './reference-workbooks';
 import type { DefaultValueReferenceRow, ImportedDefaultValueReference } from './reference-workbooks';
 import { getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
@@ -261,10 +262,35 @@ function describeAllocationBasis(input: CalculationReportInput) {
     }
 
     const labels = bases.map((basis) => REPORT_ALLOCATION_BASIS_LABEL[basis] ?? basis).join(' · ');
-
-    return bases.length === 1
+    const basisSentence = bases.length === 1
         ? `제품 배분 기준: ${labels} 단일 적용, 한 공정 내 기준 혼용 없음.`
         : `제품 배분 기준: ${labels} — 기준이 혼용되어 있어 공정별 적정성을 개별 확인해야 한다(제4장). 확인 필요(자료).`;
+
+    return `${basisSentence} ${describeAttributionMethod(input)}`;
+}
+
+/**
+ * 귀속 방법의 나머지 — 직접귀속배출량 산정방식·공용 계량기 정합계수·활동수준·미지원 보정.
+ * ANNEX IV 1.1 항목 29(귀속배출 산정방법)·30(활동수준)이 보고서 최소 요소로 요구한다.
+ * 결과 필드가 없는 옛 결과(검증 픽스처 포함)도 죽지 않게 부재를 허용한다.
+ */
+function describeAttributionMethod(input: CalculationReportInput) {
+    const results = reportableResults(input);
+    const modes = [...new Set(results.map((result) => DIRECT_EMISSIONS_INPUT_MODE_LABEL[result.direct_emissions_input_mode ?? 'UNSPECIFIED']))];
+    const groups = [...new Map(
+        results.flatMap((result) => result.reconciliation ?? [])
+            .filter((group) => group.applied)
+            .map((group) => [`${group.period_id ?? ''}|${group.group}`, group] as const)
+    ).values()];
+    const parts = [
+        `직접귀속배출량 산정방식: ${modes.length > 0 ? modes.join(' · ') : '해당 없음'}.`,
+    ];
+    if (groups.length > 0) {
+        parts.push(`공용 계량기 정합계수(2025/2547 ANNEX III A.1 식 41·42): ${groups.map((group) => `'${group.group}' RecF ${formatForReport(group.factor, 4)} (사업장 ${formatForReport(group.installation_total, 2)} / 공정 합계 ${formatForReport(group.sub_total, 2)} ${group.unit})`).join(' · ')}.`);
+    }
+    parts.push('활동수준(SEE 분모)은 ANNEX II 점 F에 따라 판매 가능하거나 다른 생산공정의 전구물질로 직접 쓰이는 재화만 포함하며, 「활동수준 제외」로 표시된 라인(불량·부산물·폐기물·스크랩)은 배출 0으로 둔다.');
+    parts.push(`측정 가능한 열·폐가스·자가발전 보정(ANNEX III A.3 식 55, ${ALLOCATION_RULES.ADJUSTMENTS.id})은 현재 버전에서 미지원 — 해당 시 별도 산정이 필요하다.`);
+    return parts.join(' ');
 }
 
 /** 비중(0~1) 표기. 부호 없이 백분율만. */
@@ -776,7 +802,7 @@ function processSection(input: CalculationReportInput) {
         table(columns.map((column) => column.header), rows, {
             widths: [2700, 2100, 1400, 1400, 1400], headerShade: SOFT, headerBold: true, repeatHeader: true,
         }),
-        paragraph(`본 보고서의 CBAM 대상 생산공정은 ${scope.length}개이다. ${describeAllocationBasis(input)} SEE 산정의 분모는 각 공정의 총생산량이다.`),
+        paragraph(`본 보고서의 CBAM 대상 생산공정은 ${scope.length}개이다. ${describeAllocationBasis(input)} SEE 산정의 분모는 각 공정의 활동수준(점 F — 판매 가능하거나 다른 생산공정의 전구물질로 직접 쓰이는 재화의 질량)이다.`),
         // 검증인이 「왜 All production routes냐」를 반드시 묻는다 — 규정 근거를 밝혀 그 여지를 없앤다.
         paragraph('생산경로가 「All production routes」인 것은 2025/2547 Art 4(6)에 따른다: 동일 기능단위(functional unit) 재화가 사업장 내 여러 생산경로로 생산되면 "a single production process shall be used encompassing all production routes"이며, 배출량은 전 경로의 가중평균이다(전례 7). 분모(총생산량)는 점 F에 따라 "the total mass of the goods leaving the production process"로, 판매되거나 다른 생산공정의 전구물질로 직접 쓰일 수 있는 재화만 포함한다.', 'Note'),
     ];
@@ -2201,11 +2227,11 @@ function annexes() {
         paragraph(`연소 배출: ${COMBUSTION_FORMULA} (제5.1장과 동일)`),
         paragraph(`연소 배출 — EF가 활동자료 단위 기준(tCO2/단위)인 경우: ${COMBUSTION_FORMULA_PER_UNIT}`, 'Note'),
         paragraph('전력 간접: E = 전력(MWh) × EF(tCO2e/MWh)'),
-        paragraph('전구물질 기여: SEE_prec = (소비량 ÷ 제품 총생산량) × 전구물질 SEE'),
-        paragraph('제품 SEE(직접) = 자체 직접배출 ÷ 총생산량 + Σ SEE_prec(직접)'),
+        paragraph('전구물질 기여: SEE_prec = (소비량 ÷ 활동수준) × 전구물질 SEE'),
+        paragraph('제품 SEE(직접) = 자체 직접배출 ÷ 활동수준(점 F) + Σ SEE_prec(직접)'),
         // 5.4가 기준 SEE를 인쇄하기 시작했으므로 산식 부속서에도 그 유도가 있어야 한다.
         // 없으면 「인쇄된 어느 산식으로도 기준값이 도출되지 않는다」는 원래 지적이 부속서에 그대로 남는다.
-        paragraph('제품 SEE(간접) = 자체 간접배출 ÷ 총생산량 + Σ SEE_prec(간접)'),
+        paragraph('제품 SEE(간접) = 자체 간접배출 ÷ 활동수준(점 F) + Σ SEE_prec(간접)'),
         paragraph('CBAM 인증서 산정 기준 SEE = SEE(직접) [간접 비관련] 또는 SEE(직접) + SEE(간접) [간접 관련] — 제3.1장 품목군 판정에 따른다'),
         paragraph('A.2 표기·반올림 규칙', 'Heading2'),
         paragraph('· 배출량·SEE: 소수 4자리 / 계수·원단위: 원천 자릿수 유지'),

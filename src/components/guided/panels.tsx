@@ -60,6 +60,7 @@ import {
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { describeSeeFlowIndirect, type SeeFlowBinding } from '@/lib/see-flow';
 import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
+import { DIRECT_EMISSIONS_INPUT_MODE_LABEL, sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
 import {
     createSourceStreamValidationErrors,
     FACTOR_SOURCE_TYPE_OPTIONS,
@@ -677,10 +678,14 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
     // 사내 다른 공정으로 넘기는 양. **이것 하나만** 받고 시장 출하량은 총량에서 뺀다 —
     // 둘 다 받으면 합이 총량과 어긋난 채 EU 문서(D_Processes)에 나갈 수 있다.
     const [internalMass, setInternalMass] = useState('');
+    // 불량·부산물·스크랩으로 나간 양(선택). 활동수준(SEE 분모)에서 빠지고 배출 0으로 기록된다 —
+    // 2025/2547 ANNEX II 점 F. 라인 하나(WASTE_RECYCLE · EXCLUDED)로 저장해 추적성을 남긴다.
+    const [excludedMass, setExcludedMass] = useState('');
     const [message, setMessage] = useState('');
     const [saved, setSaved] = useState(false);
 
     const totalMass = reportingProducts.reduce((sum, product) => sum + num(masses[product.id] ?? ''), 0);
+    const isExcludedLine = (line: ProductOutputLine) => line.activity_level_role === 'EXCLUDED';
 
     const resetForm = () => {
         setEditingProcessId('');
@@ -688,6 +693,7 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
         setRoute('');
         setMasses({});
         setInternalMass('');
+        setExcludedMass('');
         setMessage('');
     };
 
@@ -705,6 +711,10 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
         setPeriodId(process.period_id ?? data.periods[0]?.id ?? '');
         setMasses(massMap);
         setInternalMass(process.internal_consumption_mass_t > 0 ? String(process.internal_consumption_mass_t) : '');
+        const excluded = data.productOutputLines
+            .filter((line) => line.process_id === process.id && isExcludedLine(line))
+            .reduce((sum, line) => sum + line.output_mass_t, 0);
+        setExcludedMass(excluded > 0 ? String(excluded) : '');
         setMessage('');
         setSaved(false);
     };
@@ -733,6 +743,28 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
         await onSaved();
     };
 
+    /** 활동수준 제외분을 라인 하나로 저장/갱신/삭제한다 — 값이 0이면 지운다. 삭제 참조 확인은 saveProcess가 먼저 한다. */
+    const upsertExcludedLine = async (processId: string, existingLines: ProductOutputLine[]) => {
+        const existing = existingLines.find((line) => isExcludedLine(line) && !line.product_id);
+        const mass = num(excludedMass);
+        if (mass > 0) {
+            const payload = {
+                process_id: processId,
+                name: '활동수준 제외분 (불량·부산물·스크랩)',
+                output_mass_t: mass,
+                allocation_basis: 'MASS' as const,
+                manual_allocation_percent: 0,
+                note: '지도 3단계 입력 — 2025/2547 ANNEX II 점 F에 따라 활동수준 제외·배출 0',
+                reporting_scope: 'WASTE_RECYCLE' as const,
+                activity_level_role: 'EXCLUDED' as const,
+            };
+            return existing
+                ? updateLocalItem('product_output_lines', { ...existing, ...payload })
+                : createLocalItem('product_output_lines', payload);
+        }
+        return existing ? deleteLocalItem('product_output_lines', existing.id) : Promise.resolve();
+    };
+
     const saveProcess = async () => {
         const activePeriodId = periodId || data.periods[0]?.id;
         if (!name.trim()) {
@@ -759,6 +791,10 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             setMessage(`사내 이송량(${fmt(internal, 1)} t)이 총 생산량(${fmt(totalMass, 1)} t)보다 많습니다.`);
             return;
         }
+        if (num(excludedMass) < 0) {
+            setMessage('불량·부산물·스크랩 양은 0 이상이어야 합니다.');
+            return;
+        }
         const primary = lines.reduce((best, line) => (line.mass > best.mass ? line : best), lines[0]);
 
         if (editingProcessId) {
@@ -770,8 +806,9 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             const existingLines = data.productOutputLines.filter((line) => line.process_id === editingProcessId);
             const reportingIds = new Set(reportingProducts.map((product) => product.id));
             // 보고범위 밖(비CBAM 부산물 등) 라인은 폼에 없으므로 보존하고, 공정 총량에도 포함한다.
+            // 활동수준 제외 라인은 공정 총 생산량(=활동수준)에 넣지 않는다(점 F).
             const preservedOutsideMass = existingLines
-                .filter((line) => !reportingIds.has(line.product_id ?? ''))
+                .filter((line) => !reportingIds.has(line.product_id ?? '') && !isExcludedLine(line))
                 .reduce((sum, line) => sum + line.output_mass_t, 0);
             // 생산량을 0/공란으로 두면 그 제품의 생산라인이 지워진다. 전구물질의 제품별 배분이
             // 그 라인을 가리키고 있으면 배분이 갈 곳을 잃는데, 엔진은 못 찾은 배분을 조용히
@@ -786,6 +823,14 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                         `'${product.name}'의 생산량을 비우면 그 생산라인이 지워지는데, ${lineBlockers.reasons.join(' · ')}이 이 라인을 가리키고 있습니다. `
                         + '먼저 6단계에서 해당 전구물질의 제품별 배분을 고친 뒤 다시 시도하세요.'
                     );
+                    return;
+                }
+            }
+            const doomedExcluded = existingLines.find((line) => isExcludedLine(line) && !line.product_id);
+            if (doomedExcluded && num(excludedMass) <= 0) {
+                const excludedBlockers = getOutputLineDeleteBlockers(doomedExcluded.id, data);
+                if (excludedBlockers.total > 0) {
+                    setMessage('활동수준 제외 라인을 비우면 지워지는데, ' + excludedBlockers.reasons.join(' · ') + '이 이 라인을 가리키고 있습니다. 먼저 6단계에서 전구물질 배분을 고치세요.');
                     return;
                 }
             }
@@ -817,6 +862,7 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                     return existing ? deleteLocalItem('product_output_lines', existing.id) : Promise.resolve();
                 })
             );
+            await upsertExcludedLine(editingProcessId, existingLines);
             const editedTotal = totalMass + preservedOutsideMass;
             await updateLocalItem('processes', {
                 ...existingProcess,
@@ -854,6 +900,7 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                 note: '',
                 reporting_scope: getProductReportingScope(line.product),
             })));
+            await upsertExcludedLine(process.id, []);
         }
         resetForm();
         setSaved(true);
@@ -944,6 +991,18 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                             placeholder="0"
                         />
                     </Field>
+                    <Field
+                        label="불량·부산물·스크랩으로 나간 양 (t, 선택)"
+                        hint="판매하거나 다른 공정에 넣을 수 없는 양. 위 제품 생산량에는 넣지 마세요 — SEE 분모(활동수준)에서 빠지고 배출 0으로 기록됩니다 (2025/2547 ANNEX II 점 F)."
+                    >
+                        <input
+                            className={fieldClass}
+                            inputMode="decimal"
+                            value={excludedMass}
+                            onChange={(event) => setExcludedMass(event.target.value)}
+                            placeholder="0"
+                        />
+                    </Field>
                     {totalMass > 0 && (
                         <p className="text-xs leading-5 text-slate-600">
                             EU 문서에 기재됩니다 — 시장 출하 <span className="font-semibold">{fmt(Math.max(0, totalMass - num(internalMass)), 1)} t</span>
@@ -971,10 +1030,10 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
 // 없는데도 8단계에서 EU 문서가 생성됐다(씨밤이 P1-run08-02).
 
 async function syncProcessDirectEmissions(process: ProductionProcess, streams: SourceStream[]) {
-    const total = streams
-        .filter((stream) => stream.process_id === process.id)
-        .reduce((sum, stream) => sum + calculateSourceStreamEmissions(stream), 0);
-    await updateLocalItem('processes', { ...process, direct_attributable_emissions_tco2e: total });
+    // 공용 계량기 정합계수(식 41·42) 보정 후 합계 — 엔진·상세 화면과 같은 헬퍼. 방식도 함께 기록해
+    // 보고서가 「배출원 자료 합계」로 인쇄한다(CBAM-ALLOC-DIRECT-01).
+    const total = sumReconciledSourceStreamEmissions(process.id, streams);
+    await updateLocalItem('processes', { ...process, direct_attributable_emissions_tco2e: total, direct_emissions_input_mode: 'SOURCE_STREAM_SUM' });
 }
 
 function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: PanelProps) {
@@ -2100,6 +2159,16 @@ function ResultsPanel({ data, binding, selectedProcessId, onSelectStep }: PanelP
                 못한 등재를 단정하고, 간접 포함 품목에서는 두 타일이 같은 숫자인데 「다릅니다」라고
                 말했다 — 화면 자기모순(씨밤이 N3). 상태에서 파생한다. */}
             <p className="text-[11px] leading-4 text-slate-500">{indirectLabels.basisVsTotalNote}</p>
+            {/* 배분 근거 — 검증인이 「어떤 방법으로 나온 숫자인가」를 묻는다(ANNEX IV 1.1 항목 29·30). 결과에서 파생한다. */}
+            {scopedResults.length > 0 && (
+                <p className="text-[11px] leading-4 text-slate-500">
+                    배분 근거 — 직접배출 {[...new Set(scopedResults.map((result) => DIRECT_EMISSIONS_INPUT_MODE_LABEL[result.direct_emissions_input_mode]))].join(' · ')}
+                    {' · '}활동수준(분모) {[...new Set(scopedResults.map((result) => fmt(result.activity_level_t, 1)))].join(' / ')} t
+                    {[...new Map(scopedResults.flatMap((result) => result.reconciliation).filter((group) => group.applied).map((group) => [`${group.period_id ?? ''}|${group.group}`, group])).values()]
+                        .map((group) => ` · 공용 계량기 '${group.group}' RecF ${group.factor.toFixed(4)}`).join('')}
+                    {' · '}열·폐가스·자가발전 보정(식 55): 현재 버전에서 미지원
+                </p>
+            )}
 
             {(warningMessages.length > 0 || issues.length > 0) ? (
                 <div className="space-y-2">

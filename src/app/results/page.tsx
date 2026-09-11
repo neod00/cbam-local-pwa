@@ -3,6 +3,7 @@
 import { ActionItemCard, DataTable, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults, getLocalCalculationWarningHref } from '@/lib/calculation-engine';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
+import { ALLOCATION_BASIS_LABEL, ALLOCATION_RULES, DIRECT_EMISSIONS_INPUT_MODE_LABEL } from '@/lib/allocation-rules';
 import { listLocalItems } from '@/lib/local-db';
 import { INDIRECT_RELEVANCE_LABEL } from '@/lib/cbam-product-rules';
 import { getProductReportingScopeLabel } from '@/lib/reporting-scope';
@@ -32,20 +33,14 @@ function average(values: number[]) {
     return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+// 배분기준 명칭은 규칙 모듈 한 곳에서 온다 — 여기서 따로 적으면 「활동수준 제외」 같은 새 값이
+// 「질량 기준」으로 떨어져 검증인이 잘못 읽는다.
 function getAllocationLabel(result: LocalCalculationResult) {
-    if (result.allocation_basis === 'PROCESS_TOTAL') {
-        return '공정 전체';
-    }
-
-    if (result.allocation_basis === 'MANUAL') {
-        return '수동 비율';
-    }
-
-    return '질량 기준';
+    return ALLOCATION_BASIS_LABEL[result.allocation_basis] ?? result.allocation_basis;
 }
 
 function getAllocationTone(result: LocalCalculationResult) {
-    if (result.allocation_basis === 'PROCESS_TOTAL') {
+    if (result.allocation_basis === 'PROCESS_TOTAL' || result.allocation_basis === 'ACTIVITY_LEVEL_EXCLUDED') {
         return 'neutral' as const;
     }
 
@@ -54,6 +49,29 @@ function getAllocationTone(result: LocalCalculationResult) {
     }
 
     return 'pending' as const;
+}
+
+/**
+ * 배분 근거 한 줄 — 직접배출 입력방식 · 활동수준(분모) · 공용 계량기 정합계수 · 사용자 지정 사유.
+ * 배지와 배분율만으로는 「이 숫자가 어떤 방법으로 나왔는지」를 검증인이 알 수 없다(ANNEX IV 1.1 항목 29·30).
+ */
+function describeAllocationBasis(result: LocalCalculationResult) {
+    const parts = [
+        `직접배출: ${DIRECT_EMISSIONS_INPUT_MODE_LABEL[result.direct_emissions_input_mode]}`,
+        `활동수준(분모) ${formatNumber(result.activity_level_t)} t`,
+    ];
+    for (const group of result.reconciliation) {
+        parts.push(
+            group.applied
+                ? `공용 계량기 '${group.group}' RecF ${group.factor.toFixed(4)} (${formatNumber(group.installation_total)} / ${formatNumber(group.sub_total)} ${group.unit})`
+                : `공용 계량기 '${group.group}' ${group.mode === 'KEY_SPLIT' ? '배분키(정합계수 없음)' : '정합 미적용'}`
+        );
+    }
+    if (result.allocation_basis === 'MANUAL') {
+        parts.push(`사유: ${result.allocation_reason ?? '미기재'}`);
+    }
+    parts.push(`열·폐가스·자가발전 보정(식 55): ${ALLOCATION_RULES.ADJUSTMENTS.unsupported ? '현재 버전에서 미지원' : '적용'}`);
+    return parts.join(' · ');
 }
 
 function getIndirectApplicabilityLabel(result: LocalCalculationResult) {
@@ -259,8 +277,9 @@ export default function ResultsPage() {
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">
                                             {result.period_name ?? '-'}
                                         </td>
-                                        <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">
+                                        <td className="px-4 py-4 text-sm text-slate-600">
                                             <StatusBadge tone={getAllocationTone(result)}>{getAllocationLabel(result)}</StatusBadge>
+                                            <div className="mt-1 max-w-xs text-xs leading-4 text-slate-500">{describeAllocationBasis(result)}</div>
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
                                             {formatNumber(result.output_mass_t)}
@@ -366,6 +385,7 @@ export default function ResultsPage() {
                                     <dd className="mt-1 font-medium text-slate-900">{formatPercent(result.allocation_share)}</dd>
                                 </div>
                             </dl>
+                            <p className="mt-3 text-xs leading-4 text-slate-500">{describeAllocationBasis(result)}</p>
                             <p className="mt-3 text-xs text-slate-500">
                                 {result.period_name ?? '보고기간 미입력'} / {getIndirectApplicabilityLabel(result)}
                             </p>

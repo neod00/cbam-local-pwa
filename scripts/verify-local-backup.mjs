@@ -210,4 +210,52 @@ assert.throws(
   /백업 파일의 settings 데이터 저장소 형식이 올바르지 않습니다\./
 );
 
-console.log('Local backup verification passed.');
+// ── 할당로직 필드(전부 optional) — 있으면 그대로 왕복, 없으면(옛 .cbam) 그대로 통과 ──
+const allocationBackup = createLocalBackup({
+  installations: [],
+  products: [],
+  periods: [],
+  processes: [{
+    id: 'process-alloc', name: 'EAF', production_route: 'Electric arc furnace',
+    output_mass_t: 950, market_output_mass_t: 950, internal_consumption_mass_t: 0,
+    direct_attributable_emissions_tco2e: 95, electricity_mwh: 0, electricity_ef_tco2e_per_mwh: 0,
+    direct_emissions_input_mode: 'SOURCE_STREAM_SUM', direct_emissions_input_note: '',
+    created_at: '2026-05-30T00:00:00.000Z', updated_at: '2026-05-30T00:00:00.000Z',
+  }],
+  product_output_lines: [{
+    id: 'line-offspec', process_id: 'process-alloc', name: '불량품', output_mass_t: 50,
+    allocation_basis: 'MANUAL', manual_allocation_percent: 100, note: '', reporting_scope: 'WASTE_RECYCLE',
+    activity_level_role: 'EXCLUDED', manual_allocation_reason: '체류시간', manual_allocation_evidence: '운전일지',
+    created_at: '2026-05-30T00:00:00.000Z', updated_at: '2026-05-30T00:00:00.000Z',
+  }],
+  source_streams: [{
+    id: 'ss-alloc', process_id: 'process-alloc', name: 'LNG', stream_type: 'FUEL', method: 'Combustion',
+    activity_data: 5700, activity_unit: 'Nm3', ncv_gj_per_unit: 0.037, emission_factor_tco2e_per_unit: 56.1,
+    oxidation_factor: 1, conversion_factor: 1, fossil_fraction: 1, biomass_fraction: 0, source: '고지서',
+    shared_meter: { group: '공용 보일러', installation_total_activity_data: 10000, basis: 'SUB_METER', note: '' },
+    created_at: '2026-05-30T00:00:00.000Z', updated_at: '2026-05-30T00:00:00.000Z',
+  }],
+  precursors: [],
+  settings: [],
+}, '2026-05-30T00:00:00.000Z');
+const allocationRoundTrip = parseBackupFile(JSON.stringify(allocationBackup));
+assert.equal(allocationRoundTrip.data.processes[0].direct_emissions_input_mode, 'SOURCE_STREAM_SUM');
+assert.equal(allocationRoundTrip.data.product_output_lines[0].activity_level_role, 'EXCLUDED');
+assert.equal(allocationRoundTrip.data.product_output_lines[0].manual_allocation_reason, '체류시간');
+assert.equal(allocationRoundTrip.data.source_streams[0].shared_meter.group, '공용 보일러');
+assert.equal(allocationRoundTrip.data.source_streams[0].shared_meter.installation_total_activity_data, 10000);
+// 옛 백업(필드 없음)은 그대로 통과하고 필드는 undefined 로 남는다 — 엔진이 기존 숫자를 유지하는 전제.
+const legacyAllocationBackup = parseBackupFile(JSON.stringify({
+  manifest: { format: 'cbam-local-backup', format_version: 1, app_name: 'CBAM Local', app_version: '0.1.0', exported_at: '2026-05-30T00:00:00.000Z', stores: ['processes', 'product_output_lines', 'source_streams'], counts: { processes: 1, product_output_lines: 1, source_streams: 1 } },
+  data: {
+    processes: [{ id: 'p', name: 'P', production_route: '', output_mass_t: 1000, market_output_mass_t: 1000, internal_consumption_mass_t: 0, direct_attributable_emissions_tco2e: 1, electricity_mwh: 0, electricity_ef_tco2e_per_mwh: 0, created_at: '', updated_at: '' }],
+    product_output_lines: [{ id: 'l', process_id: 'p', name: 'L', output_mass_t: 1000, allocation_basis: 'MASS', manual_allocation_percent: 100, note: '', created_at: '', updated_at: '' }],
+    source_streams: [{ id: 's', process_id: 'p', name: 'S', stream_type: 'FUEL', method: 'Combustion', activity_data: 1, activity_unit: 't', ncv_gj_per_unit: 1, emission_factor_tco2e_per_unit: 1, oxidation_factor: 1, conversion_factor: 1, fossil_fraction: 1, biomass_fraction: 0, source: '', created_at: '', updated_at: '' }],
+  },
+}));
+assert.equal(legacyAllocationBackup.data.processes[0].direct_emissions_input_mode, undefined);
+assert.equal(legacyAllocationBackup.data.product_output_lines[0].activity_level_role, undefined);
+assert.equal(legacyAllocationBackup.data.source_streams[0].shared_meter, undefined);
+assert.equal(getBackupCompatibilityMessage(legacyAllocationBackup.manifest), '');
+
+console.log('Local backup verification passed (할당로직 optional 필드 왕복·옛 백업 호환 포함).');

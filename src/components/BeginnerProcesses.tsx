@@ -121,6 +121,8 @@ export default function BeginnerProcesses() {
                 market_output_mass_t: existing?.market_output_mass_t ?? outputMass,
                 internal_consumption_mass_t: existing?.internal_consumption_mass_t ?? 0,
                 direct_attributable_emissions_tco2e: existing?.direct_attributable_emissions_tco2e ?? 0,
+                direct_emissions_input_mode: existing?.direct_emissions_input_mode,
+                direct_emissions_input_note: existing?.direct_emissions_input_note,
                 electricity_mwh: existing?.electricity_mwh ?? 0,
                 electricity_ef_tco2e_per_mwh: existing?.electricity_ef_tco2e_per_mwh ?? 0,
                 electricity_ef_source: existing?.electricity_ef_source ?? '',

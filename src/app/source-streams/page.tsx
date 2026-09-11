@@ -16,6 +16,7 @@ import {
     getSourceStreamEmissionFactorBasis,
     getSourceStreamUnitWarnings,
 } from '@/lib/source-stream-calculation';
+import { SHARED_METER_BASIS_LABEL, sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
 // 검증·상수·라벨은 공유 모듈에 있다. 여기에 사본을 두면 지도 패널과 갈라진다.
 import {
     ACTIVITY_UNITS as activityUnits,
@@ -281,6 +282,7 @@ export default function SourceStreamsPage() {
             biomass_fraction: sourceStream.biomass_fraction,
             factor_source_type: sourceStream.factor_source_type ?? 'UNCLASSIFIED',
             source: sourceStream.source,
+            shared_meter: sourceStream.shared_meter,
         });
         setErrors({});
         setEditingSourceStreamId(sourceStream.id);
@@ -309,6 +311,10 @@ export default function SourceStreamsPage() {
                 : 'PER_ACTIVITY_UNIT',
             factor_source_type: newItem.factor_source_type ?? 'UNCLASSIFIED',
             source: newItem.source.trim(),
+            // 그룹 이름이 비면 단독 계량으로 본다 — 빈 그룹 객체를 남기면 정합 로직이 빈 문자열 그룹을 만든다.
+            shared_meter: newItem.shared_meter?.group?.trim()
+                ? { ...newItem.shared_meter, group: newItem.shared_meter.group.trim() }
+                : undefined,
         };
 
         if (editingSourceStreamId) {
@@ -322,17 +328,20 @@ export default function SourceStreamsPage() {
                 ...existingSourceStream,
                 ...normalizedItem,
             });
-            setSourceStreams(
-                sourceStreams.map((sourceStream) =>
-                    sourceStream.id === updatedSourceStream.id ? updatedSourceStream : sourceStream
-                )
+            const nextStreams = sourceStreams.map((sourceStream) =>
+                sourceStream.id === updatedSourceStream.id ? updatedSourceStream : sourceStream
             );
+            setSourceStreams(nextStreams);
+            // 공정을 옮겼으면 옛 공정도 다시 맞춘다.
+            await syncSumModeProcesses([existingSourceStream.process_id, updatedSourceStream.process_id], nextStreams);
             resetForm();
             return;
         }
 
         const sourceStream = await createLocalItem('source_streams', normalizedItem);
-        setSourceStreams([sourceStream, ...sourceStreams]);
+        const nextStreams = [sourceStream, ...sourceStreams];
+        setSourceStreams(nextStreams);
+        await syncSumModeProcesses([sourceStream.process_id], nextStreams);
         resetForm();
     }
 
@@ -346,10 +355,31 @@ export default function SourceStreamsPage() {
         }
 
         await deleteLocalItem('source_streams', sourceStream.id);
-        setSourceStreams(sourceStreams.filter((item) => item.id !== sourceStream.id));
+        const nextStreams = sourceStreams.filter((item) => item.id !== sourceStream.id);
+        setSourceStreams(nextStreams);
+        await syncSumModeProcesses([sourceStream.process_id], nextStreams);
         if (editingSourceStreamId === sourceStream.id) {
             resetForm();
         }
+    }
+
+    /**
+     * 배출원이 바뀌면 「배출원 자료 합계」 방식 공정의 저장값을 다시 맞춘다 — EU 문서(D_Processes)와
+     * 준비도 검사는 저장값을 읽으므로, 여기서 안 맞추면 엔진(합계)과 문서(옛 값)가 갈린다.
+     * 정합계수 보정은 그룹 전체(다른 공정 행 포함)로 계산되므로 전체 배출원을 넘긴다.
+     */
+    async function syncSumModeProcesses(processIds: Array<string | undefined>, nextStreams: SourceStream[]) {
+        const targets = processes.filter((process) =>
+            process.direct_emissions_input_mode === 'SOURCE_STREAM_SUM' && processIds.includes(process.id)
+        );
+        if (targets.length === 0) {
+            return;
+        }
+        const updated = await Promise.all(targets.map((process) => updateLocalItem('processes', {
+            ...process,
+            direct_attributable_emissions_tco2e: sumReconciledSourceStreamEmissions(process.id, nextStreams),
+        })));
+        setProcesses(processes.map((process) => updated.find((item) => item.id === process.id) ?? process));
     }
 
     const draftEnergyBreakdown = calculateSourceStreamEnergyBreakdown(newItem);
@@ -704,6 +734,79 @@ export default function SourceStreamsPage() {
                             <label htmlFor="source-stream-source" className="text-sm font-semibold text-slate-700">출처</label>
                             <input id="source-stream-source" required className={fieldClass} value={newItem.source} onChange={(event) => setNewItem({ ...newItem, source: event.target.value })} placeholder="예: 연료 청구서, 계측기 검침표" />
                             {errors.source && <p className="mt-1 text-xs font-medium text-red-600">{errors.source}</p>}
+                        </div>
+                        {/* 공용 계량기: 여러 공정이 한 계량기의 연료를 나눠 쓰는 경우. 보조계량기면 식 41·42 정합계수,
+                            배분키면 합계=총량만 검사한다(2025/2547 ANNEX III A.1·A.2). 같은 그룹 이름으로 묶는다. */}
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+                            <p className="text-sm font-semibold text-slate-800">공용 계량기 (선택)</p>
+                            <p className="mt-1 text-xs leading-5 text-slate-600">
+                                보일러·집진설비처럼 여러 공정이 한 계량기의 연료를 나눠 쓰면, 공정별 행마다 같은 그룹 이름과 사업장 전체 계량값을 적으세요.
+                                공정별 보조계량기 값이면 정합계수(RecF = 전체 계량값 ÷ 행 합계)를 적용하고, 운전시간·정격용량·생산량으로 나눈 값이면 합계가 전체와 맞는지만 검사합니다.
+                            </p>
+                            <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                <div>
+                                    <label htmlFor="source-stream-shared-group" className="text-xs font-semibold text-slate-600">그룹 이름</label>
+                                    <input
+                                        id="source-stream-shared-group"
+                                        className={fieldClass}
+                                        value={newItem.shared_meter?.group ?? ''}
+                                        placeholder="예: 공용 보일러 LNG 2026"
+                                        onChange={(event) => setNewItem({
+                                            ...newItem,
+                                            shared_meter: {
+                                                group: event.target.value,
+                                                installation_total_activity_data: newItem.shared_meter?.installation_total_activity_data ?? 0,
+                                                basis: newItem.shared_meter?.basis ?? 'SUB_METER',
+                                                note: newItem.shared_meter?.note,
+                                            },
+                                        })}
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="source-stream-shared-total" className="text-xs font-semibold text-slate-600">사업장 전체 계량값 ({newItem.activity_unit || '활동량 단위'})</label>
+                                    <input
+                                        id="source-stream-shared-total"
+                                        type="number" min="0" step="0.0001"
+                                        className={fieldClass}
+                                        disabled={!newItem.shared_meter?.group}
+                                        value={newItem.shared_meter?.installation_total_activity_data ?? 0}
+                                        onChange={(event) => newItem.shared_meter && setNewItem({
+                                            ...newItem,
+                                            shared_meter: { ...newItem.shared_meter, installation_total_activity_data: toNumber(event.target.value) },
+                                        })}
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="source-stream-shared-basis" className="text-xs font-semibold text-slate-600">이 행의 활동량 근거</label>
+                                    <select
+                                        id="source-stream-shared-basis"
+                                        className={fieldClass}
+                                        disabled={!newItem.shared_meter?.group}
+                                        value={newItem.shared_meter?.basis ?? 'SUB_METER'}
+                                        onChange={(event) => newItem.shared_meter && setNewItem({
+                                            ...newItem,
+                                            shared_meter: { ...newItem.shared_meter, basis: event.target.value as NonNullable<SourceStream['shared_meter']>['basis'] },
+                                        })}
+                                    >
+                                        {(Object.keys(SHARED_METER_BASIS_LABEL) as Array<keyof typeof SHARED_METER_BASIS_LABEL>).map((key) => (
+                                            <option key={key} value={key}>{SHARED_METER_BASIS_LABEL[key]}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label htmlFor="source-stream-shared-note" className="text-xs font-semibold text-slate-600">비고 (배분키 산출 근거)</label>
+                                    <input
+                                        id="source-stream-shared-note"
+                                        className={fieldClass}
+                                        disabled={!newItem.shared_meter?.group}
+                                        value={newItem.shared_meter?.note ?? ''}
+                                        onChange={(event) => newItem.shared_meter && setNewItem({
+                                            ...newItem,
+                                            shared_meter: { ...newItem.shared_meter, note: event.target.value },
+                                        })}
+                                    />
+                                </div>
+                            </div>
                         </div>
                         <div className="rounded-xl bg-teal-50 p-4 text-sm text-teal-900 md:col-span-1">
                             <p className="font-semibold">추정 배출량</p>

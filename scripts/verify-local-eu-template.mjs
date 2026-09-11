@@ -90,6 +90,10 @@ function loadEuExportModule() {
       .replace(/^import .*;\r?\n/gm, '')
       .replace(/^export /gm, ''),
   ].join('\n');
+  // 할당 규칙(정합계수·배분율 허용오차)은 export 가 import 한다 — 앞에 붙인다.
+  const allocationRulesSource = readFileSync('src/lib/allocation-rules.ts', 'utf8')
+    .replace(/^import .*;\r?\n/gm, '')
+    .replace(/^export /gm, '');
   const source = readFileSync('src/lib/eu-template-export.ts', 'utf8')
     .replace(
       "import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';",
@@ -98,11 +102,13 @@ function loadEuExportModule() {
     .replace("import { summarizeProductOutputLines } from './calculation-engine';", '')
     .replace("import { calculateSourceStreamEmissions, getSourceStreamEmissionFactorBasis } from './source-stream-calculation';", '')
     .replace("import { getIndirectEmissionsApplicability } from './cbam-product-rules';", '')
+    .replace("import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, reconcileSourceStreams } from './allocation-rules';", '')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
   const compiled = ts.transpileModule(
     `${sourceStreamCalculationSource}
 ${productRulesSource}
+${allocationRulesSource}
 function summarizeProductOutputLines(processOutputMassT, outputLines) {
   const activeLines = outputLines.filter((line) => line.output_mass_t > 0);
   const totalOutput = activeLines.reduce((sum, line) => sum + line.output_mass_t, 0);

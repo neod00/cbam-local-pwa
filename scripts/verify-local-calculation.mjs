@@ -704,8 +704,21 @@ assert.equal(alOffspec.is_cbam_reportable, false);
 assert.equal(alOffspec.output_mass_t, 50, '질량은 추적용으로 남긴다');
 assert.doesNotMatch(warningsOf(alGood), /제품 생산라인 합계가 공정 총 생산량과/, '공정 생산량 950 = 활동수준 950');
 assert.doesNotMatch(warningsOf(alGood), /확인 필요\(규정\)/, '역할을 명시했으면 확인 요구 없음');
+// CBAM 재화 라인이라도 불량으로 제외되면 신고 대상이 아니다(재화가 아니라 스크랩) — 기준 SEE도 없다.
+const cbamOffspecLines = [alLines[0], { ...alLines[1], product_id: 'p-good', reporting_scope: undefined, activity_level_role: 'EXCLUDED' }];
+const cbamOffspec = calculateLocalResults({ processes: [alProcess], precursors: [], products: alProducts, periods: [period], productOutputLines: cbamOffspecLines })
+  .find((r) => r.product_output_line_id === 'line-offspec');
+assert.equal(cbamOffspec.reporting_scope, 'CBAM_GOOD');
+assert.equal(cbamOffspec.is_cbam_reportable, false, 'CBAM 재화의 불량분도 신고 대상이 아니다');
+assert.equal(cbamOffspec.see_cbam_basis, null);
+// 공정 생산량(저장값)이 낡아 라인 합계와 달라도 활동수준은 라인에서 온다 — 저장값이 아니다. 차이는 경고로 남긴다.
+const staleTotal = calculateLocalResults({ processes: [{ ...alProcess, output_mass_t: 1000 }], precursors: [], products: alProducts, periods: [period], productOutputLines: alLines })
+  .find((r) => r.product_output_line_id === 'line-good');
+assert.equal(staleTotal.activity_level_t, 950, '활동수준은 포함 라인 합계(950)이지 공정 저장값(1,000)이 아니다');
+assertClose(staleTotal.direct_see, 95 / 950, 1e-9);
+assert.match(warningsOf(staleTotal), /제품 생산라인 합계가 공정 총 생산량과 50\.0000 t 차이납니다/);
 // 기존 자료(역할 미지정): 숫자는 종전대로(1,000 분모), 대신 확인을 요구한다 — 앱이 부산물 여부를 대신 정하지 않는다.
-const legacyLines = alLines.map(({ activity_level_role, ...line }) => line);
+const legacyLines = alLines.map((line) => { const legacy = { ...line }; delete legacy.activity_level_role; return legacy; });
 const legacyResults = calculateLocalResults({ processes: [{ ...alProcess, output_mass_t: 1000 }], precursors: [], products: alProducts, periods: [period], productOutputLines: legacyLines });
 const legacyGood = legacyResults.find((r) => r.product_output_line_id === 'line-good');
 assert.equal(legacyGood.activity_level_t, 1000);

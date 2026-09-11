@@ -14,9 +14,10 @@ import {
     updateLocalItem,
 } from '@/lib/local-db';
 import { summarizeProductOutputLines } from '@/lib/calculation-engine';
-import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from '@/lib/source-stream-calculation';
+import { calculateSourceStreamEnergyBreakdown } from '@/lib/source-stream-calculation';
 import { getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
 import { getProductReportingScope } from '@/lib/reporting-scope';
+import { ACTIVITY_LEVEL_ROLE_LABEL, ALLOCATION_BASIS_LABEL, DIRECT_EMISSIONS_INPUT_MODE_LABEL, sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
 import { Term } from '@/components/ux/Term';
 import { FieldHelp } from '@/components/ux/FieldHelp';
 import { AlertTriangle, ArrowRight, Factory, Gauge, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
@@ -75,10 +76,8 @@ function formatNumber(value: number) {
 
 function calculateProcessSourceStreamSummary(process: ProductionProcess, sourceStreams: SourceStream[]) {
     const linkedSourceStreams = sourceStreams.filter((sourceStream) => sourceStream.process_id === process.id);
-    const emissions = linkedSourceStreams.reduce(
-        (sum, sourceStream) => sum + calculateSourceStreamEmissions(sourceStream),
-        0
-    );
+    // 공용 계량기 정합계수(식 41·42)를 거친 합계 — 엔진·지도·초보자 화면과 같은 헬퍼를 쓴다.
+    const emissions = sumReconciledSourceStreamEmissions(process.id, sourceStreams);
     const energy = linkedSourceStreams.reduce(
         (sum, sourceStream) => sum + calculateSourceStreamEnergyBreakdown(sourceStream).total,
         0
@@ -146,6 +145,8 @@ export default function ProcessesPage() {
                     electricity_mwh: editProcess.electricity_mwh,
                     electricity_ef_tco2e_per_mwh: editProcess.electricity_ef_tco2e_per_mwh,
                     electricity_ef_source: editProcess.electricity_ef_source ?? '',
+                    direct_emissions_input_mode: editProcess.direct_emissions_input_mode,
+                    direct_emissions_input_note: editProcess.direct_emissions_input_note ?? '',
                 });
                 const existingLines = outputLineData.filter((line) => line.process_id === editProcess.id);
                 setOutputLineDrafts(existingLines.length > 0
@@ -156,6 +157,9 @@ export default function ProcessesPage() {
                         allocation_basis: line.allocation_basis,
                         manual_allocation_percent: line.manual_allocation_percent,
                         note: line.note,
+                        activity_level_role: line.activity_level_role,
+                        manual_allocation_reason: line.manual_allocation_reason ?? '',
+                        manual_allocation_evidence: line.manual_allocation_evidence ?? '',
                     }))
                     : [createOutputLineDraft(editProcess.product_id ?? '', editProcess.output_mass_t)]
                 );
@@ -195,10 +199,7 @@ export default function ProcessesPage() {
         }
 
         const linkedSourceStreams = sourceStreams.filter((sourceStream) => sourceStream.process_id === editingProcessId);
-        const emissions = linkedSourceStreams.reduce(
-            (sum, sourceStream) => sum + calculateSourceStreamEmissions(sourceStream),
-            0
-        );
+        const emissions = sumReconciledSourceStreamEmissions(editingProcessId, sourceStreams);
         const energy = linkedSourceStreams.reduce(
             (sum, sourceStream) => sum + calculateSourceStreamEnergyBreakdown(sourceStream).total,
             0
@@ -265,6 +266,8 @@ export default function ProcessesPage() {
             electricity_mwh: process.electricity_mwh,
             electricity_ef_tco2e_per_mwh: process.electricity_ef_tco2e_per_mwh,
             electricity_ef_source: process.electricity_ef_source ?? '',
+            direct_emissions_input_mode: process.direct_emissions_input_mode,
+            direct_emissions_input_note: process.direct_emissions_input_note ?? '',
         });
         setErrors({});
         const existingLines = productOutputLines.filter((line) => line.process_id === process.id);
@@ -276,6 +279,9 @@ export default function ProcessesPage() {
                 allocation_basis: line.allocation_basis,
                 manual_allocation_percent: line.manual_allocation_percent,
                 note: line.note,
+                activity_level_role: line.activity_level_role,
+                manual_allocation_reason: line.manual_allocation_reason ?? '',
+                manual_allocation_evidence: line.manual_allocation_evidence ?? '',
             }))
             : [createOutputLineDraft(process.product_id ?? '', process.output_mass_t)]
         );
@@ -299,6 +305,10 @@ export default function ProcessesPage() {
                     manual_allocation_percent: line.manual_allocation_percent,
                     note: line.note.trim(),
                     reporting_scope: getProductReportingScope(products.find((product) => product.id === line.product_id), line),
+                    // 삭제 후 재생성이므로 빠뜨리면 사용자가 고른 활동수준 역할·사유가 조용히 사라진다.
+                    activity_level_role: line.activity_level_role,
+                    manual_allocation_reason: line.manual_allocation_reason?.trim() || undefined,
+                    manual_allocation_evidence: line.manual_allocation_evidence?.trim() || undefined,
                 })
             )
         );
@@ -364,6 +374,12 @@ export default function ProcessesPage() {
             return;
         }
 
+        // 「배출원 자료 합계」 방식이면 저장값도 합계(정합 보정 후)로 맞춘다 — EU 문서(D_Processes)는 저장값을 읽는다.
+        const resolveDirectTotal = (processId: string | null) =>
+            newItem.direct_emissions_input_mode === 'SOURCE_STREAM_SUM' && processId
+                ? sumReconciledSourceStreamEmissions(processId, sourceStreams)
+                : newItem.direct_attributable_emissions_tco2e;
+
         if (editingProcessId) {
             const existingProcess = processes.find((process) => process.id === editingProcessId);
 
@@ -374,6 +390,7 @@ export default function ProcessesPage() {
             const updatedProcess = await updateLocalItem('processes', {
                 ...existingProcess,
                 ...newItem,
+                direct_attributable_emissions_tco2e: resolveDirectTotal(existingProcess.id),
                 name: newItem.name.trim(),
                 production_route: newItem.production_route.trim(),
                 period_id: newItem.period_id || undefined,
@@ -387,6 +404,7 @@ export default function ProcessesPage() {
 
         const process = await createLocalItem('processes', {
             ...newItem,
+            direct_attributable_emissions_tco2e: resolveDirectTotal(null),
             name: newItem.name.trim(),
             production_route: newItem.production_route.trim(),
             period_id: newItem.period_id || undefined,
@@ -616,7 +634,7 @@ export default function ProcessesPage() {
 
                         <FormSection
                             title="2. 제품 생산라인 배분"
-                            description="한 공정에서 여러 제품이 나오면 제품별 생산량과 배분 기준을 입력합니다. 라인 합계가 공정 총 생산량과 맞는지 확인하세요."
+                            description="한 공정에서 여러 제품이 나오면 제품별 생산량과 배분 기준을 입력합니다. 라인 합계(활동수준 제외 라인 제외)가 공정 총 생산량과 맞는지 확인하세요. 불량·부산물·스크랩은 「활동수준 제외」로 표시하면 분모에서 빠지고 배출 0으로 기록됩니다."
                             badge={<StatusBadge tone="pending">검토용</StatusBadge>}
                         >
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-3">
@@ -632,7 +650,7 @@ export default function ProcessesPage() {
                             </div>
                             <div className="mt-4 space-y-3">
                                 {outputLineDrafts.map((line, index) => (
-                                    <div key={index} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 lg:grid-cols-[1.2fr_1.2fr_1fr_1fr_1fr_auto]">
+                                    <div key={index} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 lg:grid-cols-[1.2fr_1.2fr_1fr_1fr_1fr_1.4fr_auto]">
                                         <div>
                                             <label className="text-xs font-semibold text-slate-600">라인명</label>
                                             <input className={fieldClass} value={line.name} placeholder={`제품라인 ${index + 1}`} onChange={(event) => {
@@ -669,23 +687,59 @@ export default function ProcessesPage() {
                                                 next[index] = { ...line, allocation_basis: event.target.value as OutputLineDraft['allocation_basis'] };
                                                 setOutputLineDrafts(next);
                                             }}>
-                                                <option value="MASS">질량 기준</option>
-                                                <option value="MANUAL">수동 비율</option>
+                                                <option value="MASS">{ALLOCATION_BASIS_LABEL.MASS} (규정 원칙 — 기능단위)</option>
+                                                <option value="MANUAL">{ALLOCATION_BASIS_LABEL.MANUAL}</option>
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="text-xs font-semibold text-slate-600">수동비율(%)</label>
+                                            <label className="text-xs font-semibold text-slate-600">사용자 지정 배분율(%)</label>
                                             <input type="number" min="0" step="0.0001" className={fieldClass} value={line.manual_allocation_percent} disabled={line.allocation_basis !== 'MANUAL'} onChange={(event) => {
                                                 const next = [...outputLineDrafts];
                                                 next[index] = { ...line, manual_allocation_percent: toNumber(event.target.value) };
                                                 setOutputLineDrafts(next);
                                             }} />
                                         </div>
+                                        <div>
+                                            <label className="text-xs font-semibold text-slate-600">활동수준(점 F)</label>
+                                            {/* 부산물·불량·스크랩인지 앱이 대신 정하지 않는다 — 미지정이면 산정에서 확인을 요구한다. */}
+                                            <select className={fieldClass} value={line.activity_level_role ?? ''} onChange={(event) => {
+                                                const next = [...outputLineDrafts];
+                                                next[index] = { ...line, activity_level_role: (event.target.value || undefined) as OutputLineDraft['activity_level_role'] };
+                                                setOutputLineDrafts(next);
+                                            }}>
+                                                <option value="">미지정 (포함으로 산정 · 확인 필요)</option>
+                                                <option value="GOOD">{ACTIVITY_LEVEL_ROLE_LABEL.GOOD}</option>
+                                                <option value="EXCLUDED">{ACTIVITY_LEVEL_ROLE_LABEL.EXCLUDED}</option>
+                                            </select>
+                                        </div>
                                         <div className="flex items-end">
                                             <Button type="button" variant="danger" className="min-h-11 px-3" disabled={outputLineDrafts.length === 1} onClick={() => setOutputLineDrafts(outputLineDrafts.filter((_, itemIndex) => itemIndex !== index))}>
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </div>
+                                        {line.allocation_basis === 'MANUAL' && (
+                                            <div className="grid gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:grid-cols-2 lg:col-span-full">
+                                                <p className="text-xs leading-5 text-amber-900 sm:col-span-2">
+                                                    규정상 한 공정 안 재화 간 귀속은 기능단위(질량)가 원칙입니다(2025/2547 ANNEX III A.2). 열·폐가스·몰비 등 예외에 해당하는 물리적 관계와 증빙을 적으세요 — 비어 있으면 산정 결과에 확인 필요로 남습니다.
+                                                </p>
+                                                <div>
+                                                    <label className="text-xs font-semibold text-slate-600">배분 사유(물리적 관계)</label>
+                                                    <input className={fieldClass} value={line.manual_allocation_reason ?? ''} placeholder="예: 가열로 체류시간 비율" onChange={(event) => {
+                                                        const next = [...outputLineDrafts];
+                                                        next[index] = { ...line, manual_allocation_reason: event.target.value };
+                                                        setOutputLineDrafts(next);
+                                                    }} />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-semibold text-slate-600">증빙</label>
+                                                    <input className={fieldClass} value={line.manual_allocation_evidence ?? ''} placeholder="예: 2026 운전일지, 계측 기록" onChange={(event) => {
+                                                        const next = [...outputLineDrafts];
+                                                        next[index] = { ...line, manual_allocation_evidence: event.target.value };
+                                                        setOutputLineDrafts(next);
+                                                    }} />
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -700,13 +754,18 @@ export default function ProcessesPage() {
                                         <p className="font-semibold">{formatNumber(editingOutputLineSummary.delta)} t</p>
                                     </div>
                                     <div>
-                                        <p className={editingOutputLineSummary.needsReview ? 'text-xs text-amber-800' : 'text-xs text-teal-700'}>수동비율 합계</p>
+                                        <p className={editingOutputLineSummary.needsReview ? 'text-xs text-amber-800' : 'text-xs text-teal-700'}>사용자 지정 배분율 합계</p>
                                         <p className="font-semibold">{formatNumber(editingOutputLineSummary.manualPercentTotal)}%</p>
                                     </div>
                                 </div>
                                 {editingOutputLineSummary.hasMixedAllocationBasis && (
                                     <p className="mt-2 text-xs font-semibold">
-                                        질량 기준과 수동 비율이 섞여 있습니다. 한 공정 안에서는 같은 배분기준을 사용하는지 확인하세요.
+                                        질량 기준과 사용자 지정 배분이 섞여 있습니다. 한 공정 안에서는 같은 배분기준을 사용하는지 확인하세요.
+                                    </p>
+                                )}
+                                {editingOutputLineSummary.excludedCount > 0 && (
+                                    <p className="mt-2 text-xs font-semibold">
+                                        활동수준 제외 라인 {editingOutputLineSummary.excludedCount}개({formatNumber(editingOutputLineSummary.excludedOutput)} t)는 라인 합계와 공정 총 생산량에 넣지 않습니다 — 배출 0으로 기록됩니다(2025/2547 ANNEX II 점 F).
                                     </p>
                                 )}
                                 {editingOutputLineSummary.needsOutputReview && (
@@ -746,7 +805,44 @@ export default function ProcessesPage() {
                                 exampleLabel="예시값 채우기 (402,245)"
                                 onExample={() => setNewItem({ ...newItem, direct_attributable_emissions_tco2e: 402245 })}
                             />
-                            <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.direct_attributable_emissions_tco2e} onChange={(event) => setNewItem({ ...newItem, direct_attributable_emissions_tco2e: toNumber(event.target.value) })} />
+                            {/* 어떤 방식으로 정했는지 기록한다(CBAM-ALLOC-DIRECT-01) — 같은 숫자라도 검증인은 출처를 묻는다. */}
+                            <select
+                                aria-label="직접귀속배출량 산정방식"
+                                className={fieldClass}
+                                value={newItem.direct_emissions_input_mode ?? ''}
+                                onChange={(event) => {
+                                    const mode = (event.target.value || undefined) as ProcessDraft['direct_emissions_input_mode'];
+                                    setNewItem({
+                                        ...newItem,
+                                        direct_emissions_input_mode: mode,
+                                        direct_attributable_emissions_tco2e: mode === 'SOURCE_STREAM_SUM'
+                                            ? (editingSourceStreamSummary?.emissions ?? 0)
+                                            : newItem.direct_attributable_emissions_tco2e,
+                                    });
+                                }}
+                            >
+                                <option value="">{DIRECT_EMISSIONS_INPUT_MODE_LABEL.UNSPECIFIED}</option>
+                                <option value="SOURCE_STREAM_SUM">{DIRECT_EMISSIONS_INPUT_MODE_LABEL.SOURCE_STREAM_SUM} (권장 — 배출원 자료로 근거가 남음)</option>
+                                <option value="MANUAL_TOTAL">{DIRECT_EMISSIONS_INPUT_MODE_LABEL.MANUAL_TOTAL} — 사유 필요</option>
+                                <option value="TEMPLATE_UPLOAD">{DIRECT_EMISSIONS_INPUT_MODE_LABEL.TEMPLATE_UPLOAD}</option>
+                            </select>
+                            <input
+                                type="number" min="0" step="0.0001" className={fieldClass}
+                                disabled={newItem.direct_emissions_input_mode === 'SOURCE_STREAM_SUM'}
+                                value={newItem.direct_emissions_input_mode === 'SOURCE_STREAM_SUM' ? (editingSourceStreamSummary?.emissions ?? 0) : newItem.direct_attributable_emissions_tco2e}
+                                onChange={(event) => setNewItem({ ...newItem, direct_attributable_emissions_tco2e: toNumber(event.target.value) })}
+                            />
+                            {newItem.direct_emissions_input_mode === 'SOURCE_STREAM_SUM' && (
+                                <p className="mt-1 text-xs text-slate-500">연결된 배출원 합계(공용 계량기 정합계수 보정 후)를 저장할 때 자동으로 씁니다. 배출원을 고치면 결과가 따라 바뀝니다.</p>
+                            )}
+                            {newItem.direct_emissions_input_mode === 'MANUAL_TOTAL' && (
+                                <input
+                                    className={fieldClass}
+                                    value={newItem.direct_emissions_input_note ?? ''}
+                                    onChange={(event) => setNewItem({ ...newItem, direct_emissions_input_note: event.target.value })}
+                                    placeholder="사유·근거 (예: 연속측정(CEMS) 연간 합계 — 측정보고서 p.12)"
+                                />
+                            )}
                             {errors.direct_attributable_emissions_tco2e && <p className="mt-1 text-xs font-medium text-red-600">{errors.direct_attributable_emissions_tco2e}</p>}
                         </div>
                         {editingSourceStreamSummary && editingSourceStreamSummary.count > 0 && (
