@@ -25,17 +25,28 @@ function loadLocalCalculationModule() {
   const calculationEngineSource = readFileSync('src/lib/calculation-engine.ts', 'utf8')
     .replace(/^import .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
+  // 할당 규칙(allocation-rules.ts)은 엔진이 import 한다. 앞에 붙이지 않으면 reconcileSourceStreams 가
+  // undefined 가 되어 vm 안에서 조용히 죽는다(실제로 죽었다).
+  const allocationRulesSource = readFileSync('src/lib/allocation-rules.ts', 'utf8')
+    .replace(/^import .*;\r?\n/gm, '')
+    .replace(/^export /gm, '');
 
   const compiled = ts.transpileModule(
     `${sourceStreamCalculationSource}
 ${productRulesSource}
 ${reportingScopeSource}
+${allocationRulesSource}
 ${calculationEngineSource}
 globalThis.localCalculation = {
   calculateLocalResults,
   getLocalCalculationWarningHref,
   getIndirectEmissionsApplicability,
   summarizeProductOutputLines,
+  reconcileSourceStreams,
+  resolveActivityLevelRole,
+  getDirectEmissionsInputMode,
+  sumReconciledSourceStreamEmissions,
+  ALLOCATION_RULES,
 };`,
     {
       compilerOptions: {
@@ -55,6 +66,11 @@ const {
   getIndirectEmissionsApplicability,
   getLocalCalculationWarningHref,
   summarizeProductOutputLines,
+  reconcileSourceStreams,
+  resolveActivityLevelRole,
+  getDirectEmissionsInputMode,
+  sumReconciledSourceStreamEmissions,
+  ALLOCATION_RULES,
 } = loadLocalCalculationModule();
 
 function assertClose(actual, expected, delta = 0.0000001) {
@@ -524,4 +540,286 @@ assertClose(
   ),
   (830.28 * 8000 / 8200) + 9225
 );
+// ═══════════════════════════════════════════════════════════════════════
+// 할당로직 (2025/2547 Art 4(6) · ANNEX II 점 F · ANNEX III A.1/A.2) — 규칙 ID는 allocation-rules.ts
+// ═══════════════════════════════════════════════════════════════════════
+const warningsOf = (result) => result.warnings.join('\n');
+
+// 규칙 표가 「규정 필수」로 표시한 항목은 원문 인용을 갖고 있어야 한다 — 앱이 규정에 없는 의무를 주장하면 안 된다.
+for (const rule of Object.values(ALLOCATION_RULES)) {
+  assert.ok(rule.id.startsWith('CBAM-ALLOC-'), `${rule.id}: 규칙 ID 형식`);
+  assert.ok(rule.anchor.length > 0 && rule.text.length > 20, `${rule.id}: 근거·본문이 비어 있다`);
+}
+assert.equal(ALLOCATION_RULES.ADJUSTMENTS.unsupported, true, '식 55 보정은 현재 버전에서 미지원으로 표시');
+assert.equal(ALLOCATION_RULES.ACTIVITY_LEVEL.kind, '규정 필수');
+assert.match(ALLOCATION_RULES.ACTIVITY_LEVEL.text, /shall not be included in the determination of the activity level/);
+assert.match(ALLOCATION_RULES.RECONCILIATION.text, /RecF = DInst \/ DPP/);
+
+// --- T1 직접배출 입력방식 (CBAM-ALLOC-DIRECT-01) ---
+// SOURCE_STREAM_SUM: 수기 값(120)을 무시하고 배출원 합계(821.25)를 쓴다. 저장값이 낡았음은 경고로 알린다.
+const sumModeResults = calculateLocalResults({
+  processes: [{ ...process, id: 'proc-sum', direct_emissions_input_mode: 'SOURCE_STREAM_SUM' }],
+  precursors: [], products: [product], periods: [period],
+  sourceStreams: [{ ...sourceStream, id: 'ss-sum', process_id: 'proc-sum' }],
+});
+assert.equal(sumModeResults[0].direct_emissions_input_mode, 'SOURCE_STREAM_SUM');
+assert.equal(sumModeResults[0].direct_emissions_tco2e, 821.25, '배출원 합계 방식은 합계를 직접배출로 쓴다');
+assertClose(sumModeResults[0].direct_see, 821.25 / 1000);
+assert.match(warningsOf(sumModeResults[0]), /저장된 직접귀속배출량 120\.0000 tCO2e가 배출원 합계 821\.2500 tCO2e와 다릅니다/);
+assert.doesNotMatch(warningsOf(sumModeResults[0]), /배출원 자료 합계와 공정 직접배출량 입력값이/, '합계 방식에서는 수기 대조 경고를 내지 않는다');
+// MANUAL_TOTAL: 수기 값을 쓰고 배출원 합계는 대조용(1% 초과 차이 경고).
+const manualModeResults = calculateLocalResults({
+  processes: [{ ...process, id: 'proc-man', direct_emissions_input_mode: 'MANUAL_TOTAL' }],
+  precursors: [], products: [product], periods: [period],
+  sourceStreams: [{ ...sourceStream, id: 'ss-man', process_id: 'proc-man' }],
+});
+assert.equal(manualModeResults[0].direct_emissions_input_mode, 'MANUAL_TOTAL');
+assert.equal(manualModeResults[0].direct_emissions_tco2e, 120);
+assert.match(warningsOf(manualModeResults[0]), /배출원 자료 합계와 공정 직접배출량 입력값이 701\.2500 tCO2e 차이납니다/);
+// 기존 자료(방식 미기록): 수기 값을 쓰되 UNSPECIFIED 로 남긴다 — 어느 쪽으로도 단정하지 않는다.
+assert.equal(resultsWithSourceStreams[0].direct_emissions_input_mode, 'UNSPECIFIED');
+assert.equal(resultsWithSourceStreams[0].direct_emissions_tco2e, 120);
+assert.equal(getDirectEmissionsInputMode({}), 'UNSPECIFIED');
+// 템플릿 업로드 값은 수기 값과 같이 다루되 출처가 남는다.
+const uploadResults = calculateLocalResults({
+  processes: [{ ...process, id: 'proc-up', direct_emissions_input_mode: 'TEMPLATE_UPLOAD' }],
+  precursors: [], products: [product], periods: [period],
+  sourceStreams: [{ ...sourceStream, id: 'ss-up', process_id: 'proc-up' }],
+});
+assert.equal(uploadResults[0].direct_emissions_input_mode, 'TEMPLATE_UPLOAD');
+assert.equal(uploadResults[0].direct_emissions_tco2e, 120);
+// 합계 방식인데 배출원이 없으면 직접배출 0 — 조용히 0이 되면 안 되므로 경고한다.
+const sumNoStream = calculateLocalResults({
+  processes: [{ ...process, id: 'proc-sum0', direct_emissions_input_mode: 'SOURCE_STREAM_SUM' }],
+  precursors: [], products: [product], periods: [period],
+});
+assert.equal(sumNoStream[0].direct_emissions_tco2e, 0);
+assert.match(warningsOf(sumNoStream[0]), /연결된 배출원이 없어 직접배출이 0으로 산정됩니다/);
+assert.doesNotMatch(warningsOf(sumNoStream[0]), /연결된 배출원 자료가 없습니다/, '합계 방식에서는 수기 방식용 경고를 내지 않는다');
+
+// --- T2 공용 계량기 정합계수 (CBAM-ALLOC-RECF-01, 식 41·42): 10,000 / (5,700 + 3,800) → 6,000 / 4,000 ---
+const unitFactorStream = {
+  ...sourceStream, stream_type: 'FUEL', method: 'Combustion', emission_factor_basis: 'PER_ACTIVITY_UNIT',
+  emission_factor_tco2e_per_unit: 2, ncv_gj_per_unit: 0, activity_unit: 'Nm3',
+};
+const sharedMeter = { group: '공용 보일러', installation_total_activity_data: 10000, basis: 'SUB_METER' };
+const meterA = { ...unitFactorStream, id: 'ss-meter-a', process_id: 'proc-meter-a', activity_data: 5700, shared_meter: sharedMeter };
+const meterB = { ...unitFactorStream, id: 'ss-meter-b', process_id: 'proc-meter-b', activity_data: 3800, shared_meter: sharedMeter };
+const reconciled = reconcileSourceStreams([meterA, meterB]);
+assert.equal(reconciled.groups.length, 1);
+assert.equal(reconciled.groups[0].applied, true);
+assertClose(reconciled.groups[0].factor, 10000 / 9500);
+assertClose(reconciled.streams.find((s) => s.id === 'ss-meter-a').activity_data, 6000);
+assertClose(reconciled.streams.find((s) => s.id === 'ss-meter-b').activity_data, 4000);
+assert.equal(meterA.activity_data, 5700, '원본 행을 바꾸지 않는다');
+assertClose(sumReconciledSourceStreamEmissions('proc-meter-a', [meterA, meterB]), 12000, 1e-6); // 화면·동기화용 합계도 보정값
+const meterProducts = [product, { ...product, id: 'product-2', name: 'HRC 2', cn_code: '72083900' }];
+const meterResults = calculateLocalResults({
+  processes: [
+    { ...process, id: 'proc-meter-a', product_id: 'product-1', period_id: 'p-a', direct_emissions_input_mode: 'SOURCE_STREAM_SUM' },
+    { ...process, id: 'proc-meter-b', product_id: 'product-2', period_id: 'p-b', direct_emissions_input_mode: 'SOURCE_STREAM_SUM' },
+  ],
+  precursors: [], products: meterProducts, periods: [period],
+  sourceStreams: [meterA, meterB],
+});
+const meterResultA = meterResults.find((r) => r.process_id === 'proc-meter-a');
+const meterResultB = meterResults.find((r) => r.process_id === 'proc-meter-b');
+assertClose(meterResultA.direct_emissions_tco2e, 12000, 1e-6); // 보정 활동량 6,000 × EF 2
+assertClose(meterResultB.direct_emissions_tco2e, 8000, 1e-6); // 보정 활동량 4,000 × EF 2
+assertClose(meterResultA.direct_emissions_tco2e + meterResultB.direct_emissions_tco2e, 20000, 1e-6); // 두 공정 합 = 사업장 계량 10,000 × EF 2
+assert.equal(meterResultA.reconciliation.length, 1);
+assert.equal(meterResultA.reconciliation[0].group, '공용 보일러');
+assertClose(meterResultA.reconciliation[0].factor, 10000 / 9500);
+assert.doesNotMatch(warningsOf(meterResultA), /정합계수를 적용하지 못했습니다|권고: 공용 계량기/, '정상 정합은 경고 없음');
+// 그룹 없는 행은 그대로.
+assert.equal(reconcileSourceStreams([unitFactorStream]).groups.length, 0);
+assert.equal(reconcileSourceStreams([unitFactorStream]).streams[0].activity_data, unitFactorStream.activity_data);
+// 보조계량기 1개 vs 사업장 계량기도 식 41이다(규정 조건은 계기 수이지 공정 수가 아니다).
+const lonely = reconcileSourceStreams([meterA]);
+assert.equal(lonely.groups[0].applied, true);
+assertClose(lonely.streams[0].activity_data, 10000, 1e-6);
+// 배분키(A.2)로 나눈 행에는 정합계수를 만들지 않는다 — 합계=총량만 검사한다.
+const keyMeter = { ...sharedMeter, basis: 'OPERATING_HOURS' };
+const keySplitBad = reconcileSourceStreams([{ ...meterA, shared_meter: keyMeter }, { ...meterB, shared_meter: keyMeter }]);
+assert.equal(keySplitBad.groups[0].mode, 'KEY_SPLIT');
+assert.equal(keySplitBad.groups[0].applied, false);
+assert.equal(keySplitBad.groups[0].factor, 1);
+assert.match(keySplitBad.groups[0].reason, /배분키로 나눈 행 합계 9500 Nm3가 전체 계량값 10000 Nm3와 다릅니다/);
+assert.equal(keySplitBad.streams[0].activity_data, 5700, '배분키 행은 보정하지 않는다');
+const keySplitOk = reconcileSourceStreams([{ ...meterA, activity_data: 6000, shared_meter: keyMeter }, { ...meterB, activity_data: 4000, shared_meter: keyMeter }]);
+assert.equal(keySplitOk.groups[0].reason, '');
+assert.equal(keySplitOk.groups[0].applied, false);
+// 보조계량기와 배분키가 섞이면 보정하지 않는다.
+assert.match(reconcileSourceStreams([meterA, { ...meterB, shared_meter: keyMeter }]).groups[0].reason, /섞여 있습니다/);
+// 같은 그룹 이름이라도 보고기간이 다르면 따로 묶는다 — 두 해를 한 계수로 묶으면 안 된다.
+const twoYears = reconcileSourceStreams([meterA, meterB, { ...meterA, id: 'ss-meter-a2', period_id: 'p-2027', activity_data: 9000 }]);
+assert.equal(twoYears.groups.length, 2);
+assertClose(twoYears.streams.find((s) => s.id === 'ss-meter-a2').activity_data, 10000, 1e-6);
+assertClose(twoYears.streams.find((s) => s.id === 'ss-meter-a').activity_data, 6000, 1e-6);
+assert.match(reconcileSourceStreams([meterA, { ...meterB, activity_unit: 't' }]).groups[0].reason, /단위가 다릅니다/);
+assert.match(reconcileSourceStreams([meterA, { ...meterB, shared_meter: { ...sharedMeter, installation_total_activity_data: 9000 } }]).groups[0].reason, /서로 다릅니다/);
+const zeroTotal = { ...sharedMeter, installation_total_activity_data: 0 };
+assert.match(reconcileSourceStreams([{ ...meterA, shared_meter: zeroTotal }, { ...meterB, shared_meter: zeroTotal }]).groups[0].reason, /비어 있거나 0/);
+const keySplitResults = calculateLocalResults({
+  processes: [{ ...process, id: 'proc-meter-a', product_id: 'product-1', direct_emissions_input_mode: 'SOURCE_STREAM_SUM' }, { ...process, id: 'proc-meter-b', product_id: 'product-2', direct_emissions_input_mode: 'SOURCE_STREAM_SUM' }],
+  precursors: [], products: meterProducts, periods: [period],
+  sourceStreams: [{ ...meterA, shared_meter: keyMeter }, { ...meterB, shared_meter: keyMeter }],
+});
+assert.match(warningsOf(keySplitResults[0]), /확인 필요\(자료\): 공용 계량기 그룹 '공용 보일러' — 배분키로 나눈 행 합계/);
+assert.match(warningsOf(keySplitResults[0]), /point A\.2/);
+assert.equal(keySplitResults[0].direct_emissions_tco2e, 11400, '배분키 행은 보정하지 않는다 → 5,700 × 2');
+assert.equal(keySplitResults[0].reconciliation[0].mode, 'KEY_SPLIT');
+// 정합계수가 1에서 20% 넘게 벗어나면 권고 경고(규정 한도 아님 — 단위·계량 오류 의심).
+const bigTotal = { ...sharedMeter, installation_total_activity_data: 20000 };
+const bigResults = calculateLocalResults({
+  processes: [{ ...process, id: 'proc-meter-a', product_id: 'product-1', direct_emissions_input_mode: 'SOURCE_STREAM_SUM' }, { ...process, id: 'proc-meter-b', product_id: 'product-2', direct_emissions_input_mode: 'SOURCE_STREAM_SUM' }],
+  precursors: [], products: meterProducts, periods: [period],
+  sourceStreams: [{ ...meterA, shared_meter: bigTotal }, { ...meterB, shared_meter: bigTotal }],
+});
+assert.match(warningsOf(bigResults[0]), /권고: 공용 계량기 그룹 '공용 보일러'의 정합계수 RecF = 2\.1053/);
+
+// --- T3 활동수준 (CBAM-ALLOC-AL-01, 점 F): 1,000 t 생산 중 불량 50 t → 분모 950 t, 불량 라인 배출 0 ---
+const alProducts = [
+  { ...product, id: 'p-good', reporting_scope: 'CBAM_GOOD' },
+  { ...product, id: 'p-offspec', name: '불량품', reporting_scope: 'WASTE_RECYCLE' },
+];
+const alProcess = { ...process, id: 'proc-al', product_id: 'p-good', output_mass_t: 950, direct_attributable_emissions_tco2e: 95, electricity_mwh: 0 };
+const alLines = [
+  { ...outputLineA, id: 'line-good', process_id: 'proc-al', product_id: 'p-good', name: '정규 제품', output_mass_t: 950, activity_level_role: 'GOOD' },
+  { ...outputLineB, id: 'line-offspec', process_id: 'proc-al', product_id: 'p-offspec', name: '불량품', output_mass_t: 50, reporting_scope: 'WASTE_RECYCLE', activity_level_role: 'EXCLUDED' },
+];
+const alResults = calculateLocalResults({ processes: [alProcess], precursors: [], products: alProducts, periods: [period], productOutputLines: alLines });
+const alGood = alResults.find((r) => r.product_output_line_id === 'line-good');
+const alOffspec = alResults.find((r) => r.product_output_line_id === 'line-offspec');
+assert.equal(alResults.length, 2, '제외 라인도 결과에 남는다(배출 0으로)');
+assert.equal(alGood.activity_level_t, 950, '활동수준 = 포함 라인 합계');
+assertClose(alGood.allocation_share, 1, 1e-6); // 정규 제품이 배출 전부를 받는다
+assertClose(alGood.direct_see, 95 / 950, 1e-6); // SEE 분모는 950 (1,000이 아님)
+assert.equal(alOffspec.allocation_basis, 'ACTIVITY_LEVEL_EXCLUDED');
+assert.equal(alOffspec.allocation_share, 0);
+assert.equal(alOffspec.direct_see, 0);
+assert.equal(alOffspec.see_informational_total, 0, '배출 0 배정');
+assert.equal(alOffspec.see_cbam_basis, null);
+assert.equal(alOffspec.is_cbam_reportable, false);
+assert.equal(alOffspec.output_mass_t, 50, '질량은 추적용으로 남긴다');
+assert.doesNotMatch(warningsOf(alGood), /제품 생산라인 합계가 공정 총 생산량과/, '공정 생산량 950 = 활동수준 950');
+assert.doesNotMatch(warningsOf(alGood), /확인 필요\(규정\)/, '역할을 명시했으면 확인 요구 없음');
+// 기존 자료(역할 미지정): 숫자는 종전대로(1,000 분모), 대신 확인을 요구한다 — 앱이 부산물 여부를 대신 정하지 않는다.
+const legacyLines = alLines.map(({ activity_level_role, ...line }) => line);
+const legacyResults = calculateLocalResults({ processes: [{ ...alProcess, output_mass_t: 1000 }], precursors: [], products: alProducts, periods: [period], productOutputLines: legacyLines });
+const legacyGood = legacyResults.find((r) => r.product_output_line_id === 'line-good');
+assert.equal(legacyGood.activity_level_t, 1000);
+assertClose(legacyGood.allocation_share, 0.95);
+assertClose(legacyGood.direct_see, 95 * 0.95 / 950);
+assert.match(warningsOf(legacyGood), /확인 필요\(규정\): '불량품' 라인\(폐기물·재활용\)이 활동수준에 포함되어 있습니다/);
+assert.match(warningsOf(legacyGood), /ANNEX II, point F/);
+assert.equal(legacyResults.find((r) => r.product_output_line_id === 'line-offspec').allocation_basis, 'MASS');
+// 비CBAM 공동산출물도 미지정이면 확인 요구(부산물인지 정규 제품인지 앱이 모른다). CBAM 재화는 요구하지 않는다.
+assert.equal(resolveActivityLevelRole({}, 'NON_CBAM_COPRODUCT').needsConfirmation, true);
+assert.equal(resolveActivityLevelRole({}, 'WASTE_RECYCLE').needsConfirmation, true);
+assert.equal(resolveActivityLevelRole({}, 'CBAM_GOOD').needsConfirmation, false);
+assert.equal(resolveActivityLevelRole({}, 'INTERNAL_ONLY').needsConfirmation, false, '내부 전구물질 사용은 점 F가 포함한다');
+assert.equal(resolveActivityLevelRole({ activity_level_role: 'GOOD' }, 'WASTE_RECYCLE').needsConfirmation, false, '명시하면 확인 요구 없음');
+assert.equal(resolveActivityLevelRole({ activity_level_role: 'EXCLUDED' }, 'CBAM_GOOD').role, 'EXCLUDED', 'CBAM 재화도 불량이면 제외 가능');
+// 복합 철강 회귀(밀스케일 역할 미지정)는 위에서 8,200 분모 그대로 통과했다 — 기존 숫자 불변.
+assert.match(warningsOf(complexHrcResult), /확인 필요\(규정\): '밀스케일' 라인\(비CBAM 공동산출물\)/);
+// 라인 요약도 제외 라인을 공정 생산량 비교에서 뺀다.
+const alSummary = summarizeProductOutputLines(950, alLines);
+assert.equal(alSummary.totalOutput, 950);
+assert.equal(alSummary.excludedCount, 1);
+assert.equal(alSummary.excludedOutput, 50);
+assert.equal(alSummary.needsOutputReview, false);
+
+// --- T4 사용자 지정 배분율 합계 (CBAM-ALLOC-MANUAL-01): 합계≠100% → 차단 문구 ---
+const manualLineA = { ...outputLineA, allocation_basis: 'MANUAL', manual_allocation_percent: 60, manual_allocation_reason: '가열로 체류시간 비율', manual_allocation_evidence: '2026 운전일지' };
+const manualLineB = { ...outputLineB, allocation_basis: 'MANUAL', manual_allocation_percent: 30, manual_allocation_reason: '가열로 체류시간 비율', manual_allocation_evidence: '2026 운전일지' };
+const manualShort = calculateLocalResults({ processes: [process], precursors: [], products: [product], periods: [period], productOutputLines: [manualLineA, manualLineB] });
+assert.match(warningsOf(manualShort[0]), /차단: 사용자 지정 배분율 합계가 90\.00%입니다/);
+assertClose(manualShort[0].allocation_share, 60 / 90, 1e-6); // 산정 자체는 종전대로 정규화(숫자 불변)
+const manualOk = calculateLocalResults({ processes: [process], precursors: [], products: [product], periods: [period], productOutputLines: [manualLineA, { ...manualLineB, manual_allocation_percent: 40 }] });
+assert.doesNotMatch(warningsOf(manualOk[0]), /차단:/);
+assertClose(manualOk[0].allocation_share, 0.6);
+assert.equal(manualOk[0].allocation_reason, '가열로 체류시간 비율', '결과에 배분 사유를 실어 보낸다');
+assert.equal(manualOk[0].allocation_basis, 'MANUAL');
+
+// --- T5 사용자 지정 배분: 규정 예외 고지(CBAM-ALLOC-MANUAL-01) + 사유·증빙(CBAM-ALLOC-MANUAL-03) ---
+// 사유가 있어도 「기능단위(질량) 원칙의 예외」임은 매번 알린다 — A.2 둘째 단락.
+assert.match(warningsOf(manualOk[0]), /확인 필요\(규정\): 이 공정은 사용자 지정 배분을 씁니다/);
+assert.match(warningsOf(manualOk[0]), /기능단위\(CN별 톤 = 질량\)가 원칙/);
+assert.doesNotMatch(warningsOf(productLineResults[0]), /사용자 지정 배분을 씁니다/, '질량 기준 공정에는 고지 없음');
+assert.equal(ALLOCATION_RULES.MANUAL_SCOPE.kind, '규정 필수');
+assert.equal(ALLOCATION_RULES.MANUAL_REASON.kind, '앱 내부 통제', '사유 기재는 규정 필수가 아니라 문서화 통제');
+const manualNoReason = calculateLocalResults({ processes: [process], precursors: [], products: [product], periods: [period], productOutputLines: [{ ...manualLineA, manual_allocation_reason: '' }, { ...manualLineB, manual_allocation_percent: 40 }] });
+assert.match(warningsOf(manualNoReason[0]), /확인 필요\(자료\): 'Hot rolled coil A' 사용자 지정 배분의 사유·증빙이 비어 있습니다/);
+assert.doesNotMatch(warningsOf(manualNoReason[0]), /'Hot rolled coil B' 사용자 지정 배분의 사유/, '사유가 있는 라인은 경고 없음');
+assert.equal(manualNoReason[0].allocation_reason, undefined);
+// 증빙만 없어도 확인 요구.
+const manualNoEvidence = calculateLocalResults({ processes: [process], precursors: [], products: [product], periods: [period], productOutputLines: [{ ...manualLineA, manual_allocation_evidence: '  ' }, { ...manualLineB, manual_allocation_percent: 40 }] });
+assert.match(warningsOf(manualNoEvidence[0]), /'Hot rolled coil A' 사용자 지정 배분의 사유·증빙/);
+// 질량 기준 라인에는 사유를 묻지 않는다.
+assert.doesNotMatch(warningsOf(productLineResults[0]), /사유·증빙/);
+
+// --- T6 기존 자료 호환: 신규 필드가 전혀 없는 입력이 종전 숫자를 그대로 낸다 (위 회귀 전부) + 결과에 새 필드가 채워진다 ---
+assert.equal(productLineResults[0].activity_level_t, 1000);
+assert.equal(productLineResults[0].direct_emissions_input_mode, 'UNSPECIFIED');
+assert.equal(productLineResults[0].reconciliation.length, 0); // vm realm 배열이라 deepEqual 프로토타입 비교가 실패한다
+assert.equal(resultsWithoutSourceStreams[0].activity_level_t, 1000, '라인 없으면 공정 생산량이 활동수준');
+assert.equal(resultsWithoutSourceStreams[0].allocation_basis, 'PROCESS_TOTAL');
+
+// --- T7 Art 4(6) (CBAM-ALLOC-ROUTE-01): 같은 CN·같은 기간 공정 2개 → 확인 요구 ---
+const splitResults = calculateLocalResults({
+  processes: [
+    { ...process, id: 'proc-eaf', name: 'EAF 라인', production_route: 'Electric arc furnace' },
+    { ...process, id: 'proc-bof', name: 'BOF 라인', production_route: 'Basic oxygen furnace' },
+  ],
+  precursors: [], products: [product], periods: [period],
+});
+for (const result of splitResults) {
+  assert.match(warningsOf(result), /확인 필요\(규정\): 같은 재화\(CN 72083900\)를 같은 보고기간에 생산공정 2개로 나누어 산정하고 있습니다/);
+  assert.match(warningsOf(result), /Article 4\(6\)/);
+}
+// 기간이 다르면 문제 없다. 제품이 달라도(다른 CN) 문제 없다.
+const splitByPeriod = calculateLocalResults({
+  processes: [{ ...process, id: 'proc-y1', period_id: 'y1' }, { ...process, id: 'proc-y2', period_id: 'y2' }],
+  precursors: [], products: [product], periods: [period],
+});
+for (const result of splitByPeriod) assert.doesNotMatch(warningsOf(result), /Article 4\(6\)/);
+for (const result of euResults) assert.doesNotMatch(warningsOf(result), /Article 4\(6\)/, 'EU 예제(다른 CN 2공정)는 해당 없음');
+// 같은 CN을 다른 제품 레코드로 나눠도 같은 기능단위다.
+const sameCnTwoProducts = calculateLocalResults({
+  processes: [{ ...process, id: 'proc-x', product_id: 'product-1' }, { ...process, id: 'proc-y', product_id: 'product-1b' }],
+  precursors: [], products: [product, { ...product, id: 'product-1b', name: 'HRC (B 라인)', cn_code: '7208 39 00' }], periods: [period],
+});
+assert.match(warningsOf(sameCnTwoProducts[1]), /생산공정 2개로 나누어/);
+// 사업장이 다르면 Art 4(7) 분할이지 4(6) 위반이 아니다.
+const splitByInstallation = calculateLocalResults({
+  processes: [{ ...process, id: 'proc-i1', product_id: 'product-i1' }, { ...process, id: 'proc-i2', product_id: 'product-i2' }],
+  precursors: [], products: [{ ...product, id: 'product-i1', installation_id: 'inst-1' }, { ...product, id: 'product-i2', installation_id: 'inst-2' }], periods: [period],
+});
+for (const result of splitByInstallation) assert.doesNotMatch(warningsOf(result), /Article 4\(6\)/);
+// 비CBAM 공동산출물은 기능단위 논의 대상이 아니다.
+const nonCbamTwice = calculateLocalResults({
+  processes: [{ ...process, id: 'proc-s1', product_id: 'complex-scale' }, { ...process, id: 'proc-s2', product_id: 'complex-scale' }],
+  precursors: [], products: complexProducts, periods: [period],
+});
+for (const result of nonCbamTwice) assert.doesNotMatch(warningsOf(result), /Article 4\(6\)/);
+
+// --- T8 전구물질을 활동수준 제외 라인에 귀속 → 배출이 사라지므로 확인 요구 ---
+const misdirectedPrecursor = { ...precursor, id: 'pp-mis', process_id: 'proc-al', product_id: 'p-good', consumed_mass_t: 100, purchased_mass_t: 100, output_allocations: [
+  { product_output_line_id: 'line-good', product_id: 'p-good', allocated_mass_t: 90 },
+  { product_output_line_id: 'line-offspec', product_id: 'p-offspec', allocated_mass_t: 10 },
+] };
+const misdirected = calculateLocalResults({ processes: [alProcess], precursors: [misdirectedPrecursor], products: alProducts, periods: [period], productOutputLines: alLines });
+const misGood = misdirected.find((r) => r.product_output_line_id === 'line-good');
+assert.match(warningsOf(misGood), /확인 필요\(자료\): Purchased hot rolled coil의 귀속 10\.0000 t가 활동수준 제외 라인을 가리켜 배출에서 빠집니다/);
+assertClose(misGood.precursor_direct_see, 90 * 1.2 / 950, 1e-6); // 자동으로 옮기지 않는다 — 90 t만 귀속
+assert.equal(misdirected.find((r) => r.product_output_line_id === 'line-offspec').precursor_see, 0);
+// 정상 귀속(전량 정규 제품)은 경고 없음.
+const wellDirected = calculateLocalResults({ processes: [alProcess], precursors: [{ ...misdirectedPrecursor, output_allocations: [{ product_output_line_id: 'line-good', product_id: 'p-good', allocated_mass_t: 100 }] }], products: alProducts, periods: [period], productOutputLines: alLines });
+assert.doesNotMatch(warningsOf(wellDirected[0]), /활동수준 제외 라인을 가리켜/);
+// 명시 귀속이 없으면(레거시 공정 배분율) 제외 라인은 0, 정규 제품이 전량.
+const implicitPrecursor = calculateLocalResults({ processes: [alProcess], precursors: [{ ...misdirectedPrecursor, output_allocations: undefined }], products: alProducts, periods: [period], productOutputLines: alLines });
+assertClose(implicitPrecursor.find((r) => r.product_output_line_id === 'line-good').precursor_direct_see, 100 * 1.2 / 950);
+
+console.log('Allocation-logic verification passed (T1 입력방식 · T2 RecF · T3 활동수준 · T4/T5 사용자 지정 배분 · T6 호환 · T7 Art 4(6) · T8 전구물질 귀속).');
 console.log('Local calculation verification passed.');

@@ -79,7 +79,29 @@ export interface ProductionProcess extends LocalEntity {
   electricity_ef_tco2e_per_mwh: number;
   // 전력 EF 출처 유형(CBAM 위계). 선택적: 기존 .cbam 백업과의 하위호환을 위해 undefined 허용.
   electricity_ef_source?: string;
+  /**
+   * 직접귀속배출량을 어떻게 정했는가 (CBAM-ALLOC-DIRECT-01).
+   * SOURCE_STREAM_SUM = 연결된 배출원 합계(정합계수 보정 후)를 엔진이 직접 쓴다.
+   * MANUAL_TOTAL = direct_attributable_emissions_tco2e 수기 값을 쓴다(배출원은 대조용).
+   * undefined = 기존 자료(방식 미기록) — 수기 값을 쓰되 보고서에는 「미지정」으로 남긴다.
+   * 지금까지는 지도·초보자 화면이 합계를 덮어쓰고 상세 화면은 수기 입력이라, 같은 숫자라도
+   * 「어느 방식으로 정했는지」를 검증인이 알 수 없었다.
+   */
+  direct_emissions_input_mode?: DirectEmissionsInputMode;
+  /** MANUAL_TOTAL일 때 사유·근거(모니터링 계획 A.5 방법 기술). */
+  direct_emissions_input_note?: string;
 }
+
+/** TEMPLATE_UPLOAD = 활동자료 엑셀 업로드가 값을 채움(수기 값과 같이 다루되 출처를 남긴다). */
+export type DirectEmissionsInputMode = "MANUAL_TOTAL" | "SOURCE_STREAM_SUM" | "TEMPLATE_UPLOAD";
+
+/**
+ * 활동수준(activity level) 포함 여부 — 2025/2547 ANNEX II 점 F (CBAM-ALLOC-AL-01).
+ * GOOD = 판매 가능하거나 다른 생산공정의 전구물질로 직접 쓰이는 재화 → 활동수준(SEE 분모)에 포함.
+ * EXCLUDED = 불량(off-spec)·부산물·폐기물·스크랩 → 활동수준에서 제외하고 배출 0을 배정.
+ * undefined = 기존 자료. 엔진은 GOOD으로 다루되(숫자 불변), 폐기물·공동산출물 범위면 확인을 요구한다.
+ */
+export type ActivityLevelRole = "GOOD" | "EXCLUDED";
 
 export interface ProductOutputLine extends LocalEntity {
   process_id: string;
@@ -90,6 +112,30 @@ export interface ProductOutputLine extends LocalEntity {
   manual_allocation_percent: number;
   note: string;
   reporting_scope?: ProductReportingScope;
+  activity_level_role?: ActivityLevelRole;
+  /** MANUAL(화면명 「사용자 지정 배분」)일 때 물리적 관계 사유 — ANNEX III A.2 (CBAM-ALLOC-MANUAL-02). */
+  manual_allocation_reason?: string;
+  /** MANUAL일 때 증빙(문서명·계측 기록 등). */
+  manual_allocation_evidence?: string;
+}
+
+/**
+ * 공용 계량기 정합 — 2025/2547 ANNEX III A.1 식 41·42 (CBAM-ALLOC-RECF-01).
+ * 여러 공정이 한 계량기의 연료를 나눠 쓰고 공정별 보조계량(또는 배분키) 합계가 전체 계량값과
+ * 다를 때, 같은 group 이름을 가진 행들에 RecF = installation_total / Σ행 활동량을 곱한다.
+ * 행마다 같은 총량을 적는다(별도 store를 만들지 않아 .cbam 하위호환이 그대로 유지된다).
+ */
+export interface SourceStreamSharedMeter {
+  group: string;
+  /** 사업장(전체) 계량값 — 행들과 같은 activity_unit. */
+  installation_total_activity_data: number;
+  /**
+   * 행 활동량을 정한 근거. SUB_METER = 공정별 보조계량기(측정값) → A.1 식 41·42 정합계수 적용.
+   * 나머지 = 공정별 측정값이 없어 A.2 물리적 관계로 나눈 배분키 → 정합계수 없음(정의상 합계=총량).
+   * 행 합계가 총량과 다르면 배분키 계산이 틀린 것이므로 보정하지 않고 확인을 요구한다.
+   */
+  basis: "SUB_METER" | "OPERATING_HOURS" | "RATED_CAPACITY" | "OUTPUT_MASS" | "OTHER";
+  note?: string;
 }
 
 export interface SourceStream extends LocalEntity {
@@ -111,6 +157,8 @@ export interface SourceStream extends LocalEntity {
   biomass_fraction: number;
   factor_source_type?: "EU_OR_IPCC_DEFAULT" | "NATIONAL_INVENTORY" | "SUPPLIER_OR_LAB" | "UNCLASSIFIED";
   source: string;
+  /** 공용 계량기 그룹(선택). 없으면 이 행은 단독 계량으로 본다. */
+  shared_meter?: SourceStreamSharedMeter;
 }
 
 // 산정보고서(Word)에만 쓰이는 사용자 입력. 앱이 산정 데이터로는 알 수 없는 것들

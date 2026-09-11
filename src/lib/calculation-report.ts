@@ -240,10 +240,13 @@ function informationalTotalQualifier(relevance: LocalCalculationResult['indirect
 /** 원천자료가 에너지 단위이면 NCV 환산이 산식에서 상쇄된다(제6.1장 고지 판단용). */
 const ENERGY_UNITS = new Set(['MJ', 'GJ', 'TJ', 'KWH', 'MWH', 'GWH']);
 
-const ALLOCATION_BASIS_LABEL: Record<string, string> = {
+// 화면 명칭(allocation-rules.ts ALLOCATION_BASIS_LABEL)과 별도다 — 보고서는 내부 enum을 괄호로 병기해
+// 검증인이 앱 결과표와 대조할 수 있게 한다. 이름이 겹치면 검증 스크립트의 vm 연결에서 충돌한다.
+const REPORT_ALLOCATION_BASIS_LABEL: Record<string, string> = {
     PROCESS_TOTAL: '공정 전체(제품 배분 없음 — 공정별 단일 제품)',
     MASS: '질량 기준(MASS)',
-    MANUAL: '수동 지정(MANUAL)',
+    MANUAL: '사용자 지정 배분(MANUAL)',
+    ACTIVITY_LEVEL_EXCLUDED: '활동수준 제외(점 F — 배출 0)',
 };
 
 /**
@@ -257,7 +260,7 @@ function describeAllocationBasis(input: CalculationReportInput) {
         return '제품 배분 기준: 확인 필요(자료).';
     }
 
-    const labels = bases.map((basis) => ALLOCATION_BASIS_LABEL[basis] ?? basis).join(' · ');
+    const labels = bases.map((basis) => REPORT_ALLOCATION_BASIS_LABEL[basis] ?? basis).join(' · ');
 
     return bases.length === 1
         ? `제품 배분 기준: ${labels} 단일 적용, 한 공정 내 기준 혼용 없음.`

@@ -1,8 +1,10 @@
-import type { Product, ProductOutputLine, ProductReportingScope, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
+import type { DirectEmissionsInputMode, Product, ProductOutputLine, ProductReportingScope, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
 import type { IndirectEmissionsRelevance } from './cbam-product-rules';
-import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';
+import { getProductReportingScope, getProductReportingScopeLabel, isCbamReportingScope } from './reporting-scope';
+import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, RECONCILIATION_REVIEW_DEVIATION, getDirectEmissionsInputMode, hasManualAllocationReason, reconcileSourceStreams, resolveActivityLevelRole } from './allocation-rules';
+import type { ReconciliationGroup } from './allocation-rules';
 
 export type ActivityData = Record<string, number>;
 
@@ -45,8 +47,20 @@ export interface LocalCalculationResult {
     process_id: string;
     process_name: string;
     product_output_line_id?: string;
-    allocation_basis: ProductOutputLine['allocation_basis'] | 'PROCESS_TOTAL';
+    /**
+     * ACTIVITY_LEVEL_EXCLUDED = 점 F에 따라 활동수준에서 뺀 라인(불량·부산물·폐기물·스크랩).
+     * 배분율 0, 모든 SEE 0 — 「배출 0을 배정」한다는 규정 문구를 결과에 그대로 남긴다.
+     */
+    allocation_basis: ProductOutputLine['allocation_basis'] | 'PROCESS_TOTAL' | 'ACTIVITY_LEVEL_EXCLUDED';
     allocation_share: number;
+    /** MANUAL(사용자 지정 배분)일 때 라인에 적힌 사유. 검증인이 배분 근거를 결과에서 바로 본다. */
+    allocation_reason?: string;
+    /** 이 공정의 활동수준(SEE 분모, t) — 라인이 있으면 포함 라인 합계, 없으면 공정 생산량. */
+    activity_level_t: number;
+    /** 직접귀속배출량을 어떻게 정했는가(CBAM-ALLOC-DIRECT-01). UNSPECIFIED = 기존 자료. */
+    direct_emissions_input_mode: DirectEmissionsInputMode | 'UNSPECIFIED';
+    /** 이 공정의 배출원이 속한 공용 계량기 그룹과 정합계수(식 41·42). 없으면 빈 배열. */
+    reconciliation: ReconciliationGroup[];
     product_id?: string;
     product_name: string;
     reporting_scope: ProductReportingScope;
@@ -108,6 +122,9 @@ export function getLocalCalculationWarningHref(warning: LocalCalculationWarning)
 export interface ProductOutputLineSummary {
     count: number;
     activeCount: number;
+    /** 점 F 제외 라인(생산량>0) 수. 이 라인들은 totalOutput·배분에 들어가지 않는다. */
+    excludedCount: number;
+    excludedOutput: number;
     totalOutput: number;
     delta: number;
     tolerance: number;
@@ -120,10 +137,14 @@ export interface ProductOutputLineSummary {
 
 export function summarizeProductOutputLines(
     processOutputMassT: number,
-    outputLines: Pick<ProductOutputLine, 'output_mass_t' | 'allocation_basis' | 'manual_allocation_percent'>[]
+    outputLines: Pick<ProductOutputLine, 'output_mass_t' | 'allocation_basis' | 'manual_allocation_percent' | 'activity_level_role'>[]
 ): ProductOutputLineSummary {
-    const activeLines = outputLines.filter((line) => line.output_mass_t > 0);
+    const validLines = outputLines.filter((line) => line.output_mass_t > 0);
+    // 활동수준 제외 라인은 공정 생산량(=활동수준)에도, 배분에도 들어가지 않는다(점 F).
+    const excludedLines = validLines.filter((line) => line.activity_level_role === 'EXCLUDED');
+    const activeLines = validLines.filter((line) => line.activity_level_role !== 'EXCLUDED');
     const totalOutput = activeLines.reduce((sum, line) => sum + line.output_mass_t, 0);
+    const excludedOutput = excludedLines.reduce((sum, line) => sum + line.output_mass_t, 0);
     const delta = totalOutput - processOutputMassT;
     const tolerance = Math.max(0.01, Math.abs(processOutputMassT) * 0.01);
     const allocationBases = new Set(activeLines.map((line) => line.allocation_basis));
@@ -139,6 +160,8 @@ export function summarizeProductOutputLines(
     return {
         count: outputLines.length,
         activeCount: activeLines.length,
+        excludedCount: excludedLines.length,
+        excludedOutput,
         totalOutput,
         delta,
         tolerance,
@@ -209,6 +232,19 @@ function getPrecursorExplicitAllocationMass(precursor: PurchasedPrecursor) {
         0
     );
 }
+
+/**
+ * Art 4(6) 판정용 기능단위 키 — 같은 사업장 + 같은 보고기간 + 같은 CN(없으면 제품 id).
+ * 기능단위는 CN별 톤(Art 4(2))이므로 제품 레코드가 아니라 CN으로 묶는다. 사업장이 다르면
+ * Art 4(7) 분할이라 같은 CN이어도 한 공정으로 합칠 대상이 아니다.
+ */
+function functionalUnitKey(periodId: string | undefined, product: Product | undefined) {
+    if (!product) return undefined;
+    const cn = (product.cn_code ?? '').replace(/\s+/g, '');
+    const unit = cn || product.id;
+    return `${product.installation_id ?? ''}|${periodId ?? ''}|${unit}`;
+}
+
 export function calculateEmission(input: CalcInput): CalcResult {
     const { output_mass_t, electricity_mwh, electricity_ef, fuel_usage, precursors, input_mass_t } = input;
 
@@ -231,8 +267,8 @@ export function calculateEmission(input: CalcInput): CalcResult {
 
     // 3. Precursors
     // SEE = Sum(PrecursorSEE * Share)
-    // Note: Share is usually mass_of_precursor / mass_of_product ?? 
-    // Wait, PRD says: "precursor SEE x 질량비" 
+    // Note: Share is usually mass_of_precursor / mass_of_product ??
+    // Wait, PRD says: "precursor SEE x 질량비"
     // If share_by_mass is defined as (Mass Precursor / Mass Product), then simply sum them.
     let precursor_see = 0;
     for (const p of precursors) {
@@ -288,6 +324,15 @@ export function calculateLocalResults(input: {
     const precursorsByProcess = new Map<string, PurchasedPrecursor[]>();
     const sourceStreamsByProcess = new Map<string, SourceStream[]>();
     const outputLinesByProcess = new Map<string, ProductOutputLine[]>();
+    // 공용 계량기 정합(식 41·42)을 먼저 적용한다. 공정별 합계·직접배출은 보정된 활동량으로 센다 —
+    // 원본으로 세면 그룹 합계가 사업장 계량값과 어긋난 채 SEE가 나온다.
+    const reconciliation = reconcileSourceStreams(input.sourceStreams ?? []);
+    const reconciliationGroupByStreamId = new Map<string, ReconciliationGroup>();
+    for (const group of reconciliation.groups) {
+        for (const streamId of group.stream_ids) {
+            reconciliationGroupByStreamId.set(streamId, group);
+        }
+    }
 
     for (const precursor of input.precursors) {
         if (!precursor.process_id) {
@@ -299,7 +344,7 @@ export function calculateLocalResults(input: {
         precursorsByProcess.set(precursor.process_id, group);
     }
 
-    for (const sourceStream of input.sourceStreams ?? []) {
+    for (const sourceStream of reconciliation.streams) {
         if (!sourceStream.process_id) {
             continue;
         }
@@ -317,6 +362,26 @@ export function calculateLocalResults(input: {
         const group = outputLinesByProcess.get(outputLine.process_id) ?? [];
         group.push(outputLine);
         outputLinesByProcess.set(outputLine.process_id, group);
+    }
+
+    // Art 4(6): 같은 기능단위(같은 CN) 재화를 같은 보고기간에 공정 여럿으로 나누면 안 된다 —
+    // 생산경로가 달라도 단일 공정(전 경로 가중평균)이어야 한다. 공정의 대표 제품과 생산라인 제품을
+    // 모두 센다. CBAM 신고 대상 재화만 본다(공동산출물은 기능단위 논의 대상이 아니다).
+    const processKeysById = new Map<string, Set<string>>();
+    const processCountByFunctionalUnit = new Map<string, number>();
+    for (const process of input.processes) {
+        const keys = new Set<string>();
+        const candidates = [process.product_id, ...(outputLinesByProcess.get(process.id) ?? []).map((line) => line.product_id)];
+        for (const productId of candidates) {
+            const candidate = productId ? productById.get(productId) : undefined;
+            if (!candidate || !isCbamReportingScope(getProductReportingScope(candidate))) continue;
+            const key = functionalUnitKey(process.period_id, candidate);
+            if (key) keys.add(key);
+        }
+        processKeysById.set(process.id, keys);
+        for (const key of keys) {
+            processCountByFunctionalUnit.set(key, (processCountByFunctionalUnit.get(key) ?? 0) + 1);
+        }
     }
 
     return input.processes.flatMap<LocalCalculationResult>((process) => {
@@ -345,8 +410,20 @@ export function calculateLocalResults(input: {
             addWarning('보고기간이 지정되지 않았습니다.', { type: 'process', id: process.id });
         }
 
+        for (const key of processKeysById.get(process.id) ?? []) {
+            const count = processCountByFunctionalUnit.get(key) ?? 0;
+            if (count < 2) continue;
+            const unit = key.split('|')[2];
+            addWarning(
+                `확인 필요(규정): 같은 재화(CN ${unit})를 같은 보고기간에 생산공정 ${count}개로 나누어 산정하고 있습니다. `
+                + `${ALLOCATION_RULES.SINGLE_PROCESS.anchor}: 생산경로가 달라도 단일 생산공정으로 산정합니다(전 경로 가중평균). 하나로 합치거나 사유를 확인하세요.`,
+                { type: 'process', id: process.id }
+            );
+            break;
+        }
+
         const output = process.output_mass_t > 0 ? process.output_mass_t : 0;
-        const directEmissions = process.direct_attributable_emissions_tco2e;
+        const inputMode = getDirectEmissionsInputMode(process);
         const sourceStreamEmissions = processSourceStreams.reduce(
             (sum, sourceStream) => sum + calculateSourceStreamEmissions(sourceStream),
             0
@@ -355,7 +432,12 @@ export function calculateLocalResults(input: {
             (sum, sourceStream) => sum + calculateSourceStreamEnergyBreakdown(sourceStream).total,
             0
         );
-        const sourceStreamDelta = sourceStreamEmissions - directEmissions;
+        // 배출원 합계 방식이면 저장된 수기 값이 아니라 합계를 쓴다(CBAM-ALLOC-DIRECT-01).
+        // 그 외(수기·미지정)는 종전대로 저장값을 쓰고 배출원 합계는 대조용이다.
+        const directEmissions = inputMode === 'SOURCE_STREAM_SUM'
+            ? sourceStreamEmissions
+            : process.direct_attributable_emissions_tco2e;
+        const sourceStreamDelta = sourceStreamEmissions - process.direct_attributable_emissions_tco2e;
         const grossIndirectEmissions = process.electricity_mwh * process.electricity_ef_tco2e_per_mwh;
         const processIndirectApplicability = getIndirectEmissionsApplicability(product);
         // 판정 불가(UNDETERMINED)일 때 간접배출을 「포함」으로도 「제외」로도 확정하지 않는다.
@@ -380,6 +462,26 @@ export function calculateLocalResults(input: {
             0
         );
         const precursorEmissions = precursorDirectEmissions + precursorIndirectEmissions;
+
+        // 공용 계량기 그룹 — 보정하지 못한 그룹은 확인을 요구하고, 크게 벗어난 정합계수는 권고로 알린다.
+        const processReconciliation = [...new Set(
+            processSourceStreams
+                .map((stream) => reconciliationGroupByStreamId.get(stream.id))
+                .filter((group): group is ReconciliationGroup => Boolean(group))
+        )];
+        for (const group of processReconciliation) {
+            if (group.reason) {
+                addWarning(
+                    `확인 필요(자료): 공용 계량기 그룹 '${group.group}' — ${group.reason} (${group.mode === 'KEY_SPLIT' ? ALLOCATION_RULES.KEY_SPLIT.anchor : ALLOCATION_RULES.RECONCILIATION.anchor})`,
+                    { type: 'process', id: process.id }
+                );
+            } else if (group.applied && Math.abs(group.factor - 1) > RECONCILIATION_REVIEW_DEVIATION) {
+                addWarning(
+                    `권고: 공용 계량기 그룹 '${group.group}'의 정합계수 RecF = ${group.factor.toFixed(4)} (사업장 ${group.installation_total} / 공정 합계 ${group.sub_total} ${group.unit}). 1에서 ${(RECONCILIATION_REVIEW_DEVIATION * 100).toFixed(0)}% 이상 벗어나 단위·계량 오류일 수 있습니다.`,
+                    { type: 'process', id: process.id }
+                );
+            }
+        }
 
         for (const precursor of processPrecursors) {
             // 소비량이 공정 생산량을 초과하는 것은 수율 손실(슬래그·스케일·가스)·전구물질 투입 특성상 정상이므로
@@ -406,12 +508,21 @@ export function calculateLocalResults(input: {
             }
         }
 
-        if (directEmissions > 0 && processSourceStreams.length === 0) {
+        if (inputMode === 'SOURCE_STREAM_SUM' && processSourceStreams.length === 0) {
+            addWarning(`${process.name}: 직접배출을 「배출원 자료 합계」로 정했는데 연결된 배출원이 없어 직접배출이 0으로 산정됩니다.`, { type: 'process', id: process.id });
+        }
+
+        if (inputMode !== 'SOURCE_STREAM_SUM' && directEmissions > 0 && processSourceStreams.length === 0) {
             addWarning(`${process.name}: 직접배출량은 입력되어 있지만 연결된 배출원 자료가 없습니다.`, { type: 'process', id: process.id });
         }
 
-        if (processSourceStreams.length > 0 && Math.abs(sourceStreamDelta) > Math.max(0.01, directEmissions * 0.01)) {
-            addWarning(`배출원 자료 합계와 공정 직접배출량 입력값이 ${sourceStreamDelta.toFixed(4)} tCO2e 차이납니다.`, { type: 'process', id: process.id });
+        if (processSourceStreams.length > 0 && Math.abs(sourceStreamDelta) > Math.max(0.01, process.direct_attributable_emissions_tco2e * 0.01)) {
+            if (inputMode === 'SOURCE_STREAM_SUM') {
+                // 산정은 합계를 썼지만 저장값(EU 문서 D_Processes에 나가는 값)이 낡았다.
+                addWarning(`저장된 직접귀속배출량 ${process.direct_attributable_emissions_tco2e.toFixed(4)} tCO2e가 배출원 합계 ${sourceStreamEmissions.toFixed(4)} tCO2e와 다릅니다. 산정은 합계를 썼습니다 — 공정을 다시 저장하면 EU 문서 값도 맞춰집니다.`, { type: 'process', id: process.id });
+            } else {
+                addWarning(`배출원 자료 합계와 공정 직접배출량 입력값이 ${sourceStreamDelta.toFixed(4)} tCO2e 차이납니다.`, { type: 'process', id: process.id });
+            }
         }
 
         const direct_see = output > 0 ? directEmissions / output : 0;
@@ -436,20 +547,84 @@ export function calculateLocalResults(input: {
         const see_informational_total = direct_see + own_indirect_see + precursor_see;
         const total_see = see_informational_total;
         const outputLines = outputLinesByProcess.get(process.id) ?? [];
+        // 라인마다 활동수준 역할(점 F)을 정한다. 기존 자료(미지정)는 포함으로 두어 숫자를 바꾸지 않되,
+        // 폐기물·공동산출물 범위면 「부산물인지 정규 제품인지」 확인을 요구한다.
+        const lineContexts = outputLines
+            .filter((line) => line.output_mass_t > 0)
+            .map((line) => {
+                const lineProduct = line.product_id ? productById.get(line.product_id) : product;
+                const lineScope = getProductReportingScope(lineProduct, line);
+                return { line, lineProduct, lineScope, role: resolveActivityLevelRole(line, lineScope) };
+            });
         const outputLineSummary = summarizeProductOutputLines(process.output_mass_t, outputLines);
-        const validOutputLines = outputLines.filter((line) => line.output_mass_t > 0);
-        const massTotal = validOutputLines.reduce((sum, line) => sum + line.output_mass_t, 0);
-        const manualTotal = validOutputLines.reduce(
-            (sum, line) => sum + (line.allocation_basis === 'MANUAL' ? line.manual_allocation_percent : 0),
-            0
-        );
+        const validOutputLines = lineContexts.map((context) => context.line);
+        const eligibleContexts = lineContexts.filter((context) => context.role.role === 'GOOD');
+        const eligibleOutputLines = eligibleContexts.map((context) => context.line);
+        const excludedLineIds = new Set(lineContexts.filter((context) => context.role.role === 'EXCLUDED').map((context) => context.line.id));
+        const massTotal = eligibleOutputLines.reduce((sum, line) => sum + line.output_mass_t, 0);
+        const manualLines = eligibleOutputLines.filter((line) => line.allocation_basis === 'MANUAL');
+        const manualTotal = manualLines.reduce((sum, line) => sum + line.manual_allocation_percent, 0);
+        const activityLevel = validOutputLines.length > 0 ? massTotal : output;
+
+        for (const context of lineContexts) {
+            if (!context.role.needsConfirmation) continue;
+            addWarning(
+                `확인 필요(규정): '${context.line.name}' 라인(${getProductReportingScopeLabel(context.lineScope)})이 활동수준에 포함되어 있습니다. `
+                + `불량·부산물·폐기물·스크랩이면 「활동수준 제외」로 표시하세요 — ${ALLOCATION_RULES.ACTIVITY_LEVEL.anchor}.`,
+                { type: 'process', id: process.id }
+            );
+        }
 
         if (outputLineSummary.hasMixedAllocationBasis) {
             addWarning('제품 생산라인의 배분기준이 섞여 있습니다. 한 공정 안에서는 같은 배분기준을 사용하는지 확인하세요.', { type: 'process', id: process.id });
         }
 
         if (outputLineSummary.needsAllocationReview && manualTotal <= 0) {
-            addWarning('수동 비율 배분을 선택했지만 유효한 수동비율 합계가 0입니다.', { type: 'process', id: process.id });
+            addWarning('사용자 지정 배분을 선택했지만 유효한 배분율 합계가 0입니다.', { type: 'process', id: process.id });
+        }
+
+        // 배분율 합계≠100%를 조용히 정규화하면 누락·이중계상이 숨는다. 산정은 종전대로 정규화하되
+        // 차단 수준으로 알린다 — 내보내기 준비도는 이 문구를 오류로 올린다(CBAM-ALLOC-MANUAL-01).
+        if (manualLines.length > 0 && manualTotal > 0 && Math.abs(manualTotal - 100) > MANUAL_ALLOCATION_SUM_TOLERANCE) {
+            addWarning(
+                `차단: 사용자 지정 배분율 합계가 ${manualTotal.toFixed(2)}%입니다 — 100%여야 합니다(미만은 배출 누락, 초과는 이중계상). 산정은 합계 기준으로 정규화했습니다.`,
+                { type: 'process', id: process.id }
+            );
+        }
+
+        // 한 공정 안 재화 간 귀속은 규정상 기능단위(질량)가 원칙이다(A.2 둘째 단락). 사용자 지정 비율은
+        // 열·폐가스·몰비 예외 외에는 규정 근거가 없으므로, 사유가 있어도 「규정 예외」임을 매번 알린다.
+        if (manualLines.length > 0) {
+            addWarning(
+                `확인 필요(규정): 이 공정은 사용자 지정 배분을 씁니다. ${ALLOCATION_RULES.MANUAL_SCOPE.anchor}: 한 공정 안 재화 간 귀속은 기능단위(CN별 톤 = 질량)가 원칙이며, 열(A.2.2)·폐가스(A.2.3)·화학물질 몰비(A.2.1) 외의 임의 비율은 규정에 근거가 없습니다. 예외에 해당하는지 검증인과 확인하세요.`,
+                { type: 'process', id: process.id }
+            );
+        }
+
+        for (const line of manualLines) {
+            if (hasManualAllocationReason(line)) continue;
+            addWarning(
+                `확인 필요(자료): '${line.name}' 사용자 지정 배분의 사유·증빙이 비어 있습니다 — ${ALLOCATION_RULES.MANUAL_REASON.anchor}: 어떤 물리적 관계(예외 사유)와 증빙에 근거했는지 남겨야 합니다.`,
+                { type: 'process', id: process.id }
+            );
+        }
+
+        // 전구물질을 활동수준 제외 라인에 귀속하면 그 배출이 사라진다. Mi는 부산물·스크랩으로 나간 양까지
+        // 포함해 정규 제품에 귀속돼야 한다(ANNEX III B). 자동으로 옮기지 않고 알린다.
+        for (const precursor of processPrecursors) {
+            const misdirected = (precursor.output_allocations ?? []).filter((allocation) =>
+                allocation.product_output_line_id
+                    ? excludedLineIds.has(allocation.product_output_line_id)
+                    : Boolean(allocation.product_id)
+                        && lineContexts.some((context) => context.line.product_id === allocation.product_id)
+                        && lineContexts.filter((context) => context.line.product_id === allocation.product_id).every((context) => context.role.role === 'EXCLUDED')
+            );
+            if (misdirected.length === 0) continue;
+            const lostMass = misdirected.reduce((sum, allocation) => sum + resolvePrecursorAllocationMass(precursor, allocation), 0);
+            addWarning(
+                `확인 필요(자료): ${precursor.name}의 귀속 ${lostMass.toFixed(4)} t가 활동수준 제외 라인을 가리켜 배출에서 빠집니다. 전구물질 소비량(Mi)은 부산물·스크랩으로 나간 몫까지 정규 제품에 귀속해야 합니다(2025/2547 ANNEX III, point B).`,
+                { type: 'precursor', id: precursor.id }
+            );
         }
 
         if (validOutputLines.length === 0) {
@@ -461,6 +636,9 @@ export function calculateLocalResults(input: {
                 process_name: process.name,
                 allocation_basis: 'PROCESS_TOTAL',
                 allocation_share: 1,
+                activity_level_t: activityLevel,
+                direct_emissions_input_mode: inputMode,
+                reconciliation: processReconciliation,
                 product_id: process.product_id,
                 product_name: product?.name ?? '미지정 제품',
                 reporting_scope: processReportingScope,
@@ -495,16 +673,66 @@ export function calculateLocalResults(input: {
             }];
         }
 
-        const lineResults = validOutputLines.map((line) => {
-            const lineProduct = line.product_id ? productById.get(line.product_id) : product;
-            const lineReportingScope = getProductReportingScope(lineProduct, line);
-            const lineIsCbamReportable = isCbamReportingScope(lineReportingScope);
+        const lineResults = lineContexts.map(({ line, lineProduct, lineScope, role }) => {
+            const lineIsCbamReportable = isCbamReportingScope(lineScope);
+            const lineIndirectApplicability = getIndirectEmissionsApplicability(lineProduct);
+            const lineIndirectIncluded = lineIndirectApplicability.relevance === 'INCLUDED';
+            const base = {
+                id: `result_${process.id}_${line.id}`,
+                period_id: process.period_id,
+                period_name: period?.name,
+                process_id: process.id,
+                process_name: process.name,
+                product_output_line_id: line.id,
+                activity_level_t: activityLevel,
+                direct_emissions_input_mode: inputMode,
+                reconciliation: processReconciliation,
+                product_id: line.product_id ?? process.product_id,
+                reporting_scope: lineScope,
+                product_name: lineProduct?.name ?? line.name,
+                hs_code: lineProduct?.hs_code,
+                cn_code: lineProduct?.cn_code,
+                production_route: process.production_route,
+                output_mass_t: line.output_mass_t,
+                indirect_emissions_relevance: lineIndirectApplicability.relevance,
+                indirect_emissions_rule: lineIndirectApplicability.rule_code,
+                source_stream_count: processSourceStreams.length,
+                warnings,
+                warningDetails,
+            };
+
+            // 점 F: 활동수준 제외 라인은 배분율 0, 배출 0. 신고 대상도 아니다(재화가 아니라 부산물·스크랩).
+            if (role.role === 'EXCLUDED') {
+                return {
+                    ...base,
+                    allocation_basis: 'ACTIVITY_LEVEL_EXCLUDED' as const,
+                    allocation_share: 0,
+                    is_cbam_reportable: false,
+                    direct_emissions_tco2e: 0,
+                    indirect_emissions_excluded_tco2e: 0,
+                    indirect_emissions_gross_tco2e: 0,
+                    source_stream_emissions_tco2e: 0,
+                    source_stream_energy_tj: 0,
+                    source_stream_delta_tco2e: 0,
+                    direct_see: 0,
+                    own_indirect_see: 0,
+                    indirect_see: 0,
+                    indirect_see_excluded: 0,
+                    precursor_see: 0,
+                    precursor_direct_see: 0,
+                    precursor_indirect_see: 0,
+                    see_direct_incl_precursor: 0,
+                    see_indirect_incl_precursor: 0,
+                    see_cbam_basis: null,
+                    see_informational_total: 0,
+                    total_see: 0,
+                };
+            }
+
             const allocationShare = line.allocation_basis === 'MANUAL'
                 ? (manualTotal > 0 ? line.manual_allocation_percent / manualTotal : 0)
                 : (massTotal > 0 ? line.output_mass_t / massTotal : 0);
-            const lineIndirectApplicability = getIndirectEmissionsApplicability(lineProduct);
             const lineGrossIndirectEmissions = grossIndirectEmissions * allocationShare;
-            const lineIndirectIncluded = lineIndirectApplicability.relevance === 'INCLUDED';
             const allocatedIndirectEmissions = lineIndirectIncluded ? lineGrossIndirectEmissions : 0;
             const allocatedExcludedIndirectEmissions = lineIndirectIncluded ? 0 : lineGrossIndirectEmissions;
             const allocatedDirectEmissions = directEmissions * allocationShare;
@@ -512,7 +740,7 @@ export function calculateLocalResults(input: {
                 const allocatedMass = getPrecursorAllocatedMassForLine(
                     precursor,
                     line,
-                    validOutputLines,
+                    eligibleOutputLines,
                     allocationShare
                 );
                 return sum + allocatedMass * precursor.direct_see_tco2e_per_t;
@@ -521,7 +749,7 @@ export function calculateLocalResults(input: {
                 const allocatedMass = getPrecursorAllocatedMassForLine(
                     precursor,
                     line,
-                    validOutputLines,
+                    eligibleOutputLines,
                     allocationShare
                 );
                 return sum + allocatedMass * precursor.indirect_see_tco2e_per_t;
@@ -546,28 +774,14 @@ export function calculateLocalResults(input: {
             const lineSeeInformationalTotal = lineDirectSee + lineOwnIndirectSee + linePrecursorSee;
 
             return {
-                id: `result_${process.id}_${line.id}`,
-                period_id: process.period_id,
-                period_name: period?.name,
-                process_id: process.id,
-                process_name: process.name,
-                product_output_line_id: line.id,
+                ...base,
                 allocation_basis: line.allocation_basis,
                 allocation_share: allocationShare,
-                product_id: line.product_id ?? process.product_id,
-                reporting_scope: lineReportingScope,
+                allocation_reason: line.allocation_basis === 'MANUAL' ? line.manual_allocation_reason?.trim() || undefined : undefined,
                 is_cbam_reportable: lineIsCbamReportable,
-                product_name: lineProduct?.name ?? line.name,
-                hs_code: lineProduct?.hs_code,
-                cn_code: lineProduct?.cn_code,
-                production_route: process.production_route,
-                output_mass_t: line.output_mass_t,
                 direct_emissions_tco2e: allocatedDirectEmissions,
-                indirect_emissions_relevance: lineIndirectApplicability.relevance,
-                indirect_emissions_rule: lineIndirectApplicability.rule_code,
                 indirect_emissions_excluded_tco2e: allocatedExcludedIndirectEmissions,
                 indirect_emissions_gross_tco2e: lineGrossIndirectEmissions,
-                source_stream_count: processSourceStreams.length,
                 source_stream_emissions_tco2e: sourceStreamEmissions * allocationShare,
                 source_stream_energy_tj: sourceStreamEnergy * allocationShare,
                 source_stream_delta_tco2e: sourceStreamDelta * allocationShare,
@@ -583,8 +797,6 @@ export function calculateLocalResults(input: {
                 see_cbam_basis: lineSeeCbamBasis,
                 see_informational_total: lineSeeInformationalTotal,
                 total_see: lineSeeInformationalTotal,
-                warnings,
-                warningDetails,
             };
         });
 
