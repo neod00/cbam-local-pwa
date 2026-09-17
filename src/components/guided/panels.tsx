@@ -69,6 +69,7 @@ import {
     matchGuidedStreamKind,
 } from '@/lib/source-stream-input';
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ExternalLink, Lock, Pencil, Plus, Sparkles, Trash2, Upload } from 'lucide-react';
+import { CURRENT_CBAM_PERIOD } from '@/lib/cbam-period';
 import Link from 'next/link';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
@@ -147,6 +148,11 @@ function RowActions({ label, onEdit, onDelete }: { label: string; onEdit?: () =>
 /** 참조가 남은 항목의 삭제를 막고 이유를 알린다. 참조를 남긴 채 지우면 화면에서만 사라진다. */
 function alertDeleteBlocked(name: string, reasons: string[], howTo: string) {
     window.alert(`'${name}'은(는) 다른 자료가 참조하고 있어 삭제할 수 없습니다.\n\n${reasons.join(' · ')}\n\n${howTo}`);
+}
+
+/** 리터 → 톤. 밀도(kg/L)를 곱해 1,000으로 나눈다. 저장값의 꼬리를 6자리에서 끊는다. */
+function litresToTonnes(litres: number, densityKgPerL: number): number {
+    return Math.round(litres * densityKgPerL * 1000) / 1e6;
 }
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
@@ -476,6 +482,9 @@ function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                         <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => applyPreset(`${year}년 연간`, `${year}-01-01`, `${year}-12-31`)}>
                             {year}년 연간
                         </Button>
+                        <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => applyPreset(`${year - 1}년 연간`, `${year - 1}-01-01`, `${year - 1}-12-31`)}>
+                            {year - 1}년 연간
+                        </Button>
                         <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => applyPreset(`${year}년 상반기`, `${year}-01-01`, `${year}-06-30`)}>
                             상반기
                         </Button>
@@ -494,6 +503,13 @@ function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                             <input type="date" className={fieldClass} value={endDate} onChange={(event) => setEndDate(event.target.value)} />
                         </Field>
                     </div>
+                    {startDate && startDate.slice(0, 4) !== CURRENT_CBAM_PERIOD.reportingYear && (
+                        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                            <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+                            지금은 {CURRENT_CBAM_PERIOD.reportingYear}년 확정기간입니다(신고 기한 {CURRENT_CBAM_PERIOD.declarationDue}). {startDate.slice(0, 4)}년 실적으로 만든 SEE는{' '}
+                            <span className="font-semibold">잠정치</span>로 쓸 수 있는지 수입자(고객사)에게 먼저 확인하세요 — 그 연도 자료가 {CURRENT_CBAM_PERIOD.reportingYear}년 신고에 인정되는지는 확인 필요(규정)입니다. {CURRENT_CBAM_PERIOD.reportingYear}년 실적이 모이면 같은 입력을 복사해 갱신하면 됩니다.
+                        </p>
+                    )}
                     <div className="flex gap-2">
                         <Button type="button" onClick={savePeriod}>{editingPeriodId ? '수정 저장' : '보고기간 저장'}</Button>
                         {data.periods.length > 0 && (
@@ -1042,8 +1058,10 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
     const [kindKey, setKindKey] = useState(GUIDED_STREAM_KINDS[0].key);
     const [amount, setAmount] = useState('');
     const [streamName, setStreamName] = useState('');
-    const [factor, setFactor] = useState('');
-    const [ncv, setNcv] = useState('');
+    // 도움말이 「자리값을 그대로 두세요」라고 하는데 칸이 비어 있으면, 비운 채 저장해 배출 0이 된다(run11 P1-06).
+    // 첫 유형의 자리값을 실제로 채워 둔다.
+    const [factor, setFactor] = useState(String(GUIDED_STREAM_KINDS[0].defaults.emission_factor_tco2e_per_unit));
+    const [ncv, setNcv] = useState(String(GUIDED_STREAM_KINDS[0].defaults.ncv_gj_per_unit));
     const [streamSource, setStreamSource] = useState('');
     // 계수의 **출처 유형**. 유형별 자리값이 있지만 화면에 드러내 사용자가 고치게 한다 —
     // 숨겨두면 앱이 「공급사 시험분석」 같은 근거를 사용자 대신 주장하게 되고,
@@ -1075,11 +1093,14 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
         period_id: process.period_id,
         process_id: process.id,
         name: streamName.trim() || kind.label,
-        activity_data: num(amount),
+        // 리터 유형은 밀도로 t 환산해 저장한다(EU 템플릿 단위는 t·Nm³뿐). 원자료 리터는 출처에 남긴다.
+        activity_data: kind.litres ? litresToTonnes(num(amount), kind.litres.densityKgPerL) : num(amount),
         ncv_gj_per_unit: kind.needsNcv ? num(ncv) : kind.defaults.ncv_gj_per_unit,
         emission_factor_tco2e_per_unit: num(factor),
         factor_source_type: factorSource,
-        source: streamSource.trim(),
+        source: kind.litres && streamSource.trim()
+            ? `${streamSource.trim()} · 원자료 ${fmt(num(amount), 1)} L × ${kind.litres.densityKgPerL} kg/L`
+            : streamSource.trim(),
     });
 
     const addStream = async () => {
@@ -1104,8 +1125,8 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
         setEditingStreamId('');
         setStreamName('');
         setAmount('');
-        setFactor('');
-        setNcv('');
+        setFactor(String(kind.defaults.emission_factor_tco2e_per_unit));
+        setNcv(String(kind.defaults.ncv_gj_per_unit));
         setStreamSource('');
         setFactorSource(kind.defaults.factor_source_type);
         setMessage('');
@@ -1253,11 +1274,22 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
                         placeholder={kind.allowsNegative ? '-2234000' : '128400'}
                     />
                 </Field>
+                {kind.litres && num(amount) > 0 && (
+                    <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
+                        {fmt(num(amount), 1)} L × {kind.litres.densityKgPerL} kg/L ÷ 1,000 = <span className="font-semibold">{fmt(litresToTonnes(num(amount), kind.litres.densityKgPerL), 3)} t</span> 로 저장됩니다.
+                    </p>
+                )}
 
                 {kind.needsNcv && (
-                    <Field label="순발열량 (GJ/단위)" hint="성적서 값이 있으면 그것으로. 없으면 자리값을 그대로 두세요.">
+                    <Field label="순발열량 (GJ/단위)" hint={kind.ncvHint ?? '성적서 값이 있으면 그것으로. 없으면 자리값을 그대로 두세요.'}>
                         <input className={fieldClass} inputMode="decimal" value={ncv} onChange={(event) => setNcv(event.target.value)} />
                     </Field>
+                )}
+                {kind.needsNcv && kind.ncvGrossThreshold !== undefined && num(ncv) > kind.ncvGrossThreshold && (
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                        <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+                        {fmt(num(ncv), 4)} GJ/단위는 <span className="font-semibold">총발열량</span>으로 보입니다(고지서 MJ ÷ 사용량). CBAM 산식은 순발열량을 씁니다 — 그대로 저장하면 배출이 약 10% 크게 나옵니다.
+                    </p>
                 )}
 
                 <Field label={kind.factorLabel} hint={kind.factorHint}>
@@ -1302,7 +1334,7 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
 
 // ── 5단계: ② 전력 ────────────────────────────────────────────────────
 const ELECTRICITY_EF_SOURCES = [
-    { value: 'COUNTRY_GRID_DEFAULT', label: '국가/지역 계통 평균 기본값 (Commission/IEA)' },
+    { value: 'COUNTRY_GRID_DEFAULT', label: '원산지국 계통 평균 (국가 공표값·IEA 등 — 출처를 적어 두세요)' },
     { value: 'DIRECT_TECHNICAL_LINK', label: '발전설비 직접 기술적 연결 (실측)' },
     { value: 'PPA', label: '전력구매계약(PPA) (실측)' },
     { value: 'INSTALLATION_OWN', label: '설비 내 자가발전' },
@@ -1353,12 +1385,13 @@ function ElectricityForm({
 }) {
     const [mwh, setMwh] = useState(process.electricity_mwh > 0 ? String(process.electricity_mwh) : '');
     const [ef, setEf] = useState(String(process.electricity_ef_tco2e_per_mwh || 0.47));
+    const [allocationNote, setAllocationNote] = useState(process.electricity_allocation_note ?? '');
     const [efSource, setEfSource] = useState(process.electricity_ef_source ?? 'COUNTRY_GRID_DEFAULT');
     const [message, setMessage] = useState('');
     const [saved, setSaved] = useState(false);
 
     const saveElectricity = async () => {
-        const draft = { mwh: num(mwh), ef: num(ef), efSource };
+        const draft = { mwh: num(mwh), ef: num(ef), efSource, allocationNote };
         const error = validateElectricityDraft(draft);
         if (error) {
             setMessage(error);
@@ -1388,7 +1421,8 @@ function ElectricityForm({
                     <input className={fieldClass} inputMode="decimal" value={ef} onChange={(event) => setEf(event.target.value)} />
                 </Field>
                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-                    미리 채워진 0.47은 임시 국가계수 자리값입니다. 실제 적용할 계수의 공식 출처·연도(국가 기본계수 워크북 또는 PPA·직접연결 실측)를 확인해 입력하세요.
+                    미리 채워진 0.47은 임시 자리값입니다. <span className="font-semibold">앱은 한국 계통 평균값을 갖고 있지 않습니다</span> — 업로드하는 EU 기본값 파일(DVs)에도 전력 행은 없습니다. 환경부 공표 국가 전력배출계수처럼 출처를 댈 수 있는 값을 넣고, 발행기관·문서·공표연도를{' '}
+                    <Link href="/report-inputs" className="font-semibold underline">보고서 입력(제7장)</Link>에 적어 두세요. EU가 인정하는 값인지는 수입자·검증인에게 확인이 필요합니다.
                 </p>
                 <Field label="계수 출처">
                     <select className={fieldClass} value={efSource} onChange={(event) => setEfSource(event.target.value)}>
@@ -1396,6 +1430,12 @@ function ElectricityForm({
                             <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
                     </select>
+                </Field>
+                <Field
+                    label="공용 계량기에서 나눈 값이면 — 배분 근거 (선택)"
+                    hint="계량기 하나를 여러 공정이 같이 쓰면 이 공정 몫을 직접 계산해 위에 적고, 어떻게 나눴는지 남기세요. 검증인이 묻습니다. 근거 없는 추정치보다 생산량 비율이 설명하기 쉽습니다."
+                >
+                    <input className={fieldClass} value={allocationNote} onChange={(event) => setAllocationNote(event.target.value)} placeholder="예: 한전 계량기 5,412 MWh를 생산량 비율 3,240:1,860으로 배분" />
                 </Field>
                 <Button type="button" onClick={saveElectricity}>전력 저장</Button>
             </div>
@@ -1565,8 +1605,11 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
     };
 
     // 이 공정이 만드는 제품(생산라인). 2개 이상이면 전구물질을 제품별로 배분할 수 있다(E_PurchPrec (b) 구조).
+    // 활동수준 제외(스크랩·불량) 라인은 배출 0·분모 제외다 — 원료를 배분받을 제품이 아니다.
+    // 종전에는 이 라인에도 생산량 비율로 원료를 미리 채워, 눈치채지 못하면 STS 전구물질 배출의
+    // 7.6%가 빠졌다(씨밤이 run11 P1-11).
     const outputLines = data.productOutputLines.filter(
-        (line) => line.process_id === process.id && line.output_mass_t > 0
+        (line) => line.process_id === process.id && line.output_mass_t > 0 && line.activity_level_role !== 'EXCLUDED'
     );
     const hasMultipleProducts = outputLines.length > 1;
     const outputTotal = outputLines.reduce((sum, line) => sum + line.output_mass_t, 0);
@@ -1844,6 +1887,24 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                         );
                     })}
                 </ul>
+            )}
+
+            {data.precursors.filter((precursor) => precursor.process_id === process.id).length === 0 && (
+                <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                    <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={Boolean(process.no_purchased_precursors)}
+                        onChange={async (event) => {
+                            await updateLocalItem('processes', { ...process, no_purchased_precursors: event.target.checked || undefined });
+                            await onSaved();
+                        }}
+                    />
+                    <span>
+                        <span className="font-semibold">이 공정은 구매한 CBAM 강재(선재·코일·빌릿 등)를 쓰지 않습니다.</span>{' '}
+                        강재를 사다 가공한다면 체크하지 말고 아래에 등록하세요 — 그 경우 SEE의 대부분이 이 단계에서 나옵니다.
+                    </span>
+                </label>
             )}
 
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">

@@ -225,7 +225,7 @@ export type EuExportIssueTarget =
 
 export interface EuExportReadinessIssue {
     severity: 'error' | 'warning';
-    area: '제품' | '생산공정' | '구매 전구물질' | '템플릿 한계' | '보고기간';
+    area: '제품' | '생산공정' | '구매 전구물질' | '템플릿 한계' | '보고기간' | '사업장';
     message: string;
     target?: EuExportIssueTarget;
 }
@@ -718,6 +718,36 @@ export function evaluateEuExportReadiness(
             });
         }
 
+        // 철강 가공품(품목군 「Iron or steel products」)은 대개 구매 강재를 가공해 만든다 — 그 경우 SEE의
+        // 대부분이 전구물질이다. 하나도 없는데 사람이 「없음」을 확인하지도 않았으면 알린다(run11 P1-12).
+        if (
+            euGood === 'Iron or steel products'
+            && !process.no_purchased_precursors
+            && !exportScope.precursors.some((precursor) => precursor.process_id === process.id)
+        ) {
+            issues.push({
+                severity: 'warning',
+                area: '구매 전구물질',
+                message: `${process.name}: 구매 전구물질이 없습니다. 강재를 사다 가공하는 공정이면 SEE의 대부분이 전구물질입니다 — 6단계에서 등록하세요. 구매 강재가 없는 것이 맞다면 6단계에서 「구매한 CBAM 강재 없음」을 체크하세요.`,
+                target: { type: 'process', id: process.id },
+            });
+        }
+
+        // 공용 계량기에서 나눈 전력이면 근거가 있어야 한다 — 같은 기간에 전력을 쓰는 공정이 둘 이상인데
+        // 근거가 비어 있으면 검증인이 「이 MWh는 어떻게 나왔나」를 물을 때 답할 자료가 없다(run11 P1-10).
+        if (
+            process.electricity_mwh > 0
+            && !process.electricity_allocation_note?.trim()
+            && data.processes.filter((other) => other.electricity_mwh > 0 && (other.period_id ?? '') === (process.period_id ?? '')).length > 1
+        ) {
+            issues.push({
+                severity: 'warning',
+                area: '생산공정',
+                message: `${process.name}: 전력을 쓰는 공정이 둘 이상입니다. 계량기 하나를 나눠 쓴 값이면 5단계의 「배분 근거」에 어떻게 나눴는지 적어 두세요(공정별 계량기가 있으면 그 사실을 적으세요).`,
+                target: { type: 'process', id: process.id },
+            });
+        }
+
         if (!process.production_route || process.production_route.trim().length === 0) {
             issues.push({
                 severity: 'warning',
@@ -840,6 +870,19 @@ export function evaluateEuExportReadiness(
             });
         }
 
+        // 간접 SEE가 있는데 전력 원단위·계수가 없으면 EU 문서에는 「1 MWh/t × 간접값」으로 나간다.
+        // 실재하지 않는 전력 원단위다 — 검증인이 물으면 답할 수 없다(run11 P1-17).
+        const hasElectricityBridge =
+            (precursor.indirect_electricity_mwh_per_t ?? 0) > 0 && (precursor.indirect_electricity_factor_tco2e_per_mwh ?? 0) > 0;
+        if (precursor.indirect_see_tco2e_per_t > 0 && !hasElectricityBridge) {
+            issues.push({
+                severity: 'warning',
+                area: '구매 전구물질',
+                message: `${precursor.name}: 간접 SEE ${precursor.indirect_see_tco2e_per_t}의 전력사용량(MWh/t)·전력계수가 없습니다. EU 문서의 E_PurchPrec에는 「1 MWh/t × ${precursor.indirect_see_tco2e_per_t}」로 기재됩니다 — 공급사에 두 값을 따로 요청해 6단계의 전력 분해 칸에 넣으세요.`,
+                target: { type: 'precursor', id: precursor.id },
+            });
+        }
+
         if (!precursor.source) {
             issues.push({
                 severity: 'warning',
@@ -868,9 +911,54 @@ export function evaluateEuExportReadiness(
         }
     }
 
+
+
+    // ── 사업장 ────────────────────────────────────────────────────────
+    // 화면이 「법정 필수 — 검증인이 반드시 확인합니다」라고 표시한 칸이 비어도 아무 말이 없었다.
+    // 산정보고서는 같은 항목을 「기재 필요」로 세는데 Export 점검은 「오류 0 · 경고 0」이었다(run11 P1-15·16).
+    // 사업장 자료를 넘겨받았을 때만 검사한다(넘기지 않는 호출부의 결과를 바꾸지 않는다).
+    const installationForCheck = (data.installations ?? [])[0];
+    if (installationForCheck) {
+        const missingOperator = [
+            !installationForCheck.operator_name?.trim() ? '운영자(법인)명' : '',
+            !installationForCheck.operator_reg_number?.trim() ? '법인/활동 등록번호' : '',
+            !installationForCheck.operator_address?.trim() ? '운영자 주소' : '',
+        ].filter(Boolean);
+        if (missingOperator.length > 0) {
+            issues.push({
+                severity: 'warning',
+                area: '사업장',
+                message: `${installationForCheck.name}: 비어 있는 「법정 필수」 항목 — ${missingOperator.join(' · ')}. 검증인이 반드시 확인하며 산정보고서 제2장에 「기재 필요」로 남습니다. 사업장 화면에서 채우세요.`,
+            });
+        }
+        if (!installationForCheck.unlocode?.trim()) {
+            issues.push({
+                severity: 'warning',
+                area: '사업장',
+                message: `${installationForCheck.name}: UN/LOCODE가 비어 있습니다. EU 문서 A_InstData의 UNLOCODE 칸이 빈 채로 나갑니다. UN/LOCODE는 UNECE가 도시·항만에 붙인 5자리 코드입니다(예: 부산 KRPUS, 인천 KRINC) — 가까운 도시 코드를 UNECE 목록에서 찾거나, 없으면 좌표(위도·경도)를 채우세요.`,
+            });
+        }
+    }
+
+    // ── 제품·역할이 둘 다 비어 있는 생산라인 ──────────────────────────
+    // 이런 라인은 엔진에서 공정 대표제품으로 폴백돼 배출을 배분받지만 EU 문서에는 행이 생기지 않는다 —
+    // 그 몫의 배출이 문서에서 조용히 사라진다(run11 P1-14).
+    const inScopeProcessIds = new Set(exportScope.processes.map((process) => process.id));
+    for (const line of data.productOutputLines ?? []) {
+        if (!inScopeProcessIds.has(line.process_id) || line.output_mass_t <= 0) continue;
+        if (!line.product_id && !line.activity_level_role) {
+            issues.push({
+                severity: 'warning',
+                area: '생산공정',
+                message: `생산라인 '${line.name}': 제품도 활동수준 역할도 지정되지 않았습니다. 제품이면 제품을 고르고, 스크랩·불량·부산물이면 「활동수준 제외」로 표시하세요 — 그대로 두면 이 라인 몫의 배출이 EU 문서에 나타나지 않습니다.`,
+                target: { type: 'process', id: line.process_id },
+            });
+        }
+    }
+
+    // 건수는 **모든** 검사가 끝난 뒤에 센다 — 중간에 세면 뒤에 추가한 경고가 목록에는 보이고 건수에는 빠진다.
     const errorCount = issues.filter((issue) => issue.severity === 'error').length;
     const warningCount = issues.filter((issue) => issue.severity === 'warning').length;
-
     return {
         issues,
         errorCount,

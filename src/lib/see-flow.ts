@@ -126,7 +126,36 @@ export function buildSeeFlowBinding(results: LocalCalculationResult[]): SeeFlowB
     const output = reportable.reduce((sum, result) => sum + result.output_mass_t, 0);
 
     if (reportable.length === 0 || output <= 0) {
-        return EXAMPLE_SEE_FLOW;
+        // 예시는 **결과가 하나도 없을 때만** 보여준다. 비신고 공정 탭처럼 결과는 있는데 신고 대상이
+        // 아닌 경우에 예시(1,000 t · 200 · 225 · 2.09)를 내면 실제값으로 읽힌다(씨밤이 run11 P1-13).
+        // 그때는 그 공정의 실제 배분 참고값을 보여주고 기준 SEE는 「해당 없음」(null)으로 둔다.
+        // 활동수준 제외(스크랩) 라인은 생산량에 넣지 않는다 — 넣으면 1,860 t 공정이 1,950 t로 보인다.
+        const reference = results.filter((result) => result.output_mass_t > 0 && result.allocation_basis !== 'ACTIVITY_LEVEL_EXCLUDED');
+        const referenceOutput = reference.reduce((sum, result) => sum + result.output_mass_t, 0);
+        if (reference.length === 0 || referenceOutput <= 0) {
+            return EXAMPLE_SEE_FLOW;
+        }
+        const sumOf = (pick: (result: LocalCalculationResult) => number) => reference.reduce((sum, result) => sum + pick(result), 0);
+        const referenceDirect = sumOf((result) => result.direct_emissions_tco2e);
+        const referenceIndirect = sumOf((result) => result.indirect_emissions_gross_tco2e);
+        const referencePrecursorDirect = sumOf((result) => result.precursor_direct_see * result.output_mass_t);
+        const referencePrecursorIndirect = sumOf((result) => result.precursor_indirect_see * result.output_mass_t);
+        const first = reference[0];
+        return {
+            isExample: false,
+            productName: first.product_name,
+            cnCode: first.cn_code ?? first.hs_code ?? '',
+            indirectRelevance: first.indirect_emissions_relevance,
+            basisExcludesUndetermined: false,
+            outputMassT: referenceOutput,
+            directEmissions: referenceDirect,
+            ownIndirectEmissions: referenceIndirect,
+            precursorDirectEmissions: referencePrecursorDirect,
+            precursorIndirectEmissions: referencePrecursorIndirect,
+            seeCbamBasis: null,
+            seeIndirect: (referenceIndirect + referencePrecursorIndirect) / referenceOutput,
+            seeTotal: (referenceDirect + referenceIndirect + referencePrecursorDirect + referencePrecursorIndirect) / referenceOutput,
+        };
     }
 
     const directEmissions = reportable.reduce((sum, result) => sum + result.direct_emissions_tco2e, 0);

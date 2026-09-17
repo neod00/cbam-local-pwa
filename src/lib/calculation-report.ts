@@ -2,7 +2,7 @@ import { cell, createDocx, paragraph, table } from './docx-builder';
 import { checkDisplaySum, formatForReport, formatIntegerForReport, formatPercentForReport, formatRawForReport, roundForReport } from './report-format';
 import { getCbamGoodsMetadata, getIndirectEmissionsApplicability } from './cbam-product-rules';
 import { getSectorParameters, SECTOR_PARAM_CITATION } from './sector-parameters';
-import { D43_EVIDENCE, ELECTRICITY_EF_BASIS_LABEL, ELECTRICITY_EF_CITATION, weightedAverageEf } from './electricity-ef-basis';
+import { D43_EVIDENCE, ELECTRICITY_EF_BASIS_LABEL, ELECTRICITY_EF_CITATION, resolveElectricityEfBasis, weightedAverageEf } from './electricity-ef-basis';
 import { CN_MASTER_TEMPLATE_VERSION } from './cn-master.generated';
 import { isCbamReportingScope, getProductReportingScope } from './reporting-scope';
 import { ALLOCATION_RULES, DIRECT_EMISSIONS_INPUT_MODE_LABEL } from './allocation-rules';
@@ -21,6 +21,29 @@ import type {
     ReportInputs,
     SourceStream,
 } from './local-db';
+
+/**
+ * 공급사 자료 대상기간(자유 입력 문자열)이 보고기간과 어긋나는가.
+ *
+ * 종전에는 기간 **이름**과 문자열 비교를 했다 — 「2025-01-01 ~ 2025-12-31」과 「2025년 연간」은
+ * 같은 기간인데 「불일치」로 인쇄됐다(씨밤이 run11 P1-18). 연도로 비교한다: 자료 문자열에 적힌
+ * 연도가 모두 보고기간의 연도 안에 있으면 일치로 본다. 연도를 읽을 수 없을 때만 문자열 비교로 돌아간다.
+ */
+export function isVintageMismatch(
+    vintage: string | undefined,
+    period: Pick<ReportingPeriod, 'name' | 'start_date' | 'end_date'> | undefined
+): boolean {
+    const text = vintage?.trim();
+    if (!text || !period) return false;
+    if (text === period.name) return false;
+    const yearsIn = (value?: string) => Array.from((value ?? '').matchAll(/(?:19|20)\d{2}/g)).map((match) => match[0]);
+    const periodYears = new Set([...yearsIn(period.start_date), ...yearsIn(period.end_date)]);
+    const vintageYears = yearsIn(text);
+    if (vintageYears.length === 0 || periodYears.size === 0) {
+        return Boolean(period.name) && text !== period.name;
+    }
+    return vintageYears.some((year) => !periodYears.has(year));
+}
 
 // CBAM 내재배출량 산정보고서(.docx) 생성. 설계: docs/calculation-report-design.md
 // 승인 기준 문서: CBAM_documents/CBAM_산정보고서_샘플_v0.3_한빛스틸_2026.docx
@@ -1146,7 +1169,7 @@ function electricitySection(input: CalculationReportInput) {
     const rows = cbamProcesses(input).map((process) => {
         const meta = input.reportInputs?.electricity_ef_meta?.find((item) => item.process_id === process.id);
         const source = [meta?.publisher, meta?.document, meta?.vintage].filter(Boolean).join(' · ');
-        const basis = meta?.basis ?? 'UNCLASSIFIED';
+        const basis = resolveElectricityEfBasis(meta?.basis, process);
 
         return [
             process.name,
@@ -1175,8 +1198,12 @@ function electricitySection(input: CalculationReportInput) {
 
         const meta = input.reportInputs?.electricity_ef_meta?.find((item) => item.process_id === process.id);
         const source = [meta?.publisher, meta?.document, meta?.vintage].filter(Boolean).join(' · ');
-        const basis = meta?.basis ?? 'UNCLASSIFIED';
+        const basis = resolveElectricityEfBasis(meta?.basis, process);
         const included = includedProcessIds.has(process.id);
+
+        if (process.electricity_allocation_note?.trim()) {
+            body.push(paragraph(`${process.name} — 전력 사용량 배분 근거(사업장 기재): ${process.electricity_allocation_note.trim()}`, 'Note'));
+        }
         const stress = included ? ' 이 공정의 간접배출은 인증서 기준 SEE에 포함되므로(제3.1장), 이 계수가 기준값에 직접 들어간다 — 검증인이 대조할 수 없으면 기준값의 해당 부분이 미검증으로 남는다.' : '';
 
         // 산정근거 미분류 — 앱이 대신 정하지 않는다. 다만 무엇을 골라야 하는지 안내한다.
@@ -1307,7 +1334,7 @@ function precursorSection(input: CalculationReportInput) {
         // 공급사 자료의 대상기간이 본 보고기간과 다르면 확정기간 적격성(빈티지 대응)이 걸린다.
         // 값만 인쇄하고 불일치를 말하지 않으면 리스크가 문서에서 사라진다(씨밤이 P1 — v0.3 회귀).
         const vintage = precursor.supplier_reporting_period?.trim();
-        const vintageMismatch = Boolean(vintage && period?.name && vintage !== period.name);
+        const vintageMismatch = isVintageMismatch(vintage, period);
         const detail: Array<[string, string]> = [
             ['공급사 / 원산지', `${precursor.supplier_installation || '-'} / ${precursor.supplier_country || PLACEHOLDER}`],
             ['데이터 구분', precursor.data_mode === 'DEFAULT' ? '기본값 (Default)' : precursor.data_mode === 'SEMI_ACTUAL' ? '혼합 (Measured + Default)' : '실측 (Measured)'],
@@ -1328,7 +1355,7 @@ function precursorSection(input: CalculationReportInput) {
         if (precursor.verification_status !== 'VERIFIED' && precursor.data_mode !== 'DEFAULT') {
             const share = precursorContributionShare(input, precursor);
             body.push(paragraph(
-                `리스크 고지: 본 전구물질의 실측값은 제3자 검증이 완료되지 않았다.${share === undefined ? '' : ` 이 값이 CBAM 기준 SEE의 약 ${formatPercentShare(share)}를 차지한다.`}${vintageMismatch ? ` 자료 대상기간도 ${vintage}년으로 본 보고기간과 다르다.` : ''} 확정기간의 실측 인정 요건(검증 수준·기간 대응)은 확인 필요(규정)이며, 불인정 시 공식 기본값 대체가 발동된다 — 그 영향은 제9장에 정량화한다.`,
+                `리스크 고지: 본 전구물질의 실측값은 제3자 검증이 완료되지 않았다.${share === undefined ? '' : ` 이 값이 CBAM 기준 SEE의 약 ${formatPercentShare(share)}를 차지한다.`}${vintageMismatch ? ` 자료 대상기간(${vintage})도 본 보고기간과 다르다.` : ''} 확정기간의 실측 인정 요건(검증 수준·기간 대응)은 확인 필요(규정)이며, 불인정 시 공식 기본값 대체가 발동된다 — 그 영향은 제9장에 정량화한다.`,
                 undefined,
                 { color: AMBER }
             ));
@@ -1470,7 +1497,9 @@ function defaultValueSection(input: CalculationReportInput) {
             continue;
         }
 
-        rows.push([key, '본 산정 실측값 (채택)', formatForReport(precursor.direct_see_tco2e_per_t, 4), formatForReport(precursor.indirect_see_tco2e_per_t, 5), '공급사 제공']);
+        // 기본값(DEFAULT)으로 넣은 전구물질을 「실측값」이라 인쇄하면 문서가 8.1장과 서로 다른 말을 한다(run11 P1-19).
+        const isDefaultMode = precursor.data_mode === 'DEFAULT';
+        rows.push([key, isDefaultMode ? '본 산정 적용값 — 공식 기본값 (채택)' : '본 산정 실측값 (채택)', formatForReport(precursor.direct_see_tco2e_per_t, 4), formatForReport(precursor.indirect_see_tco2e_per_t, 5), isDefaultMode ? '공식 기본값 적용' : '공급사 제공']);
         rows.push([key, '공식 DV — raw', row.direct_default === undefined || row.direct_default === null ? NOT_PUBLISHED : formatForReport(row.direct_default, 8),
             row.indirect_default === undefined || row.indirect_default === null ? NOT_PUBLISHED : formatForReport(row.indirect_default, 8),
             `조회 행 CN ${row.cn_code}`]);
@@ -1480,13 +1509,13 @@ function defaultValueSection(input: CalculationReportInput) {
         if (comparison.deltaRaw !== undefined) {
             // raw 행에도 상대차를 준다. 두 차이 행의 정보 수준이 다를 이유가 없다(씨밤이 P2).
             const rawRatio = row.direct_default ? comparison.deltaRaw / row.direct_default : undefined;
-            rows.push([key, '차이: 실측 − DV(raw)', formatForReport(comparison.deltaRaw, 8), '대조 불가',
-                `${rawRatio === undefined ? '' : `${formatPercentForReport(rawRatio)} · `}${comparison.deltaRaw < 0 ? '실측이 낮음 (유리)' : '실측이 높음 (불리)'}`]);
+            rows.push([key, isDefaultMode ? '차이: 적용값 − DV(raw)' : '차이: 실측 − DV(raw)', formatForReport(comparison.deltaRaw, 8), '대조 불가',
+                `${rawRatio === undefined ? '' : `${formatPercentForReport(rawRatio)} · `}${isDefaultMode ? '적용값 − raw (mark-up 가산분)' : comparison.deltaRaw < 0 ? '실측이 낮음 (유리)' : '실측이 높음 (불리)'}`]);
         }
 
         if (comparison.deltaApplied !== undefined) {
-            rows.push([key, `차이: 실측 − DV(${year})`, formatForReport(comparison.deltaApplied, 9), '대조 불가',
-                `${comparison.deltaAppliedRatio === undefined ? '' : `${formatPercentForReport(comparison.deltaAppliedRatio)} · `}${comparison.deltaApplied < 0 ? '실측이 낮음 (유리)' : '실측이 높음 (불리)'}`]);
+            rows.push([key, isDefaultMode ? `차이: 적용값 − DV(${year})` : `차이: 실측 − DV(${year})`, formatForReport(comparison.deltaApplied, 9), '대조 불가',
+                `${comparison.deltaAppliedRatio === undefined ? '' : `${formatPercentForReport(comparison.deltaAppliedRatio)} · `}${isDefaultMode ? (Math.abs(comparison.deltaApplied) < 1e-9 ? '적용값 = 공식 DV (일치)' : '적용값이 공식 DV와 다름 — 기본값을 다시 적용하세요') : comparison.deltaApplied < 0 ? '실측이 낮음 (유리)' : '실측이 높음 (불리)'}`]);
         }
     }
 
@@ -2038,10 +2067,10 @@ function improvementSection(input: CalculationReportInput) {
 
         const vintage = precursor.supplier_reporting_period?.trim();
 
-        if (vintage && period?.name && vintage !== period.name) {
+        if (vintage && period?.name && isVintageMismatch(vintage, period)) {
             rows.push([
                 `전구물질 자료 기간 — ${precursor.name}`,
-                `${vintage}년 대상 공급사 데이터를 ${period.name} 보고기간에 적용`,
+                `${vintage} 대상 공급사 데이터를 ${period.name} 보고기간에 적용`,
                 '확정기간 적격성(빈티지·기간 대응) 규정 확인 및 대표성 근거 확보 — 확인 필요(규정).',
             ]);
         }

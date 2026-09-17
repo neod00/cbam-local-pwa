@@ -50,7 +50,7 @@ async function fetchGuidedData(): Promise<GuidedData> {
     // 아무도 검사하지 않고, 8단계에서야(그것도 조용히) 정해진다.
     const reportingPeriodId = await getLocalSetting<string>(EXPORT_PERIOD_SETTING_KEY);
     const readiness = evaluateEuExportReadiness({
-        periods, reportingPeriodId, products, processes, productOutputLines, sourceStreams, precursors,
+        periods, reportingPeriodId, products, processes, productOutputLines, sourceStreams, precursors, installations,
     });
 
     return {
@@ -168,6 +168,8 @@ export function GuidedWorkspace() {
         hasDirectEmissions: data.processes.some((process) => process.direct_attributable_emissions_tco2e > 0),
         hasElectricity: data.processes.some((process) => process.electricity_mwh > 0),
         precursorCount: data.precursors.length,
+        // 준비도가 「구매 전구물질이 없습니다」를 냈으면 6단계는 선택이 아니라 할 일이다.
+        precursorsExpected: data.exportIssues.some((issue) => issue.area === '구매 전구물질' && issue.message.includes('구매 전구물질이 없습니다')),
         results: data.results,
         exportErrorCount: data.exportErrorCount,
         exportWarningCount: data.exportWarningCount,

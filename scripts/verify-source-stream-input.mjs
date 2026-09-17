@@ -159,4 +159,26 @@ assert.equal(
   false
 );
 
+// ── [씨밤이 run11 P1-06] 연료 배출계수 0은 조용히 배출 0이 된다 → 막는다(바이오매스 100%만 예외) ──
+const gasKind = [...M.GUIDED_STREAM_KINDS].find((k) => k.key === 'fuel-gas');
+const zeroEfDraft = { ...gasKind.defaults, period_id: 'p', process_id: 'q', name: 'gas', activity_data: 1000, source: 's', emission_factor_tco2e_per_unit: 0 };
+assert.match(M.firstSourceStreamError(M.createSourceStreamValidationErrors(zeroEfDraft)) ?? '', /배출계수/, '연료 EF 0을 막지 않는다');
+assert.equal(
+  M.firstSourceStreamError(M.createSourceStreamValidationErrors({ ...zeroEfDraft, fossil_fraction: 0, biomass_fraction: 1 })), null,
+  '바이오매스 100% 연료는 EF 0이어도 저장돼야 한다'
+);
+
+// ── [run11 P1-07] 리터 유형: 화면은 L, 저장은 t. 경유·등유 계수는 LNG 자리값이 아니다 ──
+const dieselKind = [...M.GUIDED_STREAM_KINDS].find((k) => k.key === 'fuel-diesel-l');
+assert.ok(dieselKind?.litres, '경유 (L) 유형이 없다');
+assert.equal(dieselKind.defaults.activity_unit, 't', 'EU 템플릿 단위는 t·Nm³뿐 — 리터 유형도 t로 저장한다');
+assert.deepEqual(host([dieselKind.litres.densityKgPerL, dieselKind.defaults.ncv_gj_per_unit, dieselKind.defaults.emission_factor_tco2e_per_unit]), [0.835, 43, 74.1]);
+// 12,400 L × 0.835 kg/L = 10.354 t → 10.354 × 43 × 74.1 / 1000 = 32.99 tCO2e
+const dieselEmissions = M.calculateSourceStreamEmissions({ ...dieselKind.defaults, activity_data: 12400 * 0.835 / 1000 });
+assert.ok(Math.abs(dieselEmissions - 32.99) < 0.01, `경유 12,400 L 배출이 32.99가 아니다: ${dieselEmissions}`);
+// 저장된 t 연료를 다시 열면 리터 유형이 아니라 「유류·기타 (t)」로 되짚어야 한다(리터 칸에 t 값이 뜨면 안 된다).
+assert.equal(M.matchGuidedStreamKind({ stream_type: 'FUEL', method: 'Combustion', activity_unit: 't', activity_data: 10.354 }).key, 'fuel-mass');
+// ── [run11 P1-08] 도시가스는 총발열량 경고 기준을 갖는다 ──
+assert.ok(gasKind.ncvGrossThreshold > gasKind.defaults.ncv_gj_per_unit && gasKind.ncvGrossThreshold < 0.0425, '총발열량(≈0.043) 경고 기준이 없다');
+
 console.log('Source stream input verification passed (규칙 단일화 · 세 산정방법 · 자리값 유효성 · 음수 규칙 · 유형 되짚기).');

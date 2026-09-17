@@ -44,7 +44,7 @@ const emptyDraft: ProcessDraft = {
 
 const electricityEfSources = [
     { value: '', label: '— 출처 유형 선택 —' },
-    { value: 'COUNTRY_GRID_DEFAULT', label: '국가/지역 계통 평균 기본값 (Commission/IEA)' },
+    { value: 'COUNTRY_GRID_DEFAULT', label: '원산지국 계통 평균 (국가 공표값·IEA 등 — 출처를 적어 두세요)' },
     { value: 'DIRECT_TECHNICAL_LINK', label: '발전설비 직접 기술적 연결 (실측)' },
     { value: 'PPA', label: '전력구매계약(PPA) (실측)' },
     { value: 'INSTALLATION_OWN', label: '설비 내 자가발전' },

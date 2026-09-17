@@ -80,6 +80,18 @@ export interface ProductionProcess extends LocalEntity {
   // 전력 EF 출처 유형(CBAM 위계). 선택적: 기존 .cbam 백업과의 하위호환을 위해 undefined 허용.
   electricity_ef_source?: string;
   /**
+   * 공장 전체 계량기 하나를 여러 공정이 나눠 쓸 때, 이 공정 몫을 **어떻게 나눴는지**.
+   * 예: 「한전 계량기 5,412 MWh를 생산량 비율 3,240:1,860으로 배분」. 연료에는 공용 계량기 그룹이
+   * 있지만 전력에는 근거를 남길 자리가 없었다(씨밤이 run11 P1-10). 선택 입력.
+   */
+  electricity_allocation_note?: string;
+  /**
+   * 「이 공정은 구매한 CBAM 강재(전구물질)를 쓰지 않는다」고 **사람이 확인**했는가.
+   * 강재를 사다 가공하는 공정은 SEE의 대부분이 전구물질인데, 종전에는 전구물질을 하나도 넣지 않아도
+   * 지도가 「6 / 6 완료 · 생성할 수 있습니다」라고 했다(씨밤이 run11 P1-12). 없는 것이 맞는 공정만 true.
+   */
+  no_purchased_precursors?: boolean;
+  /**
    * 직접귀속배출량을 어떻게 정했는가 (CBAM-ALLOC-DIRECT-01).
    * SOURCE_STREAM_SUM = 연결된 배출원 합계(정합계수 보정 후)를 엔진이 직접 쓴다.
    * MANUAL_TOTAL = direct_attributable_emissions_tco2e 수기 값을 쓴다(배출원은 대조용).

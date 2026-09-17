@@ -52,6 +52,17 @@ function makeResult(overrides) {
 // --- 대상이 없으면 예시로 대체 ---
 assert.equal(buildSeeFlowBinding([]).isExample, true);
 assert.equal(buildSeeFlowBinding([makeResult({ output_mass_t: 0 })]).isExample, true, '생산량 0이면 예시');
+
+// [씨밤이 run11 P1-13] 결과는 있는데 신고 대상이 아닌 공정(비CBAM 공정 탭)에 예시 숫자를 내면 실제값으로 읽힌다.
+// 그 공정의 실제 참고값을 보여주고 기준 SEE는 「해당 없음」(null)이어야 한다.
+const nonReportable = buildSeeFlowBinding([makeResult({
+  is_cbam_reportable: false, see_cbam_basis: null, output_mass_t: 1860,
+  direct_emissions_tco2e: 1049.97, indirect_emissions_gross_tco2e: 937, precursor_direct_see: 0, precursor_indirect_see: 0,
+})]);
+assert.equal(nonReportable.isExample, false, '비신고 공정에 예시(1,000 t · 200 · 225 · 2.09)를 보여주면 안 된다');
+assert.equal(nonReportable.outputMassT, 1860);
+assert.equal(nonReportable.directEmissions, 1049.97);
+assert.equal(nonReportable.seeCbamBasis, null, '비신고 공정의 기준 SEE는 해당 없음이다');
 // 예시가 앱 자신의 판정과 어긋나면 안 된다. CN 7217은 공식 목록상 간접배출 비관련이다.
 assert.equal(EXAMPLE_SEE_FLOW.indirectRelevance, 'NOT_RELEVANT');
 assert.equal(EXAMPLE_SEE_FLOW.basisExcludesUndetermined, false);

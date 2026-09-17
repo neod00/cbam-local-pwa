@@ -35,6 +35,11 @@ export interface GuidedMapInput {
     hasDirectEmissions: boolean;
     hasElectricity: boolean;
     precursorCount: number;
+    /**
+     * 구매 전구물질이 있어야 할 것으로 보이는데(철강 가공품) 아직 없고, 사람이 「없음」을 확인하지도 않았다.
+     * true면 6단계는 선택이 아니라 할 일이다 — 전구물질 없이 「6 / 6 완료 · 생성할 수 있습니다」가 뜨던 것을 막는다(run11 P1-12).
+     */
+    precursorsExpected?: boolean;
     results: LocalCalculationResult[];
     exportErrorCount: number;
     exportWarningCount: number;
@@ -110,10 +115,10 @@ export function deriveGuidedSteps(input: GuidedMapInput, binding: SeeFlowBinding
             id: 'precursors',
             order: 6,
             title: '③ 전구물질',
-            status: precursorsDone ? 'done' : 'optional',
+            status: precursorsDone ? 'done' : input.precursorsExpected ? 'todo' : 'optional',
             summary: precursorsDone
                 ? `직접 ${fmt(binding.precursorDirectEmissions)} · 간접 ${fmt(binding.precursorIndirectEmissions)}`
-                : '구매한 CBAM 강재가 있으면',
+                : input.precursorsExpected ? '구매 강재 등록 — SEE의 대부분' : '구매한 CBAM 강재가 있으면',
         },
         {
             id: 'results',
@@ -138,7 +143,7 @@ export function deriveGuidedSteps(input: GuidedMapInput, binding: SeeFlowBinding
             summary: !exportUnlocked
                 ? '잠김 — 검증 통과 후 열림'
                 : exportReady
-                    ? '생성할 수 있습니다'
+                    ? '파일을 만들 수 있습니다'
                     : `확인 항목 ${input.exportWarningCount}건 검토`,
         },
     ];
@@ -154,7 +159,8 @@ export function deriveGuidedSteps(input: GuidedMapInput, binding: SeeFlowBinding
 }
 
 export function getGuidedProgress(steps: GuidedStepState[]) {
-    const required = steps.filter((step) => step.id !== 'precursors' && step.id !== 'export');
+    // 전구물질 단계는 「선택」일 때만 분모에서 뺀다. 할 일(todo/current)이거나 끝났으면 센다.
+    const required = steps.filter((step) => step.id !== 'export' && !(step.id === 'precursors' && step.status === 'optional'));
     const done = required.filter((step) => step.status === 'done').length;
     return { done, total: required.length };
 }
