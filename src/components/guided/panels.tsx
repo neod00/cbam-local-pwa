@@ -54,7 +54,7 @@ import {
 } from '@/lib/local-db';
 import {
     findDefaultValueReference,
-    getDefaultValueTotalForYear,
+    resolveDefaultSeeForYear,
     type ImportedDefaultValueReference,
 } from '@/lib/reference-workbooks';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
@@ -1439,6 +1439,18 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
     const [supplierInstallation, setSupplierInstallation] = useState('');
     const [supplierRoute, setSupplierRoute] = useState('');
     const [supplierPeriod, setSupplierPeriod] = useState('');
+    // 공급국가 — 기본값 조회·EU 문서 국가코드의 열쇠. 앱이 대신 정하지 않는다(빈 값으로 시작).
+    const [supplierCountry, setSupplierCountry] = useState('');
+    const [referenceCountries, setReferenceCountries] = useState<string[]>([]);
+    useEffect(() => {
+        let cancelled = false;
+        getLocalSetting<ImportedDefaultValueReference>('reference:default-values').then((reference) => {
+            if (cancelled || !reference) return;
+            const names = Array.from(new Set(reference.rows.map((row) => row.country))).filter((country) => !country.startsWith('_'));
+            setReferenceCountries(names.sort((a, b) => a.localeCompare(b)));
+        });
+        return () => { cancelled = true; };
+    }, []);
     // ③ SAD 비교: 지금 입력한 실측값이 EU 공식 기본값보다 유리한지(=CBAM 비용이 낮은지) 판단.
     const [compareOpen, setCompareOpen] = useState(false);
     const [compareResult, setCompareResult] = useState<
@@ -1530,17 +1542,22 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
             setCompareResult(null);
             return;
         }
-        const match = findDefaultValueReference(reference, 'South Korea', cnDigits, '2026');
-        if (!match) {
-            setCompareMessage(`CN ${cnDigits}에 맞는 공식 기본값을 찾지 못했습니다. CN을 확인하세요.`);
+        if (!supplierCountry.trim()) {
+            setCompareMessage('먼저 공급국가를 고르세요. 공식 기본값은 원료를 만든 나라 기준입니다.');
             setCompareResult(null);
             return;
         }
-        const hasIndirect = match.indirect_default != null;
-        const markedUpTotal = getDefaultValueTotalForYear(match, '2026') ?? match.total_default ?? match.direct_default ?? 0;
+        const match = findDefaultValueReference(reference, supplierCountry, cnDigits, '2026');
+        if (!match) {
+            setCompareMessage(`${supplierCountry} · CN ${cnDigits}에 맞는 공식 기본값을 찾지 못했습니다. 공급국가와 CN을 확인하세요.`);
+            setCompareResult(null);
+            return;
+        }
+        const resolvedDefault = resolveDefaultSeeForYear(match, '2026');
+        const hasIndirect = resolvedDefault.hasIndirect;
         setCompareResult({
-            defaultDirect: hasIndirect ? (match.direct_default ?? 0) : markedUpTotal,
-            defaultIndirect: match.indirect_default ?? 0,
+            defaultDirect: resolvedDefault.direct,
+            defaultIndirect: resolvedDefault.indirect,
             hasIndirect,
             matchLabel: `${match.country} / ${match.cn_code}`,
         });
@@ -1580,17 +1597,20 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
             setMessage('공식 기본값 파일이 아직 없습니다. 자료 업로드 화면에서 EU 기본값(DVs) 파일을 가져오면 자동으로 채워집니다.');
             return;
         }
-        const match = findDefaultValueReference(reference, 'South Korea', cnDigits, '2026');
-        if (!match) {
-            setMessage(`CN ${cnDigits || '미입력'}에 맞는 기본값을 찾지 못했습니다. CN 코드를 확인하세요.`);
+        // 기본값은 **원료를 만든 나라** 기준이다. 나라를 고르기 전에는 채우지 않는다 —
+        // 종전에는 'South Korea'로 고정 조회해 대만 원료에 한국 값(4.015)이 들어갔다(run11 P0-04).
+        if (!supplierCountry.trim()) {
+            setMessage('먼저 위의 「공급국가」를 고르세요. EU 기본값은 원료를 만든 나라마다 다릅니다(예: 같은 STS 와이어가 한국 4.015 · 대만 11).');
             return;
         }
-        // 공식 DV의 간접값이 없으면(철강 DV는 대개 null) 없는 값을 markup 총액 − raw 직접으로
-        // 만들어내지 않는다(허위 간접 방지). null이면 간접 0으로 두고 그 사실을 명시한다.
-        const hasIndirect = match.indirect_default != null;
-        const markedUpTotal = getDefaultValueTotalForYear(match, '2026') ?? match.total_default ?? match.direct_default ?? 0;
-        const direct = hasIndirect ? (match.direct_default ?? 0) : markedUpTotal;
-        const indirect = match.indirect_default ?? 0;
+        const match = findDefaultValueReference(reference, supplierCountry, cnDigits, '2026');
+        if (!match) {
+            setMessage(`${supplierCountry} · CN ${cnDigits || '미입력'}에 맞는 기본값을 찾지 못했습니다. 공급국가와 CN 코드를 확인하세요.`);
+            return;
+        }
+        // 직접·간접 분해는 모든 화면이 같은 함수를 쓴다(resolveDefaultSeeForYear) — 간접이 N/A면
+        // mark-up 포함 총액을 직접에 두고 간접은 0. 없는 간접을 만들어내지 않는다.
+        const { direct, indirect, hasIndirect } = resolveDefaultSeeForYear(match, '2026');
         setDirectSee(String(direct));
         setIndirectSee(String(indirect));
         setIndirectMwh('');
@@ -1630,6 +1650,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         setSupplierInstallation('');
         setSupplierRoute('');
         setSupplierPeriod('');
+        setSupplierCountry('');
         setCompareOpen(false);
         setCompareResult(null);
         setCompareMessage('');
@@ -1657,6 +1678,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         setSupplierInstallation(precursor.supplier_installation);
         setSupplierRoute(precursor.production_route);
         setSupplierPeriod(precursor.supplier_reporting_period ?? '');
+        setSupplierCountry(precursor.supplier_country ?? '');
         setDetailOpen(Boolean(precursor.supplier_installation || precursor.production_route || precursor.supplier_reporting_period));
         const allocations = precursor.output_allocations ?? [];
         if (allocations.length > 0) {
@@ -1703,6 +1725,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
             supplierInstallation,
             supplierRoute,
             supplierPeriod,
+            supplierCountry,
             outputAllocations: undefined,
         };
         const error = validatePrecursorDraft(baseDraft);
@@ -1985,6 +2008,26 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                         )}
                     </div>
                 )}
+                <Field
+                    label="공급국가 — 이 원료를 만든 나라"
+                    hint={referenceCountries.length > 0
+                        ? '공식 기본값 파일의 국가 목록입니다. 기본값과 EU 문서의 국가코드가 이 값으로 정해집니다. 앱이 대신 고르지 않습니다.'
+                        : '영문 국가명으로 적으세요(예: South Korea, Taiwan, China). 자료 업로드에서 EU 기본값 파일을 가져오면 목록에서 고를 수 있습니다.'}
+                >
+                    {referenceCountries.length > 0 ? (
+                        <select className={fieldClass} value={supplierCountry} onChange={(event) => setSupplierCountry(event.target.value)}>
+                            <option value="">— 고르세요 —</option>
+                            {supplierCountry && !referenceCountries.includes(supplierCountry) && (
+                                <option value={supplierCountry}>{supplierCountry}</option>
+                            )}
+                            {referenceCountries.map((country) => (
+                                <option key={country} value={country}>{country}</option>
+                            ))}
+                        </select>
+                    ) : (
+                        <input className={fieldClass} value={supplierCountry} onChange={(event) => setSupplierCountry(event.target.value)} placeholder="예: South Korea" />
+                    )}
+                </Field>
                 <Button type="button" variant="secondary" onClick={applyDefaultValues}>
                     <Sparkles className="mr-2 h-4 w-4" />
                     공급사 자료 없음 — EU 기본값 채우기
@@ -2103,7 +2146,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                 </div>
                 {editingPrecursorId && (
                     <p className="text-xs leading-5 text-slate-500">
-                        검증 상태·공급국가·비CBAM 소비량은 그대로 유지됩니다. 그 항목들은 상세 입력에서 다룹니다.
+                        검증 상태·비CBAM 소비량은 그대로 유지됩니다. 그 항목들은 상세 입력에서 다룹니다.
                     </p>
                 )}
             </div>

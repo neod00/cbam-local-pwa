@@ -373,6 +373,7 @@ const precursorDraft = {
   supplierInstallation: '  OO제철 △△공장  ',
   supplierRoute: '  EAF  ',
   supplierPeriod: '  2026-01-01 ~ 2026-12-31  ',
+  supplierCountry: '  Taiwan  ',
   outputAllocations: [{ product_output_line_id: 'line_1', allocated_mass_t: 1050 }],
 };
 const link = { period_id: 'period_1', process_id: 'process_1', product_id: 'product_1' };
@@ -390,6 +391,7 @@ assert.deepEqual(host(payload), {
   production_route: 'EAF',
   supplier_installation: 'OO제철 △△공장',
   supplier_reporting_period: '2026-01-01 ~ 2026-12-31',
+  supplier_country: 'Taiwan',
   data_mode: 'ACTUAL',
   purchased_mass_t: 1100,
   consumed_mass_t: 1050,
@@ -407,16 +409,15 @@ assert.deepEqual(hostKeys(payload), [
   'consumed_mass_t', 'data_mode', 'default_value_justification', 'direct_see_tco2e_per_t',
   'indirect_electricity_factor_tco2e_per_mwh', 'indirect_electricity_mwh_per_t', 'indirect_see_tco2e_per_t',
   'name', 'output_allocations', 'period_id', 'precursor_cn_code', 'process_id', 'product_id',
-  'production_route', 'purchased_mass_t', 'source', 'supplier_installation', 'supplier_reporting_period',
+  'production_route', 'purchased_mass_t', 'source', 'supplier_country', 'supplier_installation', 'supplier_reporting_period',
 ], '전구물질 공유 payload의 키 집합이 바뀌었다');
 
 // ── [변형 D 차단] 신규 전용 기본값을 리터럴로 못 박는다 ──
 const created = G.buildPrecursorCreate(precursorDraft, link);
 assert.deepEqual(
-  host(pick(created, ['aggregated_goods_category', 'supplier_country', 'verification_status', 'default_value_year', 'consumed_for_non_cbam_mass_t'])),
+  host(pick(created, ['aggregated_goods_category', 'verification_status', 'default_value_year', 'consumed_for_non_cbam_mass_t'])),
   {
     aggregated_goods_category: 'Iron or steel products',
-    supplier_country: 'South Korea',
     // 앱이 공급사 자료를 대신 검증할 수는 없다. 신규는 언제나 미검증이다 —
     // 여기서 VERIFIED가 새면 검증하지 않은 자료가 검증됨으로 EU 문서에 나간다.
     verification_status: 'UNVERIFIED',
@@ -425,12 +426,22 @@ assert.deepEqual(
   },
   '신규 전구물질의 기본값이 바뀌었다'
 );
-// 신규는 공유 payload + 기본값 5개, 그 이상도 이하도 아니다.
+// 신규는 공유 payload + 기본값 4개, 그 이상도 이하도 아니다.
 assert.deepEqual(
   hostKeys(created).filter((key) => !hostKeys(payload).includes(key)).sort(),
-  ['aggregated_goods_category', 'consumed_for_non_cbam_mass_t', 'default_value_year', 'supplier_country', 'verification_status'],
+  ['aggregated_goods_category', 'consumed_for_non_cbam_mass_t', 'default_value_year', 'verification_status'],
   '신규 전용 키가 바뀌었다'
 );
+
+// ── [run11 P0-04] 공급국가는 사람이 고른다. 패널이 나라를 대신 정하면 안 된다 ──
+// 'South Korea' 고정이던 시절, 대만 원료에 한국 기본값(4.015)이 들어가 SEE가 기대값의 65%로 나갔다.
+assert.equal(created.supplier_country, 'Taiwan', '신규 전구물질의 공급국가는 draft에서 와야 한다');
+assert.match(
+  G.validatePrecursorDraft({ ...precursorDraft, supplierCountry: '   ' }) ?? '',
+  /공급국가/,
+  '공급국가가 비면 저장을 막아야 한다'
+);
+assert.equal(G.validatePrecursorDraft(precursorDraft), null);
 
 // ── 수정: 펼치기 보존 ──
 const existingPrecursor = {

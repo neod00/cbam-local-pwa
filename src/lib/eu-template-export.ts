@@ -84,6 +84,21 @@ export function resolveExportPeriod(
     return periods[0];
 }
 
+/**
+ * 이 생산라인 때문에 공정이 EU 문서에 나가야 하는가.
+ *
+ * 보고범위(CBAM 대상)만 보면 안 된다 — 스크랩·불량처럼 **활동수준에서 제외한 라인**은 제품을
+ * 지정하지 않는 것이 보통이고, 그러면 범위가 기본값 CBAM_GOOD로 떨어진다. 그 라인 하나 때문에
+ * EU에 팔지 않는 공정 전체가 이름 없이 D_Processes에 나갔다(씨밤이 run11 P0-02).
+ * 활동수준 제외 라인은 배출 0·분모 제외이므로 신고할 재화가 아니다.
+ */
+function isReportableOutputLine(line: ProductOutputLine, productById: Map<string, Product>): boolean {
+    if (line.activity_level_role === 'EXCLUDED') {
+        return false;
+    }
+    return isCbamReportingScope(getProductReportingScope(line.product_id ? productById.get(line.product_id) : undefined, line));
+}
+
 function createReportableExportScope(data: EuTemplateExportData): ReportableExportScope {
     const periods = data.periods ?? [];
     const period = resolveExportPeriod(periods, data.reportingPeriodId);
@@ -97,9 +112,7 @@ function createReportableExportScope(data: EuTemplateExportData): ReportableExpo
     const productById = new Map(data.products.map((product) => [product.id, product]));
     const products = data.products.filter((product) => isCbamReportingScope(getProductReportingScope(product)));
     const productIds = new Set(products.map((product) => product.id));
-    const productOutputLines = (data.productOutputLines ?? []).filter((line) =>
-        isCbamReportingScope(getProductReportingScope(line.product_id ? productById.get(line.product_id) : undefined, line))
-    );
+    const productOutputLines = (data.productOutputLines ?? []).filter((line) => isReportableOutputLine(line, productById));
     const outputLineIds = new Set(productOutputLines.map((line) => line.id));
     const processIds = new Set(productOutputLines.map((line) => line.process_id));
 
@@ -678,9 +691,7 @@ export function evaluateEuExportReadiness(
 
     for (const process of exportScope.processes) {
         const processOutputLines = outputLinesByProcess.get(process.id) ?? [];
-        const reportableOutputLine = processOutputLines.find((line) =>
-            isCbamReportingScope(getProductReportingScope(line.product_id ? productById.get(line.product_id) : undefined, line))
-        );
+        const reportableOutputLine = processOutputLines.find((line) => isReportableOutputLine(line, productById));
         const processProduct = process.product_id ? productById.get(process.product_id) : undefined;
         const product = reportableOutputLine?.product_id ? productById.get(reportableOutputLine.product_id) : processProduct;
         const processSourceStreams = sourceStreamsByProcess.get(process.id) ?? [];
@@ -1982,15 +1993,28 @@ function getEuPrecursorSeeSourceType(precursor: PurchasedPrecursor): string {
     return precursor.data_mode === 'DEFAULT' ? 'Default' : 'Measured';
 }
 
-function createPrecursorCellWrites(precursors: PurchasedPrecursor[]): EuTemplateExportCellWrite[] {
+/** E_PurchPrec (b) 「Consumed in production processes」 표는 공정 슬롯 1~10이 한 행씩이다. */
+const PRECURSOR_CONSUMPTION_FIRST_SLOT_OFFSET = 14;
+
+function createPrecursorCellWrites(
+    precursors: PurchasedPrecursor[],
+    processes: ProductionProcess[] = []
+): EuTemplateExportCellWrite[] {
     const writes: EuTemplateExportCellWrite[] = [];
+    // D_Processes·A_InstData와 **같은 순서·같은 상한**이어야 슬롯 번호가 맞는다.
+    const slotByProcessId = new Map(processes.slice(0, 10).map((process, slot) => [process.id, slot]));
 
     precursors.slice(0, 20).forEach((precursor, index) => {
         const startRow = 14 + index * 44;
+        // 소비량은 그 전구물질을 **소비한 공정의 슬롯 행**에 쓴다. 종전에는 항상 첫 슬롯 행(+14)에 써서,
+        // 소비 공정이 2번 슬롯이면 EU 수식(InputOutput)이 전구물질 배출을 0으로 계산했다 —
+        // 고객사가 재계산하면 Summary_Products 총 SEE가 5.1117이 아니라 0.5259로 나왔다(run11 P0-01).
+        const consumptionSlot = slotByProcessId.get(precursor.process_id ?? '') ?? 0;
+        const consumptionRow = startRow + PRECURSOR_CONSUMPTION_FIRST_SLOT_OFFSET + consumptionSlot;
 
         writes.push(
             { sheetName: 'E_PurchPrec', cell: `L${startRow + 3}`, label: '구매량', value: precursor.purchased_mass_t, sourceId: precursor.id },
-            { sheetName: 'E_PurchPrec', cell: `L${startRow + 14}`, label: '소비량', value: precursor.consumed_mass_t, sourceId: precursor.id },
+            { sheetName: 'E_PurchPrec', cell: `L${consumptionRow}`, label: '소비량', value: precursor.consumed_mass_t, sourceId: precursor.id },
             {
                 sheetName: 'E_PurchPrec',
                 cell: `L${startRow + 24}`,
@@ -2092,7 +2116,7 @@ export function createEuTemplateExportCellWrites(
         ...createSourceStreamCellWrites(exportScope.sourceStreams),
         ...createEmissionsEnergyCellWrites(exportScope.processes, exportScope.products),
         ...createProcessCellWrites(exportScope.processes),
-        ...createPrecursorCellWrites(exportScope.precursors),
+        ...createPrecursorCellWrites(exportScope.precursors, exportScope.processes),
         ...createSummaryProductCellWrites(exportData),
     ];
 }

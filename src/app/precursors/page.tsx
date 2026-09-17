@@ -14,7 +14,7 @@ import {
 } from '@/lib/local-db';
 import {
     findDefaultValueReference,
-    getDefaultValueTotalForYear,
+    resolveDefaultSeeForYear,
     type ImportedDefaultValueReference,
 } from '@/lib/reference-workbooks';
 import { Term } from '@/components/ux/Term';
@@ -407,12 +407,13 @@ export default function PrecursorsPage() {
             return;
         }
 
-        const totalDefault = getDefaultValueTotalForYear(match, newItem.default_value_year);
+        // mark-up 가산분을 「간접」 칸에 넣지 않는다 — 철강은 간접이 인증서 기준에서 빠져 가산분이 사라진다.
+        const resolved = resolveDefaultSeeForYear(match, newItem.default_value_year);
         setNewItem({
             ...newItem,
             name: newItem.name || match.description,
-            direct_see_tco2e_per_t: match.direct_default ?? 0,
-            indirect_see_tco2e_per_t: Math.max(0, (totalDefault ?? match.total_default ?? 0) - (match.direct_default ?? 0)),
+            direct_see_tco2e_per_t: resolved.direct,
+            indirect_see_tco2e_per_t: resolved.indirect,
             data_mode: 'DEFAULT',
             verification_status: 'UNVERIFIED',
             source: `${defaultValueReference?.summary.filename ?? 'DVsasadopted'} / ${match.country} / ${match.cn_code}`,
@@ -420,7 +421,10 @@ export default function PrecursorsPage() {
                 newItem.default_value_justification ||
                 `${newItem.default_value_year} 국가/CN 기본값 적용: ${match.country}, CN ${match.cn_code}`,
         });
-        setDefaultLookupMessage(`기본값을 적용했습니다: ${match.country} CN ${match.cn_code}, 총 ${formatNumber(totalDefault ?? match.total_default ?? 0)} tCO2e/t`);
+        setDefaultLookupMessage(
+            `기본값을 적용했습니다: ${match.country} CN ${match.cn_code}, 총 ${formatNumber(resolved.total)} tCO2e/t (mark-up 포함) — 직접 ${formatNumber(resolved.direct)}`
+            + (resolved.hasIndirect ? ` · 간접 ${formatNumber(resolved.indirect)}` : ' · 이 CN의 공식 기본값은 간접값을 제공하지 않아 간접 0')
+        );
     }
 
     return (

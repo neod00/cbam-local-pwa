@@ -1,0 +1,209 @@
+<title>대일기업 CBAM Local 사용 후기</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --ground:#F2F4F6; --surface:#FFFFFF; --ink:#16202A; --ink-2:#44525F; --steel:#6B7A88;
+  --line:#D5DBE1; --accent:#0B6B6B; --accent-soft:#DDEEEE;
+  --good:#1D7448; --good-soft:#E0F1E7; --warn:#9A5B00; --warn-soft:#FBEBD2; --crit:#AE2A20; --crit-soft:#FBE3E0;
+  --bar:#8FA0AE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#10161C; --surface:#182029; --ink:#E6ECF1; --ink-2:#B4C0CB; --steel:#8C9BA9;
+    --line:#2C3843; --accent:#57BDB6; --accent-soft:#16302F;
+    --good:#6CCB97; --good-soft:#15291F; --warn:#E9B15A; --warn-soft:#30240F; --crit:#F08A80; --crit-soft:#341A17;
+    --bar:#5C6E7D;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#10161C; --surface:#182029; --ink:#E6ECF1; --ink-2:#B4C0CB; --steel:#8C9BA9;
+  --line:#2C3843; --accent:#57BDB6; --accent-soft:#16302F;
+  --good:#6CCB97; --good-soft:#15291F; --warn:#E9B15A; --warn-soft:#30240F; --crit:#F08A80; --crit-soft:#341A17;
+  --bar:#5C6E7D;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;font-size:16px;line-height:1.75;margin:0;padding-inline:20px;padding-block:40px 80px;word-break:keep-all}
+.page{max-width:820px;margin-inline:auto;display:flex;flex-direction:column;gap:56px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+h1,h2,h3{text-wrap:balance;margin:0;line-height:1.3}
+h1{font-size:clamp(1.7rem,4.5vw,2.4rem);font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.4rem;font-weight:700}
+h3{font-size:1.05rem;font-weight:600}
+p{margin:0}
+.eyebrow{font-size:.78rem;letter-spacing:.08em;color:var(--steel);font-weight:600}
+header{display:flex;flex-direction:column;gap:18px}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px 28px;border-top:1px solid var(--line);padding-top:16px;font-size:.9rem;color:var(--ink-2)}
+.meta b{display:block;color:var(--steel);font-weight:600;font-size:.76rem;letter-spacing:.05em}
+.verdict{background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--accent);padding:22px 24px;display:flex;flex-direction:column;gap:12px}
+.verdict .big{font-size:1.2rem;font-weight:600;line-height:1.55}
+section{display:flex;flex-direction:column;gap:20px}
+.lede{color:var(--ink-2)}
+.bars{background:var(--surface);border:1px solid var(--line);padding:22px 24px;display:flex;flex-direction:column;gap:22px}
+.group{display:flex;flex-direction:column;gap:10px}
+.group > .eyebrow{margin-bottom:2px}
+.row{display:grid;grid-template-columns:minmax(150px,230px) 1fr;gap:6px 16px;align-items:center;font-size:.9rem}
+.row .lab{color:var(--ink-2);line-height:1.4}
+.track{position:relative;height:26px;background:transparent}
+.fill{height:100%;background:var(--bar);display:flex;align-items:center;justify-content:flex-end;min-width:3.6rem}
+.fill span{font-size:.84rem;font-weight:600;padding-inline:8px;color:var(--surface)}
+.fill.ok{background:var(--good)} .fill.app{background:var(--accent)} .fill.bad{background:var(--crit)}
+.note{font-size:.86rem;color:var(--steel)}
+.list{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--line)}
+.item{display:grid;grid-template-columns:2.2rem 1fr;gap:4px 12px;padding-block:16px;border-bottom:1px solid var(--line)}
+.item .n{color:var(--steel);font-size:.85rem;padding-top:3px}
+.item p.q{font-size:.88rem;color:var(--ink-2);margin-top:6px;padding-left:12px;border-left:2px solid var(--line)}
+.tag{display:inline-block;font-size:.72rem;font-weight:600;letter-spacing:.04em;padding:2px 8px;margin-right:8px;vertical-align:2px}
+.tag.crit{background:var(--crit-soft);color:var(--crit)} .tag.warn{background:var(--warn-soft);color:var(--warn)} .tag.good{background:var(--good-soft);color:var(--good)}
+.sub{display:flex;flex-direction:column;gap:10px}
+ul{margin:0;padding-left:1.2rem;display:flex;flex-direction:column;gap:8px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:.92rem}
+th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.76rem;letter-spacing:.05em;color:var(--steel);font-weight:600}
+tr:last-child td{border-bottom:0}
+.pill{display:inline-block;font-size:.78rem;font-weight:600;padding:2px 10px;white-space:nowrap}
+.pill.good{background:var(--good-soft);color:var(--good)} .pill.half{background:var(--warn-soft);color:var(--warn)} .pill.no{background:var(--crit-soft);color:var(--crit)}
+blockquote{margin:0;background:var(--accent-soft);padding:20px 24px;font-size:1.02rem;line-height:1.8}
+blockquote footer{margin-top:10px;font-size:.85rem;color:var(--ink-2)}
+ol{margin:0;padding-left:1.4rem;display:flex;flex-direction:column;gap:8px}
+.limits{font-size:.9rem;color:var(--ink-2)}
+code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.88em;background:var(--accent-soft);padding:1px 5px}
+@media (max-width:520px){.row{grid-template-columns:1fr}.item{grid-template-columns:1fr}.item .n{display:none}}
+</style>
+
+<div class="page">
+<header>
+  <p class="eyebrow">CBAM LOCAL · 실사용 평가 RUN11 · 2026-09-16</p>
+  <h1>스테인리스 나사 회사의 CBAM 담당자가 이 앱을 혼자 써 봤다</h1>
+  <div class="meta">
+    <div><b>평가자 (AI 페르소나)</b>대일기업(주) 품질환경팀 김도현 과장 · 8년차 · CBAM 세미나 3회 수준</div>
+    <div><b>제품</b>STS 십자홈붙이 나사 · CN <span class="mono">7318 15 52</span> · 3,240 t (EU 620 t)</div>
+    <div><b>방식</b>실제 브라우저로 처음부터 끝까지 사용 후, 발견 60건을 코드·공식 워크북·받은 파일로 반박 검증 (반박 0건)</div>
+    <div><b>소요</b>약 4시간 · 막힘 0회 · 브랜치 <span class="mono">feat/allocation-logic</span></div>
+  </div>
+</header>
+
+<div class="verdict">
+  <p class="eyebrow">한 줄 결론</p>
+  <p class="big">입력하고 계산하는 데까지는 컨설팅 없이 혼자 갈 수 있다. 그러나 앱이 만들어 준 파일을 그대로 고객사에 보내면 안 된다.</p>
+  <p>이 앱은 길 안내가 잘 된 계산기다. 고지서 숫자를 어디에 넣을지, 스크랩을 어떻게 처리할지, 공정을 나눌지 말지를 화면이 알려 주고 계산도 정확하다. 문제는 마지막 구간이다. 같은 입력인데 보는 곳마다 숫자가 다르고, 담당자는 그 차이를 알아챌 수단이 거의 없다.</p>
+</div>
+
+<section>
+  <h2>같은 입력, 네 개의 숫자</h2>
+  <p class="lede">STS 나사 1톤에 붙는 내재배출량(SEE, tCO₂e/t)이다. 앱 화면은 이때 「오류 0 · 경고 0 · 생성할 수 있습니다」라고 말한다.</p>
+  <div class="bars">
+    <div class="group">
+      <p class="eyebrow">인증서 산정 기준 SEE</p>
+      <div class="row"><div class="lab">공식 기본값을 파일대로 넣었을 때</div><div class="track"><div class="fill ok mono" style="width:72.4%"><span>3.7637</span></div></div></div>
+      <div class="row"><div class="lab">앱 화면 · 산정보고서</div><div class="track"><div class="fill app mono" style="width:68.8%"><span>3.5754</span></div></div></div>
+      <div class="row"><div class="lab">지도 6단계 버튼만 믿었을 때</div><div class="track"><div class="fill bad mono" style="width:47.1%"><span>2.449</span></div></div></div>
+    </div>
+    <div class="group">
+      <p class="eyebrow">총 SEE (직접 + 간접)</p>
+      <div class="row"><div class="lab">앱 화면</div><div class="track"><div class="fill app mono" style="width:98.3%"><span>5.1117</span></div></div></div>
+      <div class="row"><div class="lab">고객사가 받은 Excel을 재계산했을 때</div><div class="track"><div class="fill bad mono" style="width:10.1%"><span>0.5259</span></div></div></div>
+    </div>
+    <p class="note">3.5754는 대만 원료 기본값의 가산분(mark-up) 1이 「간접」 칸으로 분리되어 기준에서 빠진 값이다. 2.449는 대만 원료에 한국 기본값 4.015가 들어간 값이다. 0.5259는 원료 소비량이 EU 양식의 엉뚱한 공정 칸에 기록되어 원료 배출이 통째로 빠진 값이다.</p>
+  </div>
+</section>
+
+<section>
+  <h2>장점</h2>
+  <div class="list">
+    <div class="item"><div class="n mono">1</div><div><h3>처음 쓰는 사람이 길을 잃지 않는다</h3><p>가입이나 키 입력 없이 8단계 「길잡이 지도」가 바로 뜬다. 경고는 고칠 화면으로 바로 이어지고, 「새 프로젝트」는 지우기 전에 백업을 제안한다.</p></div></div>
+    <div class="item"><div class="n mono">2</div><div><h3>담당자가 가장 헷갈리는 결정을 앱이 설명해 준다</h3><p>CN 8자리를 넣으면 대상 여부와 근거 판본을 즉시 말한다. 스크랩은 제품도 원료도 아니라고 알려 주고, 활동수준에서 빼는 칸이 따로 있다. 공정을 나눌지 합칠지 기준을 제시해, 담당자가 EU 공식 예제와 같은 2공정 구조에 스스로 도달했다. 덕분에 탄소강 전용 열처리로 가스가 STS 나사에 얹히는 실수(직접배출 10배)를 피했다.</p><p class="q">"활동수준 제외 라인 1개(265 t)는 … 배출 0으로 기록됩니다(2025/2547 ANNEX II 점 F)."</p></div></div>
+    <div class="item"><div class="n mono">3</div><div><h3>계산은 정확하고 산식이 보인다</h3><p>앱 결과는 독립 손계산과 ±0.0001 안에서 일치했다. 배출원을 저장하면 배출량과 TJ가 즉시 계산되어 엑셀 검산과 맞춰볼 수 있다. 기본값을 넣는 순간 SEE가 1.693에서 3.575로 바뀌어, 대만 공급사 자료를 받아내는 일의 가치가 숫자로 보인다.</p></div></div>
+    <div class="item"><div class="n mono">4</div><div><h3>산정보고서(Word)가 컨설팅 초안 수준이다</h3><p>16장과 부속서로, 숫자를 대입한 산식, 공식 기본값 대조, 민감도, 미해소 항목 등록부, 운영자 선언까지 있다. 불확실한 규정은 「확인 필요」로 솔직하게 남긴다.</p><p class="q">"CBAM 기준 SEE의 약 46.7%가 제3자 검증을 받지 않은 공급사 통지값에서 유래한다."</p></div></div>
+    <div class="item"><div class="n mono">5</div><div><h3>무엇을 보낼지, 내년에 어떻게 다시 쓸지가 분명하다</h3><p>파일을 「수입자 전달용 / 내부 보관용 / 전문가 검토용」으로 나눠 설명하고 EU 양식의 수식은 건드리지 않는다. 백업 파일 하나로 입력값, 4 MB 기준자료, 가정값이 전부 돌아온다. EU 수출 620 t를 넣으면 인증서 2,194장, 약 €165,000이 바로 나온다.</p></div></div>
+    <div class="item"><div class="n mono">6</div><div><h3>데이터가 밖으로 나가지 않는다</h3><p>코드를 확인한 결과 산정 데이터를 보내는 통신은 없다. 나가는 것은 선택 사항인 무료 등록 정보와 문의 내용뿐이다.</p></div></div>
+  </div>
+</section>
+
+<section>
+  <h2>단점</h2>
+  <div class="sub">
+    <h3><span class="tag crit">발송 불가</span>이대로 고객사에 보내면 안 되는 것 4건</h3>
+    <div class="list">
+      <div class="item"><div class="n mono">1</div><div><p><strong>고객사가 Excel을 열면 SEE가 0.5259로 나온다.</strong> 앱이 원료 소비량을 엉뚱한 공정 칸(<code>E_PurchPrec</code> L28, L72)에 써서 EU 양식의 수식이 원료 배출을 0으로 계산한다. 옆 칸(L29, L73)으로 옮기면 앱과 같은 5.1117이 된다. 고객사 요구가 바로 "SEE가 자동 계산되게 해 달라"였다.</p></div></div>
+      <div class="item"><div class="n mono">2</div><div><p><strong>EU에 팔지 않는 탄소강 공정이 이름 없이 딸려 나간다.</strong> 화면은 「공정 수 1」인데 파일의 이름 없는 공정에 1,860 t, 1,050 tCO₂e, 1,974 MWh가 들어 있다. 스크랩 라인이 기본으로 「CBAM 신고 대상」으로 저장되는 것이 원인이다.</p></div></div>
+      <div class="item"><div class="n mono">3</div><div><p><strong>대만 원료 기본값의 가산분이 사라진다.</strong> 공식 파일은 직접 10, 2026년 적용값 11이다. 앱은 "총 11"이라고 안내한 뒤 직접 10과 간접 1로 나눠 저장한다. 철강은 간접이 기준에서 빠지므로 SEE가 5% 낮게 나온다. 담당자는 공식 엑셀을 직접 열어 보고서야 알았다.</p></div></div>
+      <div class="item"><div class="n mono">4</div><div><p><strong>지도의 「EU 기본값 채우기」가 공급국가를 묻지 않는다.</strong> 대만 원료에 한국 값 4.015가 들어간다. 출처 문구의 "South Korea"를 못 봤다면 2.449로 보냈을 것이다.</p></div></div>
+    </div>
+    <p class="note">하나 더 있다. 비용 시나리오가 실측 3.5754가 기본값 3.8214보다 낮은데도 "기본값이 유리, 사용 검토"를 권한다. 실측과 기본값에 서로 다른 벤치마크 열을 적용하는 구조 때문이며, 규정 확인 후 결론이 뒤집힐 수 있다. 고객사 메일("실측이 없으면 단가 인하")과 정반대 방향이다.</p>
+  </div>
+
+  <div class="sub">
+    <h3><span class="tag warn">오해 유발</span>화면은 "다 됐다"고 하는데 사실은 아니다</h3>
+    <ul>
+      <li>Export 점검은 「오류 0 · 경고 0」인데, 같은 데이터로 만든 산정보고서는 「기재 필요 55건 · 경고 22건」이다.</li>
+      <li>연료만 넣어도 「6 / 6 완료 · 생성할 수 있습니다」가 뜬다. 그때 SEE는 0.022로 최종값의 0.6%다.</li>
+      <li>「법정 필수」라고 표시된 운영자 등록번호를 비워도 경고가 없고, 그 정보는 EU 사본에 들어가지도 않는다.</li>
+      <li>비신고 공정 탭이 가이드의 예시 숫자(200 / 225 / 2.09)를 실제값처럼 보여준다.</li>
+      <li>산정보고서가 대만 기본값을 "실측값(채택)"이라 적고, 같은 2025년 기간을 "불일치"로 오탐한다.</li>
+    </ul>
+  </div>
+
+  <div class="sub">
+    <h3><span class="tag warn">직접 환산</span>고지서를 그대로 넣을 수 없다</h3>
+    <ul>
+      <li><strong>경유 L를 넣을 자리가 없다.</strong> 단위는 t와 Nm³뿐이고 유류 프리셋 값은 경유 값이 아니다. 밀도, 발열량, 계수를 담당자가 검색해 환산했다.</li>
+      <li>도시가스 고지서의 MJ(총발열량)를 어떻게 쓰는지 안내가 없다. 자리값 0.037 GJ/Nm³의 출처도 없다.</li>
+      <li>4단계 첫 화면은 "자리값을 그대로 두세요"라면서 칸이 비어 있고, 비운 채 저장하면 배출 0으로 들어간다.</li>
+      <li><strong>전력 배출계수의 답이 없다.</strong> 0.47은 "임시 자리값"이고, 담당자가 넣은 환경부 값 0.4747은 EU 사본에 "Commission/IEA 기본값"으로 나간다.</li>
+      <li>전력을 두 공정에 나누는 기능과 근거 칸이 없어 손으로 계산했다. 전력은 MWh만 받는다.</li>
+    </ul>
+  </div>
+
+  <div class="sub">
+    <h3><span class="tag warn">답 없음</span>들고 온 질문 13개 중 앱이 답해 준 것은 절반이 안 된다</h3>
+    <p>답을 못 얻은 것은 다음과 같다. 2025년 자료를 써도 되는가(상단 배지는 2026인데 앱은 침묵한다). 공급사 값의 "전구물질 포함"이 이중계산인가. 지게차 경유와 사무동 등유를 넣는가. 기후환경요금이 탄소가격인가. 기술팀의 60% 추정을 써도 되는가. SEFA, 벤치마크, mark-up, 「공급사 확인」 같은 용어 풀이도 화면에 없다.</p>
+  </div>
+
+  <div class="sub">
+    <h3><span class="tag warn">문서 미완</span>보안 문서가 초안 상태다</h3>
+    <p>구조는 안전하지만 약관과 개인정보 페이지에 "배포 전 확정 필요 — 운영 검토용 문구"가 그대로 보이고, 템플릿 내장 여부를 같은 화면에서 다르게 말한다. 보안팀에 근거로 내밀기 어렵다.</p>
+  </div>
+</section>
+
+<section>
+  <h2>담당자 기준 6가지 평가</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>평가 축</th><th>판정</th><th>근거</th></tr></thead>
+    <tbody>
+      <tr><td>혼자 끝낼 수 있는가</td><td><span class="pill half">절반</span></td><td>화면상으로는 4시간에 끝났다. 그러나 산출물 결함 4건을 스스로 잡을 수단이 없다.</td></tr>
+      <tr><td>내 자료 형태 그대로 넣을 수 있는가</td><td><span class="pill half">절반</span></td><td>t와 Nm³는 그대로 들어간다. kWh, L, MJ는 직접 환산했고 전력 계수는 답이 없다.</td></tr>
+      <tr><td>상사·검증인에게 설명할 수 있는가</td><td><span class="pill half">절반</span></td><td>Word 보고서로는 가능하다. 화면만으로는 전구물질 분해와 기본값 근거가 안 보이고, 보고서에 오표기가 2건 있다.</td></tr>
+      <tr><td>고객사가 요구한 산출물이 나오는가</td><td><span class="pill no">아직 아님</span></td><td>파일은 나오지만 재계산값이 0.5259이고, 이름 없는 공정과 실재하지 않는 전력 원단위가 들어 있다.</td></tr>
+      <tr><td>내년에 다시 쓸 수 있는가</td><td><span class="pill good">좋음</span></td><td>비우고 복원했더니 모든 숫자와 기준자료가 그대로 돌아왔다.</td></tr>
+      <tr><td>데이터가 밖으로 안 나가는가</td><td><span class="pill good">좋음</span></td><td>산정 데이터 전송은 없다. 다만 약관·개인정보 문구는 초안이다.</td></tr>
+    </tbody>
+  </table></div>
+  <blockquote>"컨설팅을 통째로 살 필요는 없어졌다. 입력과 계산, 보고서 초안은 내가 한다. 다만 고객사에 보내기 직전 한 번은 전문가가 파일을 열어 봐야 한다. 공식 엑셀을 직접 열어 보지 않았다면 5% 낮은 값을, Excel 재계산을 해 보지 않았다면 고객사 화면에 0.53이 뜨는 파일을 보냈을 것이다."<footer>김도현 과장의 최종 판단 (페르소나)</footer></blockquote>
+</section>
+
+<section>
+  <h2>먼저 고칠 것</h2>
+  <ol>
+    <li>EU 사본의 전구물질 소비량 셀 위치. 공정이 2개 이상일 때 드러난다.</li>
+    <li>활동수준 제외 라인 때문에 비신고 공정이 내보내기 범위에 들어가는 문제와 「공정 수」 표기 통일.</li>
+    <li>기본값의 가산분(mark-up)을 직접분에 포함하고, 지도와 상세 화면의 동작을 같게.</li>
+    <li>지도 6단계에 공급국가 선택.</li>
+    <li>내보내기 점검과 산정보고서 점검의 잣대 통일, 「완료 · 생성할 수 있습니다」 조건 강화.</li>
+    <li>경유 L 단위와 연료별 프리셋, 총발열량·순발열량 안내, 전력 계수 출처 선택지 정리.</li>
+    <li>비용 시나리오의 실측 대 기본값 비교 구조. 규정 확인 후 진행.</li>
+  </ol>
+</section>
+
+<section class="limits">
+  <h2>이 평가의 한계</h2>
+  <ul>
+    <li>평가자는 실제 사람이 아니라 AI 페르소나다. 이번 페르소나가 의심해서 잡아낸 것(대만 기본값)은 실제 담당자라면 놓칠 가능성이 크다.</li>
+    <li>회사와 수치는 가상이다. EU 공식 나사·너트 예제를 한국 STS 패스너 중소기업으로 각색했다.</li>
+    <li>개발 서버의 기능 브랜치를 평가했다. 배포본과 다를 수 있다.</li>
+    <li>평가용 브라우저에 과거 시험 데이터가 남아 있어 시나리오 기본 가정(수입 비율 35%, €75.36)과 백업 파일 내용에 영향을 줬다. 앱 결함으로 세지 않았다.</li>
+    <li>가산분의 위치, 비신고 공정의 기재 범위, 벤치마크 열 적용, 2025년 실적의 적격성은 규정 원문 대조 전이다.</li>
+    <li>Excel 재계산은 LibreOffice로 했다. Microsoft Excel에서 한 번 더 확인하는 것이 좋다.</li>
+  </ul>
+</section>
+</div>

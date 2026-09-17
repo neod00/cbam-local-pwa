@@ -566,6 +566,81 @@ assertEqual(
   'false',
   'non-CBAM product, output line, and precursor are excluded from export writes'
 );
+// ── [씨밤이 run11 P0-02] 활동수준 제외 라인 하나 때문에 비신고 공정이 EU 문서에 나가면 안 된다 ──
+// 스크랩·불량 라인은 제품을 지정하지 않는 것이 보통이라 보고범위가 기본값 CBAM_GOOD로 떨어진다.
+// 그 라인 때문에 EU에 팔지 않는 탄소강 공정(1,860 t · 열처리로 1,050 tCO2e)이 이름 없이
+// D_Processes 공정 1 블록에 나갔고, 화면은 「공정 수 1」이라고 했다.
+const run11CarbonProcess = {
+  ...process,
+  id: 'process-carbon',
+  product_id: nonCbamProduct.id,
+  name: 'Carbon steel screws (not exported to EU)',
+  output_mass_t: 1860,
+  market_output_mass_t: 1860,
+  internal_consumption_mass_t: 0,
+};
+const run11CarbonGoodLine = { ...nonCbamOutputLine, id: 'output-line-carbon', process_id: run11CarbonProcess.id, output_mass_t: 1860 };
+const run11CarbonScrapLine = {
+  ...outputLine,
+  id: 'output-line-carbon-scrap',
+  process_id: run11CarbonProcess.id,
+  product_id: undefined,
+  reporting_scope: undefined,
+  name: 'Cut-off scrap',
+  output_mass_t: 90,
+  activity_level_role: 'EXCLUDED',
+};
+const run11CarbonStream = { ...sourceStream, id: 'source-stream-carbon-furnace', process_id: run11CarbonProcess.id, name: 'Heat treatment furnace gas' };
+const run11Data = {
+  ...data,
+  products: [product, nonCbamProduct],
+  // 비신고 공정이 **앞**에 온다 — 실사용에서 슬롯이 밀린 바로 그 순서.
+  processes: [run11CarbonProcess, process],
+  productOutputLines: [outputLine, run11CarbonGoodLine, run11CarbonScrapLine],
+  sourceStreams: [sourceStream, run11CarbonStream],
+  precursors: [precursor],
+};
+const run11Writes = euExport.createEuTemplateExportCellWrites(run11Data, validation.cnCodeMap);
+assertEqual(
+  String(run11Writes.some((write) => [run11CarbonProcess.id, run11CarbonStream.id, run11CarbonScrapLine.id].includes(write.sourceId))),
+  'false',
+  'run11 P0-02: a process whose only CBAM-scoped line is excluded from the activity level must not be exported'
+);
+assertEqual(
+  run11Writes.find((write) => write.sheetName === 'D_Processes' && write.label.includes('생산량'))?.sourceId ?? run11Writes.find((write) => write.sheetName === 'D_Processes')?.sourceId,
+  process.id,
+  'run11 P0-02: D_Processes slot 1 belongs to the reportable process'
+);
+
+// ── [씨밤이 run11 P0-01] 전구물질 소비량은 **소비 공정의 슬롯 행**에 쓴다 ──
+// 종전에는 항상 첫 슬롯 행(L28)에 썼다. 소비 공정이 2번 슬롯이면 EU 수식이 전구물질 배출을 0으로
+// 계산해, 고객사가 재계산한 Summary_Products 총 SEE가 5.1117이 아니라 0.5259였다.
+const run11FirstProcess = { ...process, id: 'process-first', name: 'Another reportable process' };
+const run11FirstLine = { ...outputLine, id: 'output-line-first', process_id: run11FirstProcess.id };
+const run11FirstStream = { ...sourceStream, id: 'source-stream-first', process_id: run11FirstProcess.id };
+const run11SlotWrites = euExport.createEuTemplateExportCellWrites({
+  ...data,
+  processes: [run11FirstProcess, process],
+  productOutputLines: [run11FirstLine, outputLine],
+  sourceStreams: [run11FirstStream, sourceStream],
+  precursors: [precursor],
+}, validation.cnCodeMap);
+const run11ConsumptionWrite = run11SlotWrites.find((write) => write.sheetName === 'E_PurchPrec' && write.label === '소비량');
+assertEqual(run11ConsumptionWrite?.cell, 'L29', 'run11 P0-01: precursor consumed by the process in slot 2 goes to the slot-2 row');
+assertEqual(
+  euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).find((write) => write.sheetName === 'E_PurchPrec' && write.label === '소비량')?.cell,
+  'L28',
+  'run11 P0-01: single-process export still writes the slot-1 row'
+);
+const run11SecondPrecursorWrite = euExport.createEuTemplateExportCellWrites({
+  ...data,
+  processes: [run11FirstProcess, process],
+  productOutputLines: [run11FirstLine, outputLine],
+  sourceStreams: [run11FirstStream, sourceStream],
+  precursors: [{ ...precursor, id: 'precursor-0', process_id: run11FirstProcess.id }, precursor],
+}, validation.cnCodeMap).filter((write) => write.sheetName === 'E_PurchPrec' && write.label === '소비량').map((write) => write.cell).join(',');
+assertEqual(run11SecondPrecursorWrite, 'L28,L73', 'run11 P0-01: second precursor block (start row 58) uses its own slot row');
+
 const missingSourceStreamReadiness = euExport.evaluateEuExportReadiness({
   ...data,
   sourceStreams: [],
