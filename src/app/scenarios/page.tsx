@@ -925,7 +925,18 @@ export default function ScenariosPage() {
                                     <td className={`whitespace-nowrap px-4 py-4 text-right text-sm ${(scenario.default_gap ?? 0) > 0 ? 'font-semibold text-amber-700' : 'text-slate-600'}`}>{formatNumber(scenario.default_gap)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.benchmark_column_a)}</td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.benchmark_column_b)}</td>
-                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.sefa_indicator)}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
+                                        {formatNumber(scenario.sefa_indicator)}
+                                        {/* 실측 SEFA = 공정 몫(A열) + 전구물질 몫(전구물질의 B열 × 투입 원단위) — 2025/2620 부속서 식 (4) */}
+                                        {(scenario.sefa_precursor_breakdown?.length ?? 0) > 0 && (
+                                            <div className="mt-1 text-xs text-slate-500">
+                                                공정 {formatNumber(scenario.sefa_process_indicator)} + 전구물질 {formatNumber(scenario.sefa_precursor_indicator)}
+                                                {scenario.sefa_precursor_breakdown?.some((item) => item.benchmark_column_b === undefined) && (
+                                                    <div className="text-amber-700">벤치마크를 못 찾은 전구물질이 있어 그 몫은 0으로 두었습니다</div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
                                         {formatNumber(scenario.certificate_quantity_indicator)}
                                         {scenario.gross_certificate_quantity_indicator !== undefined && (

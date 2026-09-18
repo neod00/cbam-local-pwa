@@ -207,4 +207,39 @@ assert.equal(summarizeScenarioRisks(missingReferenceScenarios).missing_official_
 assert.equal(summarizeScenarioRisks(missingReferenceScenarios).is_ready_for_review, false);
 assertAction(getScenarioReviewAction(summarizeScenarioRisks(missingReferenceScenarios), true, true), { href: '/upload', label: '기준자료 가져오기' });
 
+// ── [씨밤이 run11 · 2025/2620 부속서 식 (4)] 복합제품의 실측 SEFA = 공정 몫 + 전구물질 몫 ──
+// 대일기업 STS 나사: 공식 워크북 벤치마크 7318 15 52 (A 0.038 / B 1.154), 전구물질 7223 00 19 (B 1.225).
+// 와이어 3,520 t → 나사 3,240 t. 종전에는 공정 몫(0.038)만 빼서, 실측 SEE가 기본값보다 낮은데도 「기본값이 유리」였다.
+const daeilReferences = {
+  benchmarks: { rows: [
+    { cn_code: '73181552', production_route: '', column_a_benchmark: 0.038, column_b_benchmark: 1.154, column_a_route: '', column_b_route: '(1)' },
+    { cn_code: '72230019', production_route: '', column_a_benchmark: 0.109, column_b_benchmark: 1.225, column_a_route: '', column_b_route: '(1)' },
+  ] },
+  defaultValues: { rows: [{ country: 'South Korea', cn_code: '73181552', total_2026: 3.8214, total_2027: 4.1688, total_2028_onwards: 4.5162 }] },
+};
+const daeilResult = {
+  ...baseResult, id: 'daeil', cn_code: '73181552', hs_code: '7318', output_mass_t: 3240,
+  see_cbam_basis: 3.7637, see_informational_total: 5.1117, total_see: 5.1117,
+  precursor_inputs: [
+    { precursor_id: 'kr', name: 'KR wire', cn_code: '72230019', supplier_country: 'South Korea', mass_t: 2910 },
+    { precursor_id: 'tw', name: 'TW wire', cn_code: '72230019', supplier_country: 'Taiwan', mass_t: 610 },
+  ],
+};
+const [daeil] = calculateProductScenarios([daeilResult], { ...assumptions, eu_import_share_percent: (620 / 3240) * 100 }, daeilReferences);
+const near = (actual, expected, tolerance, label) => assert.ok(Math.abs(actual - expected) < tolerance, `${label}: ${actual} (기대 ${expected})`);
+near(daeil.sefa_process_indicator, 0.038 * 0.975, 1e-9, '공정 몫 = A열 × CBAM factor × CSCF');
+near(daeil.sefa_precursor_indicator, (3520 / 3240) * 1.225 * 0.975, 1e-9, '전구물질 몫 = Σ mᵢ × 전구물질 B열 × CBAM factor × CSCF');
+near(daeil.sefa_indicator, 0.03705 + 1.29759, 1e-4, '실측 SEFA = 공정 몫 + 전구물질 몫');
+near(daeil.certificate_quantity_indicator, 620 * (3.7637 - daeil.sefa_indicator), 1e-6, '인증서 수량 = 수입량 × (SEE − SEFA)');
+assert.ok(
+  daeil.certificate_quantity_indicator < daeil.default_certificate_quantity_indicator,
+  `실측 SEE(3.7637)가 기본값(3.8214)보다 낮으면 인증서도 적어야 한다: 실측 ${daeil.certificate_quantity_indicator} vs 기본값 ${daeil.default_certificate_quantity_indicator}`
+);
+// 전구물질 벤치마크를 못 찾으면 그 몫은 0으로 두고 내역에 드러낸다(값을 지어내지 않는다).
+const [daeilMissing] = calculateProductScenarios([daeilResult], assumptions, { ...daeilReferences, benchmarks: { rows: [daeilReferences.benchmarks.rows[0]] } });
+assert.equal(daeilMissing.sefa_precursor_indicator, 0);
+assert.equal(daeilMissing.sefa_precursor_breakdown.every((item) => item.benchmark_column_b === undefined), true);
+// 전구물질이 없는 결과(단순제품)는 종전과 같다.
+assert.equal(readyScenarios[0].sefa_precursor_indicator, 0);
+
 console.log('Scenario risk verification passed.');

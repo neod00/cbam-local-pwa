@@ -87,6 +87,12 @@ export interface ProductScenarioResult {
     benchmark_column_a?: number;
     benchmark_column_b?: number;
     sefa_indicator?: number;
+    /** 식 (2)·(3): 이 제품을 만드는 공정 몫 = CBAM factor × CSCF × Column A */
+    sefa_process_indicator?: number;
+    /** 식 (4)의 Σ mᵢ·SEFAᵢ — 구매 전구물질이 지니고 온 무상할당 몫 (tCO2e/t 제품) */
+    sefa_precursor_indicator?: number;
+    /** 전구물질별 내역. benchmark가 없으면 그 전구물질 몫은 0으로 두고 missing으로 알린다. */
+    sefa_precursor_breakdown?: Array<{ name: string; cn_code?: string; specific_mass: number; benchmark_column_b?: number; sefa?: number }>;
     certificate_quantity_indicator?: number;
     certificate_cost_indicator_eur?: number;
     default_sefa_indicator?: number;
@@ -236,9 +242,37 @@ export function calculateProductScenarios(
         const defaultGap = defaultSee === undefined ? undefined : actualSee - defaultSee;
         const benchmarkColumnA = benchmark?.column_a_benchmark;
         const benchmarkColumnB = benchmark?.column_b_benchmark;
-        const sefaIndicator = benchmarkColumnA === undefined
+        // ── 실측 SEFA = 공정 몫 + 전구물질 몫 ─────────────────────────────────────
+        // Implementing Regulation (EU) 2025/2620 부속서:
+        //   식 (2)·(3)  SFAProc = CBAM_y · CSCF_y · BM*_g   (BM* = 제5항 **A열**, 「공정 관련」 벤치마크)
+        //   식 (4)      SEFA_g  = SFAProc_g + Σ mᵢ · SEFAᵢ   (복합제품 — 전구물질 몫을 **더한다**)
+        //   식 (5)      mᵢ = Mᵢ / AL                          (제품 1 t당 전구물질 투입량)
+        //   3.3(2)      생산자가 SEFAᵢ를 주지 않으면 전구물질의 **B열** 벤치마크로 정한다.
+        // 종전에는 A열(공정 몫 — 나사 0.038)만 빼고 전구물질 몫을 빠뜨렸다. 기본값 쪽은 B열(상류 누적 —
+        // 1.154)을 빼므로, 실측 SEE가 더 낮아도 「기본값이 유리」라는 결론이 나왔다(씨밤이 run11 P0 후보).
+        // 앱은 공급사의 검증된 SEFA를 받지 않으므로 3.3(2)의 B열 경로만 쓴다.
+        const sefaProcessIndicator = benchmarkColumnA === undefined
             ? undefined
             : benchmarkColumnA * assumptions.cbam_factor * assumptions.cscf;
+        const precursorBreakdown = (result.precursor_inputs ?? []).map((input) => {
+            const specificMass = result.output_mass_t > 0 ? input.mass_t / result.output_mass_t : 0;
+            const precursorBenchmark = input.cn_code
+                ? findBenchmarkReference(references.benchmarks, input.cn_code, input.production_route)?.column_b_benchmark
+                : undefined;
+            return {
+                name: input.name,
+                cn_code: input.cn_code,
+                specific_mass: specificMass,
+                benchmark_column_b: precursorBenchmark,
+                sefa: precursorBenchmark === undefined
+                    ? undefined
+                    : specificMass * precursorBenchmark * assumptions.cbam_factor * assumptions.cscf,
+            };
+        });
+        const sefaPrecursorIndicator = precursorBreakdown.reduce((sum, item) => sum + (item.sefa ?? 0), 0);
+        const sefaIndicator = sefaProcessIndicator === undefined
+            ? undefined
+            : sefaProcessIndicator + sefaPrecursorIndicator;
         const defaultSefaIndicator = benchmarkColumnB === undefined
             ? undefined
             : benchmarkColumnB * assumptions.cbam_factor * assumptions.cscf;
@@ -297,6 +331,9 @@ export function calculateProductScenarios(
             benchmark_column_a: benchmarkColumnA,
             benchmark_column_b: benchmarkColumnB,
             sefa_indicator: sefaIndicator,
+            sefa_process_indicator: sefaProcessIndicator,
+            sefa_precursor_indicator: sefaPrecursorIndicator,
+            sefa_precursor_breakdown: precursorBreakdown,
             certificate_quantity_indicator: certificateQuantityIndicator,
             certificate_cost_indicator_eur: certificateCostIndicator,
             default_sefa_indicator: defaultSefaIndicator,
