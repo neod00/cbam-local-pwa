@@ -299,7 +299,8 @@ export default function ExportPage() {
 
         return {
             productCount: productNames.size,
-            processCount: reportableResults.length,
+            // 결과는 제품라인 단위다. 공정 수는 공정으로 세야 EU 문서(D_Processes)의 공정 수와 맞는다.
+            processCount: new Set(reportableResults.map((result) => result.process_id)).size,
             totalOutput,
             warningCount,
         };

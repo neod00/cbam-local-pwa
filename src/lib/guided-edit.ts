@@ -273,6 +273,12 @@ export interface PrecursorDraft {
     supplierInstallation: string;
     supplierRoute: string;
     supplierPeriod: string;
+    /**
+     * 원료를 **만든 나라**(공식 DV 워크북의 국가 시트명). 기본값은 국가×CN으로 조회하므로
+     * 이 칸이 비면 기본값을 채울 수 없다. 종전에는 패널이 'South Korea'로 고정해 대만 원료에
+     * 한국 기본값이 들어갔다(씨밤이 run11 P0-04).
+     */
+    supplierCountry: string;
     /** 제품별 직접 배분. '생산량 비율로 자동'이면 undefined. */
     outputAllocations: PurchasedPrecursor['output_allocations'];
 }
@@ -286,6 +292,9 @@ export function validatePrecursorDraft(draft: PrecursorDraft): string | null {
     }
     if (draft.consumedMass <= 0) {
         return '소비량(t)을 입력하세요. 만든 양이 아니라 이 공정에 투입한 양입니다.';
+    }
+    if (!draft.supplierCountry.trim()) {
+        return '원료를 만든 나라(공급국가)를 고르세요. 기본값과 EU 문서의 국가코드가 이 값으로 정해집니다.';
     }
     if (!draft.source.trim()) {
         return 'SEE 값의 출처를 적어주세요. 예: 공급사 회신 메일, EU 기본값 파일';
@@ -329,6 +338,7 @@ export function buildPrecursorPayload(draft: PrecursorDraft, link: PrecursorLink
         production_route: draft.supplierRoute.trim(),
         supplier_installation: draft.supplierInstallation.trim(),
         supplier_reporting_period: draft.supplierPeriod.trim() || undefined,
+        supplier_country: draft.supplierCountry.trim(),
         data_mode: draft.dataMode,
         purchased_mass_t: draft.purchasedMass,
         consumed_mass_t: draft.consumedMass,
@@ -347,7 +357,6 @@ export function buildPrecursorCreate(draft: PrecursorDraft, link: PrecursorLink)
     return {
         ...buildPrecursorPayload(draft, link),
         aggregated_goods_category: 'Iron or steel products',
-        supplier_country: 'South Korea',
         verification_status: 'UNVERIFIED' as const,
         default_value_year: '2026' as const,
         consumed_for_non_cbam_mass_t: 0,

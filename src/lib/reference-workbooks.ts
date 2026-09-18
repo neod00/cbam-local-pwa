@@ -487,3 +487,53 @@ export function findBenchmarkReference(
 
     return candidates[0];
 }
+
+export interface ResolvedDefaultSee {
+    /** 전구물질 직접 SEE 칸에 넣을 값 — 연도별 mark-up 포함 */
+    direct: number;
+    /** 간접 SEE 칸에 넣을 값 — 공식 DV가 간접값을 줄 때만 0이 아니다 */
+    indirect: number;
+    /** 공식 DV가 간접값을 제공하는가 (철강 DV는 대개 N/A) */
+    hasIndirect: boolean;
+    /** 그 연도에 적용되는 총 기본값(mark-up 포함) = direct + indirect */
+    total: number;
+}
+
+const roundDefaultSee = (value: number) => Math.round(value * 1e6) / 1e6;
+
+/**
+ * 공식 기본값 한 행을 「직접 / 간접」 두 칸으로 옮긴다. **모든 화면이 이 함수 하나를 쓴다.**
+ *
+ * 왜 한 곳이어야 하는가 (씨밤이 run11 P0-03):
+ *   상세 화면은 `간접 = 연도 총액 − raw 직접`으로 계산했다. 철강 DV는 간접이 N/A라서 그 차액은
+ *   간접배출이 아니라 **mark-up 가산분**이다. 철강은 간접이 인증서 기준에서 빠지므로 가산분이
+ *   통째로 사라졌다(대만 7223 00: 파일 10 / N/A / 2026 11 → 앱 직접 10 · 간접 1 → 기준 SEE −5%).
+ *   같은 시각 지도 패널은 가산분을 직접에 넣어 두 화면이 서로 다른 값을 냈다.
+ *
+ * 규칙:
+ *   · 간접이 N/A → 직접 = 연도 총액(mark-up 포함), 간접 = 0. 없는 간접을 만들어내지 않는다.
+ *   · 간접이 있음 → mark-up 비율(연도 총액 ÷ raw 총액)을 직접·간접에 같은 비율로 얹는다.
+ *     mark-up을 직접·간접에 어떻게 나누는지는 확인 필요(규정) — 다만 합계는 항상 연도 총액과 같다.
+ */
+export function resolveDefaultSeeForYear(
+    row: DefaultValueReferenceRow,
+    year: '2026' | '2027' | '2028_ONWARDS'
+): ResolvedDefaultSee {
+    const rawDirect = row.direct_default ?? 0;
+    const hasIndirect = row.indirect_default != null;
+    const rawIndirect = row.indirect_default ?? 0;
+    const rawTotal = row.total_default ?? rawDirect + rawIndirect;
+    const yearTotal = getDefaultValueTotalForYear(row, year) ?? rawTotal;
+
+    if (!hasIndirect) {
+        const direct = roundDefaultSee(yearTotal > 0 ? yearTotal : rawDirect);
+        return { direct, indirect: 0, hasIndirect, total: direct };
+    }
+
+    const rawSum = rawDirect + rawIndirect;
+    const ratio = rawSum > 0 && yearTotal > 0 ? yearTotal / rawSum : 1;
+    const direct = roundDefaultSee(rawDirect * ratio);
+    const indirect = roundDefaultSee(rawIndirect * ratio);
+    return { direct, indirect, hasIndirect, total: roundDefaultSee(direct + indirect) };
+}
+
