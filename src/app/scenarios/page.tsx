@@ -715,7 +715,8 @@ export default function ScenariosPage() {
                             onChange={(event) => {
                                 const tonnes = Number(event.target.value) || 0;
                                 const percent = Math.min(100, Math.max(0, (tonnes / summary.totalOutput) * 100));
-                                void updateAssumptions({ ...assumptions, eu_import_share_percent: Math.round(percent * 10000) / 10000 });
+                                // 반올림하면 620 t이 620.136 t로 되돌아온다 — 비율을 그대로 저장한다.
+                                void updateAssumptions({ ...assumptions, eu_import_share_percent: percent });
                             }}
                         />
                         <p className="mt-1 text-xs text-slate-500">톤으로 적으면 위 비율로 바꿔 저장합니다(신고 대상 생산량 {formatInteger(summary.totalOutput)} t 기준). 품목이 여럿이면 같은 비율이 모두에 적용됩니다.</p>

@@ -131,6 +131,14 @@ export default function InstallationsPage() {
         async function fetchInstallations() {
             const data = await listLocalItems('installations');
             setItems(data.sort((a, b) => b.created_at.localeCompare(a.created_at)));
+            // 점검 경고의 링크(/installations?edit=…)로 들어오면 그 사업장의 수정 폼을 바로 연다.
+            const editId = new URLSearchParams(window.location.search).get('edit');
+            const editTarget = editId ? data.find((item) => item.id === editId) : undefined;
+            if (editTarget) {
+                setNewItem(toDraft(editTarget));
+                setEditingInstallationId(editTarget.id);
+                setShowForm(true);
+            }
         }
 
         fetchInstallations();

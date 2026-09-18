@@ -54,6 +54,7 @@ import {
 } from '@/lib/local-db';
 import {
     findDefaultValueReference,
+    displayReferenceCountry,
     resolveDefaultSeeForYear,
     type ImportedDefaultValueReference,
 } from '@/lib/reference-workbooks';
@@ -1092,7 +1093,9 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
         ...kind.defaults,
         period_id: process.period_id,
         process_id: process.id,
-        name: streamName.trim() || kind.label,
+        name: kind.litres
+            ? `${streamName.trim() || kind.label} · ${fmt(num(amount), 1)} L`
+            : streamName.trim() || kind.label,
         // 리터 유형은 밀도로 t 환산해 저장한다(EU 템플릿 단위는 t·Nm³뿐). 원자료 리터는 출처에 남긴다.
         activity_data: kind.litres ? litresToTonnes(num(amount), kind.litres.densityKgPerL) : num(amount),
         ncv_gj_per_unit: kind.needsNcv ? num(ncv) : kind.defaults.ncv_gj_per_unit,
@@ -1241,6 +1244,7 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
                         onChange={(event) => {
                             const next = GUIDED_STREAM_KINDS.find((item) => item.key === event.target.value);
                             setKindKey(event.target.value);
+                            setMessage('');
                             // 유형을 바꾸면 계수·발열량 자리값도 그 유형 것으로 갈아준다 —
                             // 남겨두면 물질수지 칸에 연료 계수가 남는다.
                             if (next) {
@@ -1421,7 +1425,7 @@ function ElectricityForm({
                     <input className={fieldClass} inputMode="decimal" value={ef} onChange={(event) => setEf(event.target.value)} />
                 </Field>
                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-                    미리 채워진 0.47은 임시 자리값입니다. <span className="font-semibold">앱은 한국 계통 평균값을 갖고 있지 않습니다</span> — 업로드하는 EU 기본값 파일(DVs)에도 전력 행은 없습니다. 환경부 공표 국가 전력배출계수처럼 출처를 댈 수 있는 값을 넣고, 발행기관·문서·공표연도를{' '}
+                    {num(ef) === 0.47 ? '미리 채워진 0.47은 임시 자리값입니다. ' : ''}<span className="font-semibold">앱은 한국 계통 평균값을 갖고 있지 않습니다</span> — 업로드하는 EU 기본값 파일(DVs)에도 전력 행은 없습니다. 환경부 공표 국가 전력배출계수처럼 출처를 댈 수 있는 값을 넣고, 발행기관·문서·공표연도를{' '}
                     <Link href="/report-inputs" className="font-semibold underline">보고서 입력(제7장)</Link>에 적어 두세요. EU가 인정하는 값인지는 수입자·검증인에게 확인이 필요합니다.
                 </p>
                 <Field label="계수 출처">
@@ -1629,6 +1633,22 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         });
         setAllocMasses(prefill);
         setAllocMode('manual');
+    };
+
+    // 기본값은 나라마다 다르다. 기본값을 채운 뒤 나라를 바꾸면 **옛 나라의 값·출처·사유**가 폼에 남아
+    // 그대로 저장될 수 있었다(씨밤이 run12 P1-01 — 대만 11을 채운 뒤 한국으로 바꿔도 11·출처 Taiwan).
+    // 기본값 모드일 때 나라가 바뀌면 채운 값을 비우고 다시 채우게 한다. 실측값은 건드리지 않는다.
+    const changeSupplierCountry = (next: string) => {
+        const changed = next.trim() !== supplierCountry.trim();
+        setSupplierCountry(next);
+        if (changed && dataMode === 'DEFAULT' && (directSee || source)) {
+            setDirectSee('');
+            setIndirectSee('');
+            setSource('');
+            setJustification('');
+            setCompareResult(null);
+            setMessage('공급국가를 바꿨습니다. 기본값은 나라마다 달라 채워 둔 값을 비웠습니다 — 「EU 기본값 채우기」를 다시 누르세요.');
+        }
     };
 
     const applyDefaultValues = async () => {
@@ -2076,17 +2096,17 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                         : '영문 국가명으로 적으세요(예: South Korea, Taiwan, China). 자료 업로드에서 EU 기본값 파일을 가져오면 목록에서 고를 수 있습니다.'}
                 >
                     {referenceCountries.length > 0 ? (
-                        <select className={fieldClass} value={supplierCountry} onChange={(event) => setSupplierCountry(event.target.value)}>
+                        <select className={fieldClass} value={supplierCountry} onChange={(event) => changeSupplierCountry(event.target.value)}>
                             <option value="">— 고르세요 —</option>
                             {supplierCountry && !referenceCountries.includes(supplierCountry) && (
                                 <option value={supplierCountry}>{supplierCountry}</option>
                             )}
                             {referenceCountries.map((country) => (
-                                <option key={country} value={country}>{country}</option>
+                                <option key={country} value={country}>{displayReferenceCountry(country)}</option>
                             ))}
                         </select>
                     ) : (
-                        <input className={fieldClass} value={supplierCountry} onChange={(event) => setSupplierCountry(event.target.value)} placeholder="예: South Korea" />
+                        <input className={fieldClass} value={supplierCountry} onChange={(event) => changeSupplierCountry(event.target.value)} placeholder="예: South Korea" />
                     )}
                 </Field>
                 <Button type="button" variant="secondary" onClick={applyDefaultValues}>

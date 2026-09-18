@@ -18,6 +18,7 @@ import {
 } from '@/lib/activity-data-template';
 import { downloadBlob } from '@/lib/eu-template-export';
 import {
+    displayReferenceCountry,
     findDefaultValueReference,
     parseBenchmarkWorkbook,
     parseDefaultValueWorkbook,
@@ -138,7 +139,8 @@ function DefaultValueLookup() {
     const countries = Array.from(new Set(reference.rows.map((row) => row.country))).filter((name) => !name.startsWith('_')).sort((a, b) => a.localeCompare(b));
     const cnDigits = cn.replace(/\D/g, '');
     const match = country && cnDigits.length >= 4 ? findDefaultValueReference(reference, country, cnDigits, '2026') : undefined;
-    const show = (value?: number | null) => (value === undefined || value === null ? 'N/A' : String(value));
+    // 워크북의 mark-up 값은 곱셈 결과라 꼬리가 붙는다(4.015000000000001). 6자리에서 끊어 보여준다.
+    const show = (value?: number | null) => (value === undefined || value === null ? 'N/A' : String(Math.round(value * 1e6) / 1e6));
 
     return (
         <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
@@ -147,7 +149,7 @@ function DefaultValueLookup() {
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                 <select aria-label="기본값 조회 국가" className="h-11 rounded-xl border border-slate-200 px-3 text-sm" value={country} onChange={(event) => setCountry(event.target.value)}>
                     <option value="">— 국가 —</option>
-                    {countries.map((name) => <option key={name} value={name}>{name}</option>)}
+                    {countries.map((name) => <option key={name} value={name}>{displayReferenceCountry(name)}</option>)}
                 </select>
                 <input aria-label="기본값 조회 CN 코드" className="h-11 rounded-xl border border-slate-200 px-3 text-sm" inputMode="numeric" value={cn} onChange={(event) => setCn(event.target.value)} placeholder="CN 코드 예: 72230019" />
             </div>

@@ -171,6 +171,7 @@ export function GuidedWorkspace() {
         hasElectricity: data.processes.some((process) => process.electricity_mwh > 0),
         precursorCount: data.precursors.length,
         // 준비도가 「구매 전구물질이 없습니다」를 냈으면 6단계는 선택이 아니라 할 일이다.
+        noPrecursorsConfirmed: data.precursors.length === 0 && data.processes.some((process) => process.no_purchased_precursors),
         precursorsExpected: data.exportIssues.some((issue) => issue.area === '구매 전구물질' && issue.message.includes('구매 전구물질이 없습니다')),
         results: data.results,
         exportErrorCount: data.exportErrorCount,

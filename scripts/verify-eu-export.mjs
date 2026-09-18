@@ -863,7 +863,8 @@ const scenarioChecklist = euExport.createExportChecklist({
 });
 const scenarioChecklistItem = scenarioChecklist.items.find((item) => item.label === '인증서 비용 시나리오 검토');
 assertEqual(
-  String(scenarioChecklistItem?.description.includes('기본값 우위 1건')),
+  // 0건인 항목은 문장에서 뺀다 — 「0건을 검토해야 합니다」는 할 일이 아니다(run12).
+  String(scenarioChecklistItem?.description.includes('기본값이 더 유리하게 나온 품목 1건') && !scenarioChecklistItem?.description.includes(' 0건')),
   'true',
   'scenario checklist default basis summary'
 );

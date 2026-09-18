@@ -70,6 +70,11 @@ assert.ok(expectedProgress.done < expectedProgress.total, `전구물질 없이 �
 const optionalSteps = deriveGuidedSteps({ ...baseInput, exportWarningCount: 0 }, binding);
 assert.equal(optionalSteps.find((step) => step.id === 'precursors').status, 'optional', '기대되지 않으면 선택 단계로 남는다');
 assert.equal(getGuidedProgress(optionalSteps).total, 6);
+// [run12 P2-07] 분모는 늘 6이다. 전구물질이 기대되는데 없으면 7단계가 끝나지 않아 「6 / 6」이 뜨지 않는다.
+assert.equal(expectedProgress.total, 6, '진행률 분모가 6↔7로 바뀐다');
+assert.notEqual(expectedSteps.find((step) => step.id === 'results').status, 'done', '6단계가 할 일인데 7단계에 ✓가 붙는다');
+const confirmedSteps = deriveGuidedSteps({ ...baseInput, exportWarningCount: 0, noPrecursorsConfirmed: true }, binding);
+assert.match(confirmedSteps.find((step) => step.id === 'precursors').summary, /확인함/, '「구매 강재 없음」을 확인한 뒤에도 6단계 문구가 그대로다');
 assert.doesNotMatch(mapSource, /'생성할 수 있습니다'/, '「생성할 수 있습니다」는 「보내도 된다」로 읽힌다 — 「파일을 만들 수 있습니다」로');
 
 // ── 화면 문안 (P1-05 · 09 · 10 · 11 · 16 · 21) ───────────────────────────
@@ -84,5 +89,21 @@ assert.match(readFileSync('src/app/installations/page.tsx', 'utf8'), /법정 필
 const exportPage = readFileSync('src/app/export/page.tsx', 'utf8');
 assert.doesNotMatch(exportPage, /원본 EU 템플릿 파일은 앱에 내장하지 않습니다/, '템플릿 내장 여부를 같은 화면에서 다르게 말한다 (P1-21)');
 assert.match(exportPage, /evaluateEuExportReadiness\(\{ installations, periods,/, 'Export 화면 점검이 다운로드와 다른 자료를 본다 (P1-15)');
+
+// ── run12 후속 ──────────────────────────────────────────────────────
+// [P1-run12-01] 기본값을 채운 뒤 공급국가를 바꾸면 옛 나라의 값·출처가 남아 저장될 수 있었다.
+assert.match(panels, /const changeSupplierCountry = \(next: string\) => \{[\s\S]*?dataMode === 'DEFAULT'[\s\S]*?setDirectSee\(''\);[\s\S]*?setSource\(''\);/, '공급국가를 바꿔도 채워 둔 기본값을 비우지 않는다 (run12 P1-01)');
+assert.equal((panels.match(/changeSupplierCountry\(event\.target\.value\)/g) ?? []).length, 2, '공급국가 입력(선택·직접입력) 둘 다 같은 처리를 거쳐야 한다');
+assert.doesNotMatch(readFileSync('src/lib/source-stream-input.ts', 'utf8'), /Hint: '[^']*\*\*/, '도움말은 일반 텍스트다 — 마크다운 별표가 그대로 보인다 (run12 P2-02)');
+const exporter = readFileSync('src/lib/eu-template-export.ts', 'utf8');
+assert.equal((exporter.match(/target: \{ type: 'installation', id: installationForCheck\.id \}/g) ?? []).length, 2, '사업장 경고에 수정 화면 링크가 없다 (run12 P2-03)');
+assert.match(readFileSync('src/app/installations/page.tsx', 'utf8'), /get\('edit'\)/, '/installations가 ?edit= 링크를 열지 않는다');
+assert.match(reportSource, /본 산정 \(실측 \+ 일부 공식 기본값\)/, '기본값을 섞어 쓴 본 산정을 「실측 채택」이라 부른다 (run12 P2-04)');
+assert.doesNotMatch(readFileSync('src/app/scenarios/page.tsx', 'utf8'), /Math\.round\(percent \* 10000\)/, '톤 입력을 비율로 반올림해 620 t이 620.136 t로 돌아온다 (run12 P2-05)');
+assert.match(panels, /num\(ef\) === 0\.47 \? '미리 채워진 0\.47은 임시 자리값입니다/, '자리값 안내가 자리값이 아닐 때도 뜬다 (run12 P2-06)');
+assert.match(panels, /\$\{streamName\.trim\(\) \|\| kind\.label\} · \$\{fmt\(num\(amount\), 1\)\} L/, '리터 원자료가 저장된 항목에 남지 않는다 (run12 P2-08)');
+assert.match(readFileSync('src/lib/reference-workbooks.ts', 'utf8'), /'Democratic Republic of the Cong': 'Democratic Republic of the Congo'/, '잘린 국가명을 그대로 보여준다 (run12 P2-09)');
+assert.match(readFileSync('src/app/upload/page.tsx', 'utf8'), /Math\.round\(value \* 1e6\) \/ 1e6/, '기본값 조회에 부동소수 꼬리가 보인다 (run12 P2-01)');
+assert.match(readFileSync('src/app/results/page.tsx', 'utf8'), /활동수준 제외 \(신고 대상 아님\)/, '스크랩 라인을 「CBAM 신고 대상」이라 부른다');
 
 console.log('run11 P1 verification passed (기간 오탐 · 전력 산정근거 잇기 · 전구물질 기대 · 화면 문안).');

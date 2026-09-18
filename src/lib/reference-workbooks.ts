@@ -488,6 +488,18 @@ export function findBenchmarkReference(
     return candidates[0];
 }
 
+/**
+ * 공식 워크북은 국가를 **시트 이름**으로 구분하는데 Excel 시트명은 31자에서 잘린다.
+ * 조회 키는 시트명 그대로 두고(바꾸면 매칭이 깨진다), 화면에 보일 이름만 온전히 돌려준다.
+ */
+const TRUNCATED_REFERENCE_COUNTRY_NAMES: Record<string, string> = {
+    'Democratic Republic of the Cong': 'Democratic Republic of the Congo',
+};
+
+export function displayReferenceCountry(sheetName: string): string {
+    return TRUNCATED_REFERENCE_COUNTRY_NAMES[sheetName] ?? sheetName;
+}
+
 export interface ResolvedDefaultSee {
     /** 전구물질 직접 SEE 칸에 넣을 값 — 연도별 mark-up 포함 */
     direct: number;
