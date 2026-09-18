@@ -1,5 +1,6 @@
 ﻿'use client';
 
+import { Term } from '@/components/ux/Term';
 import { ActionItemCard, Button, DataTable, SectionCard, StatusBadge } from '@/components/ui';
 import { calculateLocalResults } from '@/lib/calculation-engine';
 import { getLocalSetting, listLocalItems, setLocalSetting } from '@/lib/local-db';
@@ -722,7 +723,7 @@ export default function ScenariosPage() {
                         <p className="mt-1 text-xs text-slate-500">톤으로 적으면 위 비율로 바꿔 저장합니다(신고 대상 생산량 {formatInteger(summary.totalOutput)} t 기준). 품목이 여럿이면 같은 비율이 모두에 적용됩니다.</p>
                     </div>
                     <div>
-                        <label className="text-sm font-semibold text-slate-700">기본값 연도</label>
+                        <label className="text-sm font-semibold text-slate-700"><Term term="mark-up">기본값 연도 (mark-up)</Term></label>
                         <select
                             className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
                             value={assumptions.default_value_year}
@@ -881,9 +882,9 @@ export default function ScenariosPage() {
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">내부 검토용 total SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 SEE</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 차이</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">Benchmark A</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900"><Term term="벤치마크">Benchmark A</Term></th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">Benchmark B</th>
-                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 기준 SEFA</th>
+                            <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900"><Term term="SEFA">CBAM 기준 SEFA</Term></th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 기준 인증서</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">CBAM 기준 비용</th>
                             <th className="px-4 py-4 text-right text-sm font-semibold text-slate-900">기본값 SEFA</th>

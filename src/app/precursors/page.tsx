@@ -551,7 +551,7 @@ export default function PrecursorsPage() {
                             </select>
                         </div>
                         <div>
-                            <label htmlFor="precursor-verification" className="text-sm font-semibold text-slate-700">검증 상태</label>
+                            <label htmlFor="precursor-verification" className="text-sm font-semibold text-slate-700"><Term term="검증">검증 상태</Term></label>
                             <select id="precursor-verification" className={fieldClass} value={newItem.verification_status} onChange={(event) => setNewItem({ ...newItem, verification_status: event.target.value as PrecursorDraft['verification_status'] })}>
                                 <option value="UNVERIFIED">미검증</option>
                                 <option value="SUPPLIER_CONFIRMED">공급사 확인</option>

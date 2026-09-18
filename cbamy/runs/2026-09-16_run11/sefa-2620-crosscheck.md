@@ -12,7 +12,16 @@
 | 제6차 EU CBAM 대응 정부합동 설명회 자료 — 철강 공급망 SEFA 예제 | 같은 폴더 `20261차설명회발표자료집.pdf` 96~98쪽 | 정부 설명자료 |
 | CBAM 벤치마크 워크북 | `CBAM_documents/CBAM Benchmarks_20260206.xlsx` | EU 공식(비구속) |
 
-> EUR-Lex 영문 원문은 이 환경에서 내려받지 못했다(봇 차단, HTTP 202 빈 응답). 아래 인용은 번역본 기준이며 식 번호·항 번호는 번역본에 적힌 그대로다. **영문 원문과 글자 단위 대조는 하지 못했다.**
+> **2026-09-18 추가 — 영문 원문 대조 완료.** EUR-Lex는 스크립트 접근을 막지만 실제 브라우저로는 열린다. 원문(OJ L, 2025/2620, 22.12.2025)을 `CBAM_documents/EU Verification/OJ_L_202502620_EN_TXT.txt`로 받아 부속서 제1~5항을 대조했다. 번역본과 내용이 같다. 식 자체는 원문에서 이미지라 텍스트에는 변수 정의만 남는다.
+>
+> | 항 | 영문 원문 |
+> |---|---|
+> | 3.1 | "BMg* is the **process-related** CBAM benchmark for the production process which yields good g … as set out in point 5, **Column A**" |
+> | 3.3 | "For a complex good, the calculation of the SEFA shall take into account the production process **as well as the SEFA of each precursor**" (Equation 4) |
+> | 3.3 | "mi is the specific mass of precursor i consumed for the production of one tonne of good g" · Equation 5: Mi,y ÷ ALi,y |
+> | 3.3(2) | "where the value for the precursor i is **not provided by the producer** … is determined by selecting the appropriate BMg value from point 5, **Column B**" — 원산지·CN·추가 매개변수·기본 생산경로를 고려 |
+> | 4 | "BMg is the default CBAM benchmark set out in point 5, **Column B**" (Equation 6) |
+> | 5.1 | "Where different alloy grades for steel are given in the table for the same CN code, the **highest benchmark value** given for the relevant production year is used." |
 
 ## 규정이 말하는 것
 
@@ -58,7 +67,7 @@
 
 ## 남은 확인 사항
 
-1. **영문 원문 대조** — 식 번호와 3.3(2) 문구를 EUR-Lex 원문으로 확인.
+1. ~~영문 원문 대조~~ — 완료(위 표).
 2. **3.3(2)(a)~(d)의 B열 선택** — 전구물질의 원산지·생산경로·합금 등급에 따라 B열 값이 갈리는 CN이 있다(같은 CN에 값이 둘 이상이면 5.1은 "가장 높은 값"). 앱은 CN과 생산경로 문자열로만 찾는다.
 3. **공급사가 검증된 SEFAᵢ를 준 경우(3.3(1))** — 입력 칸이 없다. 실측 공급사 자료가 있으면 B열보다 정확하다.
 4. **전구물질의 보고기간(2025/2547 제13조)** — (1)·(2) 시기 구분에 따라 벤치마크가 달라지는 품목이 있다.
