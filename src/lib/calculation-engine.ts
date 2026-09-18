@@ -40,6 +40,16 @@ export interface CalcResult {
     yield_ratio?: number;
 }
 
+export interface PrecursorInput {
+    precursor_id: string;
+    name: string;
+    cn_code?: string;
+    supplier_country: string;
+    production_route?: string;
+    /** 이 제품라인에 귀속된 투입량(t) — 식 (5)의 Mᵢ 중 이 라인 몫 */
+    mass_t: number;
+}
+
 export interface LocalCalculationResult {
     id: string;
     period_id?: string;
@@ -65,6 +75,12 @@ export interface LocalCalculationResult {
     product_name: string;
     reporting_scope: ProductReportingScope;
     is_cbam_reportable: boolean;
+    /**
+     * 이 결과(제품라인)에 귀속된 구매 전구물질별 투입량. 무상할당 조정(SEFA) 산정에 쓴다 —
+     * 2025/2620 부속서 식 (4)는 복합제품의 SEFA에 전구물질 몫 Σ mᵢ·SEFAᵢ 를 더하라고 하는데,
+     * 그러려면 어떤 전구물질이 몇 톤 들어갔는지를 결과가 알고 있어야 한다.
+     */
+    precursor_inputs?: PrecursorInput[];
     hs_code?: string;
     cn_code?: string;
     production_route: string;
@@ -643,6 +659,16 @@ export function calculateLocalResults(input: {
                 product_name: product?.name ?? '미지정 제품',
                 reporting_scope: processReportingScope,
                 is_cbam_reportable: processIsCbamReportable,
+                precursor_inputs: processPrecursors
+                    .map((precursor) => ({
+                        precursor_id: precursor.id,
+                        name: precursor.name,
+                        cn_code: precursor.precursor_cn_code,
+                        supplier_country: precursor.supplier_country,
+                        production_route: precursor.production_route,
+                        mass_t: precursor.consumed_mass_t,
+                    }))
+                    .filter((input) => input.mass_t > 0),
                 hs_code: product?.hs_code,
                 cn_code: product?.cn_code,
                 production_route: process.production_route,
@@ -792,6 +818,16 @@ export function calculateLocalResults(input: {
                 precursor_see: linePrecursorSee,
                 precursor_direct_see: linePrecursorDirectSee,
                 precursor_indirect_see: linePrecursorIndirectSee,
+                precursor_inputs: processPrecursors
+                    .map((precursor) => ({
+                        precursor_id: precursor.id,
+                        name: precursor.name,
+                        cn_code: precursor.precursor_cn_code,
+                        supplier_country: precursor.supplier_country,
+                        production_route: precursor.production_route,
+                        mass_t: getPrecursorAllocatedMassForLine(precursor, line, eligibleOutputLines, allocationShare),
+                    }))
+                    .filter((input) => input.mass_t > 0),
                 see_direct_incl_precursor: lineSeeDirectInclPrecursor,
                 see_indirect_incl_precursor: lineSeeIndirectInclPrecursor,
                 see_cbam_basis: lineSeeCbamBasis,
