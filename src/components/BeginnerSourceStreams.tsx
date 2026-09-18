@@ -10,6 +10,7 @@ import {
     type SourceStream,
 } from '@/lib/local-db';
 import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
+import { sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
 import { ArrowLeft, ArrowRight, Check, Factory, FileText, Flame, Gauge, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -165,9 +166,9 @@ export default function BeginnerSourceStreams() {
                     factor_source_type: draft.kind === 'PROCESS' ? 'SUPPLIER_OR_LAB' : 'NATIONAL_INVENTORY',
                     source: draft.source.trim(),
                 });
-                const linkedStreams = [...sourceStreams.filter((item) => item.process_id === selectedProcess.id), sourceStream];
-                const directEmissions = linkedStreams.reduce((sum, item) => sum + calculateSourceStreamEmissions(item), 0);
-                await updateLocalItem('processes', { ...selectedProcess, direct_attributable_emissions_tco2e: directEmissions });
+                // 공정의 직접배출은 배출원 합계다(정합계수 보정 후 — 엔진과 같은 헬퍼). 방식도 함께 기록한다.
+                const directEmissions = sumReconciledSourceStreamEmissions(selectedProcess.id, [...sourceStreams, sourceStream]);
+                await updateLocalItem('processes', { ...selectedProcess, direct_attributable_emissions_tco2e: directEmissions, direct_emissions_input_mode: 'SOURCE_STREAM_SUM' });
             }
 
             await load();

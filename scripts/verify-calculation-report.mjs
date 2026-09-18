@@ -155,6 +155,8 @@ const prelude = ['const { strToU8, zipSync, strFromU8, unzipSync } = fflate;'].c
     'src/lib/reporting-scope.ts',
     'src/lib/reference-workbooks.ts',
     'src/lib/source-stream-calculation.ts',
+    // 엔진이 import 한다 — source-stream-calculation 뒤, 엔진 앞.
+    'src/lib/allocation-rules.ts',
     'src/lib/calculation-engine.ts',
 ]
     .map((path) => readFileSync(path, 'utf8')

@@ -6,6 +6,7 @@ import { summarizeProductOutputLines } from './calculation-engine';
 import { calculateSourceStreamEmissions, getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
 import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';
+import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, reconcileSourceStreams } from './allocation-rules';
 import { CN_MASTER } from './cn-master.generated';
 
 export const REQUIRED_EU_TEMPLATE_SHEETS = [
@@ -115,7 +116,9 @@ function createReportableExportScope(data: EuTemplateExportData): ReportableExpo
     const processes = scopedProcesses.filter(inPeriod);
     const inPeriodProcessIds = new Set(processes.map((process) => process.id));
 
-    const scopedSourceStreams = (data.sourceStreams ?? []).filter((sourceStream) =>
+    // 공용 계량기 정합계수(식 41·42)는 범위를 거르기 **전** 전체 행에 적용한다 — 비CBAM 공정 행을 먼저
+    // 빼면 그룹 합계가 달라져 계수가 틀린다. 이후 B_EmInst 활동자료·준비도 대조가 모두 보정값을 쓴다.
+    const scopedSourceStreams = reconcileSourceStreams(data.sourceStreams ?? []).streams.filter((sourceStream) =>
         Boolean(sourceStream.process_id && processIds.has(sourceStream.process_id))
     );
     // 배출원·전구물질은 자기 period_id와 **소속 공정**이 둘 다 이 기간이어야 한다.
@@ -751,7 +754,22 @@ export function evaluateEuExportReadiness(
             issues.push({
                 severity: 'warning',
                 area: '생산공정',
-                message: `${process.name}: 수동 비율 배분을 선택했지만 유효한 수동비율 합계가 0입니다.`,
+                message: `${process.name}: 사용자 지정 배분을 선택했지만 유효한 배분율 합계가 0입니다.`,
+                target: { type: 'process', id: process.id },
+            });
+        }
+
+        // 배분율 합계≠100%는 배출 누락(미만)·이중계상(초과)이다 — 문서를 막는다(CBAM-ALLOC-MANUAL-02).
+        // 혼용 공정은 위에서 경고했고 합계의 의미가 다르므로 여기서는 보지 않는다.
+        if (
+            !outputLineSummary.hasMixedAllocationBasis
+            && outputLineSummary.manualPercentTotal > 0
+            && Math.abs(outputLineSummary.manualPercentTotal - 100) > MANUAL_ALLOCATION_SUM_TOLERANCE
+        ) {
+            issues.push({
+                severity: 'error',
+                area: '생산공정',
+                message: `${process.name}: 사용자 지정 배분율 합계가 ${outputLineSummary.manualPercentTotal.toFixed(2)}%입니다 — 100%여야 합니다(미만은 배출 누락, 초과는 이중계상).`,
                 target: { type: 'process', id: process.id },
             });
         }
@@ -786,6 +804,17 @@ export function evaluateEuExportReadiness(
 
     for (const sourceStream of exportScope.sourceStreams) {
         issues.push(...validateSourceStreamForEuExport(sourceStream));
+    }
+
+    // 폐가스가 있고 공정이 둘 이상이면 공정 간 폐가스 이전에 식 55의 WGcorr 보정이 필요할 수 있는데,
+    // 현재 버전은 계산하지 않는다. 수입 폐가스를 연료 배출원으로 넣으면 두 공정에 이중계상된다 — 알린다.
+    const wasteGasInstallation = (data.installations ?? []).find((installation) => installation.waste_gases === 'YES');
+    if (wasteGasInstallation && exportScope.processes.length >= 2) {
+        issues.push({
+            severity: 'warning',
+            area: '생산공정',
+            message: `폐가스 발생 사업장에 생산공정이 ${exportScope.processes.length}개입니다. 공정 간 폐가스 이전 보정(${ALLOCATION_RULES.ADJUSTMENTS.id}, ${ALLOCATION_RULES.ADJUSTMENTS.anchor})은 현재 버전에서 미지원입니다 — 수입 폐가스를 연료 배출원으로 넣으면 이중계상되므로 검증인과 별도 산정을 확인하세요.`,
+        });
     }
 
     for (const precursor of exportScope.precursors) {

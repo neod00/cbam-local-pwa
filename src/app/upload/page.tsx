@@ -207,6 +207,8 @@ async function applyActivityImportPlan(plan: ActivityTemplateImportPlan): Promis
             market_output_mass_t: row.market_output_mass_t,
             internal_consumption_mass_t: row.internal_consumption_mass_t,
             direct_attributable_emissions_tco2e: row.direct_attributable_emissions_tco2e,
+            // 값의 출처를 남긴다 — 엔진은 수기 값과 같이 다루고, 보고서는 「템플릿 업로드」로 인쇄한다.
+            direct_emissions_input_mode: 'TEMPLATE_UPLOAD',
             electricity_mwh: row.electricity_mwh,
             electricity_ef_tco2e_per_mwh: row.electricity_ef_tco2e_per_mwh,
             electricity_ef_source: row.electricity_ef_source,
