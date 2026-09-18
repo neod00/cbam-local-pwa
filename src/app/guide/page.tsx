@@ -36,7 +36,7 @@ export default function GuidePage() {
             <PageHeader
                 eyebrow="Guided Workflow"
                 title="시작 가이드"
-                description="처음에는 모든 규정과 입력표를 보지 말고, 아래 3단계만 따라가세요."
+                description="처음에는 모든 규정과 입력표를 보지 말고, 아래 3단계만 따라가세요. 홈의 지도는 이 3단계를 8칸으로 풀어 놓은 것입니다 — 1(사업장·기간)을 먼저 하고, 「품목」은 2·3칸, 「고지서 입력」은 4·5·6칸, 「검증」은 7·8칸입니다."
             />
 
             <SectionCard

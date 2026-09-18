@@ -16,7 +16,7 @@ import {
     getSourceStreamEmissionFactorBasis,
     getSourceStreamUnitWarnings,
 } from '@/lib/source-stream-calculation';
-import { SHARED_METER_BASIS_LABEL, sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
+import { SHARED_METER_BASIS_LABEL, reconcileSourceStreams, sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
 // 검증·상수·라벨은 공유 모듈에 있다. 여기에 사본을 두면 지도 패널과 갈라진다.
 import {
     ACTIVITY_UNITS as activityUnits,
@@ -409,6 +409,24 @@ export default function SourceStreamsPage() {
                 <StatCard label="연료 에너지" value={formatNumber(summary.totalEnergy)} helper="TJ" icon={Gauge} tone="info" />
                 <StatCard label="추정 배출량" value={formatNumber(summary.totalEmissions)} helper="tCO2e" icon={Flame} tone="success" />
             </div>
+
+            {/* 공용 계량기 그룹의 검사 결과. 합계가 맞을 때 아무 표시가 없으면 검사가 돌았는지 알 수 없다(씨밤이 run11 P2-29). */}
+            {reconcileSourceStreams(sourceStreams).groups.length > 0 && (
+                <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+                    <p className="font-semibold text-slate-900">공용 계량기 그룹 검사</p>
+                    {reconcileSourceStreams(sourceStreams).groups.map((group) => (
+                        <p key={`${group.period_id ?? ''}-${group.group}`} className={group.reason ? 'text-amber-800' : 'text-emerald-800'}>
+                            {group.reason ? '⚠ ' : '✓ '}
+                            <span className="font-semibold">{group.group}</span> — 행 합계 {formatNumber(group.sub_total)} / 전체 계량값 {formatNumber(group.installation_total)} {group.unit}
+                            {group.reason
+                                ? ` · ${group.reason}`
+                                : group.applied
+                                    ? ` · 정합계수 ${formatNumber(group.factor)} 적용`
+                                    : ' · 합계 일치 (보정 없음)'}
+                        </p>
+                    ))}
+                </div>
+            )}
 
             <SectionCard
                 title="MRV 원칙 체크"
