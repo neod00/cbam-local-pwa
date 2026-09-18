@@ -40,6 +40,8 @@ export interface GuidedMapInput {
      * true면 6단계는 선택이 아니라 할 일이다 — 전구물질 없이 「6 / 6 완료 · 생성할 수 있습니다」가 뜨던 것을 막는다(run11 P1-12).
      */
     precursorsExpected?: boolean;
+    /** 사람이 「구매한 CBAM 강재 없음」을 확인했다(전구물질 0건일 때만 의미가 있다). */
+    noPrecursorsConfirmed?: boolean;
     results: LocalCalculationResult[];
     exportErrorCount: number;
     exportWarningCount: number;
@@ -59,7 +61,9 @@ export function deriveGuidedSteps(input: GuidedMapInput, binding: SeeFlowBinding
     const reportable = input.results.filter((result) => result.is_cbam_reportable && result.see_cbam_basis !== null);
     const calculationReady = reportable.length > 0 && (fuelDone || electricityDone);
     const resultsUnlocked = processDone && (fuelDone || electricityDone);
-    const resultsDone = calculationReady && input.exportErrorCount === 0;
+    const precursorsPending = !precursorsDone && Boolean(input.precursorsExpected);
+    // 전구물질이 있어야 하는데 없으면 결과는 아직 「끝난 것」이 아니다 — 6단계가 할 일인데 7단계에 ✓가 붙던 것(run12 P2-07).
+    const resultsDone = calculationReady && input.exportErrorCount === 0 && !precursorsPending;
     const exportUnlocked = resultsDone;
     const exportReady = resultsDone && input.exportWarningCount === 0;
 
@@ -118,7 +122,9 @@ export function deriveGuidedSteps(input: GuidedMapInput, binding: SeeFlowBinding
             status: precursorsDone ? 'done' : input.precursorsExpected ? 'todo' : 'optional',
             summary: precursorsDone
                 ? `직접 ${fmt(binding.precursorDirectEmissions)} · 간접 ${fmt(binding.precursorIndirectEmissions)}`
-                : input.precursorsExpected ? '구매 강재 등록 — SEE의 대부분' : '구매한 CBAM 강재가 있으면',
+                : input.precursorsExpected
+                    ? '구매 강재 등록 — SEE의 대부분'
+                    : input.noPrecursorsConfirmed ? '구매 강재 없음 (확인함)' : '구매한 CBAM 강재가 있으면',
         },
         {
             id: 'results',
@@ -159,8 +165,9 @@ export function deriveGuidedSteps(input: GuidedMapInput, binding: SeeFlowBinding
 }
 
 export function getGuidedProgress(steps: GuidedStepState[]) {
-    // 전구물질 단계는 「선택」일 때만 분모에서 뺀다. 할 일(todo/current)이거나 끝났으면 센다.
-    const required = steps.filter((step) => step.id !== 'export' && !(step.id === 'precursors' && step.status === 'optional'));
+    // 분모는 늘 6이다(전구물질·문서 생성 제외). 전구물질이 기대되는데 없으면 7단계가 끝나지 않으므로
+    // 「6 / 6 완료」가 뜨지 않는다 — 분모를 6↔7로 바꾸지 않고 같은 효과를 낸다(run12 P2-07).
+    const required = steps.filter((step) => step.id !== 'precursors' && step.id !== 'export');
     const done = required.filter((step) => step.status === 'done').length;
     return { done, total: required.length };
 }

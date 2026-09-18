@@ -233,7 +233,7 @@ export const GUIDED_STREAM_KINDS: GuidedStreamKind[] = [
         factorHint: '국가 인벤토리 기본값 자리값입니다. 자기 성적서 값이 있으면 그것으로 바꾸세요.',
         allowsNegative: false,
         needsNcv: true,
-        ncvHint: '자리값 0.037은 임시값입니다. 고지서의 MJ는 **총발열량**(약 42~43 MJ/Nm³)이라 그대로 쓰면 안 됩니다 — 순발열량은 그보다 약 10% 낮습니다(약 0.0385~0.039 GJ/Nm³). 도시가스사에 순발열량을 물어 그 값을 넣으세요.',
+        ncvHint: '자리값 0.037은 임시값입니다. 고지서의 MJ는 총발열량(약 42~43 MJ/Nm³)이라 그대로 쓰면 안 됩니다 — 순발열량은 그보다 약 10% 낮습니다(약 0.0385~0.039 GJ/Nm³). 도시가스사에 순발열량을 물어 그 값을 넣으세요.',
         ncvGrossThreshold: 0.041,
         defaults: {
             stream_type: 'FUEL', method: 'Combustion', activity_unit: 'Nm3',

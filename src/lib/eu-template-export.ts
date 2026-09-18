@@ -221,7 +221,8 @@ export type EuExportIssueTarget =
     | { type: 'product'; id: string }
     | { type: 'process'; id: string }
     | { type: 'sourceStream'; id: string }
-    | { type: 'precursor'; id: string };
+    | { type: 'precursor'; id: string }
+    | { type: 'installation'; id: string };
 
 export interface EuExportReadinessIssue {
     severity: 'error' | 'warning';
@@ -255,6 +256,10 @@ export function getEuExportIssueEditHref(issue: EuExportReadinessIssue): string 
 
     if (issue.target.type === 'sourceStream') {
         return `/source-streams?edit=${encodedId}`;
+    }
+
+    if (issue.target.type === 'installation') {
+        return `/installations?edit=${encodedId}`;
     }
 
     return `/precursors?edit=${encodedId}`;
@@ -928,6 +933,7 @@ export function evaluateEuExportReadiness(
             issues.push({
                 severity: 'warning',
                 area: '사업장',
+                target: { type: 'installation', id: installationForCheck.id },
                 message: `${installationForCheck.name}: 비어 있는 「법정 필수」 항목 — ${missingOperator.join(' · ')}. 검증인이 반드시 확인하며 산정보고서 제2장에 「기재 필요」로 남습니다. 사업장 화면에서 채우세요.`,
             });
         }
@@ -935,6 +941,7 @@ export function evaluateEuExportReadiness(
             issues.push({
                 severity: 'warning',
                 area: '사업장',
+                target: { type: 'installation', id: installationForCheck.id },
                 message: `${installationForCheck.name}: UN/LOCODE가 비어 있습니다. EU 문서 A_InstData의 UNLOCODE 칸이 빈 채로 나갑니다. UN/LOCODE는 UNECE가 도시·항만에 붙인 5자리 코드입니다(예: 부산 KRPUS, 인천 KRINC) — 가까운 도시 코드를 UNECE 목록에서 찾거나, 없으면 좌표(위도·경도)를 채우세요.`,
             });
         }
@@ -1044,7 +1051,11 @@ export function createExportChecklist(input: ExportChecklistInput): ExportCheckl
             label: '인증서 비용 시나리오 검토',
             description: scenarioRiskSummary.is_ready_for_review
                 ? scenarioRiskSummary.above_default_count > 0 || scenarioRiskSummary.certificate_exposure_count > 0 || scenarioRiskSummary.default_lower_certificate_count > 0
-                    ? `기준자료는 연결됐지만 기본값 우위 ${scenarioRiskSummary.default_lower_certificate_count}건, 기본값 대비 차이 ${scenarioRiskSummary.above_default_count}건을 검토해야 합니다.`
+                    ? `기준자료는 연결됐습니다. 검토할 것: ${[
+                        scenarioRiskSummary.default_lower_certificate_count > 0 ? `기본값이 더 유리하게 나온 품목 ${scenarioRiskSummary.default_lower_certificate_count}건` : '',
+                        scenarioRiskSummary.above_default_count > 0 ? `실측 SEE가 기본값보다 높은 품목 ${scenarioRiskSummary.above_default_count}건` : '',
+                        scenarioRiskSummary.certificate_exposure_count > 0 ? `인증서 부담이 있는 품목 ${scenarioRiskSummary.certificate_exposure_count}건` : '',
+                    ].filter(Boolean).join(' · ')}.`
                     : 'CN 코드와 공식 기준자료가 연결되어 시나리오 검토가 가능합니다.'
                 : `${scenarioRiskSummary.missing_reference_count}개 품목은 CN 코드 또는 공식 기준자료 연결이 필요합니다.`,
             status: scenarioRiskSummary.is_ready_for_review ? '검토 가능' : '확인 필요',

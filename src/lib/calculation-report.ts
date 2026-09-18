@@ -1427,7 +1427,7 @@ function defaultValueSection(input: CalculationReportInput) {
     const body = [
         paragraph('9. 공식 기본값(DV) 대조 및 민감도   Cross-check against Official Default Values', 'Heading1'),
         paragraph(hasSubjects
-            ? '실측 우선(actual > default) 원칙의 적용 근거를 정량적으로 제시하기 위해, 전구물질 실측값을 해당 조합(국가 × CN)의 EU 공식 기본값과 대조한다. 검증인의 개연성(plausibility) 점검 기준선 역할을 한다.'
+            ? '실측 우선(actual > default) 원칙의 적용 근거를 정량적으로 제시하기 위해, 전구물질에 적용한 값(실측값 또는 공식 기본값)을 해당 조합(국가 × CN)의 EU 공식 기본값과 대조한다. 기본값을 적용한 전구물질은 적용값이 공식 DV와 일치하는지를 확인하는 용도다. 검증인의 개연성(plausibility) 점검 기준선 역할을 한다.'
             : '본 산정에는 구매 전구물질이 없어 공식 기본값(DV) 대조 대상이 없다. 본 장은 대조 기준자료의 연결 상태만 기록한다.'),
     ];
     const gateIssues: ReportGateIssue[] = [];
@@ -1536,7 +1536,7 @@ function defaultValueSection(input: CalculationReportInput) {
         const notes: string[] = [];
 
         if (comparison.isHeadingInherited) {
-            notes.push(`CN ${comparison.precursor.precursor_cn_code} 실측값을 상위 heading(CN ${comparison.row.cn_code}) 기준 DV와 비교했습니다. heading 상속 조회의 적정성은 원본 워크북 확인 필요(자료).`);
+            notes.push(`CN ${comparison.precursor.precursor_cn_code} ${comparison.precursor.data_mode === 'DEFAULT' ? '적용값' : '실측값'}을 상위 heading(CN ${comparison.row.cn_code}) 기준 DV와 비교했습니다. heading 상속 조회의 적정성은 원본 워크북 확인 필요(자료).`);
         }
 
         const dvRoute = comparison.row.production_route?.trim();
@@ -1547,7 +1547,9 @@ function defaultValueSection(input: CalculationReportInput) {
         }
 
         if (comparison.row.indirect_default === undefined || comparison.row.indirect_default === null) {
-            notes.push('해당 조합의 간접 기본값은 공표되지 않아(N/A) 간접 실측값은 DV 대조가 불가하다.');
+            notes.push(comparison.precursor.data_mode === 'DEFAULT'
+                ? '해당 조합의 간접 기본값은 공표되지 않아(N/A) 간접은 0으로 두었다.'
+                : '해당 조합의 간접 기본값은 공표되지 않아(N/A) 간접 실측값은 DV 대조가 불가하다.');
         }
 
         // 같은 국가×CN에 경로가 갈리는 행이 여럿이면, 조회가 어느 행을 골랐는지가 결과를 바꾼다.
@@ -1619,7 +1621,16 @@ function defaultValueSection(input: CalculationReportInput) {
         const delta = dvBasis - result.see_cbam_basis;
         const ratio = result.see_cbam_basis === 0 ? undefined : delta / result.see_cbam_basis;
 
-        sensitivityRows.push([result.product_name, '실측 채택 (본 산정)', formatForReport(result.see_cbam_basis), '기준']);
+        // 본 산정이 전부 실측인 것은 아니다 — 기본값을 섞어 쓴 공정을 「실측 채택」이라 부르면 8.1장과 어긋난다(run12 P2-04).
+        const processPrecursorModes = comparisons
+            .filter((comparison) => comparison.precursor.process_id === result.process_id)
+            .map((comparison) => comparison.precursor.data_mode === 'DEFAULT');
+        const baselineLabel = processPrecursorModes.length > 0 && processPrecursorModes.every(Boolean)
+            ? '본 산정 (전구물질 전부 공식 기본값)'
+            : processPrecursorModes.some(Boolean)
+                ? '본 산정 (실측 + 일부 공식 기본값)'
+                : '실측 채택 (본 산정)';
+        sensitivityRows.push([result.product_name, baselineLabel, formatForReport(result.see_cbam_basis), '기준']);
         sensitivityRows.push([
             result.product_name,
             '전구물질을 공식 DV로 대체',
