@@ -720,7 +720,7 @@ assertTrue(dvXml.includes('본 수치는 개연성 참고이다'), '9.2에 9.1 �
 // [P1] 5.1 산식이 엔진 산식과 같아야 한다(전환계수·화석분율·PER_ACTIVITY_UNIT 분기).
 assertTrue(filledXml2.includes('전환계수 CF × 화석 분율'), '5.1 산식에 CF·화석분율');
 assertTrue(filledXml2.includes('NCV와 ÷1,000을 적용하지 않는다'), '5.1 PER_ACTIVITY_UNIT 분기 명시');
-assertTrue(filledXml2.includes('CH4·N2O는 본 산정의 대상 GHG에 포함되지 않는다'), '5.1 GHG 범위 진술');
+assertTrue(filledXml2.includes('CH4·N2O는 철강계 품목군의 대상 GHG에 포함되지 않는다'), '5.1 GHG 범위 진술(철강계 한정)');
 
 // [P1] DV 조회가 생산경로를 무시하면 워크북 행 순서로 아무 행이나 집는다.
 const routeDv = {
@@ -811,10 +811,25 @@ const actualTotal = [/확인 필요\(규정\)/g, /확인 필요\(자료\)/g, /�
     .reduce((sum, pattern) => sum + (legendStripped.match(pattern) ?? []).length, 0);
 assertEqual(Number(printedTotalMatch[1]), actualTotal, '등록부 총계가 실제 본문 표기 수와 일치(표지·14장 포함, 등록부·범례 제외)');
 
-// 표지에도 실제 미해소 항목이 있다(대상 온실가스 — 확인 필요(규정)). 건너뛰면 안 된다.
-assertTrue(/표지/.test(registrySlice.replace(/<[^>]+>/g, ' ')), '등록부에 「표지」 행이 존재');
+// 표지에 실제 미해소 항목이 있으면(대상 온실가스 미확정 — 확인 필요(규정)) 건너뛰지 않고 센다.
+// 철강 전용 프로젝트는 GHG=CO2가 Table 1로 확정돼 표지에 규정 유보가 없다(검증심사 5번). 그래서
+// 표지 유보가 살아 있는 케이스 — 품목군이 단일 철강으로 확정되지 않는 프로젝트 — 로 검사한다.
+const coverMarker = reportModule.createCalculationReport({
+    ...baseInput(), precursors: [],
+    products: [baseProduct, at({ id: 'p8', name: '요소', hs_code: '3102', cn_code: '31021010', hs_group: '31', product_type_enum: 'OTHER', unit: 'tonne', reporting_scope: 'CBAM_GOOD' })],
+    processes: [baseProcess, at({ ...baseProcess, id: 'proc8', product_id: 'p8' })],
+    sourceStreams: [baseStream, at({ ...baseStream, id: 's8', process_id: 'proc8' })],
+    results: [
+        { ...baseResult, precursor_see: 0, precursor_direct_see: 0, precursor_indirect_see: 0, see_direct_incl_precursor: 240.009264 / 8000, see_indirect_incl_precursor: 734.4 / 8000, see_cbam_basis: 240.009264 / 8000, see_informational_total: 240.009264 / 8000 + 734.4 / 8000 },
+        { ...baseResult, id: 'r8', process_id: 'proc8', product_id: 'p8', product_name: '요소', cn_code: '31021010', precursor_see: 0, precursor_direct_see: 0, precursor_indirect_see: 0, see_direct_incl_precursor: 240.009264 / 8000, see_indirect_incl_precursor: 734.4 / 8000, see_cbam_basis: 240.009264 / 8000, see_informational_total: 240.009264 / 8000 + 734.4 / 8000 },
+    ],
+});
+const coverMarkerXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await coverMarker.blob.arrayBuffer()))['word/document.xml']);
+const cmStart = coverMarkerXml.indexOf('14.1 미해소 항목 등록부');
+const cmSlice = coverMarkerXml.slice(cmStart, coverMarkerXml.indexOf('<w:pStyle w:val="Legend"/>', cmStart));
+assertTrue(/표지/.test(cmSlice.replace(/<[^>]+>/g, ' ')), '표지 유보가 있으면 등록부에 「표지」 행이 존재');
 // 범례를 미해소 항목으로 세면 안 된다 — 표지 범례는 규정·자료·기재 각 1건씩을 허위 계상한다.
-const coverRow = registrySlice
+const coverRow = cmSlice
     .replace(/<[^>]+>/g, '|')
     .replace(/\|+/g, '|')
     .match(/표지\|([^|]+)\|([^|]+)\|([^|]+)\|/);
@@ -822,6 +837,8 @@ assertTrue(Boolean(coverRow), '표지 행 파싱');
 assertEqual(coverRow[1], '1건', '표지 확인 필요(규정) 1건 (범례 미계상)');
 assertEqual(coverRow[2], '-', '표지 확인 필요(자료) 없음 (범례 미계상)');
 assertEqual(coverRow[3], '-', '표지 기재 필요 없음 (범례 미계상)');
+// 철강 전용(ok)은 표지 GHG가 확정돼 표지 유보가 없다 — 범례를 세지 않는 한 표지 행이 없어야 한다.
+assertTrue(!/\|표지\|/.test(registrySlice.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|')), '철강 전용 표지에는 규정 유보가 없어 등록부 표지 행도 없음');
 
 // ---------------- 재감사 R5 회귀 — 등록부 순서·범례 구조화·자기언급 ----------------
 
@@ -1234,4 +1251,40 @@ const wasteNoXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await wasteN
 assertTrue(wasteNoXml.includes('폐가스를 생산·사용하지 않는다'), '폐가스 「없음」이 명시적으로 표기됨');
 assertTrue(!wasteNo.issues.some((i) => i.gate === 'G5' && /폐가스/.test(i.message)), '폐가스 「없음」 선택 시 경고 없음');
 
-console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4·R5·R6 회귀 + 부문특정 파라미터 + 전력 EF 산정근거 + 운영자 식별·폐가스).');
+// ---------------- 확인 필요 → 확정 문안 (제2547 원문 확보로 유보 닫기, 씨밤이 검증심사 5번) ----------------
+// 규정 원문을 대조해 닫을 수 있는 유보는 규정 조항을 인용해 확정한다. 단 「지배 규정 선언」과
+// 「Annex II 등재 동치」는 앱이 확정할 수 없어 유보를 유지한다(상시 원칙).
+
+// 닫힌 유보 — 옛 「확인 필요(규정)」 문구가 사라지고 규정 인용으로 대체됐다.
+assertTrue(!okXml.includes('해당 분야의 대상 GHG가 CO2인지는 확인 필요(규정)'), '표지 GHG 유보가 닫힘');
+assertTrue(!okXml.includes('CBAM 대상 온실가스는 CO2이므로(확인 필요(규정))'), '5.1 GHG 유보가 닫힘');
+assertTrue(!okXml.includes('확정기간 이행규정이 표준계수 위계를 두는 경우'), '6.2.2 계수 위계 유보가 닫힘');
+assertTrue(!okXml.includes('지배하는 이행규정의 번호·적용 조항은 EUR-Lex 원문 대조가 완료되지 않았다'), '이행규정 번호 순수 미확정 문구가 후보 인용으로 대체됨');
+
+// 규정 인용이 실제로 들어갔다 — 조항을 지어내지 않고 원문을 대조한 것.
+assertTrue(okXml.includes('ANNEX I Table 1이 철강계 품목군'), 'GHG=CO2를 ANNEX I Table 1로 확정');
+assertTrue(okXml.includes('2025/2547 점 B.5.2는 표준값 위계를 둔다'), '계수 위계를 점 B.5.2로 확정');
+assertTrue(okXml.includes('Commission Implementing Regulation (EU) 2025/2547(근거 Art 7(7))'), '이행규정 후보로 2025/2547을 명시');
+assertTrue(okXml.includes('2025/2547 Art 3(2)는 시스템 경계가'), '간접 판정 규칙을 Art 3(2)로 확정');
+assertTrue(okXml.includes('2025/2547 Art 4(6)에 따른다'), 'All production routes를 Art 4(6)으로 확정');
+
+// 유지돼야 할 유보 — 앱이 확인할 수 없는 것은 여전히 유보한다.
+assertTrue(okXml.includes('이 플래그가 Annex II 등재와 법적으로 동치인지는 EUR-Lex 원문 대조가 완료되지 않았다'), 'Annex II 등재 동치 유보는 유지');
+assertTrue(okXml.replace(/<[^>]+>/g, ' ').includes('이 규정이 본 산정을 지배함의 최종 확정은 사업장'), '지배 규정 선언은 사용자·검증인 확정으로 유보 유지');
+
+// GHG=CO2 확정은 **철강계일 때만**이다 — 질산·복합비료는 N2O를 포함하므로 비철강에 새면 안 된다.
+const nonSteelCite = reportModule.createCalculationReport({
+    ...baseInput(), precursors: [],
+    products: [baseProduct, at({ id: 'p7', name: '요소', hs_code: '3102', cn_code: '31021010', hs_group: '31', product_type_enum: 'OTHER', unit: 'tonne', reporting_scope: 'CBAM_GOOD' })],
+    processes: [baseProcess, at({ ...baseProcess, id: 'proc7', product_id: 'p7' })],
+    sourceStreams: [baseStream, at({ ...baseStream, id: 's7', process_id: 'proc7' })],
+    results: [
+        { ...baseResult, precursor_see: 0, precursor_direct_see: 0, precursor_indirect_see: 0, see_direct_incl_precursor: 240.009264 / 8000, see_indirect_incl_precursor: 734.4 / 8000, see_cbam_basis: 240.009264 / 8000, see_informational_total: 240.009264 / 8000 + 734.4 / 8000 },
+        { ...baseResult, id: 'r7', process_id: 'proc7', product_id: 'p7', product_name: '요소', cn_code: '31021010', precursor_see: 0, precursor_direct_see: 0, precursor_indirect_see: 0, see_direct_incl_precursor: 240.009264 / 8000, see_indirect_incl_precursor: 734.4 / 8000, see_cbam_basis: 240.009264 / 8000, see_informational_total: 240.009264 / 8000 + 734.4 / 8000 },
+    ],
+});
+const nonSteelCiteXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await nonSteelCite.blob.arrayBuffer()))['word/document.xml']);
+assertTrue(!nonSteelCiteXml.includes('ANNEX I Table 1이 철강계 품목군'), '비철강 섞이면 철강 GHG=CO2 확정을 쓰지 않음');
+assertTrue(nonSteelCiteXml.includes('N2O·PFC 등 다른 대상 GHG'), '비철강 미확정 분기는 GHG 확인 필요를 유지');
+
+console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4·R5·R6 회귀 + 부문특정 파라미터 + 전력 EF 산정근거 + 운영자 식별·폐가스 + 확인 필요→확정).');
