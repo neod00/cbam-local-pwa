@@ -25,7 +25,13 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type ProcessDraft = Omit<ProductionProcess, 'id' | 'created_at' | 'updated_at'>;
-type OutputLineDraft = Omit<ProductOutputLine, 'id' | 'created_at' | 'updated_at' | 'process_id'>;
+/**
+ * `existing_id` — 이미 저장된 라인을 고치는 중이면 그 id. 저장할 때 **같은 id로 갱신**해야 한다.
+ * 종전에는 공정을 저장할 때마다 라인을 전부 지우고 새 id로 다시 만들었다. 전구물질의 제품별 배분
+ * (output_allocations)은 라인 id를 가리키므로, 공정을 한 번 수정 저장하면 배분이 끊겨 전구물질 몫이 0이 됐다
+ * (씨밤이 run12 후속 확인 — 기준 SEE 3.764 → 0.022).
+ */
+type OutputLineDraft = Omit<ProductOutputLine, 'id' | 'created_at' | 'updated_at' | 'process_id'> & { existing_id?: string };
 type ProcessErrors = Partial<Record<keyof ProcessDraft, string>>;
 
 const emptyDraft: ProcessDraft = {
@@ -273,6 +279,7 @@ export default function ProcessesPage() {
         const existingLines = productOutputLines.filter((line) => line.process_id === process.id);
         setOutputLineDrafts(existingLines.length > 0
             ? existingLines.map((line) => ({
+                existing_id: line.id,
                 product_id: line.product_id ?? '',
                 name: line.name,
                 output_mass_t: line.output_mass_t,
@@ -293,10 +300,14 @@ export default function ProcessesPage() {
         const existingLines = productOutputLines.filter((line) => line.process_id === processId);
         const validDrafts = outputLineDrafts.filter((line) => line.output_mass_t > 0);
 
-        await Promise.all(existingLines.map((line) => deleteLocalItem('product_output_lines', line.id)));
+        const existingById = new Map(existingLines.map((line) => [line.id, line]));
+        const keptIds = new Set(validDrafts.map((line) => line.existing_id).filter((id): id is string => Boolean(id && existingById.has(id))));
+
+        // 화면에서 지운 라인만 삭제한다. 남은 라인은 id를 지킨 채 갱신한다 — 전구물질 배분이 이 id를 가리킨다.
+        await Promise.all(existingLines.filter((line) => !keptIds.has(line.id)).map((line) => deleteLocalItem('product_output_lines', line.id)));
         const savedLines = await Promise.all(
-            validDrafts.map((line, index) =>
-                createLocalItem('product_output_lines', {
+            validDrafts.map((line, index) => {
+                const fields = {
                     process_id: processId,
                     product_id: line.product_id || undefined,
                     name: line.name.trim() || `Output line ${index + 1}`,
@@ -305,12 +316,15 @@ export default function ProcessesPage() {
                     manual_allocation_percent: line.manual_allocation_percent,
                     note: line.note.trim(),
                     reporting_scope: getProductReportingScope(products.find((product) => product.id === line.product_id), line),
-                    // 삭제 후 재생성이므로 빠뜨리면 사용자가 고른 활동수준 역할·사유가 조용히 사라진다.
                     activity_level_role: line.activity_level_role,
                     manual_allocation_reason: line.manual_allocation_reason?.trim() || undefined,
                     manual_allocation_evidence: line.manual_allocation_evidence?.trim() || undefined,
-                })
-            )
+                };
+                const existing = line.existing_id ? existingById.get(line.existing_id) : undefined;
+                return existing
+                    ? updateLocalItem('product_output_lines', { ...existing, ...fields })
+                    : createLocalItem('product_output_lines', fields);
+            })
         );
 
         setProductOutputLines([
@@ -700,7 +714,7 @@ export default function ProcessesPage() {
                                             }} />
                                         </div>
                                         <div>
-                                            <label className="text-xs font-semibold text-slate-600">활동수준(점 F)</label>
+                                            <label className="text-xs font-semibold text-slate-600"><Term term="활동수준">활동수준(점 F)</Term></label>
                                             {/* 부산물·불량·스크랩인지 앱이 대신 정하지 않는다 — 미지정이면 산정에서 확인을 요구한다. */}
                                             <select className={fieldClass} value={line.activity_level_role ?? ''} onChange={(event) => {
                                                 const next = [...outputLineDrafts];

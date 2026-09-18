@@ -106,4 +106,11 @@ assert.match(readFileSync('src/lib/reference-workbooks.ts', 'utf8'), /'Democrati
 assert.match(readFileSync('src/app/upload/page.tsx', 'utf8'), /Math\.round\(value \* 1e6\) \/ 1e6/, '기본값 조회에 부동소수 꼬리가 보인다 (run12 P2-01)');
 assert.match(readFileSync('src/app/results/page.tsx', 'utf8'), /활동수준 제외 \(신고 대상 아님\)/, '스크랩 라인을 「CBAM 신고 대상」이라 부른다');
 
+// [run12 후속 P0] 공정을 저장할 때 생산라인을 지우고 새 id로 다시 만들면, 라인 id를 가리키는 전구물질 배분이 끊겨
+// 전구물질 몫이 0이 된다(기준 SEE 3.764 → 0.022). 남은 라인은 같은 id로 갱신해야 한다.
+const processesPage = readFileSync('src/app/processes/page.tsx', 'utf8');
+assert.doesNotMatch(processesPage, /Promise\.all\(existingLines\.map\(\(line\) => deleteLocalItem\('product_output_lines'/, '공정 저장이 생산라인을 전부 지우고 다시 만든다 — 전구물질 배분이 끊긴다');
+assert.match(processesPage, /existing_id: line\.id/, '수정 폼이 기존 라인의 id를 들고 있지 않다');
+assert.match(processesPage, /updateLocalItem\('product_output_lines', \{ \.\.\.existing, \.\.\.fields \}\)/, '기존 라인을 같은 id로 갱신하지 않는다');
+
 console.log('run11 P1 verification passed (기간 오탐 · 전력 산정근거 잇기 · 전구물질 기대 · 화면 문안).');
