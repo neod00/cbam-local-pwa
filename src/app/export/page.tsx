@@ -307,8 +307,10 @@ export default function ExportPage() {
     }, [reportableResults]);
 
     const readiness = useMemo(
-        () => evaluateEuExportReadiness({ processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
-        [processes, productOutputLines, sourceStreams, precursors, products, validation?.cnCodeMap]
+        // 다운로드가 쓰는 것과 **같은 자료**로 점검한다. 종전에는 사업장·보고기간을 넘기지 않아,
+        // 화면은 「오류 0」인데 다운로드만 실패하거나 사업장 누락이 점검에 안 잡혔다(씨밤이 run11 P1-15).
+        () => evaluateEuExportReadiness({ installations, periods, processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
+        [installations, periods, processes, productOutputLines, sourceStreams, precursors, products, validation?.cnCodeMap]
     );
 
     const scenarioRiskSummary = useMemo(() => {
@@ -1192,7 +1194,7 @@ export default function ExportPage() {
                             <div className="mt-5 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3">
                                 <h3 className="text-sm font-semibold text-teal-900">Export 원칙</h3>
                                 <ul className="mt-2 space-y-2 text-xs leading-5 text-teal-900/80">
-                                    <li>원본 EU 템플릿 파일은 앱에 내장하지 않습니다.</li>
+                                    <li>공식 EU 템플릿(버전 {DEFAULT_EU_TEMPLATE_VERSION})을 앱에 내장해 기본으로 씁니다. 더 새 공식본이 있으면 업로드한 파일이 우선합니다.</li>
                                     <li>업로드한 파일은 브라우저 메모리에서만 처리합니다.</li>
                                     <li>공식 시트명, 서식, 수식, 영문 라벨은 유지합니다.</li>
                                     <li>A_InstData, B_EmInst, C_Emissions&Energy, D_Processes, E_PurchPrec, Summary_Products의 확인된 입력 셀에 현재 로컬 데이터를 반영합니다.</li>

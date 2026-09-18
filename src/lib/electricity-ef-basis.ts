@@ -94,3 +94,32 @@ export function weightedAverageEf(sources: ReportElectricitySourceRow[] | undefi
         droppedRows,
     };
 }
+
+/** 5단계(생산공정)의 「계수 출처」 선택지 → 제7장 산정근거 유형. */
+const PROCESS_SOURCE_TO_BASIS: Record<string, ElectricityEfBasis> = {
+    COUNTRY_GRID_DEFAULT: 'GRID_AVERAGE',
+    DIRECT_TECHNICAL_LINK: 'DIRECT_LINK',
+    PPA: 'PPA',
+    INSTALLATION_OWN: 'SELF_GENERATION',
+    MIX: 'MULTI_SOURCE',
+};
+
+/**
+ * 제7장 산정근거를 정한다. 보고서 입력에서 고른 값이 있으면 그것, 없으면 **5단계에서 사람이 고른
+ * 계수 출처**를 잇는다. 종전에는 둘이 이어지지 않아, 같은 전력계수가 EU 사본에는 D.4(a)로 나가고
+ * 산정보고서에는 「미분류 — 기재 필요」로 나갔다(씨밤이 run11 P1-20). 앱이 새로 정하는 것이 아니라
+ * 사용자가 이미 고른 값을 옮기는 것이다. 전력을 입력하지 않았으면 잇지 않는다.
+ */
+export function resolveElectricityEfBasis(
+    reportBasis: ElectricityEfBasis | undefined,
+    process: { electricity_mwh: number; electricity_ef_source?: string }
+): ElectricityEfBasis {
+    if (reportBasis && reportBasis !== 'UNCLASSIFIED') {
+        return reportBasis;
+    }
+    if (process.electricity_mwh > 0 && process.electricity_ef_source) {
+        return PROCESS_SOURCE_TO_BASIS[process.electricity_ef_source] ?? 'UNCLASSIFIED';
+    }
+    return 'UNCLASSIFIED';
+}
+

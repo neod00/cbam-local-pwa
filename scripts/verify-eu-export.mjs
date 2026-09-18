@@ -423,6 +423,10 @@ const installation = {
   authorized_representative_name: 'Local CBAM Manager',
   email: 'cbam@example.com',
   telephone: '+82-32-000-0000',
+  // 운영자(법인) 식별은 EU 사본 셀로 나가지 않지만 준비도 점검 대상이다. UN/LOCODE는 일부러 비워 둔다.
+  operator_name: 'Main Factory Co., Ltd.',
+  operator_reg_number: '123-45-67890',
+  operator_address: '1 Steel Road, Incheon',
 };
 const period = {
   id: 'period-1',
@@ -555,10 +559,58 @@ assertEqual(String(validation.isValid), 'true', 'synthetic workbook validity');
 assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
 const readiness = euExport.evaluateEuExportReadiness(data, validation.cnCodeMap);
 assertEqual(String(readiness.errorCount), '0', 'readiness error count');
-assertEqual(String(readiness.warningCount), '0', 'readiness warning count');
+// 기준 픽스처의 전구물질은 간접 SEE 0.25에 전력 분해값이 없다 → EU 문서에 「1 MWh/t × 0.25」로 나간다는 경고 1건(run11 P1-17).
+assertEqual(String(readiness.warningCount), '2', 'readiness warning count (bridge-less precursor indirect SEE + empty UN/LOCODE)');
+assertEqual(String(readiness.issues.some((issue) => issue.message.includes('1 MWh/t × 0.25'))), 'true', 'run11 P1-17: bridge-less indirect SEE is announced');
+const bridgedReadiness = euExport.evaluateEuExportReadiness({
+  ...data,
+  precursors: [{ ...precursor, indirect_electricity_mwh_per_t: 0.5, indirect_electricity_factor_tco2e_per_mwh: 0.5 }],
+}, validation.cnCodeMap);
+assertEqual(String(bridgedReadiness.issues.some((issue) => issue.message.includes('1 MWh/t'))), 'false', 'run11 P1-17: supplier electricity breakdown clears the warning');
+
+// [run11 P1-12] 철강 가공품 공정에 구매 전구물질이 하나도 없으면 알린다. 사람이 「없음」을 확인하면 조용해진다.
+const noPrecursorReadiness = euExport.evaluateEuExportReadiness({ ...data, precursors: [] }, validation.cnCodeMap);
+assertEqual(String(noPrecursorReadiness.issues.some((issue) => issue.message.includes('구매 전구물질이 없습니다'))), 'true', 'run11 P1-12: missing precursors are announced');
+const confirmedNoPrecursorReadiness = euExport.evaluateEuExportReadiness({
+  ...data,
+  processes: [{ ...process, no_purchased_precursors: true }],
+  precursors: [],
+}, validation.cnCodeMap);
+assertEqual(String(confirmedNoPrecursorReadiness.issues.some((issue) => issue.message.includes('구매 전구물질이 없습니다'))), 'false', 'run11 P1-12: confirmed "no purchased precursors" is quiet');
+
+// [run11 P1-15·16] 사업장을 넘겨받으면 법정 필수 누락과 UN/LOCODE 공란을 알린다. 넘기지 않으면 결과가 그대로다.
+const installationReadiness = euExport.evaluateEuExportReadiness({
+  ...data,
+  installations: [{ ...installation, operator_name: '', operator_reg_number: undefined, operator_address: undefined }],
+}, validation.cnCodeMap);
+assertEqual(String(installationReadiness.issues.filter((issue) => issue.area === '사업장').length), '2', 'run11 P1-16: operator identity and UN/LOCODE gaps are announced');
+assertEqual(String(installationReadiness.warningCount), String(installationReadiness.issues.filter((issue) => issue.severity === 'warning').length), 'warning count must include every listed warning');
+assertEqual(String(installationReadiness.warningCount), '3', 'installation warnings are counted (2) on top of the bridge warning (1)');
+assertEqual(String(euExport.evaluateEuExportReadiness({ ...data, installations: undefined }, validation.cnCodeMap).issues.filter((issue) => issue.area === '사업장').length), '0', 'callers that do not pass installations keep their results');
+const completeInstallationReadiness = euExport.evaluateEuExportReadiness({
+  ...data,
+  installations: [{ ...installation, operator_name: 'Op Co', operator_reg_number: '123-45-67890', operator_address: '1 Steel Road', unlocode: 'KRINC' }],
+}, validation.cnCodeMap);
+assertEqual(String(completeInstallationReadiness.issues.filter((issue) => issue.area === '사업장').length), '0', 'run11 P1-16: complete installation is quiet');
+
+// [run11 P1-14] 제품도 활동수준 역할도 없는 생산라인은 배출을 가져가지만 EU 문서에 행이 없다.
+const unassignedLineReadiness = euExport.evaluateEuExportReadiness({
+  ...data,
+  productOutputLines: [outputLine, { ...outputLine, id: 'output-line-unassigned', product_id: undefined, activity_level_role: undefined, name: 'Unassigned line', output_mass_t: 10 }],
+}, validation.cnCodeMap);
+assertEqual(String(unassignedLineReadiness.issues.some((issue) => issue.message.includes("'Unassigned line'"))), 'true', 'run11 P1-14: unassigned output line is announced');
+
+// [run11 P1-10] 전력을 쓰는 공정이 둘 이상인데 배분 근거가 없으면 알린다.
+const sharedMeterReadiness = euExport.evaluateEuExportReadiness({
+  ...data,
+  processes: [process, { ...process, id: 'process-second', name: 'Second line' }],
+  productOutputLines: [outputLine, { ...outputLine, id: 'output-line-second', process_id: 'process-second' }],
+  sourceStreams: [sourceStream, { ...sourceStream, id: 'source-stream-second', process_id: 'process-second' }],
+}, validation.cnCodeMap);
+assertEqual(String(sharedMeterReadiness.issues.filter((issue) => issue.message.includes('배분 근거')).length), '2', 'run11 P1-10: shared electricity meter without a note is announced per process');
 const scopedReadiness = euExport.evaluateEuExportReadiness(scopedData, validation.cnCodeMap);
 assertEqual(String(scopedReadiness.errorCount), '0', 'non-CBAM coproduct readiness error count');
-assertEqual(String(scopedReadiness.warningCount), '0', 'non-CBAM coproduct readiness warning count');
+assertEqual(String(scopedReadiness.warningCount), '2', 'non-CBAM coproduct readiness warning count (same two warnings only)');
 const scopedWrites = euExport.createEuTemplateExportCellWrites(scopedData, validation.cnCodeMap);
 assertEqual(String(scopedWrites.filter((write) => write.sheetName === 'Summary_Products').length), '3', 'only one reportable Summary_Products row');
 assertEqual(
@@ -669,7 +721,7 @@ const precursorEvidenceReadiness = euExport.evaluateEuExportReadiness({
     },
   ],
 }, validation.cnCodeMap);
-assertEqual(String(precursorEvidenceReadiness.warningCount), '2', 'precursor evidence warning count');
+assertEqual(String(precursorEvidenceReadiness.warningCount), '5', 'precursor evidence warning count (2 evidence + 2 bridge-less indirect + UN/LOCODE)');
 assertEqual(
   String(precursorEvidenceReadiness.issues.some((issue) => issue.message.includes('기본값을 사용하는 사유'))),
   'true',
@@ -689,7 +741,7 @@ const allocationReadiness = euExport.evaluateEuExportReadiness({
   ],
 }, validation.cnCodeMap);
 assertEqual(String(allocationReadiness.errorCount), '1', 'allocation readiness error count');
-assertEqual(String(allocationReadiness.warningCount), '2', 'allocation readiness warning count');
+assertEqual(String(allocationReadiness.warningCount), '4', 'allocation readiness warning count');
 assertEqual(
   String(allocationReadiness.issues.some((issue) => issue.message.includes('제품 생산라인 합계'))),
   'true',

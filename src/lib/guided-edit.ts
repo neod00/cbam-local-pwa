@@ -234,6 +234,8 @@ export interface ElectricityDraft {
     mwh: number;
     ef: number;
     efSource: string;
+    /** 공용 계량기에서 나눈 값이면 그 근거. 비면 undefined로 지운다. */
+    allocationNote?: string;
 }
 
 export function validateElectricityDraft(draft: ElectricityDraft): string | null {
@@ -252,6 +254,7 @@ export function buildElectricityUpdate(existing: ProductionProcess, draft: Elect
         electricity_mwh: draft.mwh,
         electricity_ef_tco2e_per_mwh: draft.ef,
         electricity_ef_source: draft.efSource || undefined,
+        electricity_allocation_note: draft.allocationNote?.trim() || undefined,
     };
 }
 

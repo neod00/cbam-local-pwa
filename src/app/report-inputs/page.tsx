@@ -18,7 +18,7 @@ import type {
 } from '@/lib/local-db';
 import { getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
 import { getSectorParameters, SECTOR_PARAM_CITATION } from '@/lib/sector-parameters';
-import { ELECTRICITY_EF_BASIS_LABEL, isActualBasis } from '@/lib/electricity-ef-basis';
+import { ELECTRICITY_EF_BASIS_LABEL, isActualBasis, resolveElectricityEfBasis } from '@/lib/electricity-ef-basis';
 import type { ElectricityEfBasis } from '@/lib/local-db';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import Link from 'next/link';
@@ -282,7 +282,8 @@ export default function ReportInputsPage() {
                 <div className="space-y-4">
                     {processes.map((process) => {
                         const entry = inputs.electricity_ef_meta?.find((item) => item.process_id === process.id) ?? { process_id: process.id };
-                        const basis: ElectricityEfBasis = entry.basis ?? 'UNCLASSIFIED';
+                        // 5단계에서 고른 계수 출처를 이어 보여준다 — 같은 것을 두 번 고르게 하지 않는다(run11 P1-20).
+                        const basis: ElectricityEfBasis = resolveElectricityEfBasis(entry.basis, process);
 
                         // 함수형 업데이트 — 같은 공정의 여러 칸을 빠르게 바꿔도 서로 덮어쓰지 않는다.
                         function update(next: Partial<typeof entry>) {

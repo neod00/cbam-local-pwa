@@ -373,7 +373,7 @@ export default function InstallationsPage() {
                                 id="installation-unlocode"
                                 label="UN/LOCODE"
                                 value={newItem.unlocode ?? ''}
-                                placeholder="선택 입력"
+                                placeholder="5자리 도시·항만 코드 — 예: KRPUS(부산), KRINC(인천)"
                                 onChange={(value) => setNewItem({ ...newItem, unlocode: value })}
                             />
                             <FormInput
@@ -470,7 +470,23 @@ export default function InstallationsPage() {
                                         <Phone className="h-4 w-4 shrink-0 text-slate-400" />
                                         <span className="truncate">{item.telephone || '담당자 전화번호 미입력'}</span>
                                     </p>
+                                    <p className="truncate">운영자(법인): {item.operator_name || '미입력'}</p>
                                 </div>
+                                {/* 「법정 필수」라고 표시한 칸이 비어도 저장 후 아무 말이 없었다(씨밤이 run11 P1-16). */}
+                                {[
+                                    !item.operator_name?.trim() ? '운영자(법인)명' : '',
+                                    !item.operator_reg_number?.trim() ? '법인/활동 등록번호' : '',
+                                    !item.operator_address?.trim() ? '운영자 주소' : '',
+                                ].filter(Boolean).length > 0 && (
+                                    <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                                        법정 필수 항목이 비어 있습니다:{' '}
+                                        {[
+                                            !item.operator_name?.trim() ? '운영자(법인)명' : '',
+                                            !item.operator_reg_number?.trim() ? '법인/활동 등록번호' : '',
+                                            !item.operator_address?.trim() ? '운영자 주소' : '',
+                                        ].filter(Boolean).join(' · ')}. 검증인이 반드시 확인하며, 산정보고서에 「기재 필요」로 남습니다.
+                                    </p>
+                                )}
                                 <Button type="button" variant="secondary" className="mt-4 min-h-9 px-3 py-1.5" onClick={() => startEditInstallation(item)}>
                                     <Pencil className="mr-1.5 h-4 w-4" />
                                     수정

@@ -118,6 +118,16 @@ export function createSourceStreamValidationErrors(sourceStream: SourceStreamDra
         nextErrors.emission_factor_tco2e_per_unit = '배출계수는 0 이상이어야 합니다.';
     }
 
+    // 연료의 배출계수가 0이면 배출이 조용히 0 tCO₂e로 저장된다(씨밤이 run11 P1-06).
+    // 바이오매스 100%만 예외다 — 그 경우 화석 배출이 0인 것이 맞다.
+    if (
+        sourceStream.stream_type === 'FUEL'
+        && sourceStream.emission_factor_tco2e_per_unit <= 0
+        && sourceStream.biomass_fraction < 1
+    ) {
+        nextErrors.emission_factor_tco2e_per_unit = '연료 배출원은 배출계수를 0보다 크게 입력하세요. 비워 두면 배출이 0으로 저장됩니다.';
+    }
+
     if (sourceStream.stream_type !== 'FUEL' && sourceStream.emission_factor_tco2e_per_unit <= 0) {
         nextErrors.emission_factor_tco2e_per_unit = '공정 원료 배출원은 배출계수를 0보다 크게 입력하세요.';
     }
@@ -195,6 +205,15 @@ export interface GuidedStreamKind {
     allowsNegative: boolean;
     /** 순발열량 칸을 보여주는가(연료만) */
     needsNcv: boolean;
+    /** 순발열량 칸의 도움말. 고지서 열량(총발열량)과 순발열량을 혼동하지 않게 한다. */
+    ncvHint?: string;
+    /** 이 값(GJ/단위)을 넘으면 총발열량을 적은 것으로 보고 화면에서 경고한다. */
+    ncvGrossThreshold?: number;
+    /**
+     * 고지서·전표가 **리터(L)** 인 액체연료. 화면에서는 L로 받고, 저장할 때 밀도로 t 환산한다 —
+     * EU 템플릿(B_EmInst)의 활동자료 단위는 t·Nm³뿐이라 저장 단위는 t여야 한다.
+     */
+    litres?: { densityKgPerL: number };
     defaults: Pick<
         SourceStreamDraft,
         'stream_type' | 'method' | 'activity_unit' | 'ncv_gj_per_unit'
@@ -214,6 +233,8 @@ export const GUIDED_STREAM_KINDS: GuidedStreamKind[] = [
         factorHint: '국가 인벤토리 기본값 자리값입니다. 자기 성적서 값이 있으면 그것으로 바꾸세요.',
         allowsNegative: false,
         needsNcv: true,
+        ncvHint: '자리값 0.037은 임시값입니다. 고지서의 MJ는 **총발열량**(약 42~43 MJ/Nm³)이라 그대로 쓰면 안 됩니다 — 순발열량은 그보다 약 10% 낮습니다(약 0.0385~0.039 GJ/Nm³). 도시가스사에 순발열량을 물어 그 값을 넣으세요.',
+        ncvGrossThreshold: 0.041,
         defaults: {
             stream_type: 'FUEL', method: 'Combustion', activity_unit: 'Nm3',
             ncv_gj_per_unit: 0.037, emission_factor_tco2e_per_unit: 56.1,
@@ -228,12 +249,51 @@ export const GUIDED_STREAM_KINDS: GuidedStreamKind[] = [
         activityLabel: '연간 사용량 (t)',
         activityHint: '연료 구매대장·계량기 검침 합계',
         factorLabel: '배출계수 (tCO₂e/TJ)',
-        factorHint: 'EU/IPCC 기본값 자리값입니다. 자기 성적서 값이 있으면 그것으로 바꾸세요.',
+        factorHint: '자리값 73은 임시값입니다. 유종마다 다릅니다(경유 74.1 · 등유 71.9 · LPG 63.1 · LNG 56.1, IPCC 2006). 자기 성적서 값이 있으면 그것으로 바꾸세요.',
         allowsNegative: false,
         needsNcv: true,
+        ncvHint: '자리값 48은 LNG급 임시값입니다. 유종마다 다릅니다(경유 43.0 · 등유 43.8 · LPG 47.3 GJ/t, IPCC 2006). 경유·등유는 아래 「리터(L)」 유형을 쓰면 환산까지 해 줍니다.',
         defaults: {
             stream_type: 'FUEL', method: 'Combustion', activity_unit: 't',
             ncv_gj_per_unit: 48, emission_factor_tco2e_per_unit: 73,
+            emission_factor_basis: 'PER_TJ', oxidation_factor: 1, conversion_factor: 1,
+            fossil_fraction: 1, biomass_fraction: 0, factor_source_type: 'EU_OR_IPCC_DEFAULT',
+        },
+    },
+    {
+        key: 'fuel-diesel-l',
+        label: '연료 연소 — 경유 (L) · 지게차·비상발전기',
+        hint: '주유 전표·구매대장의 리터 합계. 저장할 때 밀도 0.835 kg/L로 t 환산합니다',
+        activityLabel: '연간 사용량 (L)',
+        activityHint: '주유 전표 12개월 합계(리터). 앱이 × 0.835 kg/L ÷ 1,000으로 t 환산해 저장합니다.',
+        factorLabel: '배출계수 (tCO₂e/TJ)',
+        factorHint: 'IPCC 2006 경유(Gas/Diesel Oil) 기본값 74.1입니다. 자기 성적서 값이 있으면 그것으로 바꾸세요.',
+        allowsNegative: false,
+        needsNcv: true,
+        ncvHint: 'IPCC 2006 경유 기본값 43.0 GJ/t입니다(t 기준 — 환산 후 단위).',
+        litres: { densityKgPerL: 0.835 },
+        defaults: {
+            stream_type: 'FUEL', method: 'Combustion', activity_unit: 't',
+            ncv_gj_per_unit: 43, emission_factor_tco2e_per_unit: 74.1,
+            emission_factor_basis: 'PER_TJ', oxidation_factor: 1, conversion_factor: 1,
+            fossil_fraction: 1, biomass_fraction: 0, factor_source_type: 'EU_OR_IPCC_DEFAULT',
+        },
+    },
+    {
+        key: 'fuel-kerosene-l',
+        label: '연료 연소 — 등유 (L) · 난방·건조',
+        hint: '구매대장의 리터 합계. 저장할 때 밀도 0.80 kg/L로 t 환산합니다. 제품 생산과 무관한 사무동·기숙사 난방은 산정 경계 밖일 수 있습니다 — 확인 필요(규정)',
+        activityLabel: '연간 사용량 (L)',
+        activityHint: '구매대장 12개월 합계(리터). 앱이 × 0.80 kg/L ÷ 1,000으로 t 환산해 저장합니다.',
+        factorLabel: '배출계수 (tCO₂e/TJ)',
+        factorHint: 'IPCC 2006 등유(Other Kerosene) 기본값 71.9입니다.',
+        allowsNegative: false,
+        needsNcv: true,
+        ncvHint: 'IPCC 2006 등유 기본값 43.8 GJ/t입니다(t 기준 — 환산 후 단위).',
+        litres: { densityKgPerL: 0.8 },
+        defaults: {
+            stream_type: 'FUEL', method: 'Combustion', activity_unit: 't',
+            ncv_gj_per_unit: 43.8, emission_factor_tco2e_per_unit: 71.9,
             emission_factor_basis: 'PER_TJ', oxidation_factor: 1, conversion_factor: 1,
             fossil_fraction: 1, biomass_fraction: 0, factor_source_type: 'EU_OR_IPCC_DEFAULT',
         },
@@ -291,20 +351,25 @@ export const GUIDED_STREAM_KINDS: GuidedStreamKind[] = [
     },
 ];
 
+/** 유형을 **키로** 찾는다. 배열 위치로 찾으면 유형을 하나 끼워 넣는 순간 다른 유형을 가리킨다. */
+function guidedKindByKey(key: string): GuidedStreamKind {
+    return GUIDED_STREAM_KINDS.find((kind) => kind.key === key) ?? GUIDED_STREAM_KINDS[0];
+}
+
 /** 저장된 배출원이 어느 입력 유형인지 되짚는다(수정 폼이 알맞은 칸을 그리도록). */
 export function matchGuidedStreamKind(stream: Pick<SourceStream,
     'stream_type' | 'method' | 'activity_unit' | 'activity_data'>): GuidedStreamKind {
     if (stream.stream_type === 'FUEL') {
         return GUIDED_STREAM_KINDS.find((kind) =>
-            kind.defaults.stream_type === 'FUEL' && kind.defaults.activity_unit === stream.activity_unit
-        ) ?? GUIDED_STREAM_KINDS[1];
+            kind.defaults.stream_type === 'FUEL' && !kind.litres && kind.defaults.activity_unit === stream.activity_unit
+        ) ?? guidedKindByKey('fuel-mass');
     }
 
     if (stream.method === 'Mass balance') {
         return GUIDED_STREAM_KINDS.find((kind) =>
             kind.key === (stream.activity_data < 0 ? 'mass-balance-out' : 'mass-balance-in')
-        ) ?? GUIDED_STREAM_KINDS[3];
+        ) ?? guidedKindByKey('mass-balance-in');
     }
 
-    return GUIDED_STREAM_KINDS[2];
+    return guidedKindByKey('process-emissions');
 }
