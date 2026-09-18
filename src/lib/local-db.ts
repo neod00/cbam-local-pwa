@@ -681,6 +681,25 @@ export function parseBackupFile(content: string): CbamBackupFile {
   };
 }
 
+/**
+ * 설정(settings)은 key당 한 건이어야 한다. 앱은 같은 key를 갱신만 하지만, 외부에서 만든 백업이나
+ * 시험 잔재에는 같은 key가 여러 건 들어 있을 수 있다 — 그대로 넣으면 어느 값이 읽힐지 알 수 없고,
+ * 앞사람의 등록정보가 다음 백업에 계속 실린다(씨밤이 run11 P2-34). 가장 최근에 고친 한 건만 남긴다.
+ */
+export function dedupeBackupRows<T>(storeName: string, rows: T[]): T[] {
+  if (storeName !== 'settings') return rows;
+  const latestByKey = new Map<string, T>();
+  for (const row of rows) {
+    const setting = row as unknown as { key?: string; updated_at?: string };
+    if (!setting.key) continue;
+    const kept = latestByKey.get(setting.key) as unknown as { updated_at?: string } | undefined;
+    if (!kept || (setting.updated_at ?? '') >= (kept.updated_at ?? '')) {
+      latestByKey.set(setting.key, row);
+    }
+  }
+  return Array.from(latestByKey.values());
+}
+
 export async function importLocalBackup(backup: CbamBackupFile): Promise<void> {
   const db = await openDatabase();
 
@@ -690,7 +709,7 @@ export async function importLocalBackup(backup: CbamBackupFile): Promise<void> {
     for (const storeName of STORE_NAMES) {
       const store = transaction.objectStore(storeName);
       store.clear();
-      for (const item of backup.data[storeName]) {
+      for (const item of dedupeBackupRows<unknown>(storeName, backup.data[storeName] as unknown[])) {
         store.put(item);
       }
     }

@@ -18,6 +18,7 @@ import {
 } from '@/lib/activity-data-template';
 import { downloadBlob } from '@/lib/eu-template-export';
 import {
+    findDefaultValueReference,
     parseBenchmarkWorkbook,
     parseDefaultValueWorkbook,
     type ImportedBenchmarkReference,
@@ -112,6 +113,56 @@ function ReferenceSummaryCard({ summary }: { summary?: ReferenceWorkbookSummary 
                         </div>
                     ))}
                 </div>
+            )}
+        </div>
+    );
+}
+
+/**
+ * 가져온 기본값 파일을 **앱 안에서** 조회한다. 종전에는 미리보기가 시멘트 5행뿐이라, 앱이 채운 기본값이
+ * 파일 원본과 같은지 확인하려면 엑셀을 직접 열어야 했다(씨밤이 run11 P2-33).
+ */
+function DefaultValueLookup() {
+    const [reference, setReference] = useState<ImportedDefaultValueReference>();
+    const [country, setCountry] = useState('');
+    const [cn, setCn] = useState('');
+
+    useEffect(() => {
+        getLocalSetting<ImportedDefaultValueReference>('reference:default-values').then(setReference);
+    }, []);
+
+    if (!reference) {
+        return null;
+    }
+
+    const countries = Array.from(new Set(reference.rows.map((row) => row.country))).filter((name) => !name.startsWith('_')).sort((a, b) => a.localeCompare(b));
+    const cnDigits = cn.replace(/\D/g, '');
+    const match = country && cnDigits.length >= 4 ? findDefaultValueReference(reference, country, cnDigits, '2026') : undefined;
+    const show = (value?: number | null) => (value === undefined || value === null ? 'N/A' : String(value));
+
+    return (
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-sm font-semibold text-slate-900">기본값 조회 — 파일 원본 값 확인</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">전구물질 화면의 「기본값 채우기」가 넣는 값의 원본 행입니다. 국가와 CN(4자리 이상)을 넣으세요.</p>
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <select aria-label="기본값 조회 국가" className="h-11 rounded-xl border border-slate-200 px-3 text-sm" value={country} onChange={(event) => setCountry(event.target.value)}>
+                    <option value="">— 국가 —</option>
+                    {countries.map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+                <input aria-label="기본값 조회 CN 코드" className="h-11 rounded-xl border border-slate-200 px-3 text-sm" inputMode="numeric" value={cn} onChange={(event) => setCn(event.target.value)} placeholder="CN 코드 예: 72230019" />
+            </div>
+            {country && cnDigits.length >= 4 && !match && (
+                <p className="mt-3 text-sm text-amber-700">{country} · CN {cnDigits}에 맞는 행이 없습니다. 파일은 4·6자리 행으로 묶여 있는 경우가 많습니다.</p>
+            )}
+            {match && (
+                <dl className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-6">
+                    <div><dt className="text-xs text-slate-500">매칭 행</dt><dd className="font-semibold text-slate-900">CN {match.cn_code}</dd></div>
+                    <div><dt className="text-xs text-slate-500">직접</dt><dd className="font-semibold text-slate-900">{show(match.direct_default)}</dd></div>
+                    <div><dt className="text-xs text-slate-500">간접</dt><dd className="font-semibold text-slate-900">{show(match.indirect_default)}</dd></div>
+                    <div><dt className="text-xs text-slate-500">2026 (mark-up 포함)</dt><dd className="font-semibold text-slate-900">{show(match.markup_2026)}</dd></div>
+                    <div><dt className="text-xs text-slate-500">2027</dt><dd className="font-semibold text-slate-900">{show(match.markup_2027)}</dd></div>
+                    <div><dt className="text-xs text-slate-500">2028~</dt><dd className="font-semibold text-slate-900">{show(match.markup_2028_onwards)}</dd></div>
+                </dl>
             )}
         </div>
     );
@@ -477,6 +528,7 @@ export default function UploadPage() {
                             </label>
                         </div>
                         <ReferenceSummaryCard summary={defaultValueSummary} />
+                        <DefaultValueLookup key={defaultValueSummary?.imported_at ?? 'none'} />
                     </div>
                 </div>
             </SectionCard>

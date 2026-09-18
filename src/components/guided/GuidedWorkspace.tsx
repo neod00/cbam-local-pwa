@@ -115,6 +115,8 @@ export function GuidedWorkspace() {
             }
             await startNewProject();
             window.localStorage.removeItem(CBAM_LAST_BACKUP_AT_KEY);
+            // reload()는 「보고 있던 단계」를 고정한다 — 새 프로젝트에서는 그 기억도 지워야 1단계로 돌아간다(run11 P2-25).
+            activeStepRef.current = null;
             setSelectedStep(null);
             setSelectedProcessId('ALL');
             await reload();

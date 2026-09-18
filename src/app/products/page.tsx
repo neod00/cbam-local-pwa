@@ -937,10 +937,10 @@ export default function ProductsPage() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
                         <FileSpreadsheet className="h-4 w-4 text-blue-700" />
-                        CBAM 대상 가능 품목
+                        CN이 CBAM 목록에 있는 품목
                     </div>
                     <div className="mt-3 text-2xl font-semibold text-slate-950">{productSummary.annexCandidateCount}개</div>
-                    <p className="mt-1 text-xs text-slate-500">대표 규칙 기준 대상 가능 품목</p>
+                    <p className="mt-1 text-xs text-slate-500">CN 코드 기준입니다. EU에 팔지 않아 「비CBAM 공동산출물」로 둔 품목도 셉니다 — 신고 대상 수는 지도 2단계를 보세요.</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">

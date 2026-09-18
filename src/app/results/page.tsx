@@ -161,7 +161,7 @@ export default function ResultsPage() {
                 <StatCard label="CBAM 신고 라인" value={summary.lineCount} helper={`제품라인 ${summary.productLineCount}개 · 배분 참고 ${summary.allocationOnlyCount}개`} icon={Factory} tone="info" />
                 <StatCard label="총 생산량" value={formatNumber(summary.totalOutput)} helper="tonne" icon={Scale} tone="pending" />
                 <StatCard label="CBAM 기준 배출량" value={formatNumber(summary.allocatedEmissions)} helper="tCO2e" icon={Gauge} tone="success" />
-                <StatCard label="확인 필요" value={summary.warningCount} helper="경고 항목" icon={AlertTriangle} tone="warning" />
+                <StatCard label="확인 필요" value={summary.warningCount} helper="산정 경고만 — 내보내기 점검은 지도 7단계·Export" icon={AlertTriangle} tone="warning" />
             </div>
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">

@@ -54,7 +54,7 @@ export function describeSeeFlowIndirect(
                 basisNote: 'EU 공식 CN 목록상 간접배출 비관련',
                 indirectLabel: '간접 SEE (보고용)',
                 indirectNote: '인증서 계산에서만 제외 · 입력 필수',
-                basisVsTotalNote: '이 품목은 간접분이 인증서 산정 기준에서 빠지지만 보고에는 반드시 포함됩니다 — 그래서 기준과 총 SEE가 다릅니다.',
+                basisVsTotalNote: '이 품목은 간접분 — 우리 공장 전력(②)과 구매 원료가 지니고 온 간접분(③의 전기 몫) — 이 인증서 산정 기준에서 빠지지만 보고에는 반드시 포함됩니다. 그래서 기준과 총 SEE가 다릅니다.',
                 // 항등식은 「전부 비관련」일 때만 성립한다. 포함이 섞이면 그 제품의 기준 SEE에
                 // 이미 간접이 들어 있어 우변이 이중계상된다.
                 showTotalIdentity: true,

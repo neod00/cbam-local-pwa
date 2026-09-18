@@ -703,6 +703,24 @@ export default function ScenariosPage() {
                         <p className="mt-1 text-xs text-slate-500">제품 생산량 중 EU 수입자에게 넘어갈 물량 비율입니다.</p>
                     </div>
                     <div>
+                        <label htmlFor="scenario-import-tonnes" className="text-sm font-semibold text-slate-700">또는 EU 수입 예정량(t)</label>
+                        <input
+                            id="scenario-import-tonnes"
+                            type="number"
+                            min="0"
+                            step="1"
+                            disabled={summary.totalOutput <= 0}
+                            className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100 disabled:bg-slate-100"
+                            value={summary.totalOutput > 0 ? Math.round((summary.totalOutput * assumptions.eu_import_share_percent) / 100) : ''}
+                            onChange={(event) => {
+                                const tonnes = Number(event.target.value) || 0;
+                                const percent = Math.min(100, Math.max(0, (tonnes / summary.totalOutput) * 100));
+                                void updateAssumptions({ ...assumptions, eu_import_share_percent: Math.round(percent * 10000) / 10000 });
+                            }}
+                        />
+                        <p className="mt-1 text-xs text-slate-500">톤으로 적으면 위 비율로 바꿔 저장합니다(신고 대상 생산량 {formatInteger(summary.totalOutput)} t 기준). 품목이 여럿이면 같은 비율이 모두에 적용됩니다.</p>
+                    </div>
+                    <div>
                         <label className="text-sm font-semibold text-slate-700">기본값 연도</label>
                         <select
                             className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
@@ -773,6 +791,7 @@ export default function ScenariosPage() {
                             value={assumptions.certificate_price_eur}
                             onChange={(event) => void updateAssumptions({ ...assumptions, certificate_price_eur: Number(event.target.value) || 0 })}
                         />
+                        <p className="mt-1 text-xs text-slate-500">직접 넣는 가정값입니다 — 앱이 시세를 가져오지 않습니다. EU 집행위가 공표하는 CBAM 인증서 가격(2026년은 분기별)을 확인해 넣고, 언제 값인지 메모해 두세요. CBAM factor·CSCF도 같은 성격의 가정값입니다.</p>
                     </div>
                 </div>
                 <div className="mt-4 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">

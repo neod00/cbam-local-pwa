@@ -557,6 +557,7 @@ export default function PrecursorsPage() {
                                 <option value="SUPPLIER_CONFIRMED">공급사 확인</option>
                                 <option value="VERIFIED">검증완료</option>
                             </select>
+                            <p className="mt-1 text-xs leading-5 text-slate-500">미검증 = 받은 값을 그대로 넣음 · 공급사 확인 = 공급사가 산정 근거(양식·기간·경계)를 문서로 확인해 줌 · 검증완료 = 제3자 검증기관의 검증서가 있음. 회신 메일만 받은 상태는 「미검증」입니다.</p>
                         </div>
                         {newItem.data_mode !== 'DEFAULT' && newItem.verification_status === 'UNVERIFIED' && (
                             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 md:col-span-3">
