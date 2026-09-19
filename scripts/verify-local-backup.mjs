@@ -258,4 +258,21 @@ assert.equal(legacyAllocationBackup.data.product_output_lines[0].activity_level_
 assert.equal(legacyAllocationBackup.data.source_streams[0].shared_meter, undefined);
 assert.equal(getBackupCompatibilityMessage(legacyAllocationBackup.manifest), '');
 
+// ── internal_transfers (in-plant transfers) ──
+// A backup without the store still opens (older backups). A backup that carries transfers is written as
+// format_version 2 so that an older app refuses it instead of silently dropping the transfers.
+const emptyStores = { installations: [], products: [], periods: [], processes: [], product_output_lines: [], source_streams: [], precursors: [], settings: [] };
+const noTransferBackup = createLocalBackup({ ...emptyStores, internal_transfers: [] });
+assert.equal(noTransferBackup.manifest.format_version, 1, 'a backup without transfers must stay readable by older apps');
+assert.equal(createLocalBackup(emptyStores).manifest.format_version, 1, 'data built before the store existed must still produce a backup');
+const transferRow = { id: 'internal_transfer_1', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z', source_process_id: 'a', target_process_id: 'b', mass_t: 1227000 };
+const transferBackup = createLocalBackup({ ...emptyStores, internal_transfers: [transferRow] });
+assert.equal(transferBackup.manifest.format_version, 2, 'a backup with transfers must be version 2');
+assert.equal(transferBackup.manifest.counts.internal_transfers, 1);
+const transferRoundTrip = parseBackupFile(JSON.stringify(transferBackup));
+assert.equal(transferRoundTrip.data.internal_transfers[0].mass_t, 1227000, 'transfers must survive a round trip');
+const legacyNoStore = parseBackupFile(JSON.stringify({ manifest: { format: 'cbam-local-backup', format_version: 1 }, data: emptyStores }));
+assert.deepEqual(JSON.parse(JSON.stringify(legacyNoStore.data.internal_transfers)), [], 'an older backup gets an empty transfer store');
+assert.throws(() => parseBackupFile(JSON.stringify({ manifest: { format: 'cbam-local-backup', format_version: 3 }, data: emptyStores })), /지원하지 않는/, 'unknown future versions are refused');
+
 console.log('Local backup verification passed (할당로직 optional 필드 왕복·옛 백업 호환 포함).');

@@ -6,6 +6,7 @@ export type StoreName =
   | "product_output_lines"
   | "source_streams"
   | "precursors"
+  | "internal_transfers"
   | "settings";
 
 export interface LocalEntity {
@@ -350,6 +351,27 @@ export interface PurchasedPrecursor extends LocalEntity {
   output_allocations?: PrecursorOutputAllocation[];
 }
 
+/**
+ * 사내 이송 — 한 생산공정의 산출물을 같은 사업장의 다른 생산공정이 전구물질로 쓴 양.
+ * Implementing Regulation (EU) 2025/2547 부속서 III: 사업장 안의 다른 생산공정에서 만든 전구물질은
+ * (a) 그 전구물질의 기간 평균 직접·간접 SEE와 (b) 각 생산공정에서 쓴 양으로 처리한다.
+ * 구매 전구물질(precursors)과 섞지 않는다 — EU 템플릿은 사내 이송을 D_Processes (c)칸으로 받고,
+ * E_PurchPrec에도 실리면 두 경로를 모두 더해 받는 제품의 SEE가 두 배가 된다.
+ * 설계: docs/internal-precursor-design.md
+ */
+export interface InternalTransfer extends LocalEntity {
+  period_id?: string;
+  /** 만든 공정 */
+  source_process_id: string;
+  /** 어느 제품 라인의 산출물인가. 비우면 보내는 공정의 라인이 하나일 때만 자동으로 정해진다. */
+  source_output_line_id?: string;
+  /** 받은 공정 */
+  target_process_id: string;
+  /** 받은 공정이 이 기간에 소비한 양 (t) */
+  mass_t: number;
+  note?: string;
+}
+
 export interface AppSetting extends LocalEntity {
   key: string;
   value: unknown;
@@ -361,7 +383,11 @@ export const CBAM_LAST_BACKUP_AT_KEY = "cbam-local:last-backup-at";
 
 export interface CbamBackupManifest {
   format: "cbam-local-backup";
-  format_version: 1;
+  /**
+   * 2 = 사내 이송(internal_transfers)이 들어 있다. 이송을 모르는 옛 앱이 이 백업을 열면 이송을 조용히 버려
+   * 받는 제품의 SEE가 낮아진다 — 그래서 옛 앱이 거부하도록 버전을 올린다. 이송이 없으면 1로 써서 옛 앱도 읽는다.
+   */
+  format_version: 1 | 2;
   app_name: typeof CBAM_LOCAL_APP_NAME;
   app_version: string;
   exported_at: string;
@@ -392,11 +418,13 @@ type StoreEntityMap = {
   product_output_lines: ProductOutputLine;
   source_streams: SourceStream;
   precursors: PurchasedPrecursor;
+  internal_transfers: InternalTransfer;
   settings: AppSetting;
 };
 
 const DB_NAME = "cbam-local";
-const DB_VERSION = 5;
+// 6: internal_transfers 저장소 추가(사내 이송). 업그레이드는 없는 저장소만 만든다 — 기존 자료는 건드리지 않는다.
+const DB_VERSION = 6;
 const STORE_NAMES: StoreName[] = [
   "installations",
   "products",
@@ -405,6 +433,7 @@ const STORE_NAMES: StoreName[] = [
   "product_output_lines",
   "source_streams",
   "precursors",
+  "internal_transfers",
   "settings",
 ];
 
@@ -571,7 +600,7 @@ export function createLocalBackup(data: BackupData, exportedAt = nowIso()): Cbam
   return {
     manifest: {
       format: "cbam-local-backup",
-      format_version: 1,
+      format_version: (data.internal_transfers ?? []).length > 0 ? 2 : 1,
       app_name: CBAM_LOCAL_APP_NAME,
       app_version: CBAM_LOCAL_APP_VERSION,
       exported_at: exportedAt,
@@ -584,6 +613,7 @@ export function createLocalBackup(data: BackupData, exportedAt = nowIso()): Cbam
         product_output_lines: data.product_output_lines.length,
         source_streams: data.source_streams.length,
         precursors: data.precursors.length,
+        internal_transfers: (data.internal_transfers ?? []).length,
         settings: data.settings.length,
       },
     },
@@ -643,6 +673,7 @@ export async function exportLocalBackup(): Promise<CbamBackupFile> {
     product_output_lines: await listLocalItems("product_output_lines"),
     source_streams: await listLocalItems("source_streams"),
     precursors: await listLocalItems("precursors"),
+    internal_transfers: await listLocalItems("internal_transfers"),
     settings: await listLocalItems("settings"),
   });
 }
@@ -652,7 +683,7 @@ export function parseBackupFile(content: string): CbamBackupFile {
 
   if (
     parsed.manifest?.format !== "cbam-local-backup" ||
-    parsed.manifest.format_version !== 1 ||
+    (parsed.manifest.format_version !== 1 && parsed.manifest.format_version !== 2) ||
     !parsed.data
   ) {
     throw new Error("유효하지 않거나 지원하지 않는 .cbam 백업 파일입니다.");
@@ -682,6 +713,7 @@ export function parseBackupFile(content: string): CbamBackupFile {
         product_output_lines: data.product_output_lines?.length ?? 0,
         source_streams: data.source_streams?.length ?? 0,
         precursors: data.precursors?.length ?? 0,
+        internal_transfers: data.internal_transfers?.length ?? 0,
         settings: data.settings?.length ?? 0,
       },
     },
