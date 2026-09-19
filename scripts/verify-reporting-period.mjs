@@ -139,7 +139,7 @@ assert.match(
   /const allPeriods = data\.periods;/,
   'allPeriods가 `data.periods ?? []`면 periods를 안 넘긴 호출부가 오류를 뒤집어쓴다'
 );
-assert.match(exportSource, /allPeriods && allPeriods\.length > 1 && !data\.reportingPeriodId/, '다중 기간 미선택을 오류로 올리지 않는다');
+assert.match(exportSource, /allPeriods && allPeriods\.length > 1 && !periodChoiceValid/, '다중 기간 미선택을 오류로 올리지 않는다');
 assert.match(exportSource, /allPeriods && allPeriods\.length === 0/, '기간 없음 검사가 `안 넘김`까지 잡는다');
 
 // 미선택은 **오류**여야 한다. 경고면 그대로 Export가 되고, 앱이 대신 고른 셈이 된다.

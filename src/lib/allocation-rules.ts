@@ -287,7 +287,9 @@ export function reconcileSourceStreams<T extends SourceStream>(streams: T[]): Re
  * 사업장에서 지도의 ①·EU 문서·결과표가 서로 다른 값을 인쇄한다.
  */
 export function sumReconciledSourceStreamEmissions(processId: string, streams: SourceStream[]) {
-    return reconcileSourceStreams(streams)
+    const total = reconcileSourceStreams(streams)
         .streams.filter((stream) => stream.process_id === processId)
         .reduce((sum, stream) => sum + calculateSourceStreamEmissions(stream), 0);
+    // run13 P2: trim binary noise (1049.9665725000002). 9 decimals of a tonne is a milligram.
+    return Math.round(total * 1e9) / 1e9;
 }
