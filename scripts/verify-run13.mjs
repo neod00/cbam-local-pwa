@@ -74,3 +74,9 @@ assert.doesNotMatch(workspace.slice(workspace.indexOf('const scopedResults')), /
 assert.equal((panels.match(/\{ \.\.\.data, \.\.\.\(data\.allRecords \?\? \{\}\) \}/g) ?? []).length, 2, '제품·기간 삭제 차단은 전체 기간 자료로 검사해야 한다');
 assert.match(exportSource, /periodSettled/, '기간을 고르기 전에 「기간 밖 자료 제외」 경고가 뜬다');
 console.log('map period scope gate passed.');
+
+// ── 지도는 자료를 읽는 동안 빈 프로젝트처럼 보이지 않는다 (run16) ─────────────
+assert.match(workspace, /role="status"[^>]*>[\s\S]{0,400}저장된 자료를 읽는 중입니다/, '지도가 읽는 동안 빈 골격(0 \/ 6)을 보여준다');
+assert.match(workspace, /disabled=\{newProjectBusy \|\| !data\.loaded\}/, '자료를 읽기 전에 새 프로젝트를 누를 수 있다');
+assert.match(workspace, /\{data\.loadError && \(/, '읽기 실패 사유를 저장만 하고 화면에 내지 않는다');
+console.log('map loading state gate passed.');
