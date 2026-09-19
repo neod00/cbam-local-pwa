@@ -786,6 +786,27 @@ export const NEW_PROJECT_PRESERVED_SETTING_KEYS = [
   "scenario:assumptions",
 ] as const;
 
+/**
+ * 새 프로젝트가 **지우는** 설정과, 확인창에서 그것을 부르는 이름. 위 보존 목록에 없는 설정 키는 전부 여기에 있어야 한다 —
+ * 확인창 문구는 이 표에서 만들어지므로, 설정을 새로 만들고 여기에 적지 않으면 「말없이 지워지는 것」이 생긴다
+ * (run13에서 벤치마크·보고서 입력값, run14에서 수출 유형 선택이 그렇게 빠져 있었다). scripts/verify-run13.mjs가 잠근다.
+ */
+export const NEW_PROJECT_CLEARED_SETTINGS: Record<string, string> = {
+  "report:inputs": "산정보고서 입력값(문서번호 등)",
+  "export:reporting-period": "EU 문서 기간 선택",
+  "export:response-type": "수출 유형 선택",
+};
+
+/** 새 프로젝트 확인창 문구. 지워지는 것과 남는 것을 모두 말한다. */
+export function describeNewProjectEffects(): string {
+  return [
+    "새 프로젝트를 시작하면 현재 입력 데이터(사업장·제품·공정·연료·전력·전구물질·사내 이송)가 모두 삭제됩니다.",
+    "라이선스·EU 기본값(DV)·벤치마크 파일·비용 가정은 유지됩니다.",
+    `${Object.values(NEW_PROJECT_CLEARED_SETTINGS).join(", ")}은 함께 지워집니다. 「마지막 백업」 기록도 초기화됩니다.`,
+    "계속할까요?",
+  ].join("\n");
+}
+
 // 입력 데이터(7개 도메인 스토어)만 비우고, 설정은 위 보존 키만 남긴다. 라이선스·DV는 유지되므로
 // 사용자는 다시 로그인하거나 기본값을 재업로드할 필요가 없다. clearLocalData(전체 삭제)와 구별된다.
 export async function startNewProject(): Promise<void> {

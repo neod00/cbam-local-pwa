@@ -47,7 +47,32 @@ assert.match(exportPage, /\{ installations, periods, reportingPeriodId, internal
 
 // ── P2 ──────────────────────────────────────────────────────────────
 assert.match(read('src/lib/local-db.ts'), /"reference:default-values",\s*\n[^\n]*\n\s*"reference:benchmarks",/, '새 프로젝트가 벤치마크 파일을 말없이 지운다 (P2)');
-assert.match(read('src/components/guided/GuidedWorkspace.tsx'), /산정보고서 입력값\(문서번호 등\)과 EU 문서 기간 선택은 함께 지워집니다/, '새 프로젝트 확인창이 지워지는 것을 다 말하지 않는다 (P2)');
+// 새 프로젝트 확인창은 지워지는 설정을 **전부** 말한다. 문구는 local-db의 표에서 만들어진다 — 설정 키를 새로 만들고
+// 표에 적지 않으면 여기서 걸린다(run13: 벤치마크·보고서 입력값, run14: 수출 유형 선택이 말없이 지워졌다).
+{
+  const { readdirSync, statSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const walk = (dir) => readdirSync(dir).flatMap((name) => {
+    const full = join(dir, name);
+    return statSync(full).isDirectory() ? walk(full) : /\.(ts|tsx)$/.test(name) ? [full] : [];
+  });
+  const usedKeys = new Set();
+  for (const file of walk('src')) {
+    for (const match of read(file).matchAll(/['"]((?:license|reference|scenario|export|report):[a-z0-9-]+)['"]/g)) usedKeys.add(match[1]);
+  }
+  const db = read('src/lib/local-db.ts');
+  const block = (name) => db.slice(db.indexOf(name), db.indexOf('};', db.indexOf(name)) > 0 && name.includes('CLEARED') ? db.indexOf('};', db.indexOf(name)) : db.indexOf('] as const', db.indexOf(name)));
+  const keysIn = (text) => new Set([...text.matchAll(/"([a-z]+:[a-z0-9-]+)"/g)].map((match) => match[1]));
+  const preserved = keysIn(block('NEW_PROJECT_PRESERVED_SETTING_KEYS = ['));
+  const cleared = keysIn(block('NEW_PROJECT_CLEARED_SETTINGS: Record<string, string> = {'));
+  assert.ok(preserved.size >= 1 && cleared.size >= 1, `설정 목록을 읽지 못했다: 유지 ${preserved.size} · 지움 ${cleared.size}`);
+  const unlisted = [...usedKeys].filter((key) => !preserved.has(key) && !cleared.has(key));
+  assert.deepEqual(unlisted, [], `새 프로젝트가 말없이 지우는 설정이 있다 — NEW_PROJECT_CLEARED_SETTINGS에 이름을 적으세요: ${unlisted.join(', ')}`);
+  assert.deepEqual([...cleared].filter((key) => preserved.has(key)), [], '같은 설정이 「유지」와 「지움」 양쪽에 있다');
+  assert.match(db, /Object\.values\(NEW_PROJECT_CLEARED_SETTINGS\)\.join/, '확인창 문구가 표에서 만들어지지 않는다');
+  assert.match(db, /전구물질·사내 이송\)가 모두 삭제됩니다/, '확인창이 사내 이송도 지워진다는 것을 말하지 않는다');
+  assert.match(read('src/components/guided/GuidedWorkspace.tsx'), /window\.confirm\(describeNewProjectEffects\(\)\)/, '지도의 새 프로젝트 확인창이 공용 문구를 쓰지 않는다');
+}
 assert.match(read('src/lib/allocation-rules.ts'), /Math\.round\(total \* 1e9\) \/ 1e9/, '배출원 합계에 부동소수 꼬리가 남는다 (P2)');
 
 console.log('run13 verification passed (라인 삭제 차단 · 기간 선택 · 무변경 저장 · 문안).');
