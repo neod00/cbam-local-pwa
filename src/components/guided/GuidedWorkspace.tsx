@@ -29,6 +29,7 @@ const EMPTY_DATA: GuidedData = {
     productOutputLines: [],
     sourceStreams: [],
     precursors: [],
+    internalTransfers: [],
     results: [],
     exportIssues: [],
     exportErrorCount: 0,
@@ -45,11 +46,14 @@ async function fetchGuidedData(): Promise<GuidedData> {
         listLocalItems('source_streams'),
         listLocalItems('precursors'),
     ]);
-    const results = calculateLocalResults({ products, periods, processes, productOutputLines, sourceStreams, precursors });
+    // 사내 이송(공정 간 전가)도 함께 넘긴다 — 빠뜨리면 이 화면만 받는 제품의 SEE가 낮게 나온다.
+    const internalTransfers = await listLocalItems('internal_transfers');
+    const results = calculateLocalResults({ internalTransfers, products, periods, processes, productOutputLines, sourceStreams, precursors });
     // periods와 고른 기간을 함께 넘긴다 — 이걸 넘기지 않으면 「어느 기간이 나가는가」를
     // 아무도 검사하지 않고, 8단계에서야(그것도 조용히) 정해진다.
     const reportingPeriodId = await getLocalSetting<string>(EXPORT_PERIOD_SETTING_KEY);
     const readiness = evaluateEuExportReadiness({
+        internalTransfers,
         periods, reportingPeriodId, products, processes, productOutputLines, sourceStreams, precursors, installations,
     });
 
@@ -63,6 +67,7 @@ async function fetchGuidedData(): Promise<GuidedData> {
         productOutputLines,
         sourceStreams,
         precursors,
+        internalTransfers,
         results,
         exportIssues: readiness.issues,
         exportErrorCount: readiness.errorCount,
@@ -180,12 +185,15 @@ export function GuidedWorkspace() {
             sourceStreams: scoped.sourceStreams,
             precursors: scoped.precursors,
             results: scoped.results,
+            // A transfer belongs to the period of its sending process.
+            internalTransfers: allData.internalTransfers.filter((transfer) => scoped.processes.some((process) => process.id === transfer.source_process_id)),
             viewPeriodId: viewPeriod.id,
             allRecords: {
                 processes: allData.processes,
                 productOutputLines: allData.productOutputLines,
                 sourceStreams: allData.sourceStreams,
                 precursors: allData.precursors,
+                internalTransfers: allData.internalTransfers,
             },
         };
     }, [allData, viewPeriod]);

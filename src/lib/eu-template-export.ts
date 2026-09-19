@@ -796,6 +796,8 @@ export function evaluateEuExportReadiness(
             euGood === 'Iron or steel products'
             && !process.no_purchased_precursors
             && !exportScope.precursors.some((precursor) => precursor.process_id === process.id)
+            // 사내 다른 공정에서 원료를 받는 공정은 「전구물질이 없는」 공정이 아니다.
+            && !(data.internalTransfers ?? []).some((transfer) => transfer.target_process_id === process.id && transfer.mass_t > 0)
         ) {
             issues.push({
                 severity: 'warning',

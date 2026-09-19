@@ -43,7 +43,7 @@ assert.match(panels, /setLocalSetting\(EXPORT_PERIOD_SETTING_KEY, undefined\)/, 
 // ── P1: /export가 고른 기간을 읽는다 ────────────────────────────────
 const exportPage = read('src/app/export/page.tsx');
 assert.match(exportPage, /getLocalSetting<string>\(EXPORT_PERIOD_SETTING_KEY\)/, '/export가 1단계에서 고른 기간을 읽지 않는다 (P1)');
-assert.match(exportPage, /\{ installations, periods, reportingPeriodId, processes,/, '/export 준비도 검사에 고른 기간이 안 들어간다 (P1)');
+assert.match(exportPage, /\{ installations, periods, reportingPeriodId, internalTransfers, processes,/, '/export 준비도 검사에 고른 기간이 안 들어간다 (P1)');
 
 // ── P2 ──────────────────────────────────────────────────────────────
 assert.match(read('src/lib/local-db.ts'), /"reference:default-values",\s*\n[^\n]*\n\s*"reference:benchmarks",/, '새 프로젝트가 벤치마크 파일을 말없이 지운다 (P2)');

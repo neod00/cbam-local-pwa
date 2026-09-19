@@ -106,7 +106,9 @@ export default function ResultsPage() {
                 listLocalItems('product_output_lines'),
             ]);
 
-            setResults(calculateLocalResults({ processes, precursors, products, periods, sourceStreams, productOutputLines }));
+            // 사내 이송(공정 간 전가)도 함께 넘긴다 — 빠뜨리면 이 화면만 받는 제품의 SEE가 낮게 나온다.
+            const internalTransfers = await listLocalItems('internal_transfers');
+            setResults(calculateLocalResults({ internalTransfers, processes, precursors, products, periods, sourceStreams, productOutputLines }));
             setLoading(false);
         }
 
