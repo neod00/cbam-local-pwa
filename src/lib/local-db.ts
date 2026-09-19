@@ -339,6 +339,14 @@ export interface PurchasedPrecursor extends LocalEntity {
   indirect_electricity_factor_tco2e_per_mwh?: number;
   source: string;
   default_value_justification: string;
+  /**
+   * 공급사가 준 이 전구물질의 SEFAᵢ (tCO₂e / 전구물질 t) — 2025/2620 부속서 3.3(1).
+   * CBAM factor·CSCF가 이미 반영된 **최종값**이다. verification_status가 VERIFIED일 때만 산정에 쓴다.
+   * 비어 있거나 미검증이면 3.3(2)에 따라 전구물질의 B열 벤치마크로 정한다.
+   */
+  supplier_sefa_tco2e_per_t?: number;
+  /** 그 값의 근거 문서(검증보고서 번호·발행일 등) */
+  supplier_sefa_source?: string;
   output_allocations?: PrecursorOutputAllocation[];
 }
 

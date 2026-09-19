@@ -48,6 +48,9 @@ export interface PrecursorInput {
     production_route?: string;
     /** 이 제품라인에 귀속된 투입량(t) — 식 (5)의 Mᵢ 중 이 라인 몫 */
     mass_t: number;
+    /** 공급사가 준 SEFAᵢ와 그 검증 상태 — 2025/2620 부속서 3.3(1)은 검증된 값만 허용한다 */
+    supplier_sefa_tco2e_per_t?: number;
+    verification_status?: PurchasedPrecursor['verification_status'];
 }
 
 export interface LocalCalculationResult {
@@ -678,6 +681,8 @@ export function calculateLocalResults(input: {
                         cn_code: precursor.precursor_cn_code,
                         supplier_country: precursor.supplier_country,
                         production_route: precursor.production_route,
+                        supplier_sefa_tco2e_per_t: precursor.supplier_sefa_tco2e_per_t,
+                        verification_status: precursor.verification_status,
                         mass_t: precursor.consumed_mass_t,
                     }))
                     .filter((input) => input.mass_t > 0),
@@ -837,6 +842,8 @@ export function calculateLocalResults(input: {
                         cn_code: precursor.precursor_cn_code,
                         supplier_country: precursor.supplier_country,
                         production_route: precursor.production_route,
+                        supplier_sefa_tco2e_per_t: precursor.supplier_sefa_tco2e_per_t,
+                        verification_status: precursor.verification_status,
                         mass_t: getPrecursorAllocatedMassForLine(precursor, line, eligibleOutputLines, allocationShare),
                     }))
                     .filter((input) => input.mass_t > 0),

@@ -113,6 +113,8 @@ export default function PrecursorsPage() {
     const [showForm, setShowForm] = useState(false);
     const [editingPrecursorId, setEditingPrecursorId] = useState<string | null>(null);
     const [newItem, setNewItem] = useState<PrecursorDraft>(emptyDraft);
+    // Text of the supplier SEFA box, kept apart from the number so that "1." can be typed.
+    const [supplierSefaText, setSupplierSefaText] = useState('');
     const [errors, setErrors] = useState<PrecursorErrors>({});
 
     useEffect(() => {
@@ -135,6 +137,7 @@ export default function PrecursorsPage() {
             setProducts(productData.sort((a, b) => a.name.localeCompare(b.name)));
             setDefaultValueReference(defaultReference);
             if (editPrecursor) {
+                setSupplierSefaText(editPrecursor.supplier_sefa_tco2e_per_t === undefined ? '' : String(editPrecursor.supplier_sefa_tco2e_per_t));
                 setNewItem({
                     period_id: editPrecursor.period_id ?? '',
                     process_id: editPrecursor.process_id ?? '',
@@ -155,6 +158,8 @@ export default function PrecursorsPage() {
                     indirect_see_tco2e_per_t: editPrecursor.indirect_see_tco2e_per_t,
                     source: editPrecursor.source,
                     default_value_justification: editPrecursor.default_value_justification,
+                    supplier_sefa_tco2e_per_t: editPrecursor.supplier_sefa_tco2e_per_t,
+                    supplier_sefa_source: editPrecursor.supplier_sefa_source,
                     output_allocations: editPrecursor.output_allocations,
                 });
                 setEditingPrecursorId(editPrecursor.id);
@@ -204,6 +209,7 @@ export default function PrecursorsPage() {
 
     function resetForm() {
         setNewItem(createDefaultDraft());
+        setSupplierSefaText('');
         setErrors({});
         setEditingPrecursorId(null);
         setShowForm(false);
@@ -216,11 +222,13 @@ export default function PrecursorsPage() {
         }
 
         setNewItem(createDefaultDraft());
+        setSupplierSefaText('');
         setEditingPrecursorId(null);
         setShowForm(true);
     }
 
     function startEditPrecursor(precursor: PurchasedPrecursor) {
+        setSupplierSefaText(precursor.supplier_sefa_tco2e_per_t === undefined ? '' : String(precursor.supplier_sefa_tco2e_per_t));
         setNewItem({
             period_id: precursor.period_id ?? '',
             process_id: precursor.process_id ?? '',
@@ -241,6 +249,8 @@ export default function PrecursorsPage() {
             indirect_see_tco2e_per_t: precursor.indirect_see_tco2e_per_t,
             source: precursor.source,
             default_value_justification: precursor.default_value_justification,
+            supplier_sefa_tco2e_per_t: precursor.supplier_sefa_tco2e_per_t,
+            supplier_sefa_source: precursor.supplier_sefa_source,
             output_allocations: precursor.output_allocations,
         });
         setErrors({});
@@ -558,6 +568,43 @@ export default function PrecursorsPage() {
                                 <option value="VERIFIED">검증완료</option>
                             </select>
                             <p className="mt-1 text-xs leading-5 text-slate-500">미검증 = 받은 값을 그대로 넣음 · 공급사 확인 = 공급사가 산정 근거(양식·기간·경계)를 문서로 확인해 줌 · 검증완료 = 제3자 검증기관의 검증서가 있음. 회신 메일만 받은 상태는 「미검증」입니다.</p>
+                        </div>
+                        {/* 2025/2620 부속서 3.3(1): 공급사가 준 검증된 SEFAᵢ가 있으면 기본 벤치마크(B열) 대신 그 값을 쓴다. */}
+                        <div className="md:col-span-2">
+                            <label htmlFor="precursor-supplier-sefa" className="text-sm font-semibold text-slate-700"><Term term="SEFA">공급사 제공 SEFA</Term> (tCO₂e / 원료 t, 선택)</label>
+                            <input
+                                id="precursor-supplier-sefa"
+                                className={fieldClass}
+                                inputMode="decimal"
+                                value={supplierSefaText}
+                                onChange={(event) => {
+                                    const raw = event.target.value;
+                                    const parsed = Number(raw.trim());
+                                    setSupplierSefaText(raw);
+                                    setNewItem({ ...newItem, supplier_sefa_tco2e_per_t: raw.trim() === '' || !Number.isFinite(parsed) || parsed < 0 ? undefined : parsed });
+                                }}
+                                placeholder="비워 두면 기본 벤치마크(B열)로 계산"
+                            />
+                            <p className="mt-1 text-xs leading-5 text-slate-500">
+                                공급사가 자기 제품의 무상할당 조정값(SEFA)을 산정해 검증받았다면 그 값을 넣으세요. 인증서 비용 시나리오에서 기본 벤치마크 대신 쓰입니다.
+                                검증 상태가 「검증완료」일 때만 반영됩니다. 값에는 CBAM factor와 CSCF가 이미 들어 있어야 합니다. SEE(내재배출량)와는 다른 값입니다.
+                            </p>
+                            {supplierSefaText.trim() !== '' && newItem.supplier_sefa_tco2e_per_t === undefined && (
+                                <p className="mt-1 text-xs font-semibold text-red-700">0 이상의 숫자를 넣으세요. 지금 값은 저장되지 않습니다.</p>
+                            )}
+                            {newItem.supplier_sefa_tco2e_per_t !== undefined && newItem.verification_status !== 'VERIFIED' && (
+                                <p className="mt-1 text-xs font-semibold text-amber-700">지금은 「검증완료」가 아니라 이 값이 계산에 쓰이지 않습니다.</p>
+                            )}
+                        </div>
+                        <div>
+                            <label htmlFor="precursor-supplier-sefa-source" className="text-sm font-semibold text-slate-700">SEFA 근거 문서</label>
+                            <input
+                                id="precursor-supplier-sefa-source"
+                                className={fieldClass}
+                                value={newItem.supplier_sefa_source ?? ''}
+                                onChange={(event) => setNewItem({ ...newItem, supplier_sefa_source: event.target.value || undefined })}
+                                placeholder="예: 검증보고서 번호·발행일"
+                            />
                         </div>
                         {newItem.data_mode !== 'DEFAULT' && newItem.verification_status === 'UNVERIFIED' && (
                             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 md:col-span-3">

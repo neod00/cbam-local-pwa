@@ -242,4 +242,32 @@ assert.equal(daeilMissing.sefa_precursor_breakdown.every((item) => item.benchmar
 // 전구물질이 없는 결과(단순제품)는 종전과 같다.
 assert.equal(readyScenarios[0].sefa_precursor_indicator, 0);
 
+// ── [2025/2620 부속서 3.3(1)] 공급사가 준 **검증된** SEFAᵢ는 B열 대신 쓴다 ──
+// SEFAᵢ는 CBAM factor·CSCF가 이미 반영된 최종값이라 계수를 다시 곱하지 않는다.
+const withSupplierSefa = (status, value = 1.3) => ({
+  ...daeilResult,
+  precursor_inputs: [
+    { ...daeilResult.precursor_inputs[0], supplier_sefa_tco2e_per_t: value, verification_status: status },
+    daeilResult.precursor_inputs[1],
+  ],
+});
+const [verified] = calculateProductScenarios([withSupplierSefa('VERIFIED')], assumptions, daeilReferences);
+near(verified.sefa_precursor_indicator, (2910 / 3240) * 1.3 + (610 / 3240) * 1.225 * 0.975, 1e-9, '검증된 공급사 SEFA는 그대로, 나머지는 B열 × 계수');
+assert.equal(verified.sefa_precursor_breakdown[0].sefa_basis, 'SUPPLIER_VERIFIED');
+assert.equal(verified.sefa_precursor_breakdown[1].sefa_basis, 'COLUMN_B');
+// 검증완료가 아니면 입력돼 있어도 쓰지 않고, 쓰지 않았다는 사실을 드러낸다.
+for (const status of ['UNVERIFIED', 'SUPPLIER_CONFIRMED', undefined]) {
+  const [unverified] = calculateProductScenarios([withSupplierSefa(status)], assumptions, daeilReferences);
+  near(unverified.sefa_precursor_indicator, daeil.sefa_precursor_indicator, 1e-9, `미검증(${status}) 공급사 SEFA는 계산에 쓰이면 안 된다`);
+  assert.equal(unverified.sefa_precursor_breakdown[0].supplier_sefa_unverified, true);
+}
+// 음수·NaN은 값이 없는 것으로 본다. 0은 유효한 값이다(무상할당이 없는 공급사).
+const [negative] = calculateProductScenarios([withSupplierSefa('VERIFIED', -1)], assumptions, daeilReferences);
+near(negative.sefa_precursor_indicator, daeil.sefa_precursor_indicator, 1e-9, '음수 SEFA는 무시한다');
+const [zero] = calculateProductScenarios([withSupplierSefa('VERIFIED', 0)], assumptions, daeilReferences);
+near(zero.sefa_precursor_indicator, (610 / 3240) * 1.225 * 0.975, 1e-9, '검증된 SEFA 0은 0으로 쓴다');
+// 벤치마크 파일에 전구물질 행이 없어도 검증된 공급사 값은 쓸 수 있다.
+const [verifiedNoBenchmark] = calculateProductScenarios([withSupplierSefa('VERIFIED')], assumptions, { ...daeilReferences, benchmarks: { rows: [daeilReferences.benchmarks.rows[0]] } });
+near(verifiedNoBenchmark.sefa_precursor_indicator, (2910 / 3240) * 1.3, 1e-9, '벤치마크가 없어도 검증된 공급사 SEFA는 반영');
+
 console.log('Scenario risk verification passed.');
