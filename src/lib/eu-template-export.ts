@@ -78,10 +78,13 @@ export function resolveExportPeriod(
     periods: ReportingPeriod[] = [],
     reportingPeriodId?: string
 ): ReportingPeriod | undefined {
-    if (reportingPeriodId) {
-        return periods.find((period) => period.id === reportingPeriodId);
+    // run13 P1: the stored choice can outlive its period (add a second period, pick it, delete it).
+    // A choice that matches nothing is no choice; with one period left there is nothing to choose.
+    const chosen = reportingPeriodId ? periods.find((period) => period.id === reportingPeriodId) : undefined;
+    if (chosen) {
+        return chosen;
     }
-    return periods[0];
+    return reportingPeriodId && periods.length > 1 ? undefined : periods[0];
 }
 
 /**
@@ -556,13 +559,15 @@ export function evaluateEuExportReadiness(
     // 그래서 「안 넘김(undefined)」과 「없음([])」을 구분한다.
     const allPeriods = data.periods;
 
-    if (allPeriods && allPeriods.length > 1 && !data.reportingPeriodId) {
+    const periodChoiceValid = Boolean(data.reportingPeriodId && allPeriods?.some((period) => period.id === data.reportingPeriodId));
+
+    if (allPeriods && allPeriods.length > 1 && !periodChoiceValid) {
         issues.push({
             severity: 'error',
             area: '보고기간',
-            message: `보고기간이 ${allPeriods.length}개입니다. 이 사본이 다룰 기간을 먼저 고르세요 — 문서에는 한 기간만 기재됩니다.`,
+            message: `보고기간이 ${allPeriods.length}개입니다. 이 사본이 다룰 기간을 먼저 고르세요 — 문서에는 한 기간만 기재됩니다. 고르는 곳: 작업 지도 1단계 또는 「EU 문서 만들기」 화면의 「EU 문서에 나갈 기간」.`,
         });
-    } else if (data.reportingPeriodId && !exportScope.period) {
+    } else if (data.reportingPeriodId && !exportScope.period && !allPeriods) {
         issues.push({
             severity: 'error',
             area: '보고기간',
@@ -595,6 +600,15 @@ export function evaluateEuExportReadiness(
     const excludedTotal = exportScope.excludedByPeriod.processes
         + exportScope.excludedByPeriod.sourceStreams
         + exportScope.excludedByPeriod.precursors;
+
+    // run13 P1: picking a period that holds no data used to unlock the export with nothing in it.
+    if (exportScope.period && allPeriods && allPeriods.length > 1 && exportScope.processes.length === 0 && data.processes.length > 0) {
+        issues.push({
+            severity: 'error',
+            area: '보고기간',
+            message: `'${exportScope.period.name}'에 속한 생산공정이 없습니다. 이 기간으로 문서를 만들면 빈 문서가 나갑니다. 다른 기간을 고르거나 이 기간의 자료를 먼저 입력하세요.`,
+        });
+    }
 
     if (exportScope.period && excludedTotal > unassignedTotal) {
         issues.push({
@@ -861,6 +875,23 @@ export function evaluateEuExportReadiness(
             area: '생산공정',
             message: `폐가스 발생 사업장에 생산공정이 ${exportScope.processes.length}개입니다. 공정 간 폐가스 이전 보정(${ALLOCATION_RULES.ADJUSTMENTS.id}, ${ALLOCATION_RULES.ADJUSTMENTS.anchor})은 현재 버전에서 미지원입니다 — 수입 폐가스를 연료 배출원으로 넣으면 이중계상되므로 검증인과 별도 산정을 확인하세요.`,
         });
+    }
+
+    // run13 P0: a precursor whose allocation points at a deleted line is dropped from the export scope above,
+    // so it must be checked against the unscoped data. Otherwise the file is produced with its emissions missing.
+    const allOutputLineIds = new Set((data.productOutputLines ?? []).map((line) => line.id));
+    for (const precursor of data.productOutputLines ? data.precursors : []) {
+        const orphaned = (precursor.output_allocations ?? []).filter(
+            (allocation) => allocation.product_output_line_id && !allOutputLineIds.has(allocation.product_output_line_id)
+        );
+        if (orphaned.length > 0) {
+            issues.push({
+                severity: 'error',
+                area: '구매 전구물질',
+                message: `${precursor.name}: 제품별 배분이 지워진 생산라인을 가리킵니다. 이대로면 이 전구물질 배출이 계산에서 빠집니다. 전구물질을 열어 배분을 다시 지정하세요.`,
+                target: { type: 'precursor', id: precursor.id },
+            });
+        }
     }
 
     for (const precursor of exportScope.precursors) {

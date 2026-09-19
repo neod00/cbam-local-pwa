@@ -741,6 +741,8 @@ export async function clearLocalData(): Promise<void> {
 export const NEW_PROJECT_PRESERVED_SETTING_KEYS = [
   "license:free-registration",
   "reference:default-values",
+  // run13 P2: the benchmark workbook is the same kind of reference file as the default values; it was wiped without notice.
+  "reference:benchmarks",
   "scenario:assumptions",
 ] as const;
 

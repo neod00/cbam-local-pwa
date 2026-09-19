@@ -1,0 +1,8 @@
+# Verify scripts slice source text on "
+"; CRLF checkouts on Windows break them.
+* text=auto eol=lf
+*.xlsx binary
+*.docx binary
+*.pdf binary
+*.png binary
+*.cbam binary

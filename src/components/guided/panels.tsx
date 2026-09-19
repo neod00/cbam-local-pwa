@@ -374,6 +374,10 @@ function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             return;
         }
         await deleteLocalItem('periods', period.id);
+        // run13 P1: do not leave the export-period choice pointing at the period that was just deleted.
+        if (data.reportingPeriodId === period.id) {
+            await setLocalSetting(EXPORT_PERIOD_SETTING_KEY, undefined);
+        }
         // 삭제는 저장이 아니다. 초록 「저장했습니다」가 남으면 방금 한 동작과 반대를 말한다.
         setSaved(false);
         if (editingPeriodId === period.id) closePeriodForm();
@@ -775,8 +779,9 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                 reporting_scope: 'WASTE_RECYCLE' as const,
                 activity_level_role: 'EXCLUDED' as const,
             };
+            // run13 P2: an existing line keeps its own name, note and scope (the detail screen may have set them). Only the mass is edited here.
             return existing
-                ? updateLocalItem('product_output_lines', { ...existing, ...payload })
+                ? updateLocalItem('product_output_lines', { ...existing, output_mass_t: mass })
                 : createLocalItem('product_output_lines', payload);
         }
         return existing ? deleteLocalItem('product_output_lines', existing.id) : Promise.resolve();
@@ -795,7 +800,11 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
         const lines = reportingProducts
             .map((product) => ({ product, mass: num(masses[product.id] ?? '') }))
             .filter((line) => line.mass > 0);
-        if (lines.length === 0) {
+        const reportingIdsForCheck = new Set(reportingProducts.map((product) => product.id));
+        const keepsOutsideLines = Boolean(editingProcessId) && data.productOutputLines.some(
+            (line) => line.process_id === editingProcessId && !reportingIdsForCheck.has(line.product_id ?? '') && !isExcludedLine(line) && line.output_mass_t > 0
+        );
+        if (lines.length === 0 && !keepsOutsideLines) {
             setMessage('이 공정에서 만든 제품의 생산량을 1개 이상 입력하세요.');
             return;
         }
@@ -812,7 +821,7 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             setMessage('불량·부산물·스크랩 양은 0 이상이어야 합니다.');
             return;
         }
-        const primary = lines.reduce((best, line) => (line.mass > best.mass ? line : best), lines[0]);
+        const primary = lines.length > 0 ? lines.reduce((best, line) => (line.mass > best.mass ? line : best), lines[0]) : undefined;
 
         if (editingProcessId) {
             const existingProcess = data.processes.find((process) => process.id === editingProcessId);
@@ -858,9 +867,9 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                     const existing = existingLines.find((line) => line.product_id === product.id);
                     if (mass > 0) {
                         if (existing) {
+                            // run13 P2: keep the line's own name (e.g. "STS 나사 완제품 (전량 판매)"); only the mass is edited here.
                             return updateLocalItem('product_output_lines', {
                                 ...existing,
-                                name: product.name,
                                 output_mass_t: mass,
                                 reporting_scope: getProductReportingScope(product),
                             });
@@ -884,7 +893,7 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             await updateLocalItem('processes', {
                 ...existingProcess,
                 period_id: activePeriodId,
-                product_id: primary.product.id,
+                product_id: primary?.product.id ?? existingProcess.product_id,
                 name: name.trim(),
                 production_route: route.trim() || existingProcess.production_route || '가공(압연·신선·열처리)',
                 output_mass_t: editedTotal,
@@ -894,7 +903,7 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
         } else {
             const process = await createLocalItem('processes', {
                 period_id: activePeriodId,
-                product_id: primary.product.id,
+                product_id: primary?.product.id,
                 name: name.trim(),
                 production_route: route.trim() || '가공(압연·신선·열처리)',
                 output_mass_t: totalMass,
@@ -993,6 +1002,14 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                             </div>
                         ))}
                         {totalMass > 0 && <p className="text-xs font-semibold text-slate-600">합계 {fmt(totalMass, 1)} t</p>}
+                        {/* run13 P1: lines for goods outside the CBAM scope have no row above; say so instead of looking empty. */}
+                        {editingProcessId && data.productOutputLines
+                            .filter((line) => line.process_id === editingProcessId && !isExcludedLine(line) && !reportingProducts.some((product) => product.id === line.product_id))
+                            .map((line) => (
+                                <p key={line.id} className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                                    CBAM 대상이 아닌 제품 라인 「{line.name}」 {fmt(line.output_mass_t, 1)} t은 그대로 보존됩니다. 이 양은 상세 입력의 생산공정 화면에서 고칩니다.
+                                </p>
+                            ))}
                     </div>
                     {/* EU 문서(D_Processes)는 시장 출하량과 내부 소비량을 따로 묻는다.
                         입력을 하나만 받고 나머지를 빼서 구하면, 둘의 합이 총량과 어긋날 수 없다. */}
@@ -1825,6 +1842,16 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                     })
                     .filter((allocation) => allocation.allocated_mass_t > 0),
             };
+        }
+        // run13 P1: with a single product line the allocation UI is hidden, so the user never chose "auto".
+        // Saving used to wipe the stored allocation; a line added later then silently re-split this precursor.
+        if (!hasMultipleProducts && editingPrecursorId) {
+            const kept = data.precursors.find((precursor) => precursor.id === editingPrecursorId)?.output_allocations ?? [];
+            if (kept.length === 1) {
+                draft = { ...baseDraft, outputAllocations: [{ ...kept[0], allocated_mass_t: consumedMass, allocation_percent: 100 }] };
+            } else if (kept.length > 1) {
+                draft = { ...baseDraft, outputAllocations: kept };
+            }
         }
         if (editingPrecursorId) {
             const existing = data.precursors.find((precursor) => precursor.id === editingPrecursorId);

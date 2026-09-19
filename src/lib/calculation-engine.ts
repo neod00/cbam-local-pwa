@@ -635,6 +635,18 @@ export function calculateLocalResults(input: {
                         && lineContexts.some((context) => context.line.product_id === allocation.product_id)
                         && lineContexts.filter((context) => context.line.product_id === allocation.product_id).every((context) => context.role.role === 'EXCLUDED')
             );
+            // run13 P0: an allocation whose line was deleted is skipped by the mass lookup, so its emissions vanish without a trace.
+            const knownLineIds = new Set(lineContexts.map((context) => context.line.id));
+            const orphaned = (precursor.output_allocations ?? []).filter(
+                (allocation) => allocation.product_output_line_id && !knownLineIds.has(allocation.product_output_line_id)
+            );
+            if (orphaned.length > 0) {
+                const orphanMass = orphaned.reduce((sum, allocation) => sum + resolvePrecursorAllocationMass(precursor, allocation), 0);
+                addWarning(
+                    `확인 필요(자료): ${precursor.name}의 제품별 배분 ${orphanMass.toFixed(4)} t가 지워진 생산라인을 가리켜 배출에서 빠졌습니다. 전구물질 화면에서 이 전구물질을 열어 배분을 다시 지정하세요.`,
+                    { type: 'precursor', id: precursor.id }
+                );
+            }
             if (misdirected.length === 0) continue;
             const lostMass = misdirected.reduce((sum, allocation) => sum + resolvePrecursorAllocationMass(precursor, allocation), 0);
             addWarning(

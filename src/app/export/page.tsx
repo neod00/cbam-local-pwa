@@ -22,7 +22,7 @@ import {
 } from '@/lib/eu-template-export';
 import { createDeliveryPackage } from '@/lib/delivery-package';
 import { createCalculationReport } from '@/lib/calculation-report';
-import { REPORT_INPUTS_SETTING_KEY } from '@/lib/local-db';
+import { EXPORT_PERIOD_SETTING_KEY, REPORT_INPUTS_SETTING_KEY } from '@/lib/local-db';
 import type { ReportInputs } from '@/lib/local-db';
 import {
     CBAM_LAST_BACKUP_AT_KEY,
@@ -195,6 +195,8 @@ export default function ExportPage() {
     const [results, setResults] = useState<LocalCalculationResult[]>([]);
     const [installations, setInstallations] = useState<Installation[]>([]);
     const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
+    // run13 P1: the period chosen on the map was never read here, so the map unlocked while this page stayed blocked.
+    const [reportingPeriodId, setReportingPeriodId] = useState<string>();
     const [processes, setProcesses] = useState<ProductionProcess[]>([]);
     const [productOutputLines, setProductOutputLines] = useState<ProductOutputLine[]>([]);
     const [sourceStreams, setSourceStreams] = useState<SourceStream[]>([]);
@@ -251,6 +253,7 @@ export default function ExportPage() {
                 savedScenarioAssumptions,
                 savedExportResponseType,
                 savedReportInputs,
+                savedReportingPeriodId,
             ] = await Promise.all([
                 listLocalItems('installations'),
                 listLocalItems('periods'),
@@ -264,10 +267,12 @@ export default function ExportPage() {
                 getLocalSetting<ScenarioAssumptions>(SCENARIO_ASSUMPTIONS_SETTING_KEY),
                 getLocalSetting<ExportResponseType>(EXPORT_RESPONSE_TYPE_SETTING_KEY),
                 getLocalSetting<ReportInputs>(REPORT_INPUTS_SETTING_KEY),
+                getLocalSetting<string>(EXPORT_PERIOD_SETTING_KEY),
             ]);
 
             setInstallations(installationData);
             setPeriods(periodData);
+            setReportingPeriodId(savedReportingPeriodId);
             setProcesses(processData);
             setProductOutputLines(outputLineData);
             setSourceStreams(sourceStreamData);
@@ -309,8 +314,8 @@ export default function ExportPage() {
     const readiness = useMemo(
         // 다운로드가 쓰는 것과 **같은 자료**로 점검한다. 종전에는 사업장·보고기간을 넘기지 않아,
         // 화면은 「오류 0」인데 다운로드만 실패하거나 사업장 누락이 점검에 안 잡혔다(씨밤이 run11 P1-15).
-        () => evaluateEuExportReadiness({ installations, periods, processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
-        [installations, periods, processes, productOutputLines, sourceStreams, precursors, products, validation?.cnCodeMap]
+        () => evaluateEuExportReadiness({ installations, periods, reportingPeriodId, processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
+        [installations, periods, reportingPeriodId, processes, productOutputLines, sourceStreams, precursors, products, validation?.cnCodeMap]
     );
 
     const scenarioRiskSummary = useMemo(() => {
@@ -330,8 +335,8 @@ export default function ExportPage() {
         );
     }, [benchmarkReference, defaultValueReference, scenarioRiskSummary]);
     const plannedCellWrites = useMemo(
-        () => createEuTemplateExportCellWrites({ installations, periods, processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
-        [installations, periods, processes, productOutputLines, sourceStreams, precursors, products, validation?.cnCodeMap]
+        () => createEuTemplateExportCellWrites({ installations, periods, reportingPeriodId, processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
+        [installations, periods, reportingPeriodId, processes, productOutputLines, sourceStreams, precursors, products, validation?.cnCodeMap]
     );
 
     const backupStatus = useMemo(() => getBackupStatus(lastBackupAt), [lastBackupAt]);
@@ -552,6 +557,7 @@ export default function ExportPage() {
             const exportResult = await createEuTemplateExportCopyResult(templateFile, {
                 installations,
                 periods,
+                reportingPeriodId,
                 processes,
                 productOutputLines,
                 sourceStreams,
@@ -588,6 +594,7 @@ export default function ExportPage() {
             const exportResult = await createEuTemplateExportCopyResult(templateFile, {
                 installations,
                 periods,
+                reportingPeriodId,
                 processes,
                 productOutputLines,
                 sourceStreams,
@@ -693,6 +700,28 @@ export default function ExportPage() {
                 title="EU Communication Template Export"
                 description="사용자가 보유한 EU 원본 Communication Template을 브라우저에서만 검증하고, 원본 구조를 보존한 수입자 전달용 복사본을 생성합니다. 이 파일은 연간 CBAM 신고서 자체가 아니라 신고 지원자료입니다."
             />
+
+            {periods.length > 1 && (
+                <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <label className="block text-sm font-semibold text-slate-900" htmlFor="export-period">EU 문서에 나갈 기간</label>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">문서 한 부에는 한 기간만 담깁니다. 작업 지도 1단계의 선택과 같은 값입니다.</p>
+                    <select
+                        id="export-period"
+                        className="mt-2 h-11 w-full max-w-xl rounded-xl border border-slate-200 px-3 text-sm"
+                        value={periods.some((period) => period.id === reportingPeriodId) ? reportingPeriodId : ''}
+                        onChange={async (event) => {
+                            const next = event.target.value || undefined;
+                            await setLocalSetting(EXPORT_PERIOD_SETTING_KEY, next);
+                            setReportingPeriodId(next);
+                        }}
+                    >
+                        <option value="">— 고르세요 —</option>
+                        {periods.map((period) => (
+                            <option key={period.id} value={period.id}>{period.name} ({period.start_date} ~ {period.end_date})</option>
+                        ))}
+                    </select>
+                </section>
+            )}
 
             <section className="w-full min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">

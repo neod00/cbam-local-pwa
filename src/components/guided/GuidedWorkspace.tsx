@@ -96,7 +96,7 @@ export function GuidedWorkspace() {
     // 새 프로젝트: 입력 데이터만 비우고 라이선스·EU 기본값·비용 가정은 유지한다(startNewProject).
     // 되돌릴 수 없으므로 확인 + 삭제 전 .cbam 백업을 제안한다.
     const handleNewProject = useCallback(async () => {
-        if (!window.confirm('새 프로젝트를 시작하면 현재 입력 데이터(사업장·제품·공정·연료·전력·전구물질)가 모두 삭제됩니다.\n라이선스·EU 기본값(DV)·비용 가정은 유지됩니다.\n계속할까요?')) {
+        if (!window.confirm('새 프로젝트를 시작하면 현재 입력 데이터(사업장·제품·공정·연료·전력·전구물질)가 모두 삭제됩니다.\n라이선스·EU 기본값(DV)·벤치마크 파일·비용 가정은 유지됩니다.\n산정보고서 입력값(문서번호 등)과 EU 문서 기간 선택은 함께 지워집니다.\n계속할까요?')) {
             return;
         }
         setNewProjectBusy(true);

@@ -20,6 +20,7 @@ import { getProductReportingScope } from '@/lib/reporting-scope';
 import { ACTIVITY_LEVEL_ROLE_LABEL, ALLOCATION_BASIS_LABEL, DIRECT_EMISSIONS_INPUT_MODE_LABEL, sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
 import { Term } from '@/components/ux/Term';
 import { FieldHelp } from '@/components/ux/FieldHelp';
+import { getOutputLineDeleteBlockers } from '@/lib/guided-edit';
 import { AlertTriangle, ArrowRight, Factory, Gauge, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
@@ -360,6 +361,18 @@ export default function ProcessesPage() {
         const validOutputLines = outputLineDrafts.filter((line) => line.output_mass_t > 0);
         if (validOutputLines.length === 0) {
             nextErrors.output_mass_t = nextErrors.output_mass_t ?? '제품 생산라인을 1개 이상 입력하세요.';
+        }
+
+        // run13 P0: a removed line may still be the target of a precursor's per-product allocation.
+        // Deleting it leaves the allocation pointing nowhere and the precursor mass silently drops out (SEE 3.764 -> 0.022).
+        if (editingProcessId) {
+            const keptLineIds = new Set(validOutputLines.map((line) => line.existing_id).filter(Boolean));
+            const blockedLines = productOutputLines
+                .filter((line) => line.process_id === editingProcessId && !keptLineIds.has(line.id))
+                .filter((line) => getOutputLineDeleteBlockers(line.id, { precursors }).total > 0);
+            if (blockedLines.length > 0) {
+                nextErrors.output_mass_t = `「${blockedLines.map((line) => line.name).join('」, 「')}」 라인은 지울 수 없습니다. 전구물질의 제품별 배분이 이 라인을 가리킵니다. 지우면 그 전구물질 배출이 계산에서 빠집니다. 먼저 전구물질 화면에서 배분을 옮기거나 「생산량 비율로 자동」으로 바꾸세요.`;
+            }
         }
 
         if (newItem.market_output_mass_t < 0) {
