@@ -140,6 +140,7 @@ globalThis.euExport = {
   createEuTemplateExportCopy,
   createEuTemplateExportCopyResult,
   evaluateEuExportReadiness,
+  internalConsumptionSlot,
   getEuExportDownloadStatusMessage,
   getEuExportIssueEditHref,
   validateEuTemplateFile
@@ -773,6 +774,48 @@ assertEqual(
   'mixed allocation basis warning'
 );
 assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '47', 'planned cell writes');
+
+// ── D_Processes (c): in-plant transfers go to the receiving process's slot ──
+// Slot layout confirmed against the official "Example Steel 2 EAF alloys" workbook (column S of the template):
+// each block lists the other processes in order, skipping itself. Process 1 -> [2,3,4..], 2 -> [1,3,4..], 3 -> [1,2,4..].
+assertEqual(String(euExport.internalConsumptionSlot(1, 2)), '1', 'process 1 -> process 2 is slot 1');
+assertEqual(String(euExport.internalConsumptionSlot(2, 1)), '1', 'process 2 -> process 1 is slot 1');
+assertEqual(String(euExport.internalConsumptionSlot(2, 3)), '2', 'process 2 -> process 3 is slot 2');
+assertEqual(String(euExport.internalConsumptionSlot(3, 1)), '1', 'process 3 -> process 1 is slot 1');
+assertEqual(String(euExport.internalConsumptionSlot(3, 2)), '2', 'process 3 -> process 2 is slot 2');
+assertEqual(String(euExport.internalConsumptionSlot(1, 10)), '9', 'process 1 -> process 10 is the last slot');
+assertEqual(String(euExport.internalConsumptionSlot(2, 2)), 'undefined', 'a process cannot transfer to itself');
+{
+  const mk = (id, name, internal) => ({ ...data.processes[0], id, name, output_mass_t: 1000, market_output_mass_t: 1000 - internal, internal_consumption_mass_t: internal });
+  const a = mk('proc_a', 'A', 300);
+  const b = mk('proc_b', 'B', 100);
+  const c = mk('proc_c', 'C', 0);
+  const transfers = [
+    { id: 't1', source_process_id: a.id, target_process_id: b.id, mass_t: 100 },
+    { id: 't2', source_process_id: a.id, target_process_id: c.id, mass_t: 150 },
+    { id: 't3', source_process_id: a.id, target_process_id: 'proc_not_in_document', mass_t: 50 },
+    { id: 't4', source_process_id: b.id, target_process_id: c.id, mass_t: 100 },
+  ];
+  const chainData = { ...data, processes: [a, b, c], precursors: [], internalTransfers: transfers };
+  const cell = (writes, ref) => String(writes.find((write) => write.sheetName === 'D_Processes' && write.cell === ref)?.value);
+  const writes = euExport.createEuTemplateExportCellWrites(chainData, validation.cnCodeMap);
+  assertEqual(cell(writes, 'L32'), '100', 'A -> B lands in A slot 1 (L32)');
+  assertEqual(cell(writes, 'L33'), '150', 'A -> C lands in A slot 2 (L33)');
+  assertEqual(cell(writes, 'L41'), '50', 'a receiver outside the document goes to (d) non-CBAM consumption');
+  assertEqual(cell(writes, 'L97'), '0', 'B -> A slot stays 0');
+  assertEqual(cell(writes, 'L98'), '100', 'B -> C lands in B slot 2 (L98) — not slot 1, which is process A');
+  assertEqual(cell(writes, 'L162'), '0', 'C sends nothing');
+  assertEqual(String(writes.some((write) => write.sheetName === 'E_PurchPrec')), 'false', 'in-plant transfers must never reach E_PurchPrec');
+  // With transfers that add up, the guard is a control, not a block.
+  const ok = euExport.evaluateEuExportReadiness(chainData, validation.cnCodeMap).issues.filter((issue) => issue.severity === 'error' && /사내 다른 공정/.test(issue.message));
+  assertEqual(String(ok.length), '0', 'transfers that add up to the in-plant consumption must not block the export');
+  const short = euExport.evaluateEuExportReadiness({ ...chainData, internalTransfers: transfers.filter((t) => t.id !== 't2') }, validation.cnCodeMap)
+    .issues.filter((issue) => issue.severity === 'error' && /지정한 양의 합/.test(issue.message));
+  assertEqual(String(short.length), '1', 'transfers that do not add up must be an error');
+  // Legacy data (amount without transfer records) keeps the old single-cell write and stays blocked.
+  const legacyWrites = euExport.createEuTemplateExportCellWrites({ ...chainData, internalTransfers: [] }, validation.cnCodeMap);
+  assertEqual(cell(legacyWrites, 'L32'), '300', 'legacy data still writes the total to the first slot');
+}
 // 집계품목 라우트 정규화: 조강(Crude steel) 등 자유텍스트 경로도 허용 드롭다운 값('All production routes')으로.
 const crudeProduct = { ...product, id: 'product-crude', name: 'Crude steel billet', hs_code: '7207', cn_code: '72071111', hs_group: '72', product_type_enum: 'HS72_SEMI' };
 const crudeProcess = { ...process, id: 'process-crude', product_id: crudeProduct.id, name: 'EAF steelmaking', production_route: 'Electric arc furnace' };
