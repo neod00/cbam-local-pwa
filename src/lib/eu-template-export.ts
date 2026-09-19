@@ -565,7 +565,7 @@ export function evaluateEuExportReadiness(
         issues.push({
             severity: 'error',
             area: '보고기간',
-            message: `보고기간이 ${allPeriods.length}개입니다. 이 사본이 다룰 기간을 먼저 고르세요 — 문서에는 한 기간만 기재됩니다. 고르는 곳: 작업 지도 1단계 또는 「EU 문서 만들기」 화면의 「EU 문서에 나갈 기간」.`,
+            message: `보고기간이 ${allPeriods.length}개입니다. 이 사본이 다룰 기간을 먼저 고르세요 — 문서에는 한 기간만 기재됩니다. 고르는 곳: 작업 지도 1단계 또는 「상세 Export」 화면 위쪽의 「EU 문서에 나갈 기간」.`,
         });
     } else if (data.reportingPeriodId && !exportScope.period && !allPeriods) {
         issues.push({
