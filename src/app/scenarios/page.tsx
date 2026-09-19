@@ -933,7 +933,13 @@ export default function ScenariosPage() {
                                         {(scenario.sefa_precursor_breakdown?.length ?? 0) > 0 && (
                                             <div className="mt-1 text-xs text-slate-500">
                                                 공정 {formatNumber(scenario.sefa_process_indicator)} + 전구물질 {formatNumber(scenario.sefa_precursor_indicator)}
-                                                {scenario.sefa_precursor_breakdown?.some((item) => item.benchmark_column_b === undefined) && (
+                                                {scenario.sefa_precursor_breakdown?.some((item) => item.sefa_basis === 'SUPPLIER_VERIFIED') && (
+                                                    <div className="text-emerald-700">공급사 검증 SEFA 적용: {scenario.sefa_precursor_breakdown.filter((item) => item.sefa_basis === 'SUPPLIER_VERIFIED').map((item) => item.name).join(', ')}</div>
+                                                )}
+                                                {scenario.sefa_precursor_breakdown?.some((item) => item.supplier_sefa_unverified) && (
+                                                    <div className="text-amber-700">공급사 SEFA가 입력됐지만 「검증완료」가 아니라 쓰지 않았습니다. 기본 벤치마크(B열)로 계산했습니다</div>
+                                                )}
+                                                {scenario.sefa_precursor_breakdown?.some((item) => item.sefa_basis === 'COLUMN_B' && item.benchmark_column_b === undefined) && (
                                                     <div className="text-amber-700">벤치마크를 못 찾은 전구물질이 있어 그 몫은 0으로 두었습니다</div>
                                                 )}
                                             </div>

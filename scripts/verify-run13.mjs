@@ -51,3 +51,10 @@ assert.match(read('src/components/guided/GuidedWorkspace.tsx'), /산정보고서
 assert.match(read('src/lib/allocation-rules.ts'), /Math\.round\(total \* 1e9\) \/ 1e9/, '배출원 합계에 부동소수 꼬리가 남는다 (P2)');
 
 console.log('run13 verification passed (라인 삭제 차단 · 기간 선택 · 무변경 저장 · 문안).');
+
+// ── 공급사 검증 SEFA 입력칸 (2025/2620 부속서 3.3(1)) ─────────────────────
+const precursorsPage = read('src/app/precursors/page.tsx');
+assert.match(precursorsPage, /id="precursor-supplier-sefa"/, '공급사 SEFA 입력칸이 없다');
+assert.equal((precursorsPage.match(/supplier_sefa_tco2e_per_t: (editPrecursor|precursor)\.supplier_sefa_tco2e_per_t/g) ?? []).length, 2, '수정 폼이 공급사 SEFA를 다시 읽지 않으면 저장할 때 지워진다');
+assert.equal((read('src/lib/calculation-engine.ts').match(/supplier_sefa_tco2e_per_t: precursor\.supplier_sefa_tco2e_per_t/g) ?? []).length, 2, '엔진의 전구물질 투입 내역 2곳이 모두 공급사 SEFA를 실어야 한다');
+console.log('supplier SEFA gate passed.');
