@@ -3,9 +3,9 @@
 import { GuidedMap } from '@/components/guided/GuidedMap';
 import { GuidedStepPanel, type GuidedData } from '@/components/guided/panels';
 import { calculateLocalResults } from '@/lib/calculation-engine';
-import { evaluateEuExportReadiness } from '@/lib/eu-template-export';
+import { evaluateEuExportReadiness, scopeRecordsToExportPeriod } from '@/lib/eu-template-export';
 import { deriveGuidedSteps, getGuidedProgress, type GuidedStepId } from '@/lib/guided-map';
-import { CBAM_LAST_BACKUP_AT_KEY, EXPORT_PERIOD_SETTING_KEY, exportLocalBackup, getLocalSetting, listLocalItems, startNewProject } from '@/lib/local-db';
+import { CBAM_LAST_BACKUP_AT_KEY, EXPORT_PERIOD_SETTING_KEY, exportLocalBackup, getLocalSetting, listLocalItems, setLocalSetting, startNewProject } from '@/lib/local-db';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { buildSeeFlowBinding } from '@/lib/see-flow';
 import { BarChart3, CircleHelp, FilePlus, Map as MapIcon, ShieldCheck, Upload } from 'lucide-react';
@@ -152,9 +152,53 @@ export function GuidedWorkspace() {
         [data.products]
     );
 
+    // 기간이 둘 이상이면 지도는 한 기간만 본다. 종전에는 두 해의 공정·배출·생산량을 합산해 보여줬다
+    // (「공정 4개 · 6,397,300 t」, 기준 SEE는 두 해 네 제품의 평균). 어느 문서에도 나가지 않는 숫자였다.
+    // 보는 기간 = EU 문서에 나갈 기간(같은 설정값). 아직 고르지 않았으면 첫 기간을 보여주되 그렇다고 말한다.
+    const periodChosen = data.periods.some((item) => item.id === data.reportingPeriodId);
+    const viewPeriod = data.periods.length > 1
+        ? (data.periods.find((item) => item.id === data.reportingPeriodId) ?? data.periods[0])
+        : undefined;
+    const allData = data;
+    const viewData = useMemo<GuidedData>(() => {
+        if (!viewPeriod) {
+            return allData;
+        }
+        const scoped = scopeRecordsToExportPeriod({
+            periods: allData.periods,
+            reportingPeriodId: viewPeriod.id,
+            processes: allData.processes,
+            productOutputLines: allData.productOutputLines,
+            sourceStreams: allData.sourceStreams,
+            precursors: allData.precursors,
+            results: allData.results,
+        });
+        return {
+            ...allData,
+            processes: scoped.processes,
+            productOutputLines: scoped.productOutputLines,
+            sourceStreams: scoped.sourceStreams,
+            precursors: scoped.precursors,
+            results: scoped.results,
+            viewPeriodId: viewPeriod.id,
+            allRecords: {
+                processes: allData.processes,
+                productOutputLines: allData.productOutputLines,
+                sourceStreams: allData.sourceStreams,
+                precursors: allData.precursors,
+            },
+        };
+    }, [allData, viewPeriod]);
+
+    const choosePeriod = useCallback(async (periodId: string) => {
+        await setLocalSetting(EXPORT_PERIOD_SETTING_KEY, periodId);
+        setSelectedProcessId('ALL');
+        await reload();
+    }, [reload]);
+
     const scopedResults = useMemo(
-        () => (selectedProcessId === 'ALL' ? data.results : data.results.filter((result) => result.process_id === selectedProcessId)),
-        [data.results, selectedProcessId]
+        () => (selectedProcessId === 'ALL' ? viewData.results : viewData.results.filter((result) => result.process_id === selectedProcessId)),
+        [viewData.results, selectedProcessId]
     );
     const binding = useMemo(() => buildSeeFlowBinding(scopedResults), [scopedResults]);
 
@@ -164,19 +208,19 @@ export function GuidedWorkspace() {
         periodCount: data.periods.length,
         reportingProductCount: reportingProducts.length,
         cnReadyCount: reportingProducts.filter((product) => (product.cn_code ?? '').replace(/\D/g, '').length === 8).length,
-        processCount: data.processes.length,
-        hasProcessOutput: data.processes.some((process) => process.output_mass_t > 0),
-        sourceStreamCount: data.sourceStreams.length,
-        hasDirectEmissions: data.processes.some((process) => process.direct_attributable_emissions_tco2e > 0),
-        hasElectricity: data.processes.some((process) => process.electricity_mwh > 0),
-        precursorCount: data.precursors.length,
+        processCount: viewData.processes.length,
+        hasProcessOutput: viewData.processes.some((process) => process.output_mass_t > 0),
+        sourceStreamCount: viewData.sourceStreams.length,
+        hasDirectEmissions: viewData.processes.some((process) => process.direct_attributable_emissions_tco2e > 0),
+        hasElectricity: viewData.processes.some((process) => process.electricity_mwh > 0),
+        precursorCount: viewData.precursors.length,
         // 준비도가 「구매 전구물질이 없습니다」를 냈으면 6단계는 선택이 아니라 할 일이다.
-        noPrecursorsConfirmed: data.precursors.length === 0 && data.processes.some((process) => process.no_purchased_precursors),
+        noPrecursorsConfirmed: viewData.precursors.length === 0 && viewData.processes.some((process) => process.no_purchased_precursors),
         precursorsExpected: data.exportIssues.some((issue) => issue.area === '구매 전구물질' && issue.message.includes('구매 전구물질이 없습니다')),
-        results: data.results,
+        results: viewData.results,
         exportErrorCount: data.exportErrorCount,
         exportWarningCount: data.exportWarningCount,
-    }, binding), [data, reportingProducts, binding]);
+    }, binding), [data, viewData, reportingProducts, binding]);
 
     // 사용자가 상자를 고르기 전에는 '지금 여기' 단계를 자동으로 보여준다(파생값 — effect 불필요).
     const activeStep: GuidedStepId | null = selectedStep
@@ -184,7 +228,7 @@ export function GuidedWorkspace() {
     activeStepRef.current = activeStep;
 
     const progress = getGuidedProgress(steps);
-    const period = data.periods[0];
+    const period = viewPeriod ?? data.periods[0];
     const primaryProduct = reportingProducts[0];
 
     const handleSelect = useCallback((id: GuidedStepId) => {
@@ -228,7 +272,32 @@ export function GuidedWorkspace() {
                 </div>
             </header>
 
-            {data.processes.length > 1 && (
+            {data.periods.length > 1 && (
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2" role="tablist" aria-label="보고기간 선택">
+                    <span className="text-xs font-semibold text-slate-500">보는 기간 = EU 문서에 나갈 기간</span>
+                    {data.periods.map((item) => (
+                        <button
+                            key={item.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={periodChosen && item.id === viewPeriod?.id}
+                            onClick={() => void choosePeriod(item.id)}
+                            className={`min-h-9 rounded-full border px-4 text-xs font-bold transition ${
+                                periodChosen && item.id === viewPeriod?.id
+                                    ? 'border-teal-600 bg-teal-600 text-white'
+                                    : 'border-slate-200 bg-white text-slate-600 hover:border-teal-200'
+                            }`}
+                        >
+                            {item.name}
+                        </button>
+                    ))}
+                    {!periodChosen && viewPeriod && (
+                        <span className="text-xs font-semibold text-amber-700">아직 고르지 않았습니다. 지금은 「{viewPeriod.name}」 자료를 보여주고 있습니다.</span>
+                    )}
+                </div>
+            )}
+
+            {viewData.processes.length > 1 && (
                 <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="공정 선택">
                     <button
                         type="button"
@@ -243,7 +312,7 @@ export function GuidedWorkspace() {
                     >
                         전체 합계
                     </button>
-                    {data.processes.map((process) => (
+                    {viewData.processes.map((process) => (
                         <button
                             key={process.id}
                             type="button"
@@ -277,7 +346,7 @@ export function GuidedWorkspace() {
                     <GuidedStepPanel
                         step={activeStep}
                         steps={steps}
-                        data={data}
+                        data={viewData}
                         selectedProcessId={selectedProcessId}
                         binding={binding}
                         onSaved={reload}

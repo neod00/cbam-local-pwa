@@ -64,3 +64,13 @@ const scenariosPage = read('src/app/scenarios/page.tsx');
 assert.match(scenariosPage, /updateAssumptions\(withAssumptionYear\(assumptions,/, '연도 선택이 factor를 함께 옮기지 않는다');
 assert.match(scenariosPage, /공식값 적용/, '공식값과 다른 factor를 되돌릴 방법이 없다');
 console.log('CBAM factor gate passed.');
+
+// ── 지도는 고른 기간의 자료만 본다 (run15 두 번째 원장) ─────────────────────
+const workspace = read('src/components/guided/GuidedWorkspace.tsx');
+assert.match(workspace, /const viewData = useMemo<GuidedData>/, '지도가 두 기간의 자료를 합산한다');
+assert.match(workspace, /data=\{viewData\}/, '패널이 다른 기간의 공정까지 받는다');
+assert.match(workspace, /aria-label="보고기간 선택"/, '지도에서 기간을 바꿀 수 없다');
+assert.doesNotMatch(workspace.slice(workspace.indexOf('const scopedResults')), /[^w]data\.(results|processes|sourceStreams|precursors)\b/, '지도 합계 일부가 아직 전체 기간 자료를 읽는다');
+assert.equal((panels.match(/\{ \.\.\.data, \.\.\.\(data\.allRecords \?\? \{\}\) \}/g) ?? []).length, 2, '제품·기간 삭제 차단은 전체 기간 자료로 검사해야 한다');
+assert.match(exportSource, /periodSettled/, '기간을 고르기 전에 「기간 밖 자료 제외」 경고가 뜬다');
+console.log('map period scope gate passed.');

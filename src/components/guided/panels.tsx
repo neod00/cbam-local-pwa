@@ -91,6 +91,18 @@ export interface GuidedData {
     exportIssues: EuExportReadinessIssue[];
     exportErrorCount: number;
     exportWarningCount: number;
+    /**
+     * 기간이 둘 이상이면 지도와 패널은 **한 기간의 자료만** 본다(viewPeriodId). 그때 위의 공정·라인·배출원·
+     * 전구물질·결과는 그 기간 것만 담긴다. 삭제 차단처럼 「다른 기간에서 쓰고 있는가」를 봐야 하는 검사는
+     * 여기의 전체 자료를 쓴다 — 좁힌 자료로 검사하면 다른 해에서 쓰는 제품을 지울 수 있게 된다.
+     */
+    viewPeriodId?: string;
+    allRecords?: {
+        processes: ProductionProcess[];
+        productOutputLines: ProductOutputLine[];
+        sourceStreams: SourceStream[];
+        precursors: PurchasedPrecursor[];
+    };
 }
 
 interface PanelProps {
@@ -361,7 +373,7 @@ function SetupPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
     // 사라지지 않고 없는 기간을 가리킨 채 남는데, 엔진의 기간 누락 경고는 period_id가
     // **비었을 때만** 울리므로 아무도 알려주지 않는다.
     const removePeriod = async (period: ReportingPeriod) => {
-        const blockers = getPeriodDeleteBlockers(period.id, data);
+        const blockers = getPeriodDeleteBlockers(period.id, { ...data, ...(data.allRecords ?? {}) });
         if (blockers.total > 0) {
             alertDeleteBlocked(
                 period.name,
@@ -587,7 +599,7 @@ function ProductsPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
     // 하나만 가리키므로, 다제품 공정의 두 번째 제품은 공정 참조에 걸리지 않는다. 그대로 지우면
     // 생산라인이 없는 제품을 가리킨 채 질량을 계속 만들어낸다.
     const removeProduct = async (product: Product) => {
-        const blockers = getProductDeleteBlockers(product.id, data);
+        const blockers = getProductDeleteBlockers(product.id, { ...data, ...(data.allRecords ?? {}) });
         if (blockers.total > 0) {
             alertDeleteBlocked(
                 product.name,
@@ -694,7 +706,8 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
     const [editingProcessId, setEditingProcessId] = useState('');
     const [name, setName] = useState('');
     const [route, setRoute] = useState('');
-    const [periodId, setPeriodId] = useState(data.periods[0]?.id ?? '');
+    // 새 공정은 지금 지도가 보고 있는 기간에 만든다 — 2026년을 보면서 넣은 공정이 2025년에 들어가면 안 된다.
+    const [periodId, setPeriodId] = useState(data.viewPeriodId ?? data.periods[0]?.id ?? '');
     const [masses, setMasses] = useState<Record<string, string>>({});
     // 사내 다른 공정으로 넘기는 양. **이것 하나만** 받고 시장 출하량은 총량에서 뺀다 —
     // 둘 다 받으면 합이 총량과 어긋난 채 EU 문서(D_Processes)에 나갈 수 있다.
@@ -788,7 +801,7 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
     };
 
     const saveProcess = async () => {
-        const activePeriodId = periodId || data.periods[0]?.id;
+        const activePeriodId = periodId || data.viewPeriodId || data.periods[0]?.id;
         if (!name.trim()) {
             setMessage('공정 이름을 입력하세요. 예: 신선·소둔 라인');
             return;
