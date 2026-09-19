@@ -160,30 +160,59 @@ export function buildSeeFlowBinding(results: LocalCalculationResult[]): SeeFlowB
 
     const directEmissions = reportable.reduce((sum, result) => sum + result.direct_emissions_tco2e, 0);
     const ownIndirectEmissions = reportable.reduce((sum, result) => sum + result.indirect_emissions_gross_tco2e, 0);
-    const precursorDirectEmissions = reportable.reduce(
+    const purchasedPrecursorDirectEmissions = reportable.reduce(
         (sum, result) => sum + result.precursor_direct_see * result.output_mass_t,
         0
     );
-    const precursorIndirectEmissions = reportable.reduce(
+    const purchasedPrecursorIndirectEmissions = reportable.reduce(
         (sum, result) => sum + result.precursor_indirect_see * result.output_mass_t,
         0
     );
 
+    // ── 사내 이송(공정 간 전가) ──────────────────────────────────────────
+    // 받는 공정만 볼 때는 사내에서 받은 원료의 배출이 ③에 들어간다(그 공정에는 「밖에서 온」 배출이다).
+    // 보내는 공정과 받는 공정을 **함께** 볼 때(전체 합계)는 그 배출이 이미 보내는 공정의 ①②③에 있다 —
+    // 또 더하면 두 번 센다. 이때는 더하지 않고, 분모에서 사내에서 소비된 양을 뺀다(시장에 나간 양만 남는다).
+    // 그러면 지도의 기준 SEE가 「시장에 나간 제품들의 생산량 가중 평균」과 같아진다.
+    const processIdsInView = new Set(reportable.map((result) => result.process_id));
+    let internalDirectFromOutside = 0;
+    let internalIndirectFromOutside = 0;
+    let internalMassWithinView = 0;
+    let internalDirectWithinView = 0;
+    let internalIndirectWithinView = 0;
+    let internalBasisWithinView = 0;
+    for (const result of reportable) {
+        for (const input of result.internal_precursor_inputs ?? []) {
+            if (processIdsInView.has(input.source_process_id)) {
+                internalMassWithinView += input.mass_t;
+                internalDirectWithinView += input.mass_t * input.direct_see;
+                internalIndirectWithinView += input.mass_t * input.indirect_see;
+                internalBasisWithinView += input.mass_t * (result.indirect_emissions_relevance === 'INCLUDED' ? input.direct_see + input.indirect_see : input.direct_see);
+            } else {
+                internalDirectFromOutside += input.mass_t * input.direct_see;
+                internalIndirectFromOutside += input.mass_t * input.indirect_see;
+            }
+        }
+    }
+    const precursorDirectEmissions = purchasedPrecursorDirectEmissions + internalDirectFromOutside;
+    const precursorIndirectEmissions = purchasedPrecursorIndirectEmissions + internalIndirectFromOutside;
+    const netOutput = Math.max(output - internalMassWithinView, 0);
+
     // CBAM 산정 기준 SEE는 값이 null이 아닌 결과만 가중평균한다(신고 대상 아닌 공정은 null).
     const basisResults = reportable.filter((result) => result.see_cbam_basis !== null);
-    const basisOutput = basisResults.reduce((sum, result) => sum + result.output_mass_t, 0);
+    const basisOutput = basisResults.reduce((sum, result) => sum + result.output_mass_t, 0) - internalMassWithinView;
     const seeCbamBasis = basisOutput > 0
-        ? basisResults.reduce((sum, result) => sum + (result.see_cbam_basis ?? 0) * result.output_mass_t, 0) / basisOutput
+        ? (basisResults.reduce((sum, result) => sum + (result.see_cbam_basis ?? 0) * result.output_mass_t, 0) - internalBasisWithinView) / basisOutput
         : null;
 
-    const seeIndirect = reportable.reduce(
+    const seeIndirect = netOutput > 0 ? (reportable.reduce(
         (sum, result) => sum + result.see_indirect_incl_precursor * result.output_mass_t,
         0
-    ) / output;
-    const seeTotal = reportable.reduce(
+    ) - internalIndirectWithinView) / netOutput : 0;
+    const seeTotal = netOutput > 0 ? (reportable.reduce(
         (sum, result) => sum + result.see_informational_total * result.output_mass_t,
         0
-    ) / output;
+    ) - internalDirectWithinView - internalIndirectWithinView) / netOutput : 0;
 
     // 하나라도 판정 불가면 판정 불가로 본다 — 모르는 것을 안전하게 가정하지 않는다.
     // 「전부 포함」·「전부 비관련」만 그렇게 부르고, 섞였으면 MIXED다. 혼재를 「비관련」으로
@@ -206,7 +235,8 @@ export function buildSeeFlowBinding(results: LocalCalculationResult[]): SeeFlowB
         // 기준 SEE는 basisResults(값이 있는 것)만 가중평균한다. 판정 불가 제품이 섞였으면
         // 그 제품이 빠진 값이므로, 화면이 그 사실을 말해야 한다.
         basisExcludesUndetermined: hasUndetermined && basisResults.length > 0,
-        outputMassT: output,
+        // 사내에서 소비된 양을 뺀 값 — 보내는·받는 공정을 함께 볼 때 시장에 나간 양만 남는다. 이송이 없으면 종전과 같다.
+        outputMassT: netOutput,
         directEmissions,
         ownIndirectEmissions,
         precursorDirectEmissions,

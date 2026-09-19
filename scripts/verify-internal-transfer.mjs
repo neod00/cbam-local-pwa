@@ -146,4 +146,15 @@ for (const file of walk('src')) {
 }
 assert.deepEqual(missing, [], `이송을 넘기지 않는 호출부가 있다:\n${missing.join('\n')}`);
 
+// ── 4단계: 산정보고서 자가검사는 사내 전가분을 소계의 구성 항목으로 센다 ─────
+// 빼먹으면 「원천값 불일치」로 발행이 막힌다(직접 소계 ≠ 자체 + 구매 전구물질).
+const reportSource = readFileSync('src/lib/calculation-report.ts', 'utf8');
+assert.match(reportSource, /parts: \[result\.direct_see, result\.precursor_direct_see, result\.internal_precursor_direct_see \?\? 0\]/, '보고서 직접 소계 검산에 사내 전가분이 없다');
+assert.match(reportSource, /parts: \[result\.own_indirect_see, result\.precursor_indirect_see, result\.internal_precursor_indirect_see \?\? 0\]/, '보고서 간접 소계 검산에 사내 전가분이 없다');
+assert.match(reportSource, /internalTransfers\?: InternalTransferInput\[\]/, '보고서 안의 재계산이 이송을 받지 못한다');
+assert.equal((readFileSync('src/app/export/page.tsx', 'utf8').match(/results: docScope\.results,\n\s+internalTransfers,/g) ?? []).length, 2, '/export가 산정보고서에 이송을 넘기지 않는다');
+// 엔진 결과에서 직접 검산: 소계 = 자체 + 구매 + 사내
+near(rolled.see_direct_incl_precursor, rolled.direct_see + rolled.precursor_direct_see + rolled.internal_precursor_direct_see, 1e-12, '직접 소계의 세 구성 항목');
+near(rolled.see_indirect_incl_precursor, rolled.own_indirect_see + rolled.precursor_indirect_see + rolled.internal_precursor_indirect_see, 1e-12, '간접 소계의 세 구성 항목');
+
 console.log('Internal transfer verification passed (공식 EAF 예제 정답지 1.0015/1.3784 → 1.4396/1.7315 · 3단계 사슬 · 순환·라인 모호·기간 불일치 차단).');

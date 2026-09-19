@@ -308,7 +308,16 @@ export default function ResultsPage() {
                                             <div className="mt-1 text-xs text-slate-400">보고용 SEE(간접) {formatNumber(result.see_indirect_incl_precursor)}</div>
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
-                                            {formatNumber(result.precursor_see)}
+                                            {formatNumber(result.precursor_see + (result.internal_precursor_direct_see ?? 0) + (result.internal_precursor_indirect_see ?? 0))}
+                                            {/* 사내 다른 공정에서 받은 원료의 몫은 구매분과 따로 보여준다 — EU 문서에서도 다른 칸으로 나간다. */}
+                                            {(result.internal_precursor_inputs ?? []).length > 0 && (
+                                                <div className="mt-1 text-xs text-slate-400">
+                                                    구매 {formatNumber(result.precursor_see)} · 사내 {formatNumber((result.internal_precursor_direct_see ?? 0) + (result.internal_precursor_indirect_see ?? 0))}
+                                                    {(result.internal_precursor_inputs ?? []).map((input) => (
+                                                        <div key={input.transfer_id}>← {input.source_process_name} {formatNumber(input.mass_t)} t</div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-950">
                                             {formatNumber(result.see_cbam_basis)}
@@ -368,7 +377,12 @@ export default function ResultsPage() {
                                 </div>
                                 <div>
                                     <dt className="text-xs text-slate-500">전구물질 SEE</dt>
-                                    <dd className="mt-1 font-medium text-slate-900">{formatNumber(result.precursor_see)}</dd>
+                                    <dd className="mt-1 font-medium text-slate-900">
+                                        {formatNumber(result.precursor_see + (result.internal_precursor_direct_see ?? 0) + (result.internal_precursor_indirect_see ?? 0))}
+                                        {(result.internal_precursor_inputs ?? []).length > 0 && (
+                                            <span className="ml-1 text-xs font-normal text-slate-500">(구매 {formatNumber(result.precursor_see)} · 사내 {formatNumber((result.internal_precursor_direct_see ?? 0) + (result.internal_precursor_indirect_see ?? 0))})</span>
+                                        )}
+                                    </dd>
                                 </div>
                                 <div>
                                     <dt className="text-xs text-slate-500">보고용 SEE(직접)</dt>

@@ -984,6 +984,11 @@ export default function ScenariosPage() {
                                                         {item.benchmark_ambiguous ? ' · 공급국의 기본 경로를 못 찾아 최고값 사용' : ''}
                                                     </div>
                                                 ))}
+                                                {scenario.sefa_precursor_breakdown?.filter((item) => item.sefa_basis === 'INTERNAL').map((item) => (
+                                                    <div key={item.name} className={item.sefa === undefined ? 'text-amber-700' : 'text-teal-700'}>
+                                                        {item.name.slice(0, 22)}: {item.sefa === undefined ? '보내는 제품의 SEFA를 정하지 못해 0으로 두었습니다' : `보내는 제품의 SEFA 적용 (${formatNumber(item.sefa)})`}
+                                                    </div>
+                                                ))}
                                                 {scenario.sefa_precursor_breakdown?.some((item) => item.sefa_basis === 'COLUMN_B' && item.benchmark_column_b === undefined) && (
                                                     <div className="text-amber-700">벤치마크를 못 찾은 전구물질이 있어 그 몫은 0으로 두었습니다</div>
                                                 )}
