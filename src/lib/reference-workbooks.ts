@@ -488,6 +488,133 @@ export function findBenchmarkReference(
     return candidates[0];
 }
 
+// ── 벤치마크 값 고르기 (2025/2620 부속서 5.1 · 5.3) ─────────────────────────
+// 공식 표는 570개 CN 중 525개에 값을 **둘 이상** 준다. 5.3의 표시 문자가 그 뜻이다:
+//   (1) 2026~27년 생산분 · (2) 2028~30년 생산분
+//   (C)(D)(E) 탄소강 — 고로·전로 / DRI·전기로 / 스크랩·전기로
+//   (F)(G)(H) 저합금강 — 같은 세 경로 · (J) 고합금강(전기로)
+//   (A)(B) 회색·백색 클링커 · (K)(L) 1차·2차 알루미늄
+// 종전 조회는 앱의 경로 글자(예: 「가공(압연·신선·열처리)」)를 표시 문자와 비교해 한 번도 맞지 않았고,
+// 늘 첫 행을 돌려줬다. 2028년 이후 기간에도 (1) 값이, 전기로 원료에도 고로 값이 나갔다.
+
+export type BenchmarkPeriodIndicator = '1' | '2';
+
+export interface BenchmarkSelection {
+    cn_code: string;
+    column_a?: number;
+    column_a_indicator: string;
+    column_b?: number;
+    column_b_indicator: string;
+    /**
+     * 경로·등급을 정할 근거가 없어 여러 값 중 가장 높은 값을 골랐다.
+     * 높은 벤치마크는 인증서를 **줄이는** 쪽이므로 화면에 반드시 드러낸다.
+     */
+    column_a_ambiguous: boolean;
+    column_b_ambiguous: boolean;
+}
+
+interface BenchmarkEntry {
+    value: number;
+    indicator: string;
+    letters: string[];
+    period?: BenchmarkPeriodIndicator;
+}
+
+/** 「(F)(1)」 → letters ['F'], period '1'. 「(C)/(F)」 → letters ['C','F']. */
+export function parseBenchmarkIndicator(indicator: string | undefined): { letters: string[]; period?: BenchmarkPeriodIndicator } {
+    const tokens = Array.from((indicator ?? '').matchAll(/\(([A-Za-z]|[12])\)/g)).map((match) => match[1].toUpperCase());
+    const period = tokens.find((token) => token === '1' || token === '2') as BenchmarkPeriodIndicator | undefined;
+    return { letters: tokens.filter((token) => token !== '1' && token !== '2'), period };
+}
+
+/** 기본값 적용 연도 → 5.3의 생산연도 표시. 2028년 이후는 (2). */
+export function benchmarkPeriodForYear(year: '2026' | '2027' | '2028_ONWARDS' | undefined): BenchmarkPeriodIndicator {
+    return year === '2028_ONWARDS' ? '2' : '1';
+}
+
+/**
+ * 공정·원료의 경로 글자에서 5.3 표시 문자를 짐작한다. 실제 자료를 쓸 때(5.2) 경로는 **실제** 경로다.
+ * 글자에서 읽어낼 수 없으면 빈 배열 — 호출부가 다른 근거(국가 기본 경로)를 찾는다.
+ */
+export function inferBenchmarkRouteLetters(routeText: string | undefined): string[] {
+    const text = (routeText ?? '').toLowerCase();
+    if (!text.trim()) return [];
+    const direct = parseBenchmarkIndicator(routeText).letters;
+    if (direct.length > 0) return direct;
+    if (/dri|직접환원/.test(text)) return ['D', 'G'];
+    if (/bf|bof|blast|고로|전로/.test(text)) return ['C', 'F'];
+    if (/eaf|electric arc|전기로|scrap|스크랩/.test(text)) return ['E', 'H', 'J'];
+    return [];
+}
+
+function pickBenchmarkEntry(entries: BenchmarkEntry[], period: BenchmarkPeriodIndicator, routeLetters: string[]) {
+    if (entries.length === 0) {
+        return { entry: undefined, ambiguous: false };
+    }
+    // (1)/(2)가 붙은 값은 해당 기간 것만. 표시가 없는 값은 두 기간 공통이다.
+    const inPeriod = entries.filter((entry) => !entry.period || entry.period === period);
+    const pool = inPeriod.length > 0 ? inPeriod : entries;
+    const byRoute = routeLetters.length > 0
+        ? pool.filter((entry) => entry.letters.some((letter) => routeLetters.includes(letter)))
+        : [];
+    const finalPool = byRoute.length > 0 ? byRoute : pool;
+    // 5.1: 같은 CN에 합금 등급이 여럿이면 그 생산연도의 **가장 높은** 값.
+    const entry = finalPool.reduce((best, candidate) => (candidate.value > best.value ? candidate : best), finalPool[0]);
+    const distinctValues = new Set(finalPool.map((candidate) => candidate.value)).size;
+    // 경로 근거로 좁혔으면 남은 차이는 합금 등급(5.1이 최고값을 지정) — 모호하지 않다.
+    return { entry, ambiguous: byRoute.length === 0 && distinctValues > 1 };
+}
+
+export function selectBenchmarkValues(
+    reference: ImportedBenchmarkReference | undefined,
+    cnCode: string,
+    options: { period: BenchmarkPeriodIndicator; columnARouteLetters?: string[]; columnBRouteLetters?: string[] }
+): BenchmarkSelection | undefined {
+    if (!reference) {
+        return undefined;
+    }
+    const normalizedCnCode = normalizeCode(cnCode);
+    const matchedCnCode = reference.rows
+        .map((row) => row.cn_code)
+        .filter((rowCn) => rowCn === normalizedCnCode || normalizedCnCode.startsWith(rowCn))
+        .sort((a, b) => b.length - a.length)[0];
+    if (!matchedCnCode) {
+        return undefined;
+    }
+    const rows = reference.rows.filter((row) => row.cn_code === matchedCnCode);
+    const entriesOf = (column: 'a' | 'b'): BenchmarkEntry[] => rows.flatMap((row) => {
+        const value = column === 'a' ? row.column_a_benchmark : row.column_b_benchmark;
+        const indicator = column === 'a' ? row.column_a_route : row.column_b_route;
+        return value === undefined ? [] : [{ value, indicator, ...parseBenchmarkIndicator(indicator) }];
+    });
+    const a = pickBenchmarkEntry(entriesOf('a'), options.period, options.columnARouteLetters ?? []);
+    const b = pickBenchmarkEntry(entriesOf('b'), options.period, options.columnBRouteLetters ?? []);
+    return {
+        cn_code: matchedCnCode,
+        column_a: a.entry?.value,
+        column_a_indicator: a.entry?.indicator ?? '',
+        column_a_ambiguous: a.ambiguous,
+        column_b: b.entry?.value,
+        column_b_indicator: b.entry?.indicator ?? '',
+        column_b_ambiguous: b.ambiguous,
+    };
+}
+
+/**
+ * 5.1: 기본값으로 SEFA를 정할 때는 2025/2621 부속서 I이 **그 원산국에** 지정한 생산경로를 쓴다.
+ * 공식 기본값 워크북의 「Underlying production route determining CBAM BM」 열이 그 경로다(예: (C), (C)/(F)).
+ */
+export function defaultBenchmarkRouteLetters(
+    reference: ImportedDefaultValueReference | undefined,
+    country: string | undefined,
+    cnCode: string
+): string[] {
+    if (!country) return [];
+    const row = defaultValueCandidates(reference, country, cnCode)[0];
+    return parseBenchmarkIndicator(row?.production_route).letters;
+}
+
+
 /**
  * 공식 워크북은 국가를 **시트 이름**으로 구분하는데 Excel 시트명은 31자에서 잘린다.
  * 조회 키는 시트명 그대로 두고(바꾸면 매칭이 깨진다), 화면에 보일 이름만 온전히 돌려준다.
