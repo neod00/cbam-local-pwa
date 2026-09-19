@@ -259,8 +259,10 @@ export function GuidedWorkspace() {
                     <div className="min-w-0">
                         <h1 className="truncate text-lg font-bold tracking-tight text-slate-950">CBAM 길잡이 지도</h1>
                         <p className="truncate text-xs text-slate-500">
-                            {primaryProduct ? `${primaryProduct.name}${primaryProduct.cn_code ? ` · CN ${primaryProduct.cn_code}` : ''}` : '지도를 따라가면 EU 제출 문서가 완성됩니다'}
-                            {period ? ` · ${period.name}` : ''}
+                            {!data.loaded
+                                ? '저장된 자료를 읽는 중입니다…'
+                                : primaryProduct ? `${primaryProduct.name}${primaryProduct.cn_code ? ` · CN ${primaryProduct.cn_code}` : ''}` : '지도를 따라가면 EU 제출 문서가 완성됩니다'}
+                            {data.loaded && period ? ` · ${period.name}` : ''}
                         </p>
                     </div>
                 </div>
@@ -268,15 +270,20 @@ export function GuidedWorkspace() {
                     <button
                         type="button"
                         onClick={handleNewProject}
-                        disabled={newProjectBusy}
+                        // 자료를 다 읽기 전에는 누를 수 없다 — 「빈 프로젝트」로 보이는 화면에서 새 프로젝트를 시작하면 읽히지 않은 자료가 지워진다.
+                        disabled={newProjectBusy || !data.loaded}
                         className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-teal-300 hover:text-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         <FilePlus className="h-3.5 w-3.5" />
                         새 프로젝트
                     </button>
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
-                        {progress.done} / {progress.total} 완료
-                    </span>
+                    {data.loaded ? (
+                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
+                            {progress.done} / {progress.total} 완료
+                        </span>
+                    ) : (
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">읽는 중…</span>
+                    )}
                 </div>
             </header>
 
@@ -339,7 +346,26 @@ export function GuidedWorkspace() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+            {/* 자료를 읽지 못했으면 그렇다고 말한다. 종전에는 사유를 저장만 하고 화면에 내지 않아, 읽기 실패가 빈 프로젝트와 똑같이 보였다. */}
+            {data.loadError && (
+                <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-900">
+                    <p className="font-semibold">저장된 자료를 읽지 못했습니다. 아래 화면은 빈 프로젝트가 아니라 「읽기 실패」 상태입니다.</p>
+                    <p className="mt-1">새 프로젝트를 시작하거나 값을 새로 입력하지 마세요 — 브라우저를 완전히 닫았다가 다시 열어 보세요. 다른 탭에서 이 앱이 열려 있으면 닫으세요. 백업(.cbam)이 있으면 「데이터 안전·백업」에서 복원할 수 있습니다.</p>
+                    <p className="mt-1 text-xs text-red-800">사유: {data.loadError}</p>
+                </div>
+            )}
+
+            {/* 읽는 동안에는 지도의 빈 골격(0 / 6 · 「회사·공장 정보부터」)을 보여주지 않는다. 느린 PC에서는 그 화면이
+                몇 초 동안 떠 있고, 「내 자료가 사라졌다」로 읽힌다(씨밤이 run16 — 첫 로딩 10초 이상). */}
+            {!data.loaded && (
+                <div role="status" aria-live="polite" className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+                    <span className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-teal-600" aria-hidden="true" />
+                    <p className="text-sm font-semibold text-slate-800">저장된 자료를 읽는 중입니다…</p>
+                    <p className="max-w-md text-xs leading-5 text-slate-500">자료는 이 브라우저 안에 그대로 있습니다. 기준자료 파일이 크거나 PC가 바쁘면 몇 초 걸릴 수 있습니다.</p>
+                </div>
+            )}
+
+            <div className={data.loaded ? 'grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]' : 'hidden'}>
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="산정 지도">
                     <GuidedMap
                         steps={steps}
