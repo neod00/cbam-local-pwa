@@ -849,6 +849,37 @@ export function evaluateEuExportReadiness(
             });
         }
 
+        // ── 사내 이송(공정 간 전가) 안전장치 ─────────────────────────────────────
+        // 엔진은 아직 사내 이송을 하류 공정에 얹지 않는다(docs/internal-precursor-design.md).
+        // 이 상태로 문서를 만들면 두 가지 중 하나로 틀린다. Excel 재계산으로 확인했다(2026-09-19):
+        //   · 그대로 두면 앱의 하류 제품 SEE는 0인데, 템플릿은 (c)칸의 양으로 상류 배출을 얹는다 — 앱과 문서가 다른 말을 한다.
+        //   · 사내 이송분을 「구매 전구물질」로 넣어 우회하면 템플릿이 (c)칸과 E_PurchPrec를 **둘 다** 더해
+        //     하류 제품 SEE가 두 배가 된다(평판재 앱 1.2307 → 문서 2.461).
+        // 틀린 문서를 내보내는 것보다 막는 편이 낫다. 본 구현이 들어가면 이 검사는 그 구현의 검산으로 바뀐다.
+        if (process.internal_consumption_mass_t > 0) {
+            const senderCns = new Set(
+                (outputLinesByProcess.get(process.id) ?? [])
+                    .map((line) => (line.product_id ? productById.get(line.product_id) : undefined))
+                    .concat(process.product_id ? [productById.get(process.product_id)] : [])
+                    .map((product) => (product?.cn_code ?? '').replace(/\D/g, ''))
+                    .filter((cn) => cn.length === 8)
+            );
+            const workaround = exportScope.precursors.filter(
+                (precursor) => precursor.process_id !== process.id
+                    && senderCns.has((precursor.precursor_cn_code ?? '').replace(/\D/g, ''))
+            );
+            issues.push({
+                severity: 'error',
+                area: '생산공정',
+                message: workaround.length > 0
+                    ? `${process.name}: 사내 다른 공정으로 넘긴 양(${process.internal_consumption_mass_t.toFixed(1)} t)이 있는데, 같은 CN의 원료가 「구매 전구물질」로도 들어가 있습니다(${workaround.map((item) => item.name).join(', ')}).`
+                        + ' 이대로 EU 문서를 만들면 템플릿이 두 경로를 모두 더해 받는 제품의 SEE가 두 배가 됩니다. 공정 간 전가는 아직 지원되지 않아 이 구성으로는 문서를 만들 수 없습니다.'
+                    : `${process.name}: 사내 다른 공정으로 넘긴 양(${process.internal_consumption_mass_t.toFixed(1)} t)이 있습니다.`
+                        + ' 앱은 아직 이 양의 배출을 받는 공정에 얹지 않습니다 — 받는 제품의 SEE가 실제보다 낮게(0일 수도) 나옵니다. 공정 간 전가는 아직 지원되지 않아 이 구성으로는 문서를 만들 수 없습니다.',
+                target: { type: 'process', id: process.id },
+            });
+        }
+
         if (outputLineSummary.hasMixedAllocationBasis) {
             issues.push({
                 severity: 'warning',
