@@ -49,6 +49,9 @@ globalThis.scenarioCalculation = {
   parseBenchmarkIndicator,
   inferBenchmarkRouteLetters,
   defaultBenchmarkRouteLetters,
+  CBAM_FACTOR_BY_YEAR,
+  officialCbamFactorForYear,
+  withAssumptionYear,
 };`,
     {
       compilerOptions: {
@@ -73,6 +76,9 @@ const {
   parseBenchmarkIndicator,
   inferBenchmarkRouteLetters,
   defaultBenchmarkRouteLetters,
+  CBAM_FACTOR_BY_YEAR,
+  officialCbamFactorForYear,
+  withAssumptionYear,
 } = loadScenarioModule();
 
 function assertClose(actual, expected, delta = 0.0000001) {
@@ -383,5 +389,24 @@ assert.deepEqual(plain(billet.sefa_precursor_breakdown.map((item) => [item.bench
 ]);
 const [wire2028] = calculateProductScenarios([daeilResult], { ...assumptions, default_value_year: '2028_ONWARDS' }, daeilReferences);
 assert.equal(wire2028.benchmark_column_b, 1.154, '대일 나사 시험 자료에는 (2) 행이 없으므로 (1) 값을 그대로 쓴다');
+
+// ── [지침 2003/87/EC 제10a조(1a)] CBAM factor는 해마다 내려간다 ──────────────
+// 조문: 97,5 % in 2026, 95 % in 2027, 90 % in 2028, 77,5 % in 2029, 51,5 % in 2030,
+//       39 % in 2031, 26,5 % in 2032 and 14 % in 2033. From 2034, no CBAM factor shall apply.
+assert.deepEqual(
+  JSON.parse(JSON.stringify(CBAM_FACTOR_BY_YEAR)).map((row) => [row.year, row.factor]),
+  [[2026, 0.975], [2027, 0.95], [2028, 0.9], [2029, 0.775], [2030, 0.515], [2031, 0.39], [2032, 0.265], [2033, 0.14]]
+);
+assert.equal(officialCbamFactorForYear('2026'), 0.975);
+assert.equal(officialCbamFactorForYear('2027'), 0.95);
+assert.equal(officialCbamFactorForYear('2028_ONWARDS'), 0.9);
+assert.equal(DEFAULT_SCENARIO_ASSUMPTIONS.cbam_factor, officialCbamFactorForYear(DEFAULT_SCENARIO_ASSUMPTIONS.default_value_year), '초기 가정의 factor가 초기 연도의 공식값과 다르다');
+// 손대지 않은 factor는 연도와 함께 옮긴다. 연도만 바꾸고 0.975를 두면 인증서가 적게 계산된다.
+const moved = withAssumptionYear({ ...assumptions, default_value_year: '2026', cbam_factor: 0.975 }, '2028_ONWARDS');
+assert.equal(moved.default_value_year, '2028_ONWARDS');
+assert.equal(moved.cbam_factor, 0.9, '연도를 바꿨는데 factor가 옛 연도 값에 머문다');
+assert.equal(withAssumptionYear(moved, '2027').cbam_factor, 0.95);
+// 직접 고친 값은 건드리지 않는다(화면이 공식값과 다르다고 알린다).
+assert.equal(withAssumptionYear({ ...assumptions, default_value_year: '2026', cbam_factor: 0.8 }, '2027').cbam_factor, 0.8, '사용자가 고친 factor를 덮어쓰면 안 된다');
 
 console.log('Scenario risk verification passed.');

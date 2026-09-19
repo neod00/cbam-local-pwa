@@ -74,6 +74,47 @@ export function normalizeScenarioAssumptions(value: Partial<ScenarioAssumptions>
     };
 }
 
+/**
+ * CBAM factor — Directive 2003/87/EC Article 10a(1a) (Directive (EU) 2023/959로 개정).
+ * 무상할당이 해마다 줄어드는 비율이다. 2034년부터는 factor가 없다(무상할당 조정 0).
+ */
+export const CBAM_FACTOR_BY_YEAR: ReadonlyArray<{ year: number; factor: number }> = [
+    { year: 2026, factor: 0.975 },
+    { year: 2027, factor: 0.95 },
+    { year: 2028, factor: 0.9 },
+    { year: 2029, factor: 0.775 },
+    { year: 2030, factor: 0.515 },
+    { year: 2031, factor: 0.39 },
+    { year: 2032, factor: 0.265 },
+    { year: 2033, factor: 0.14 },
+];
+
+/**
+ * 가정의 「기본값 적용 연도」에 맞는 공식 factor. 「2028년 이후」는 묶음이라 값이 하나가 아니다 —
+ * 그 첫 해(2028)의 값을 돌려주고, 화면이 이후 연도의 값을 함께 보여준다.
+ */
+export function officialCbamFactorForYear(year: ScenarioAssumptions['default_value_year']): number {
+    const calendarYear = year === '2026' ? 2026 : year === '2027' ? 2027 : 2028;
+    return CBAM_FACTOR_BY_YEAR.find((row) => row.year === calendarYear)?.factor ?? 0;
+}
+
+/**
+ * 연도를 바꿀 때 factor를 어떻게 할지 정한다.
+ * 사용자가 factor를 **손대지 않았으면**(= 이전 연도의 공식값 그대로면) 새 연도의 공식값으로 함께 옮긴다.
+ * 직접 고친 값이면 건드리지 않는다 — 화면이 공식값과 다르다고 알린다.
+ */
+export function withAssumptionYear(
+    assumptions: ScenarioAssumptions,
+    nextYear: ScenarioAssumptions['default_value_year']
+): ScenarioAssumptions {
+    const untouched = Math.abs(assumptions.cbam_factor - officialCbamFactorForYear(assumptions.default_value_year)) < 1e-9;
+    return {
+        ...assumptions,
+        default_value_year: nextYear,
+        cbam_factor: untouched ? officialCbamFactorForYear(nextYear) : assumptions.cbam_factor,
+    };
+}
+
 export interface ProductScenarioResult {
     result_id: string;
     product_name: string;

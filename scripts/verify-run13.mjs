@@ -58,3 +58,9 @@ assert.match(precursorsPage, /id="precursor-supplier-sefa"/, '공급사 SEFA 입
 assert.equal((precursorsPage.match(/supplier_sefa_tco2e_per_t: (editPrecursor|precursor)\.supplier_sefa_tco2e_per_t/g) ?? []).length, 2, '수정 폼이 공급사 SEFA를 다시 읽지 않으면 저장할 때 지워진다');
 assert.equal((read('src/lib/calculation-engine.ts').match(/supplier_sefa_tco2e_per_t: precursor\.supplier_sefa_tco2e_per_t/g) ?? []).length, 2, '엔진의 전구물질 투입 내역 2곳이 모두 공급사 SEFA를 실어야 한다');
 console.log('supplier SEFA gate passed.');
+
+// ── CBAM factor 연도 안내 ────────────────────────────────────────────
+const scenariosPage = read('src/app/scenarios/page.tsx');
+assert.match(scenariosPage, /updateAssumptions\(withAssumptionYear\(assumptions,/, '연도 선택이 factor를 함께 옮기지 않는다');
+assert.match(scenariosPage, /공식값 적용/, '공식값과 다른 factor를 되돌릴 방법이 없다');
+console.log('CBAM factor gate passed.');

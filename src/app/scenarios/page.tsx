@@ -5,7 +5,10 @@ import { ActionItemCard, Button, DataTable, SectionCard, StatusBadge } from '@/c
 import { calculateLocalResults } from '@/lib/calculation-engine';
 import { getLocalSetting, listLocalItems, setLocalSetting } from '@/lib/local-db';
 import {
+    CBAM_FACTOR_BY_YEAR,
     calculateProductScenarios,
+    officialCbamFactorForYear,
+    withAssumptionYear,
     CERTIFICATE_INDICATOR_NOTICE,
     DEFAULT_SCENARIO_ASSUMPTIONS,
     normalizeScenarioAssumptions,
@@ -727,7 +730,7 @@ export default function ScenariosPage() {
                         <select
                             className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
                             value={assumptions.default_value_year}
-                            onChange={(event) => void updateAssumptions({ ...assumptions, default_value_year: event.target.value as ScenarioAssumptions['default_value_year'] })}
+                            onChange={(event) => void updateAssumptions(withAssumptionYear(assumptions, event.target.value as ScenarioAssumptions['default_value_year']))}
                         >
                             <option value="2026">2026</option>
                             <option value="2027">2027</option>
@@ -758,6 +761,26 @@ export default function ScenariosPage() {
                             value={assumptions.cbam_factor}
                             onChange={(event) => void updateAssumptions({ ...assumptions, cbam_factor: Number(event.target.value) || 0 })}
                         />
+                        {/* factor는 해마다 내려간다(지침 2003/87/EC 제10a조(1a)). 연도만 바꾸고 factor를 두면 인증서가 적게 계산된다. */}
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                            공식값: {CBAM_FACTOR_BY_YEAR.map((row) => `${row.year}년 ${row.factor}`).join(' · ')} · 2034년부터 0
+                        </p>
+                        {Math.abs(assumptions.cbam_factor - officialCbamFactorForYear(assumptions.default_value_year)) >= 1e-9 && (
+                            <div className="mt-1 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                                고른 연도({assumptions.default_value_year === '2028_ONWARDS' ? '2028년' : `${assumptions.default_value_year}년`})의 공식값은 {officialCbamFactorForYear(assumptions.default_value_year)}입니다.
+                                {assumptions.cbam_factor > officialCbamFactorForYear(assumptions.default_value_year) ? ' 지금 값이 더 커서 인증서가 실제보다 적게 나옵니다.' : ''}
+                                <button
+                                    type="button"
+                                    className="ml-2 font-semibold text-teal-700 underline"
+                                    onClick={() => void updateAssumptions({ ...assumptions, cbam_factor: officialCbamFactorForYear(assumptions.default_value_year) })}
+                                >
+                                    공식값 적용
+                                </button>
+                            </div>
+                        )}
+                        {assumptions.default_value_year === '2028_ONWARDS' && (
+                            <p className="mt-1 text-xs leading-5 text-slate-500">「2028년 이후」는 여러 해의 묶음입니다. 2029년 이후를 검토하려면 위 공식값에서 해당 연도의 값을 직접 넣으세요.</p>
+                        )}
                     </div>
                     <div>
                         <label className="text-sm font-semibold text-slate-700">CSCF</label>
