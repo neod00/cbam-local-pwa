@@ -661,6 +661,73 @@ export function evaluateEuExportReadiness(
         });
     }
 
+    // ── 사내 이송의 구조 검사 ─────────────────────────────────────────────
+    // 엔진은 아래 세 경우에 전가하지 않고 「차단」 경고만 낸다(값을 지어내지 않는다). 그런데 준비도가 그 경고를
+    // 모르면 받는 제품의 SEE가 0인 채로 문서가 열린다(씨밤이 run16 — 순환 이송을 넣어도 8단계가 열려 있었다).
+    // 여기서 같은 조건을 오류로 올린다.
+    {
+        const scopedIds = new Set(exportScope.processes.map((process) => process.id));
+        const processById = new Map(data.processes.map((process) => [process.id, process]));
+        const transfers = (data.internalTransfers ?? []).filter(
+            (transfer) => transfer.mass_t > 0 && (scopedIds.has(transfer.source_process_id) || scopedIds.has(transfer.target_process_id))
+        );
+        // 순환: 들어오는 간선이 없는 공정부터 지워 나가고 남는 것이 순환에 걸린 공정이다.
+        const nodes = new Set(transfers.flatMap((transfer) => [transfer.source_process_id, transfer.target_process_id]));
+        let edges = transfers.map((transfer) => [transfer.source_process_id, transfer.target_process_id] as const);
+        let removed = true;
+        while (removed) {
+            removed = false;
+            for (const node of [...nodes]) {
+                if (!edges.some(([, target]) => target === node)) {
+                    nodes.delete(node);
+                    edges = edges.filter(([source]) => source !== node);
+                    removed = true;
+                }
+            }
+        }
+        if (nodes.size > 0) {
+            const names = [...nodes].map((id) => processById.get(id)?.name ?? id);
+            issues.push({
+                severity: 'error',
+                area: '생산공정',
+                message: `사내 이송이 순환합니다: ${names.join(' ↔ ')}. 순환 이송은 지원하지 않아 이 공정들에는 사내에서 받은 원료의 배출이 얹히지 않았습니다 — 받는 제품의 SEE가 낮게(0일 수도) 나옵니다. 3단계에서 이송 방향을 확인하세요.`,
+                target: { type: 'process', id: [...nodes][0] },
+            });
+        }
+        for (const transfer of transfers) {
+            const source = processById.get(transfer.source_process_id);
+            const target = processById.get(transfer.target_process_id);
+            if (!source || !target) {
+                issues.push({
+                    severity: 'error',
+                    area: '생산공정',
+                    message: `사내 이송(${transfer.mass_t.toFixed(1)} t)의 ${source ? '받는' : '보내는'} 공정을 찾지 못했습니다. 3단계에서 ${source?.name ?? target?.name ?? '해당 공정'}의 이송을 다시 지정하세요.`,
+                    target: source || target ? { type: 'process', id: (source ?? target)!.id } : undefined,
+                });
+                continue;
+            }
+            if ((source.period_id ?? '') !== (target.period_id ?? '')) {
+                issues.push({
+                    severity: 'error',
+                    area: '생산공정',
+                    message: `${source.name} → ${target.name}: 보고기간이 다른 공정 사이의 사내 이송입니다. 같은 기간의 공정끼리만 이송할 수 있습니다.`,
+                    target: { type: 'process', id: source.id },
+                });
+            }
+            const senderLines = (data.productOutputLines ?? []).filter(
+                (line) => line.process_id === source.id && line.output_mass_t > 0 && line.activity_level_role !== 'EXCLUDED'
+            );
+            if (senderLines.length > 1 && !senderLines.some((line) => line.id === transfer.source_output_line_id)) {
+                issues.push({
+                    severity: 'error',
+                    area: '생산공정',
+                    message: `${source.name} → ${target.name}: 보내는 공정에 제품이 둘 이상인데 어느 제품을 넘기는지 정해지지 않았습니다. 3단계에서 ${source.name}을(를) 열어 「넘기는 제품」을 고르세요.`,
+                    target: { type: 'process', id: source.id },
+                });
+            }
+        }
+    }
+
     // The exclusion notice only makes sense once a period is settled. Before the user chooses, it named a period nobody picked.
     const periodSettled = !allPeriods || allPeriods.length <= 1 || periodChoiceValid;
     if (exportScope.period && periodSettled && excludedTotal > unassignedTotal) {
