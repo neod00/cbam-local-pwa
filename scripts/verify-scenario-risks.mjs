@@ -9,14 +9,22 @@ function loadScenarioModule() {
     .replace(/import\s+\{[\s\S]*?\}\s+from '\.\/reference-workbooks';\r?\n/, '')
     .replace(/^export /gm, '');
 
+  // The benchmark selector is the code under test: load the real one, not a stand-in.
+  const referenceSource = readFileSync('src/lib/reference-workbooks.ts', 'utf8');
+  const selectorStart = referenceSource.indexOf('export type BenchmarkPeriodIndicator');
+  const selectorEnd = referenceSource.indexOf(' * 공식 워크북은 국가를') - 4;
+  assert.ok(selectorStart >= 0 && selectorEnd > selectorStart, 'benchmark selector block not found');
+  const selectorSource = referenceSource.slice(selectorStart, selectorEnd).replace(/^export /gm, '');
+
   const compiled = ts.transpileModule(
     `
-function findBenchmarkReference(references, cnCode, productionRoute) {
-  const candidates = references?.rows
-    ?.filter((row) => row.cn_code === cnCode || cnCode.startsWith(row.cn_code))
-    .sort((a, b) => b.cn_code.length - a.cn_code.length) ?? [];
+${selectorSource}
 
-  return candidates.find((row) => !productionRoute || row.production_route === productionRoute) ?? candidates[0];
+const normalizeCode = (value) => String(value ?? '').replace(/[^0-9]/g, '');
+function defaultValueCandidates(references, country, cnCode) {
+  return (references?.rows ?? [])
+    .filter((row) => row.country === country && (row.cn_code === cnCode || cnCode.startsWith(row.cn_code)))
+    .sort((a, b) => b.cn_code.length - a.cn_code.length);
 }
 
 function findDefaultValueReference(references, originCountry, cnCode) {
@@ -37,6 +45,10 @@ globalThis.scenarioCalculation = {
   getScenarioReviewAction,
   normalizeScenarioAssumptions,
   summarizeScenarioRisks,
+  selectBenchmarkValues,
+  parseBenchmarkIndicator,
+  inferBenchmarkRouteLetters,
+  defaultBenchmarkRouteLetters,
 };`,
     {
       compilerOptions: {
@@ -57,6 +69,10 @@ const {
   getScenarioReviewAction,
   normalizeScenarioAssumptions,
   summarizeScenarioRisks,
+  selectBenchmarkValues,
+  parseBenchmarkIndicator,
+  inferBenchmarkRouteLetters,
+  defaultBenchmarkRouteLetters,
 } = loadScenarioModule();
 
 function assertClose(actual, expected, delta = 0.0000001) {
@@ -269,5 +285,103 @@ near(zero.sefa_precursor_indicator, (610 / 3240) * 1.225 * 0.975, 1e-9, '검증�
 // 벤치마크 파일에 전구물질 행이 없어도 검증된 공급사 값은 쓸 수 있다.
 const [verifiedNoBenchmark] = calculateProductScenarios([withSupplierSefa('VERIFIED')], assumptions, { ...daeilReferences, benchmarks: { rows: [daeilReferences.benchmarks.rows[0]] } });
 near(verifiedNoBenchmark.sefa_precursor_indicator, (2910 / 3240) * 1.3, 1e-9, '벤치마크가 없어도 검증된 공급사 SEFA는 반영');
+
+// ── [2025/2620 부속서 5.1 · 5.3] 값이 여럿인 CN에서 벤치마크 고르기 ─────────────
+// 행은 공식 워크북(CBAM Benchmarks_20260206.xlsx)에서 그대로 옮겼다. 이어지는 행은 CN을 물려받는다.
+const officialRows = [
+  // 7223 00 19 STS 와이어: 생산연도로 갈린다
+  { cn_code: '72230019', column_a_benchmark: 0.109, column_a_route: '', column_b_benchmark: 1.225, column_b_route: '(1)' },
+  { cn_code: '72230019', column_a_benchmark: undefined, column_a_route: '', column_b_benchmark: 1.187, column_b_route: '(2)' },
+  // 7207 11 11 반제품: A·B열 모두 경로로 갈린다
+  { cn_code: '72071111', column_a_benchmark: 0.188, column_a_route: '(C)', column_b_benchmark: 1.364, column_b_route: '(C)' },
+  { cn_code: '72071111', column_a_benchmark: 0.065, column_a_route: '(D)', column_b_benchmark: 0.475, column_b_route: '(D)' },
+  { cn_code: '72071111', column_a_benchmark: 0.065, column_a_route: '(E)', column_b_benchmark: 0.066, column_b_route: '(E)' },
+  // 합금강: 등급(F·G·H·J) × 생산연도 — 값은 구조 확인용
+  { cn_code: '72249002', column_a_benchmark: 0.2, column_a_route: '(F)', column_b_benchmark: 1.5, column_b_route: '(F)(1)' },
+  { cn_code: '72249002', column_a_benchmark: 0.07, column_a_route: '(G)', column_b_benchmark: 0.6, column_b_route: '(G)(1)' },
+  { cn_code: '72249002', column_a_benchmark: 0.07, column_a_route: '(H)', column_b_benchmark: 0.3, column_b_route: '(H)(1)' },
+  { cn_code: '72249002', column_a_benchmark: 0.09, column_a_route: '(J)', column_b_benchmark: 0.4, column_b_route: '(J)(1)' },
+  { cn_code: '72249002', column_a_benchmark: undefined, column_a_route: '', column_b_benchmark: 1.4, column_b_route: '(F)(2)' },
+  { cn_code: '72249002', column_a_benchmark: undefined, column_a_route: '', column_b_benchmark: 0.5, column_b_route: '(G)(2)' },
+  { cn_code: '72249002', column_a_benchmark: undefined, column_a_route: '', column_b_benchmark: 0.25, column_b_route: '(H)(2)' },
+  { cn_code: '72249002', column_a_benchmark: undefined, column_a_route: '', column_b_benchmark: 0.35, column_b_route: '(J)(2)' },
+  // 값이 하나뿐인 CN
+  { cn_code: '72011011', column_a_benchmark: 1.089, column_a_route: '', column_b_benchmark: 1.21, column_b_route: '' },
+];
+const official = { rows: officialRows };
+const plain = (value) => JSON.parse(JSON.stringify(value));
+
+assert.deepEqual(plain(parseBenchmarkIndicator('(F)(2)')), { letters: ['F'], period: '2' });
+assert.deepEqual(plain(parseBenchmarkIndicator('(C)/(F)')), { letters: ['C', 'F'] });
+assert.deepEqual(plain(parseBenchmarkIndicator('\u00a0')), { letters: [] }, '워크북의 빈칸(nbsp)은 경로 없음이다');
+
+// 생산연도: 2026~27은 (1), 2028~은 (2). (2) 행에는 A열 값이 없으므로 A열은 공통값을 쓴다.
+const wire1 = selectBenchmarkValues(official, '72230019', { period: '1' });
+const wire2 = selectBenchmarkValues(official, '72230019', { period: '2' });
+assert.equal(wire1.column_b, 1.225);
+assert.equal(wire2.column_b, 1.187, '2028년 이후 기간에 (1) 값이 나간다');
+assert.equal(wire2.column_a, 0.109, '(2) 기간에 A열 값을 잃는다');
+assert.equal(wire2.column_b_ambiguous, false, '생산연도로 하나만 남으면 모호하지 않다');
+
+// 경로: 원산국 기본 경로(기본값 워크북의 경로 열)로 고른다.
+assert.equal(selectBenchmarkValues(official, '72071111', { period: '1', columnBRouteLetters: ['C'] }).column_b, 1.364);
+assert.equal(selectBenchmarkValues(official, '72071111', { period: '1', columnBRouteLetters: ['E'] }).column_b, 0.066, '전기로 원료에 고로 값이 나간다');
+assert.equal(selectBenchmarkValues(official, '72071111', { period: '1', columnARouteLetters: ['D', 'G'] }).column_a, 0.065);
+// 경로 근거가 없으면 가장 높은 값을 고르되, 그 사실을 알린다.
+const unknownRoute = selectBenchmarkValues(official, '72071111', { period: '1' });
+assert.equal(unknownRoute.column_b, 1.364);
+assert.equal(unknownRoute.column_b_ambiguous, true, '근거 없이 고른 값임을 알려야 한다');
+// 표에 없는 문자를 받으면 근거 없는 것과 같다.
+assert.equal(selectBenchmarkValues(official, '72071111', { period: '1', columnBRouteLetters: ['K'] }).column_b_ambiguous, true);
+
+// 5.1: 같은 CN에 합금 등급이 여럿이면 그 생산연도의 가장 높은 값. 「(C)/(F)」처럼 경로가 등급을 가로지르면 그 안에서 최고값.
+const alloy2 = selectBenchmarkValues(official, '72249002', { period: '2', columnBRouteLetters: ['C', 'F'] });
+assert.equal(alloy2.column_b, 1.4);
+assert.equal(alloy2.column_b_indicator, '(F)(2)');
+assert.equal(alloy2.column_b_ambiguous, false);
+assert.equal(selectBenchmarkValues(official, '72249002', { period: '1', columnBRouteLetters: ['E', 'H', 'J'] }).column_b, 0.4, '전기로 계열(H·J) 중 최고값');
+
+// 값이 하나뿐인 CN은 종전과 같다. 8자리에 없으면 짧은 코드로 내려간다.
+const single = selectBenchmarkValues(official, '72011011', { period: '2', columnBRouteLetters: ['C'] });
+assert.equal(single.column_a, 1.089);
+assert.equal(single.column_b, 1.21);
+assert.equal(single.column_b_ambiguous, false);
+assert.equal(selectBenchmarkValues(official, '99999999', { period: '1' }), undefined);
+
+// 글자에서 실제 경로 읽기(5.2 — 실제 자료의 A열)
+assert.deepEqual(plain(inferBenchmarkRouteLetters('스크랩 전기로(EAF)')), ['E', 'H', 'J']);
+assert.deepEqual(plain(inferBenchmarkRouteLetters('BF/BOF 일관제철')), ['C', 'F']);
+assert.deepEqual(plain(inferBenchmarkRouteLetters('DRI-EAF')), ['D', 'G'], 'DRI/EAF는 DRI 경로다 — EAF로 읽으면 안 된다');
+assert.deepEqual(plain(inferBenchmarkRouteLetters('가공(압연·신선·열처리)')), [], '가공 공정 글자에서는 경로를 지어내지 않는다');
+
+// 원산국 기본 경로: 기본값 워크북의 경로 열에서 읽는다.
+const dvWithRoutes = { rows: [
+  { country: 'South Korea', cn_code: '720711', production_route: '(C)' },
+  { country: 'Nowhere', cn_code: '720711', production_route: '(E)' },
+  { country: 'South Korea', cn_code: '7224', production_route: '(C)/(F)' },
+  { country: 'South Korea', cn_code: '7223', production_route: '\u00a0' },
+] };
+assert.deepEqual(plain(defaultBenchmarkRouteLetters(dvWithRoutes, 'South Korea', '72071111')), ['C']);
+assert.deepEqual(plain(defaultBenchmarkRouteLetters(dvWithRoutes, 'South Korea', '72249002')), ['C', 'F']);
+assert.deepEqual(plain(defaultBenchmarkRouteLetters(dvWithRoutes, 'South Korea', '72230019')), []);
+assert.deepEqual(plain(defaultBenchmarkRouteLetters(dvWithRoutes, undefined, '72071111')), []);
+
+// 시나리오에 연결: 전구물질의 B열은 **그 전구물질의 원산국** 경로로, 기간은 가정의 연도로 고른다.
+const billetResult = {
+  ...baseResult, id: 'billet', cn_code: '72011011', hs_code: '7201', output_mass_t: 1000,
+  precursor_inputs: [
+    { precursor_id: 'kr', name: 'KR billet', cn_code: '72071111', supplier_country: 'South Korea', mass_t: 500 },
+    { precursor_id: 'xx', name: 'EAF billet', cn_code: '72071111', supplier_country: 'Nowhere', mass_t: 500 },
+    { precursor_id: 'zz', name: 'Unknown billet', cn_code: '72071111', supplier_country: 'Atlantis', mass_t: 100 },
+  ],
+};
+const [billet] = calculateProductScenarios([billetResult], assumptions, { benchmarks: official, defaultValues: dvWithRoutes });
+assert.deepEqual(plain(billet.sefa_precursor_breakdown.map((item) => [item.benchmark_column_b, item.benchmark_indicator, item.benchmark_ambiguous])), [
+  [1.364, '(C)', false],
+  [0.066, '(E)', false],
+  [1.364, '(C)', true],
+]);
+const [wire2028] = calculateProductScenarios([daeilResult], { ...assumptions, default_value_year: '2028_ONWARDS' }, daeilReferences);
+assert.equal(wire2028.benchmark_column_b, 1.154, '대일 나사 시험 자료에는 (2) 행이 없으므로 (1) 값을 그대로 쓴다');
 
 console.log('Scenario risk verification passed.');

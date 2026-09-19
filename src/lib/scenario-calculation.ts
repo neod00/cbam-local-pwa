@@ -1,7 +1,10 @@
 import type { LocalCalculationResult } from './calculation-engine';
 import {
-    findBenchmarkReference,
+    benchmarkPeriodForYear,
+    defaultBenchmarkRouteLetters,
     findDefaultValueReference,
+    inferBenchmarkRouteLetters,
+    selectBenchmarkValues,
     getDefaultValueTotalForYear,
     type ImportedBenchmarkReference,
     type ImportedDefaultValueReference,
@@ -86,6 +89,12 @@ export interface ProductScenarioResult {
     default_gap?: number;
     benchmark_column_a?: number;
     benchmark_column_b?: number;
+    /** 고른 값의 5.3 표시 문자 — 예: 「(1)」, 「(C)」, 「(F)(2)」. 값이 하나뿐인 CN은 빈 문자열 */
+    benchmark_column_a_indicator?: string;
+    benchmark_column_b_indicator?: string;
+    /** 경로를 정할 근거가 없어 여러 값 중 가장 높은 값을 골랐다(인증서가 줄어드는 쪽) */
+    benchmark_column_a_ambiguous?: boolean;
+    benchmark_column_b_ambiguous?: boolean;
     sefa_indicator?: number;
     /** 식 (2)·(3): 이 제품을 만드는 공정 몫 = CBAM factor × CSCF × Column A */
     sefa_process_indicator?: number;
@@ -102,6 +111,8 @@ export interface ProductScenarioResult {
         sefa_basis: 'SUPPLIER_VERIFIED' | 'COLUMN_B';
         /** 공급사 값이 있지만 검증완료가 아니라 쓰지 않았다 */
         supplier_sefa_unverified?: boolean;
+        benchmark_indicator: string;
+        benchmark_ambiguous: boolean;
     }>;
     certificate_quantity_indicator?: number;
     certificate_cost_indicator_eur?: number;
@@ -237,7 +248,17 @@ export function calculateProductScenarios(
             };
         }
 
-        const benchmark = findBenchmarkReference(references.benchmarks, cnCode, result.production_route);
+        // 5.3: 값이 여럿인 CN은 생산연도 (1)/(2)와 경로·등급 문자로 고른다.
+        //   A열(실제 자료, 5.2) — 이 공정의 **실제** 경로. 글자에서 못 읽으면 원산국 기본 경로로 본다.
+        //   B열(기본값, 5.1)    — 2025/2621이 **원산국에** 지정한 경로(기본값 워크북의 경로 열).
+        const benchmarkPeriod = benchmarkPeriodForYear(assumptions.default_value_year);
+        const originRouteLetters = defaultBenchmarkRouteLetters(references.defaultValues, assumptions.origin_country, cnCode);
+        const actualRouteLetters = inferBenchmarkRouteLetters(result.production_route);
+        const benchmark = selectBenchmarkValues(references.benchmarks, cnCode, {
+            period: benchmarkPeriod,
+            columnARouteLetters: actualRouteLetters.length > 0 ? actualRouteLetters : originRouteLetters,
+            columnBRouteLetters: originRouteLetters,
+        });
         const defaultValue = findDefaultValueReference(
             references.defaultValues,
             assumptions.origin_country,
@@ -250,8 +271,8 @@ export function calculateProductScenarios(
         const defaultMarkupAmount =
             defaultSee !== undefined && defaultSeeRaw !== undefined ? defaultSee - defaultSeeRaw : undefined;
         const defaultGap = defaultSee === undefined ? undefined : actualSee - defaultSee;
-        const benchmarkColumnA = benchmark?.column_a_benchmark;
-        const benchmarkColumnB = benchmark?.column_b_benchmark;
+        const benchmarkColumnA = benchmark?.column_a;
+        const benchmarkColumnB = benchmark?.column_b;
         // ── 실측 SEFA = 공정 몫 + 전구물질 몫 ─────────────────────────────────────
         // Implementing Regulation (EU) 2025/2620 부속서:
         //   식 (2)·(3)  SFAProc = CBAM_y · CSCF_y · BM*_g   (BM* = 제5항 **A열**, 「공정 관련」 벤치마크)
@@ -267,9 +288,18 @@ export function calculateProductScenarios(
             : benchmarkColumnA * assumptions.cbam_factor * assumptions.cscf;
         const precursorBreakdown = (result.precursor_inputs ?? []).map((input) => {
             const specificMass = result.output_mass_t > 0 ? input.mass_t / result.output_mass_t : 0;
-            const precursorBenchmark = input.cn_code
-                ? findBenchmarkReference(references.benchmarks, input.cn_code, input.production_route)?.column_b_benchmark
+            // 3.3(2)(a)·(d): 전구물질의 B열은 **그 전구물질의 원산국**에 지정된 경로로 고른다.
+            const precursorSelection = input.cn_code
+                ? selectBenchmarkValues(references.benchmarks, input.cn_code, {
+                    period: benchmarkPeriod,
+                    columnBRouteLetters: defaultBenchmarkRouteLetters(references.defaultValues, input.supplier_country, input.cn_code),
+                })
                 : undefined;
+            const precursorBenchmark = precursorSelection?.column_b;
+            const precursorBenchmarkMeta = {
+                benchmark_indicator: precursorSelection?.column_b_indicator ?? '',
+                benchmark_ambiguous: precursorSelection?.column_b_ambiguous ?? false,
+            };
             const supplierSefa = Number.isFinite(input.supplier_sefa_tco2e_per_t) && (input.supplier_sefa_tco2e_per_t ?? -1) >= 0
                 ? input.supplier_sefa_tco2e_per_t
                 : undefined;
@@ -281,6 +311,8 @@ export function calculateProductScenarios(
                     benchmark_column_b: precursorBenchmark,
                     sefa: specificMass * supplierSefa,
                     sefa_basis: 'SUPPLIER_VERIFIED' as const,
+                    benchmark_indicator: '',
+                    benchmark_ambiguous: false,
                 };
             }
             return {
@@ -293,6 +325,7 @@ export function calculateProductScenarios(
                     : specificMass * precursorBenchmark * assumptions.cbam_factor * assumptions.cscf,
                 sefa_basis: 'COLUMN_B' as const,
                 supplier_sefa_unverified: supplierSefa !== undefined,
+                ...precursorBenchmarkMeta,
             };
         });
         const sefaPrecursorIndicator = precursorBreakdown.reduce((sum, item) => sum + (item.sefa ?? 0), 0);
@@ -356,6 +389,10 @@ export function calculateProductScenarios(
             default_gap: defaultGap,
             benchmark_column_a: benchmarkColumnA,
             benchmark_column_b: benchmarkColumnB,
+            benchmark_column_a_indicator: benchmark?.column_a_indicator,
+            benchmark_column_b_indicator: benchmark?.column_b_indicator,
+            benchmark_column_a_ambiguous: benchmark?.column_a_ambiguous,
+            benchmark_column_b_ambiguous: benchmark?.column_b_ambiguous,
             sefa_indicator: sefaIndicator,
             sefa_process_indicator: sefaProcessIndicator,
             sefa_precursor_indicator: sefaPrecursorIndicator,

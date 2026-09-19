@@ -925,8 +925,19 @@ export default function ScenariosPage() {
                                         )}
                                     </td>
                                     <td className={`whitespace-nowrap px-4 py-4 text-right text-sm ${(scenario.default_gap ?? 0) > 0 ? 'font-semibold text-amber-700' : 'text-slate-600'}`}>{formatNumber(scenario.default_gap)}</td>
-                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.benchmark_column_a)}</td>
-                                    <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">{formatNumber(scenario.benchmark_column_b)}</td>
+                                    {/* 공식 표는 대부분의 CN에 값을 여럿 준다(2025/2620 부속서 5.3). 어느 값을 골랐는지, 근거가 있었는지 보여준다. */}
+                                    <td className="px-4 py-4 text-right text-sm text-slate-600">
+                                        <span className="whitespace-nowrap">{formatNumber(scenario.benchmark_column_a)} {scenario.benchmark_column_a_indicator}</span>
+                                        {scenario.benchmark_column_a_ambiguous && (
+                                            <div className="mt-1 max-w-[14rem] text-left text-xs text-amber-700">생산경로를 알 수 없어 여러 값 중 가장 높은 값을 썼습니다. 공정의 생산경로에 BF/BOF · DRI · EAF 중 하나를 적어 주세요.</div>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-4 text-right text-sm text-slate-600">
+                                        <span className="whitespace-nowrap">{formatNumber(scenario.benchmark_column_b)} {scenario.benchmark_column_b_indicator}</span>
+                                        {scenario.benchmark_column_b_ambiguous && (
+                                            <div className="mt-1 max-w-[14rem] text-left text-xs text-amber-700">원산국의 기본 생산경로를 찾지 못해 여러 값 중 가장 높은 값을 썼습니다. 인증서가 실제보다 적게 나올 수 있습니다.</div>
+                                        )}
+                                    </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-slate-600">
                                         {formatNumber(scenario.sefa_indicator)}
                                         {/* 실측 SEFA = 공정 몫(A열) + 전구물질 몫(전구물질의 B열 × 투입 원단위) — 2025/2620 부속서 식 (4) */}
@@ -939,6 +950,12 @@ export default function ScenariosPage() {
                                                 {scenario.sefa_precursor_breakdown?.some((item) => item.supplier_sefa_unverified) && (
                                                     <div className="text-amber-700">공급사 SEFA가 입력됐지만 「검증완료」가 아니라 쓰지 않았습니다. 기본 벤치마크(B열)로 계산했습니다</div>
                                                 )}
+                                                {scenario.sefa_precursor_breakdown?.filter((item) => item.sefa_basis === 'COLUMN_B' && item.benchmark_column_b !== undefined).map((item) => (
+                                                    <div key={item.name} className={item.benchmark_ambiguous ? 'text-amber-700' : undefined}>
+                                                        {item.name.slice(0, 18)}: B열 {formatNumber(item.benchmark_column_b)} {item.benchmark_indicator}
+                                                        {item.benchmark_ambiguous ? ' · 공급국의 기본 경로를 못 찾아 최고값 사용' : ''}
+                                                    </div>
+                                                ))}
                                                 {scenario.sefa_precursor_breakdown?.some((item) => item.sefa_basis === 'COLUMN_B' && item.benchmark_column_b === undefined) && (
                                                     <div className="text-amber-700">벤치마크를 못 찾은 전구물질이 있어 그 몫은 0으로 두었습니다</div>
                                                 )}
