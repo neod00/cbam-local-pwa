@@ -84,6 +84,10 @@ export interface LocalCalculationResult {
      * 그러려면 어떤 전구물질이 몇 톤 들어갔는지를 결과가 알고 있어야 한다.
      */
     precursor_inputs?: PrecursorInput[];
+    /** 사내 다른 공정에서 받은 전구물질의 몫 — 구매 전구물질(precursor_*)과 따로 둔다. see_*_incl_precursor에는 이미 더해져 있다. */
+    internal_precursor_direct_see?: number;
+    internal_precursor_indirect_see?: number;
+    internal_precursor_inputs?: InternalPrecursorInput[];
     hs_code?: string;
     cn_code?: string;
     production_route: string;
@@ -330,7 +334,160 @@ export function calculateEmission(input: CalcInput): CalcResult {
     };
 }
 
+// ── 사내 이송(공정 간 전가) ───────────────────────────────────────────────
+// 2025/2547 부속서 III: 사업장 안의 **다른 생산공정**에서 만든 전구물질은 그 전구물질의 기간 평균
+// 직접·간접 SEE × 받는 공정이 쓴 양으로 받는 공정에 얹는다. EU 템플릿의 D_Processes (c)칸이 하는 계산이다.
+// 공식 예제 「Example Steel 2 EAF alloys」가 정답지다(조강 1.0015 / 1.3784 → 압연재 1.4396 / 1.7315).
+//
+// 1단계(공정별 자체 몫 + 구매 전구물질)는 건드리지 않는다. 그 결과 위에 상류→하류 순으로 얹는다.
+// 이송이 없으면 결과는 종전과 완전히 같다.
+
+export interface InternalTransferInput {
+    id: string;
+    period_id?: string;
+    source_process_id: string;
+    source_output_line_id?: string;
+    target_process_id: string;
+    mass_t: number;
+}
+
+export interface InternalPrecursorInput {
+    transfer_id: string;
+    source_process_id: string;
+    source_process_name: string;
+    source_product_name: string;
+    source_cn_code?: string;
+    /** 이 결과(제품라인)에 귀속된 양 (t) */
+    mass_t: number;
+    /** 적용한 보내는 쪽 SEE — 구매·사내 전구물질까지 포함한 최종값, 기간 평균 */
+    direct_see: number;
+    indirect_see: number;
+}
+
+/** 이송 그래프를 상류→하류로 정렬한다. 순환에 걸린 공정은 cyclic으로 돌려준다(전가하지 않는다). */
+function orderProcessesForTransfers(processIds: string[], transfers: InternalTransferInput[]) {
+    const incoming = new Map<string, number>(processIds.map((id) => [id, 0]));
+    const outgoing = new Map<string, string[]>();
+    for (const transfer of transfers) {
+        if (!incoming.has(transfer.source_process_id) || !incoming.has(transfer.target_process_id)) continue;
+        incoming.set(transfer.target_process_id, (incoming.get(transfer.target_process_id) ?? 0) + 1);
+        outgoing.set(transfer.source_process_id, [...(outgoing.get(transfer.source_process_id) ?? []), transfer.target_process_id]);
+    }
+    const ready = processIds.filter((id) => (incoming.get(id) ?? 0) === 0);
+    const ordered: string[] = [];
+    while (ready.length > 0) {
+        const id = ready.shift() as string;
+        ordered.push(id);
+        for (const next of outgoing.get(id) ?? []) {
+            incoming.set(next, (incoming.get(next) ?? 0) - 1);
+            if (incoming.get(next) === 0) ready.push(next);
+        }
+    }
+    return { ordered, cyclic: processIds.filter((id) => !ordered.includes(id)) };
+}
+
+export function applyInternalTransfers(
+    ownResults: LocalCalculationResult[],
+    transfers: InternalTransferInput[]
+): LocalCalculationResult[] {
+    const valid = transfers.filter((transfer) => Number.isFinite(transfer.mass_t) && transfer.mass_t > 0);
+    if (valid.length === 0) {
+        return ownResults;
+    }
+    const results = ownResults.map((result) => ({ ...result, warnings: [...result.warnings], warningDetails: [...result.warningDetails] }));
+    const byProcess = new Map<string, LocalCalculationResult[]>();
+    for (const result of results) {
+        byProcess.set(result.process_id, [...(byProcess.get(result.process_id) ?? []), result]);
+    }
+    const warn = (processId: string, message: string) => {
+        for (const result of byProcess.get(processId) ?? []) {
+            result.warnings.push(message);
+            result.warningDetails.push({ message, target: { type: 'process', id: processId } });
+        }
+    };
+
+    const { ordered, cyclic } = orderProcessesForTransfers([...byProcess.keys()], valid);
+    for (const processId of cyclic) {
+        warn(processId, '차단: 사내 이송이 순환합니다(A→B→A). 순환 이송은 지원하지 않아 이 공정에는 사내 전구물질 배출을 얹지 않았습니다. 이송 방향을 확인하세요.');
+    }
+
+    for (const targetId of ordered) {
+        const targetResults = byProcess.get(targetId) ?? [];
+        for (const transfer of valid.filter((item) => item.target_process_id === targetId)) {
+            const senderResults = byProcess.get(transfer.source_process_id) ?? [];
+            if (senderResults.length === 0) {
+                warn(targetId, '차단: 사내 이송의 보내는 공정을 찾지 못했습니다. 3단계에서 이송을 다시 지정하세요.');
+                continue;
+            }
+            if (cyclic.includes(transfer.source_process_id)) {
+                continue;
+            }
+            const sender = transfer.source_output_line_id
+                ? senderResults.find((result) => result.product_output_line_id === transfer.source_output_line_id)
+                : senderResults.filter((result) => result.output_mass_t > 0).length === 1
+                    ? senderResults.find((result) => result.output_mass_t > 0)
+                    : undefined;
+            if (!sender) {
+                warn(targetId, `차단: ${senderResults[0].process_name}에서 받은 사내 이송이 어느 제품 라인의 산출물인지 정해지지 않았습니다. 보내는 공정에 제품이 둘 이상이면 라인을 지정해야 합니다.`);
+                continue;
+            }
+            if ((sender.period_id ?? '') !== (targetResults[0]?.period_id ?? '')) {
+                warn(targetId, `차단: ${sender.process_name}에서 받은 사내 이송이 다른 보고기간의 공정을 가리킵니다. 같은 기간의 공정끼리만 이송할 수 있습니다.`);
+                continue;
+            }
+            for (const target of targetResults) {
+                if (target.output_mass_t <= 0) continue;
+                const mass = transfer.mass_t * target.allocation_share;
+                const addedDirectSee = mass * sender.see_direct_incl_precursor / target.output_mass_t;
+                const addedIndirectSee = mass * sender.see_indirect_incl_precursor / target.output_mass_t;
+                target.internal_precursor_direct_see = (target.internal_precursor_direct_see ?? 0) + addedDirectSee;
+                target.internal_precursor_indirect_see = (target.internal_precursor_indirect_see ?? 0) + addedIndirectSee;
+                target.internal_precursor_inputs = [...(target.internal_precursor_inputs ?? []), {
+                    transfer_id: transfer.id,
+                    source_process_id: sender.process_id,
+                    source_process_name: sender.process_name,
+                    source_product_name: sender.product_name,
+                    source_cn_code: sender.cn_code,
+                    mass_t: mass,
+                    direct_see: sender.see_direct_incl_precursor,
+                    indirect_see: sender.see_indirect_incl_precursor,
+                }];
+                target.see_direct_incl_precursor += addedDirectSee;
+                target.see_indirect_incl_precursor += addedIndirectSee;
+                if (target.see_cbam_basis !== null) {
+                    target.see_cbam_basis += target.indirect_emissions_relevance === 'INCLUDED' ? addedDirectSee + addedIndirectSee : addedDirectSee;
+                }
+                target.see_informational_total = (target.see_informational_total ?? 0) + addedDirectSee + addedIndirectSee;
+                target.total_see = target.see_informational_total;
+            }
+        }
+    }
+
+    // 검산: 받은 양이 그 공정의 산출량보다 적으면 수율이 100%를 넘는다 — 물리적으로 이상하다.
+    for (const [processId, processResults] of byProcess) {
+        const received = valid.filter((item) => item.target_process_id === processId).reduce((sum, item) => sum + item.mass_t, 0);
+        const produced = processResults.reduce((sum, result) => sum + result.output_mass_t, 0);
+        if (received > 0 && produced > received * 1.001 && processResults.every((result) => (result.precursor_inputs ?? []).length === 0)) {
+            warn(processId, `확인 필요(자료): 사내에서 받은 양(${received.toFixed(1)} t)보다 산출량(${produced.toFixed(1)} t)이 많습니다. 다른 원료가 없다면 받은 양을 확인하세요.`);
+        }
+    }
+    return results;
+}
+
 export function calculateLocalResults(input: {
+    processes: ProductionProcess[];
+    precursors: PurchasedPrecursor[];
+    products: Product[];
+    periods: ReportingPeriod[];
+    sourceStreams?: SourceStream[];
+    productOutputLines?: ProductOutputLine[];
+    internalTransfers?: InternalTransferInput[];
+}): LocalCalculationResult[] {
+    return applyInternalTransfers(calculateOwnResults(input), input.internalTransfers ?? []);
+}
+
+/** 1단계 — 공정별 자체 몫(직접·전력)과 구매 전구물질. 공정끼리는 서로 모른다. */
+function calculateOwnResults(input: {
     processes: ProductionProcess[];
     precursors: PurchasedPrecursor[];
     products: Product[];
