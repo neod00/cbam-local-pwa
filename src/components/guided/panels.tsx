@@ -671,7 +671,7 @@ function ProductsPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                     <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
                         <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
                         {exportSupport.good
-                            ? <>품목군 「{exportSupport.good}」은 <span className="font-semibold">아직 EU 문서 생성이 지원되지 않습니다</span>(현재 철강 계열만). 산정과 결과 확인은 됩니다.</>
+                            ? <>품목군 「{exportSupport.good}」은 <span className="font-semibold">이 앱의 지원 범위가 아닙니다</span>(철강 전용). 등록은 되지만 산정 결과와 EU 문서에는 넣지 않습니다 — 같은 공정에서 철강 제품과 함께 만드는 경우에만, 배출을 나누기 위해 등록하세요.</>
                             : <>이 CN은 EU 공식 목록에서 조회되지 않습니다. CN을 다시 확인하세요.</>}
                     </div>
                 )}
