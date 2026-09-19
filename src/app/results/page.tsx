@@ -269,7 +269,7 @@ export default function ResultsPage() {
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">
                                             {result.product_name}
-                                            <div className="mt-1 text-xs font-semibold text-slate-500">{result.allocation_basis === 'ACTIVITY_LEVEL_EXCLUDED' ? '활동수준 제외 (신고 대상 아님)' : getProductReportingScopeLabel(result.reporting_scope)}</div>
+                                            <div className="mt-1 text-xs font-semibold text-slate-500">{result.allocation_basis === 'ACTIVITY_LEVEL_EXCLUDED' ? '활동수준 제외 (신고 대상 아님)' : result.reporting_scope === 'CBAM_GOOD' && !result.is_cbam_reportable ? '앱 지원 범위 밖 (산정 제외)' : getProductReportingScopeLabel(result.reporting_scope)}</div>
                                             {(result.cn_code || result.hs_code) && (
                                                 <div className="text-xs text-slate-400">
                                                     {result.cn_code ? `CN ${result.cn_code}` : `HS ${result.hs_code}`}
@@ -352,7 +352,7 @@ export default function ResultsPage() {
                                         {result.product_name}
                                         {result.cn_code ? ` / CN ${result.cn_code}` : result.hs_code ? ` / HS ${result.hs_code}` : ''}
                                     </p>
-                                    <p className="mt-1 text-xs font-semibold text-slate-500">{result.allocation_basis === 'ACTIVITY_LEVEL_EXCLUDED' ? '활동수준 제외 (신고 대상 아님)' : getProductReportingScopeLabel(result.reporting_scope)}</p>
+                                    <p className="mt-1 text-xs font-semibold text-slate-500">{result.allocation_basis === 'ACTIVITY_LEVEL_EXCLUDED' ? '활동수준 제외 (신고 대상 아님)' : result.reporting_scope === 'CBAM_GOOD' && !result.is_cbam_reportable ? '앱 지원 범위 밖 (산정 제외)' : getProductReportingScopeLabel(result.reporting_scope)}</p>
                                 </div>
                                 <StatusBadge tone={getAllocationTone(result)}>{getAllocationLabel(result)}</StatusBadge>
                             </div>
