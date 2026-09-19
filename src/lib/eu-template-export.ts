@@ -87,6 +87,52 @@ export function resolveExportPeriod(
     return reportingPeriodId && periods.length > 1 ? undefined : periods[0];
 }
 
+export interface PeriodScopedRecords<R extends { period_id?: string }> {
+    period?: ReportingPeriod;
+    periods: ReportingPeriod[];
+    processes: ProductionProcess[];
+    productOutputLines: ProductOutputLine[];
+    sourceStreams: SourceStream[];
+    precursors: PurchasedPrecursor[];
+    results: R[];
+}
+
+/**
+ * 산정보고서와 전달 패키지가 EU 사본과 **같은 기간**을 말하게 한다.
+ *
+ * EU 사본만 고른 기간을 따르고 보고서·패키지는 모든 기간을 담았다. 기간이 둘이면 한 패키지 안의
+ * 세 문서가 서로 다른 범위를 말한다. 여기서는 기간만 거른다 — 보고범위(CBAM 대상 여부)는 건드리지
+ * 않는다. 보고서는 비CBAM 공정도 사업장 전체 그림으로 싣기 때문이다.
+ * 기간이 하나면 period_id가 빈 행도 그 기간으로 본다(createReportableExportScope와 같은 규칙).
+ */
+export function scopeRecordsToExportPeriod<R extends { period_id?: string }>(input: {
+    periods: ReportingPeriod[];
+    reportingPeriodId?: string;
+    processes: ProductionProcess[];
+    productOutputLines: ProductOutputLine[];
+    sourceStreams: SourceStream[];
+    precursors: PurchasedPrecursor[];
+    results: R[];
+}): PeriodScopedRecords<R> {
+    const period = resolveExportPeriod(input.periods, input.reportingPeriodId);
+    if (!period || input.periods.length <= 1) {
+        return { ...input, period };
+    }
+    const processes = input.processes.filter((process) => process.period_id === period.id);
+    const processIds = new Set(processes.map((process) => process.id));
+    const ofKeptProcess = (row: { period_id?: string; process_id?: string }) =>
+        row.period_id === period.id && (!row.process_id || processIds.has(row.process_id));
+    return {
+        period,
+        periods: [period],
+        processes,
+        productOutputLines: input.productOutputLines.filter((line) => processIds.has(line.process_id)),
+        sourceStreams: input.sourceStreams.filter(ofKeptProcess),
+        precursors: input.precursors.filter(ofKeptProcess),
+        results: input.results.filter((result) => result.period_id === period.id),
+    };
+}
+
 /**
  * 이 생산라인 때문에 공정이 EU 문서에 나가야 하는가.
  *
