@@ -8,6 +8,7 @@ import {
     Product,
     ProductOutputLine,
     ProductionProcess,
+    InternalTransfer,
     PurchasedPrecursor,
     ReportingPeriod,
     SourceStream,
@@ -108,6 +109,8 @@ export default function ProcessesPage() {
     const [processes, setProcesses] = useState<ProductionProcess[]>([]);
     const [productOutputLines, setProductOutputLines] = useState<ProductOutputLine[]>([]);
     const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
+    // 사내 이송(받는 공정별 양)은 작업 지도 3단계에서 넣는다. 여기서는 합계와 어긋나지 않게 읽기만 한다.
+    const [internalTransfers, setInternalTransfers] = useState<InternalTransfer[]>([]);
     const [sourceStreams, setSourceStreams] = useState<SourceStream[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
@@ -136,6 +139,7 @@ export default function ProcessesPage() {
             setProcesses(sortedProcesses);
             setProductOutputLines(outputLineData);
             setPrecursors(precursorData);
+            setInternalTransfers(await listLocalItems('internal_transfers'));
             setSourceStreams(sourceStreamData);
             setProducts(productData.sort((a, b) => a.name.localeCompare(b.name)));
             setPeriods(periodData.sort((a, b) => b.start_date.localeCompare(a.start_date)));
@@ -469,6 +473,12 @@ export default function ProcessesPage() {
         const linkedSourceStreams = sourceStreams.filter((sourceStream) => sourceStream.process_id === process.id);
         const linkedOutputLines = productOutputLines.filter((line) => line.process_id === process.id);
 
+        const incomingTransfers = internalTransfers.filter((transfer) => transfer.target_process_id === process.id);
+        if (incomingTransfers.length > 0) {
+            window.alert(`이 생산공정은 다른 공정에서 사내 이송을 받고 있어 삭제할 수 없습니다(${incomingTransfers.length}건).\n먼저 작업 지도 3단계에서 보내는 공정을 열어 이 공정으로 넘기는 양을 비우세요.`);
+            return;
+        }
+
         if (linkedPrecursors.length > 0 || linkedSourceStreams.length > 0) {
             window.alert(
                 [
@@ -489,6 +499,9 @@ export default function ProcessesPage() {
             return;
         }
 
+        const outgoingTransfers = internalTransfers.filter((transfer) => transfer.source_process_id === process.id);
+        await Promise.all(outgoingTransfers.map((transfer) => deleteLocalItem('internal_transfers', transfer.id)));
+        setInternalTransfers(internalTransfers.filter((transfer) => transfer.source_process_id !== process.id));
         await deleteLocalItem('processes', process.id);
         await Promise.all(linkedOutputLines.map((line) => deleteLocalItem('product_output_lines', line.id)));
         setProductOutputLines(productOutputLines.filter((line) => line.process_id !== process.id));
@@ -816,7 +829,23 @@ export default function ProcessesPage() {
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700">내부 소비량(t)</label>
-                            <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.internal_consumption_mass_t} onChange={(event) => setNewItem({ ...newItem, internal_consumption_mass_t: toNumber(event.target.value) })} />
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.0001"
+                                className={fieldClass}
+                                value={newItem.internal_consumption_mass_t}
+                                // 받는 공정별 이송이 있으면 이 값은 그 합계다. 여기서 따로 고치면 EU 문서 (c)칸의 합과 어긋난다.
+                                disabled={internalTransfers.some((transfer) => transfer.source_process_id === editingProcessId && transfer.mass_t > 0)}
+                                onChange={(event) => setNewItem({ ...newItem, internal_consumption_mass_t: toNumber(event.target.value) })}
+                            />
+                            {internalTransfers.some((transfer) => transfer.source_process_id === editingProcessId && transfer.mass_t > 0) ? (
+                                <p className="mt-1 text-xs leading-5 text-slate-500">
+                                    받는 공정별 이송량의 합계입니다({internalTransfers.filter((transfer) => transfer.source_process_id === editingProcessId && transfer.mass_t > 0).map((transfer) => `${processes.find((item) => item.id === transfer.target_process_id)?.name ?? '알 수 없는 공정'} ${transfer.mass_t.toLocaleString('ko-KR')} t`).join(' · ')}). 작업 지도 3단계에서 이 공정을 열어 고치세요.
+                                </p>
+                            ) : (
+                                <p className="mt-1 text-xs leading-5 text-slate-500">사내 다른 공정으로 넘기는 양은 작업 지도 3단계에서 받는 공정별로 넣으세요. 여기에 합계만 넣으면 받는 공정을 알 수 없어 EU 문서를 만들 수 없습니다.</p>
+                            )}
                             {errors.internal_consumption_mass_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.internal_consumption_mass_t}</p>}
                         </div>
                         <div>

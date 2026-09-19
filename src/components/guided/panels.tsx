@@ -42,12 +42,14 @@ import {
     deleteLocalItem,
     EXPORT_PERIOD_SETTING_KEY,
     getLocalSetting,
+    listLocalItems,
     setLocalSetting,
     updateLocalItem,
     type Installation,
     type Product,
     type ProductionProcess,
     type ProductOutputLine,
+    type InternalTransfer,
     type PurchasedPrecursor,
     type ReportingPeriod,
     type SourceStream,
@@ -87,6 +89,8 @@ export interface GuidedData {
     productOutputLines: ProductOutputLine[];
     sourceStreams: SourceStream[];
     precursors: PurchasedPrecursor[];
+    /** 사내 이송(공정 간 전가) — 보내는 공정의 3단계에서 넣고, 받는 공정의 6단계에서 읽기 전용으로 보인다 */
+    internalTransfers: InternalTransfer[];
     results: LocalCalculationResult[];
     exportIssues: EuExportReadinessIssue[];
     exportErrorCount: number;
@@ -102,6 +106,7 @@ export interface GuidedData {
         productOutputLines: ProductOutputLine[];
         sourceStreams: SourceStream[];
         precursors: PurchasedPrecursor[];
+        internalTransfers: InternalTransfer[];
     };
 }
 
@@ -711,7 +716,13 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
     const [masses, setMasses] = useState<Record<string, string>>({});
     // 사내 다른 공정으로 넘기는 양. **이것 하나만** 받고 시장 출하량은 총량에서 뺀다 —
     // 둘 다 받으면 합이 총량과 어긋난 채 EU 문서(D_Processes)에 나갈 수 있다.
-    const [internalMass, setInternalMass] = useState('');
+    // 사내 이송은 **받는 공정별로** 받는다(2025/2547 부속서 III — 각 생산공정에서 쓴 양). 합계만 받으면 그 배출을 누구에게
+    // 얹을지 알 수 없고, EU 문서 (c)칸도 받는 공정별 칸이다. internal_consumption_mass_t는 이 값들의 합(파생값)이다.
+    const [transferMasses, setTransferMasses] = useState<Record<string, string>>({});
+    // 보내는 공정에 제품이 둘 이상이면 어느 제품을 넘기는지 알아야 한다 — 제품마다 SEE가 다를 수 있다.
+    const [transferProductId, setTransferProductId] = useState('');
+    const receivers = data.processes.filter((process) => process.id !== editingProcessId);
+    const internalTotal = receivers.reduce((sum, process) => sum + num(transferMasses[process.id] ?? ''), 0);
     // 불량·부산물·스크랩으로 나간 양(선택). 활동수준(SEE 분모)에서 빠지고 배출 0으로 기록된다 —
     // 2025/2547 ANNEX II 점 F. 라인 하나(WASTE_RECYCLE · EXCLUDED)로 저장해 추적성을 남긴다.
     const [excludedMass, setExcludedMass] = useState('');
@@ -726,7 +737,8 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
         setName('');
         setRoute('');
         setMasses({});
-        setInternalMass('');
+        setTransferMasses({});
+        setTransferProductId('');
         setExcludedMass('');
         setMessage('');
     };
@@ -744,7 +756,14 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
         setRoute(process.production_route);
         setPeriodId(process.period_id ?? data.periods[0]?.id ?? '');
         setMasses(massMap);
-        setInternalMass(process.internal_consumption_mass_t > 0 ? String(process.internal_consumption_mass_t) : '');
+        const outgoing = data.internalTransfers.filter((transfer) => transfer.source_process_id === process.id);
+        const transferMap: Record<string, string> = {};
+        outgoing.forEach((transfer) => {
+            transferMap[transfer.target_process_id] = String(num(transferMap[transfer.target_process_id] ?? '') + transfer.mass_t);
+        });
+        setTransferMasses(transferMap);
+        const sourceLine = data.productOutputLines.find((line) => line.id === outgoing[0]?.source_output_line_id);
+        setTransferProductId(sourceLine?.product_id ?? '');
         const excluded = data.productOutputLines
             .filter((line) => line.process_id === process.id && isExcludedLine(line))
             .reduce((sum, line) => sum + line.output_mass_t, 0);
@@ -763,9 +782,19 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             );
             return;
         }
+        const incoming = (data.allRecords?.internalTransfers ?? data.internalTransfers).filter((transfer) => transfer.target_process_id === process.id);
+        if (incoming.length > 0) {
+            window.alert(`이 공정은 다른 공정에서 사내 이송을 받고 있어 삭제할 수 없습니다(${incoming.length}건).\n먼저 3단계에서 보내는 공정을 열어 이 공정으로 넘기는 양을 비우세요.`);
+            return;
+        }
         if (!window.confirm(`'${process.name}' 공정을 삭제할까요? 산정결과·EU 문서에서도 제외됩니다.`)) {
             return;
         }
+        await Promise.all(
+            (data.allRecords?.internalTransfers ?? data.internalTransfers)
+                .filter((transfer) => transfer.source_process_id === process.id)
+                .map((transfer) => deleteLocalItem('internal_transfers', transfer.id))
+        );
         await Promise.all(
             data.productOutputLines
                 .filter((line) => line.process_id === process.id)
@@ -800,6 +829,30 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
         return existing ? deleteLocalItem('product_output_lines', existing.id) : Promise.resolve();
     };
 
+    /** 받는 공정별 이송 레코드를 폼의 값에 맞춘다: 양이 있으면 만들거나 고치고, 0이면 지운다. */
+    const syncTransfers = async (processId: string, activePeriodId: string) => {
+        // 보내는 라인: 제품이 하나면 비워 둔다(엔진이 자동으로 정한다). 둘 이상이면 고른 제품의 라인.
+        const savedLines = (await listLocalItems('product_output_lines')).filter((line) => line.process_id === processId);
+        const productLines = savedLines.filter((line) => line.product_id && line.activity_level_role !== 'EXCLUDED');
+        const sourceLineId = productLines.length > 1 ? productLines.find((line) => line.product_id === transferProductId)?.id : undefined;
+        const existing = data.internalTransfers.filter((transfer) => transfer.source_process_id === processId);
+        for (const receiver of receivers) {
+            const mass = num(transferMasses[receiver.id] ?? '');
+            const [current, ...duplicates] = existing.filter((transfer) => transfer.target_process_id === receiver.id);
+            await Promise.all(duplicates.map((transfer) => deleteLocalItem('internal_transfers', transfer.id)));
+            if (mass > 0) {
+                const fields = { period_id: activePeriodId, source_process_id: processId, source_output_line_id: sourceLineId, target_process_id: receiver.id, mass_t: mass };
+                await (current ? updateLocalItem('internal_transfers', { ...current, ...fields }) : createLocalItem('internal_transfers', fields));
+            } else if (current) {
+                await deleteLocalItem('internal_transfers', current.id);
+            }
+        }
+        // 받는 공정이 사라진 이송은 남겨 두지 않는다.
+        await Promise.all(existing
+            .filter((transfer) => !receivers.some((receiver) => receiver.id === transfer.target_process_id))
+            .map((transfer) => deleteLocalItem('internal_transfers', transfer.id)));
+    };
+
     const saveProcess = async () => {
         const activePeriodId = periodId || data.viewPeriodId || data.periods[0]?.id;
         if (!name.trim()) {
@@ -821,13 +874,21 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
             setMessage('이 공정에서 만든 제품의 생산량을 1개 이상 입력하세요.');
             return;
         }
-        const internal = num(internalMass);
+        const internal = internalTotal;
         if (internal < 0) {
             setMessage('사내 이송량은 0 이상이어야 합니다.');
             return;
         }
         if (internal > totalMass + 1e-9) {
             setMessage(`사내 이송량(${fmt(internal, 1)} t)이 총 생산량(${fmt(totalMass, 1)} t)보다 많습니다.`);
+            return;
+        }
+        if (receivers.some((process) => num(transferMasses[process.id] ?? '') < 0)) {
+            setMessage('사내 이송량은 0 이상이어야 합니다.');
+            return;
+        }
+        if (internal > 0 && lines.length > 1 && !lines.some((line) => line.product.id === transferProductId)) {
+            setMessage('이 공정은 제품이 둘 이상입니다. 다른 공정으로 넘기는 것이 어느 제품인지 고르세요.');
             return;
         }
         if (num(excludedMass) < 0) {
@@ -910,9 +971,10 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                 name: name.trim(),
                 production_route: route.trim() || existingProcess.production_route || '가공(압연·신선·열처리)',
                 output_mass_t: editedTotal,
-                internal_consumption_mass_t: num(internalMass),
-                market_output_mass_t: editedTotal - num(internalMass),
+                internal_consumption_mass_t: internalTotal,
+                market_output_mass_t: editedTotal - internalTotal,
             });
+            await syncTransfers(editingProcessId, activePeriodId);
         } else {
             const process = await createLocalItem('processes', {
                 period_id: activePeriodId,
@@ -922,8 +984,8 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                 output_mass_t: totalMass,
                 // 둘 다 0으로 두면 EU 문서 D_Processes에 「시장 0 · 내부 0」이 나간다 —
                 // 총 생산량이 있는데도. 문서가 거짓을 말하게 된다.
-                internal_consumption_mass_t: num(internalMass),
-                market_output_mass_t: totalMass - num(internalMass),
+                internal_consumption_mass_t: internalTotal,
+                market_output_mass_t: totalMass - internalTotal,
                 direct_attributable_emissions_tco2e: 0,
                 electricity_mwh: 0,
                 electricity_ef_tco2e_per_mwh: 0.47,
@@ -940,6 +1002,7 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                 reporting_scope: getProductReportingScope(line.product),
             })));
             await upsertExcludedLine(process.id, []);
+            await syncTransfers(process.id, activePeriodId);
         }
         resetForm();
         setSaved(true);
@@ -1026,18 +1089,43 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                     </div>
                     {/* EU 문서(D_Processes)는 시장 출하량과 내부 소비량을 따로 묻는다.
                         입력을 하나만 받고 나머지를 빼서 구하면, 둘의 합이 총량과 어긋날 수 없다. */}
-                    <Field
-                        label="이 중 사내 다른 공정으로 넘기는 양 (t)"
-                        hint="예: 전기로 조강 일부를 압연으로 이송. 전량 외부 판매면 비워두세요."
-                    >
-                        <input
-                            className={fieldClass}
-                            inputMode="decimal"
-                            value={internalMass}
-                            onChange={(event) => setInternalMass(event.target.value)}
-                            placeholder="0"
-                        />
-                    </Field>
+                    {receivers.length > 0 && (
+                        <div className="space-y-2">
+                            <p className="text-sm font-semibold text-slate-800">이 중 사내 다른 공정으로 넘기는 양 (t)</p>
+                            <p className="text-xs leading-5 text-slate-500">
+                                예: 전기로 조강 일부를 압연으로 이송. 받는 공정별로 적으세요 — 이 공정의 배출이 그 양만큼 받는 공정의 제품에 실립니다. 전량 외부 판매면 비워 두세요.
+                            </p>
+                            {receivers.map((process) => (
+                                <div key={process.id} className="flex items-center gap-3">
+                                    <span className="w-40 flex-none truncate text-sm text-slate-700">→ {process.name}</span>
+                                    <input
+                                        aria-label={`${process.name}(으)로 넘기는 양`}
+                                        className={fieldClass}
+                                        inputMode="decimal"
+                                        value={transferMasses[process.id] ?? ''}
+                                        onChange={(event) => setTransferMasses((current) => ({ ...current, [process.id]: event.target.value }))}
+                                        placeholder="0"
+                                    />
+                                </div>
+                            ))}
+                            {internalTotal > 0 && reportingProducts.filter((product) => num(masses[product.id] ?? '') > 0).length > 1 && (
+                                <Field label="넘기는 제품" hint="제품마다 배출이 다를 수 있어, 어느 제품을 넘기는지 알아야 합니다.">
+                                    <select aria-label="넘기는 제품" className={fieldClass} value={transferProductId} onChange={(event) => setTransferProductId(event.target.value)}>
+                                        <option value="">— 고르세요 —</option>
+                                        {reportingProducts.filter((product) => num(masses[product.id] ?? '') > 0).map((product) => (
+                                            <option key={product.id} value={product.id}>{product.name}</option>
+                                        ))}
+                                    </select>
+                                </Field>
+                            )}
+                            {editingProcessId && internalTotal === 0
+                                && (data.processes.find((process) => process.id === editingProcessId)?.internal_consumption_mass_t ?? 0) > 0 && (
+                                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                                    종전에 넣은 사내 이송량 {fmt(data.processes.find((process) => process.id === editingProcessId)?.internal_consumption_mass_t ?? 0, 1)} t에는 받는 공정이 지정돼 있지 않습니다. 위에 받는 공정별로 다시 적어 주세요.
+                                </p>
+                            )}
+                        </div>
+                    )}
                     <Field
                         label="불량·부산물·스크랩으로 나간 양 (t, 선택)"
                         hint="판매하거나 다른 공정에 넣을 수 없는 양. 위 제품 생산량에는 넣지 마세요 — SEE 분모(활동수준)에서 빠지고 배출 0으로 기록됩니다 (2025/2547 ANNEX II 점 F)."
@@ -1052,8 +1140,8 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                     </Field>
                     {totalMass > 0 && (
                         <p className="text-xs leading-5 text-slate-600">
-                            EU 문서에 기재됩니다 — 시장 출하 <span className="font-semibold">{fmt(Math.max(0, totalMass - num(internalMass)), 1)} t</span>
-                            {' · '}사내 이송 <span className="font-semibold">{fmt(num(internalMass), 1)} t</span>
+                            EU 문서에 기재됩니다 — 시장 출하 <span className="font-semibold">{fmt(Math.max(0, totalMass - internalTotal), 1)} t</span>
+                            {' · '}사내 이송 <span className="font-semibold">{fmt(internalTotal, 1)} t</span>
                         </p>
                     )}
                     <div className="flex gap-2">
@@ -1927,6 +2015,33 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                 }}
             />
 
+            {/* 사내에서 받은 원료 — 보내는 공정의 3단계에서 넣은 것. 여기서는 읽기만 한다(같은 양을 구매 전구물질로도 넣으면 EU 문서에서 두 번 계산된다). */}
+            {data.internalTransfers.filter((transfer) => transfer.target_process_id === process.id && transfer.mass_t > 0).length > 0 && (
+                <div className="space-y-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-950">
+                    <p className="font-semibold">사내에서 받은 원료</p>
+                    <ul className="space-y-1">
+                        {data.internalTransfers.filter((transfer) => transfer.target_process_id === process.id && transfer.mass_t > 0).map((transfer) => {
+                            const sender = data.processes.find((item) => item.id === transfer.source_process_id);
+                            const applied = data.results
+                                .filter((result) => result.process_id === process.id)
+                                .flatMap((result) => result.internal_precursor_inputs ?? [])
+                                .find((input) => input.transfer_id === transfer.id);
+                            return (
+                                <li key={transfer.id}>
+                                    {sender?.name ?? '알 수 없는 공정'} → {fmt(transfer.mass_t, 1)} t
+                                    {applied
+                                        ? ` · 적용 SEE 직접 ${fmt(applied.direct_see, 4)} · 간접 ${fmt(applied.indirect_see, 4)} tCO₂e/t`
+                                        : ' · 아직 반영되지 않았습니다(7단계의 차단 항목을 확인하세요)'}
+                                </li>
+                            );
+                        })}
+                    </ul>
+                    <p className="text-xs leading-5 text-teal-900">
+                        보내는 공정의 배출이 이 양만큼 이 공정의 제품에 실립니다. 양은 3단계에서 보내는 공정을 열어 고칩니다.
+                        이 원료를 아래 「구매한 CBAM 원료」에 다시 넣지 마세요 — EU 문서에서 두 번 계산됩니다.
+                    </p>
+                </div>
+            )}
             {processPrecursors.length > 0 && (
                 <ul className="space-y-2">
                     {processPrecursors.map((precursor) => {
@@ -2449,6 +2564,7 @@ function ExportPanel({ data, onSelectStep }: PanelProps) {
                 installations: data.installations,
                 periods: data.periods,
                 reportingPeriodId: exportPeriod?.id,
+                internalTransfers: data.internalTransfers,
                 processes: data.processes,
                 productOutputLines: data.productOutputLines,
                 sourceStreams: data.sourceStreams,

@@ -36,6 +36,7 @@ import {
     type Product,
     type ProductOutputLine,
     type ProductionProcess,
+    type InternalTransfer,
     type PurchasedPrecursor,
     type ReportingPeriod,
     type SourceStream,
@@ -202,6 +203,8 @@ export default function ExportPage() {
     const [productOutputLines, setProductOutputLines] = useState<ProductOutputLine[]>([]);
     const [sourceStreams, setSourceStreams] = useState<SourceStream[]>([]);
     const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
+    // 사내 이송(공정 간 전가). 엔진·준비도·EU 사본이 모두 같은 이송을 봐야 한다.
+    const [internalTransfers, setInternalTransfers] = useState<InternalTransfer[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [benchmarkReference, setBenchmarkReference] = useState<ImportedBenchmarkReference | undefined>();
     const [defaultValueReference, setDefaultValueReference] = useState<ImportedDefaultValueReference | undefined>();
@@ -278,6 +281,8 @@ export default function ExportPage() {
             setProductOutputLines(outputLineData);
             setSourceStreams(sourceStreamData);
             setPrecursors(precursorData);
+            const transferData = await listLocalItems('internal_transfers');
+            setInternalTransfers(transferData);
             setProducts(productData);
             setBenchmarkReference(benchmarkData);
             setDefaultValueReference(defaultValueData);
@@ -285,6 +290,7 @@ export default function ExportPage() {
             setExportResponseType(normalizeExportResponseType(savedExportResponseType));
             setReportInputs(savedReportInputs);
             setResults(calculateLocalResults({
+                internalTransfers: transferData,
                 processes: processData,
                 precursors: precursorData,
                 products: productData,
@@ -320,8 +326,8 @@ export default function ExportPage() {
     const readiness = useMemo(
         // 다운로드가 쓰는 것과 **같은 자료**로 점검한다. 종전에는 사업장·보고기간을 넘기지 않아,
         // 화면은 「오류 0」인데 다운로드만 실패하거나 사업장 누락이 점검에 안 잡혔다(씨밤이 run11 P1-15).
-        () => evaluateEuExportReadiness({ installations, periods, reportingPeriodId, processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
-        [installations, periods, reportingPeriodId, processes, productOutputLines, sourceStreams, precursors, products, validation?.cnCodeMap]
+        () => evaluateEuExportReadiness({ installations, periods, reportingPeriodId, internalTransfers, processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
+        [installations, periods, reportingPeriodId, internalTransfers, processes, productOutputLines, sourceStreams, precursors, products, validation?.cnCodeMap]
     );
 
     const scenarioRiskSummary = useMemo(() => {
@@ -341,8 +347,8 @@ export default function ExportPage() {
         );
     }, [benchmarkReference, defaultValueReference, scenarioRiskSummary]);
     const plannedCellWrites = useMemo(
-        () => createEuTemplateExportCellWrites({ installations, periods, reportingPeriodId, processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
-        [installations, periods, reportingPeriodId, processes, productOutputLines, sourceStreams, precursors, products, validation?.cnCodeMap]
+        () => createEuTemplateExportCellWrites({ installations, periods, reportingPeriodId, internalTransfers, processes, productOutputLines, sourceStreams, precursors, products }, validation?.cnCodeMap),
+        [installations, periods, reportingPeriodId, internalTransfers, processes, productOutputLines, sourceStreams, precursors, products, validation?.cnCodeMap]
     );
 
     const backupStatus = useMemo(() => getBackupStatus(lastBackupAt), [lastBackupAt]);
@@ -564,6 +570,7 @@ export default function ExportPage() {
                 installations,
                 periods,
                 reportingPeriodId,
+                internalTransfers,
                 processes,
                 productOutputLines,
                 sourceStreams,
@@ -601,6 +608,7 @@ export default function ExportPage() {
                 installations,
                 periods,
                 reportingPeriodId,
+                internalTransfers,
                 processes,
                 productOutputLines,
                 sourceStreams,

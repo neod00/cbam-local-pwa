@@ -291,14 +291,17 @@ assert.ok(
   !/market_output_mass_t: 0,/.test(source),
   '지도가 시장 출하량을 0으로 굳혀 만든다 — EU 문서에 총 생산량과 앞뒤가 안 맞는 값이 나간다'
 );
-assert.match(source, /internal_consumption_mass_t: num\(internalMass\)/, '사내 이송량 입력이 저장되지 않는다');
+// 사내 이송은 받는 공정별로 받고(internal_transfers), 공정의 internal_consumption_mass_t는 그 합계다.
+assert.match(source, /internal_consumption_mass_t: internalTotal/, '사내 이송량 합계가 저장되지 않는다');
+assert.match(source, /await syncTransfers\(editingProcessId, activePeriodId\)/, '수정 저장이 받는 공정별 이송을 저장하지 않는다');
+assert.match(source, /await syncTransfers\(process\.id, activePeriodId\)/, '신규 저장이 받는 공정별 이송을 저장하지 않는다');
 assert.match(
   source,
-  /market_output_mass_t: (totalMass|editedTotal) - num\(internalMass\)/,
+  /market_output_mass_t: (totalMass|editedTotal) - internalTotal/,
   '시장 출하량을 총량에서 빼서 구하지 않는다 — 둘 다 받으면 합이 총량과 어긋날 수 있다'
 );
 // 신규·수정 두 경로 모두에서.
-for (const branch of ['totalMass - num(internalMass)', 'editedTotal - num(internalMass)']) {
+for (const branch of ['totalMass - internalTotal', 'editedTotal - internalTotal']) {
   assert.ok(source.includes(branch), `시장 출하량 산출이 한쪽 경로에만 있다: ${branch}`);
 }
 

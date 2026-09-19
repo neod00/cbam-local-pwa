@@ -79,8 +79,10 @@ async function loadReviewData(): Promise<ReviewData> {
         listLocalItems('source_streams'),
         listLocalItems('precursors'),
     ]);
-    const results = calculateLocalResults({ periods, products, processes, productOutputLines, sourceStreams, precursors });
-    const readiness = evaluateEuExportReadiness({ installations, periods, products, processes, productOutputLines, sourceStreams, precursors });
+    // 사내 이송(공정 간 전가)도 함께 넘긴다 — 빠뜨리면 이 화면만 받는 제품의 SEE가 낮게 나온다.
+    const internalTransfers = await listLocalItems('internal_transfers');
+    const results = calculateLocalResults({ internalTransfers, periods, products, processes, productOutputLines, sourceStreams, precursors });
+    const readiness = evaluateEuExportReadiness({ internalTransfers, installations, periods, products, processes, productOutputLines, sourceStreams, precursors });
     return { loaded: true, installations, periods, products, processes, productOutputLines, sourceStreams, precursors, results, readiness };
 }
 

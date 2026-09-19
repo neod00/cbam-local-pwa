@@ -115,4 +115,35 @@ const otherPeriod = { ...period, id: 'period_2026', name: '2026' };
 const crossPeriod = calculateLocalResults({ ...base, periods: [period, otherPeriod], processes: [p1, { ...p2, period_id: otherPeriod.id }], internalTransfers: [transfer] });
 assert.ok(pick(crossPeriod, p2.id).warnings.some((message) => message.startsWith('차단:') && message.includes('보고기간')), '다른 기간 공정 간 이송을 알리지 않는다');
 
+// ── 화면 연결: 엔진·준비도·EU 사본을 부르는 모든 곳이 이송을 함께 넘긴다 ─────
+// 한 곳이라도 빠지면 그 화면만 받는 제품의 SEE가 낮게 나온다(화면마다 다른 숫자).
+import { readdirSync, statSync } from 'node:fs';
+import { basename, join } from 'node:path';
+const walk = (dir) => readdirSync(dir).flatMap((name) => {
+  const full = join(dir, name);
+  return statSync(full).isDirectory() ? walk(full) : /\.(ts|tsx)$/.test(name) ? [full] : [];
+});
+const CALLS = ['calculateLocalResults(', 'evaluateEuExportReadiness(', 'createEuTemplateExportCellWrites(', 'createEuTemplateExportCopyResult('];
+// 산정보고서의 내부 재계산(기본값 대입 비교)은 4단계에서 연결한다.
+const EXEMPT = new Set(['calculation-engine.ts', 'eu-template-export.ts', 'calculation-report.ts']);
+const missing = [];
+for (const file of walk('src')) {
+  if (EXEMPT.has(basename(file))) continue;
+  const text = readFileSync(file, 'utf8');
+  for (const call of CALLS) {
+    let from = 0;
+    while ((from = text.indexOf(call, from)) >= 0) {
+      const lineStart = text.lastIndexOf('\n', from) + 1;
+      const isImport = /^\s*(import|\/\/|\*)/.test(text.slice(lineStart, from)) || text.slice(lineStart, from).trim() === '';
+      const argument = text.slice(from, from + 700);
+      const end = argument.indexOf('});') >= 0 ? argument.indexOf('});') : argument.indexOf('})');
+      if (!isImport && !argument.slice(0, end >= 0 ? end : 700).includes('internalTransfers')) {
+        missing.push(`${file}:${text.slice(0, from).split('\n').length} ${call}`);
+      }
+      from += call.length;
+    }
+  }
+}
+assert.deepEqual(missing, [], `이송을 넘기지 않는 호출부가 있다:\n${missing.join('\n')}`);
+
 console.log('Internal transfer verification passed (공식 EAF 예제 정답지 1.0015/1.3784 → 1.4396/1.7315 · 3단계 사슬 · 순환·라인 모호·기간 불일치 차단).');
