@@ -10,7 +10,7 @@ import { findDefaultValueReference, hasAmbiguousDefaultValueRoutes } from './ref
 import type { DefaultValueReferenceRow, ImportedDefaultValueReference } from './reference-workbooks';
 import { getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
 import { calculateLocalResults } from './calculation-engine';
-import type { LocalCalculationResult } from './calculation-engine';
+import type { InternalTransferInput, LocalCalculationResult } from './calculation-engine';
 import type {
     Installation,
     Product,
@@ -78,6 +78,8 @@ export interface CalculationReportInput {
     sourceStreams: SourceStream[];
     precursors: PurchasedPrecursor[];
     results: LocalCalculationResult[];
+    /** 사내 이송(공정 간 전가). 보고서 안의 재계산(기본값 대입 비교)도 같은 이송으로 해야 받는 제품의 값이 맞다. */
+    internalTransfers?: InternalTransferInput[];
     generatedAt: Date;
     /** /upload에서 연결한 EU 공식 기본값 기준자료. 없으면 제9장은 「기준자료 미연결」로 출력하고 G6 경고. */
     defaultValues?: ImportedDefaultValueReference;
@@ -396,12 +398,13 @@ function checkResultDisplaySums(results: LocalCalculationResult[]): { issues: Re
         const checks = [
             checkDisplaySum({
                 label: `${result.product_name}: SEE 직접 소계`,
-                parts: [result.direct_see, result.precursor_direct_see],
+                // 사내 다른 공정에서 받은 전구물질의 몫도 소계의 구성 항목이다. 빼먹으면 원천값 불일치로 발행이 막힌다.
+                parts: [result.direct_see, result.precursor_direct_see, result.internal_precursor_direct_see ?? 0],
                 total: result.see_direct_incl_precursor,
             }),
             checkDisplaySum({
                 label: `${result.product_name}: SEE 간접 소계`,
-                parts: [result.own_indirect_see, result.precursor_indirect_see],
+                parts: [result.own_indirect_see, result.precursor_indirect_see, result.internal_precursor_indirect_see ?? 0],
                 total: result.see_indirect_incl_precursor,
             }),
             checkDisplaySum({
@@ -875,10 +878,10 @@ function methodologySection(input: CalculationReportInput) {
     // 인쇄된 결과를 재현하지 못하는 경우가 생긴다(씨밤이 P1 — v0.1 회귀).
     for (const result of reportable) {
         body.push(paragraph(
-            `${result.product_name}: SEE(직접, 전구물질 포함) = ${formatRawForReport(result.direct_see)} + ${formatRawForReport(result.precursor_direct_see)} = ${formatForReport(result.see_direct_incl_precursor)} tCO2e/t`
+            `${result.product_name}: SEE(직접, 전구물질 포함) = ${formatRawForReport(result.direct_see)} + ${formatRawForReport(result.precursor_direct_see)}${(result.internal_precursor_direct_see ?? 0) > 0 ? ` + ${formatRawForReport(result.internal_precursor_direct_see ?? 0)}(사내 전구물질)` : ''} = ${formatForReport(result.see_direct_incl_precursor)} tCO2e/t`
         ));
         body.push(paragraph(
-            `${result.product_name}: SEE(간접) = ${formatRawForReport(result.own_indirect_see)} + ${formatRawForReport(result.precursor_indirect_see)} = ${formatForReport(result.see_indirect_incl_precursor)} tCO2e/t`
+            `${result.product_name}: SEE(간접) = ${formatRawForReport(result.own_indirect_see)} + ${formatRawForReport(result.precursor_indirect_see)}${(result.internal_precursor_indirect_see ?? 0) > 0 ? ` + ${formatRawForReport(result.internal_precursor_indirect_see ?? 0)}(사내 전구물질)` : ''} = ${formatForReport(result.see_indirect_incl_precursor)} tCO2e/t`
         ));
         // 장 제목이 「제품 SEE 및 인증서 기준」인데 기준값을 제시하지 않으면, 간접 포함 품목의 기준 SEE가
         // 인쇄된 어느 산식으로도 도출되지 않는다. 두 구성값만 두고 독자가 조립하게 두지 않는다(씨밤이 P2).
@@ -1693,12 +1696,23 @@ function resultSection(input: CalculationReportInput) {
     for (const result of reportable) {
         rows.push([result.product_name, '자체 공정 직접배출', formatForReport(result.direct_see), '자체 배출 ÷ 생산량']);
         rows.push([result.product_name, '전구물질 직접 내재배출', formatForReport(result.precursor_direct_see), '소비비율 × 전구물질 SEE']);
+        // 2025/2547 부속서 III: 사업장 안의 다른 생산공정에서 만든 전구물질 — 기간 평균 SEE × 이 공정에서 쓴 양.
+        for (const internal of result.internal_precursor_inputs ?? []) {
+            rows.push([result.product_name, `사내 전구물질 직접 (${internal.source_process_name})`,
+                formatForReport(result.output_mass_t > 0 ? internal.mass_t * internal.direct_see / result.output_mass_t : 0),
+                `${formatForReport(internal.mass_t)} t × ${formatForReport(internal.direct_see)} ÷ 생산량`]);
+        }
         // boolean으로 쓰면 「판정 불가」가 「제외」로 붕괴해 진짜 비관련 품목과 구분되지 않는다(씨밤이 P1).
         const undetermined = result.indirect_emissions_relevance === 'UNDETERMINED';
         const included = result.indirect_emissions_relevance === 'INCLUDED';
         rows.push([result.product_name, 'SEE 직접 소계', formatForReport(result.see_direct_incl_precursor), undetermined ? '판정 불가 — 기준 SEE 미산출' : included ? '' : '= CBAM 인증서 산정 기준']);
         rows.push([result.product_name, '자체 전력 간접배출', formatForReport(result.own_indirect_see), included ? '' : '정보 목적']);
         rows.push([result.product_name, '전구물질 간접 내재배출', formatForReport(result.precursor_indirect_see), included ? '' : '정보 목적']);
+        for (const internal of result.internal_precursor_inputs ?? []) {
+            rows.push([result.product_name, `사내 전구물질 간접 (${internal.source_process_name})`,
+                formatForReport(result.output_mass_t > 0 ? internal.mass_t * internal.indirect_see / result.output_mass_t : 0),
+                `${formatForReport(internal.mass_t)} t × ${formatForReport(internal.indirect_see)} ÷ 생산량${included ? '' : ' · 정보 목적'}`]);
+        }
         rows.push([result.product_name, 'SEE 간접 소계', formatForReport(result.see_indirect_incl_precursor), undetermined ? '판정 불가 — 확인 필요' : included ? '인증서 기준 포함' : '인증서 기준 제외']);
         // 간접 포함 품목에서는 이 행이 기준값을 담은 **유일한** 행이다(직접 소계의 기준 표기는 위에서 일부러 비운다).
         // 라벨을 「참고」로 두면 장 전체에 기준값이 표기되지 않는다(씨밤이 P1).

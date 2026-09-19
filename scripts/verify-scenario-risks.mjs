@@ -409,4 +409,30 @@ assert.equal(withAssumptionYear(moved, '2027').cbam_factor, 0.95);
 // 직접 고친 값은 건드리지 않는다(화면이 공식값과 다르다고 알린다).
 assert.equal(withAssumptionYear({ ...assumptions, default_value_year: '2026', cbam_factor: 0.8 }, '2027').cbam_factor, 0.8, '사용자가 고친 factor를 덮어쓰면 안 된다');
 
+// ── 사내 전구물질의 SEFA는 보내는 제품의 SEFA다 (2025/2620 부속서 3.3(1) — 같은 사업장의 실제 자료) ──
+// 종전 우회 입력에서는 슬래브에 B열 1.189가 통째로 적용돼 평판재의 SEFA가 SEE보다 커졌다.
+{
+  const chainBenchmarks = { rows: [
+    { cn_code: '72189911', column_a_benchmark: 0.128, column_a_route: '', column_b_benchmark: 1.189, column_b_route: '(1)' },
+    { cn_code: '72191310', column_a_benchmark: 0.073, column_a_route: '', column_b_benchmark: 1.189, column_b_route: '(1)' },
+    { cn_code: '72061000', column_a_benchmark: 0.15, column_a_route: '(C)', column_b_benchmark: 1.288, column_b_route: '(C)' },
+  ] };
+  const slabResult = { ...baseResult, id: 'slab', process_id: 'p_eaf', cn_code: '72189911', hs_code: '7218', output_mass_t: 2234000, see_cbam_basis: 1.1584,
+    precursor_inputs: [{ precursor_id: 'ingot', name: 'Ingot', cn_code: '72061000', supplier_country: 'Nowhere', mass_t: 80500 }] };
+  const sheetResult = { ...baseResult, id: 'sheet', process_id: 'p_roll', cn_code: '72191310', hs_code: '7219', output_mass_t: 1133000, see_cbam_basis: 1.2545, precursor_inputs: [],
+    internal_precursor_inputs: [{ transfer_id: 't', source_process_id: 'p_eaf', source_process_name: 'EAF', source_product_name: 'Slab', source_cn_code: '72189911', mass_t: 1227000, direct_see: 1.1584, indirect_see: 0.8301 }] };
+  // 받는 제품을 먼저 넣어도 보내는 제품부터 계산해야 한다.
+  const [sheetScenario, slabScenario] = calculateProductScenarios([sheetResult, slabResult], assumptions, { benchmarks: chainBenchmarks, defaultValues: { rows: [] } });
+  assert.equal(sheetScenario.result_id, 'sheet', '결과 순서는 입력 순서를 지킨다');
+  const slabSefa = 0.128 * 0.975 + (80500 / 2234000) * 1.288 * 0.975;
+  near(slabScenario.sefa_indicator, slabSefa, 1e-9, '슬래브 SEFA');
+  near(sheetScenario.sefa_indicator, 0.073 * 0.975 + (1227000 / 1133000) * slabSefa, 1e-9, '평판재 SEFA = 공정 몫 + 받은 양 × 슬래브 SEFA');
+  assert.ok(sheetScenario.sefa_indicator < 1.2545, `사내 전구물질에 B열을 통째로 적용하면 SEFA가 SEE를 넘는다: ${sheetScenario.sefa_indicator}`);
+  assert.equal(sheetScenario.sefa_precursor_breakdown.find((item) => item.sefa_basis === 'INTERNAL').source_process_id, 'p_eaf');
+  // 보내는 공정이 신고 대상이 아니면(결과에 없으면) 그 몫은 0 — 지어내지 않는다.
+  const [orphan] = calculateProductScenarios([sheetResult], assumptions, { benchmarks: chainBenchmarks, defaultValues: { rows: [] } });
+  near(orphan.sefa_indicator, 0.073 * 0.975, 1e-9, '보내는 제품의 SEFA를 모르면 사내 몫은 0');
+  assert.equal(orphan.sefa_precursor_breakdown.find((item) => item.sefa_basis === 'INTERNAL').sefa, undefined);
+}
+
 console.log('Scenario risk verification passed.');

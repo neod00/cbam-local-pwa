@@ -118,6 +118,8 @@ export function withAssumptionYear(
 export interface ProductScenarioResult {
     /** Reporting period of the underlying result. Two periods give two rows for the same product. */
     period_name?: string;
+    /** 이 결과를 낸 공정 — 사내 전구물질의 SEFA를 보내는 공정에서 찾을 때 쓴다 */
+    process_id?: string;
     result_id: string;
     product_name: string;
     cn_code?: string;
@@ -151,7 +153,10 @@ export interface ProductScenarioResult {
         benchmark_column_b?: number;
         sefa?: number;
         /** SUPPLIER_VERIFIED = 3.3(1) 공급사 검증값 · COLUMN_B = 3.3(2) 기본 벤치마크 */
-        sefa_basis: 'SUPPLIER_VERIFIED' | 'COLUMN_B';
+        /** INTERNAL = 사내 다른 공정에서 받은 전구물질 — 보내는 제품의 SEFA를 그대로 쓴다 */
+        sefa_basis: 'SUPPLIER_VERIFIED' | 'COLUMN_B' | 'INTERNAL';
+        /** INTERNAL일 때 보내는 공정 */
+        source_process_id?: string;
         /** 공급사 값이 있지만 검증완료가 아니라 쓰지 않았다 */
         supplier_sefa_unverified?: boolean;
         benchmark_indicator: string;
@@ -265,9 +270,12 @@ export function calculateProductScenarios(
         defaultValues?: ImportedDefaultValueReference;
     }
 ): ProductScenarioResult[] {
-    return results
-        .filter((result) => result.is_cbam_reportable && result.see_cbam_basis !== null)
-        .map((result) => {
+    const reportable = results.filter((result) => result.is_cbam_reportable && result.see_cbam_basis !== null);
+    // 사내 전구물질의 SEFA는 보내는 제품의 SEFA다. 그래서 상류 공정부터 계산한다: 보내는 공정의 값이 정해진
+    // 결과만 계산하고, 나머지는 다음 바퀴로 넘긴다. 끝까지 정해지지 않는 것(순환, 보내는 공정이 신고 대상 아님)은
+    // 그 몫을 0으로 두고 계산한다 — 값을 지어내지 않는다.
+    const sefaByProcess = new Map<string, number>();
+    const computeScenario = (result: LocalCalculationResult): ProductScenarioResult => {
         const cnCode = result.cn_code || result.hs_code;
         const actualSee = result.see_cbam_basis ?? 0;
         const informationalTotalSee = result.see_informational_total ?? result.total_see;
@@ -371,7 +379,22 @@ export function calculateProductScenarios(
                 ...precursorBenchmarkMeta,
             };
         });
-        const sefaPrecursorIndicator = precursorBreakdown.reduce((sum, item) => sum + (item.sefa ?? 0), 0);
+        // 사내 전구물질(2025/2547 부속서 III)의 SEFAᵢ는 B열 기본값이 아니라 **보내는 제품의 SEFA**다 — 같은 사업장, 같은 검증 범위의
+        // 실제 자료이므로 2025/2620 부속서 3.3(1)에 해당한다. 보내는 쪽 값은 아래 2차 패스에서 채운다(상류부터 정해져야 한다).
+        const internalBreakdown = (result.internal_precursor_inputs ?? []).map((input) => ({
+            name: `사내: ${input.source_process_name}`,
+            cn_code: input.source_cn_code,
+            specific_mass: result.output_mass_t > 0 ? input.mass_t / result.output_mass_t : 0,
+            benchmark_column_b: undefined,
+            sefa: sefaByProcess.has(input.source_process_id)
+                ? (result.output_mass_t > 0 ? input.mass_t / result.output_mass_t : 0) * (sefaByProcess.get(input.source_process_id) ?? 0)
+                : undefined,
+            sefa_basis: 'INTERNAL' as const,
+            benchmark_indicator: '',
+            benchmark_ambiguous: false,
+            source_process_id: input.source_process_id,
+        }));
+        const sefaPrecursorIndicator = [...precursorBreakdown, ...internalBreakdown].reduce((sum, item) => sum + (item.sefa ?? 0), 0);
         const sefaIndicator = sefaProcessIndicator === undefined
             ? undefined
             : sefaProcessIndicator + sefaPrecursorIndicator;
@@ -440,7 +463,8 @@ export function calculateProductScenarios(
             sefa_indicator: sefaIndicator,
             sefa_process_indicator: sefaProcessIndicator,
             sefa_precursor_indicator: sefaPrecursorIndicator,
-            sefa_precursor_breakdown: precursorBreakdown,
+            sefa_precursor_breakdown: [...precursorBreakdown, ...internalBreakdown],
+            process_id: result.process_id,
             certificate_quantity_indicator: certificateQuantityIndicator,
             certificate_cost_indicator_eur: certificateCostIndicator,
             default_sefa_indicator: defaultSefaIndicator,
@@ -464,5 +488,32 @@ export function calculateProductScenarios(
                     : '공식 기준값과 연결되었습니다. 실제자료/기본값 SEFA 및 인증서 지표를 검토하세요.'
                 : '벤치마크 또는 국가/CN 기본값 연결이 필요합니다.',
         };
-    });
+    };
+
+    const done = new Map<string, ProductScenarioResult>();
+    const reportableProcessIds = new Set(reportable.map((result) => result.process_id));
+    let pending = reportable;
+    while (pending.length > 0) {
+        const waiting: LocalCalculationResult[] = [];
+        for (const result of pending) {
+            const senders = (result.internal_precursor_inputs ?? []).map((input) => input.source_process_id);
+            const ready = senders.every((id) => sefaByProcess.has(id) || !reportableProcessIds.has(id));
+            if (!ready) {
+                waiting.push(result);
+                continue;
+            }
+            const scenario = computeScenario(result);
+            done.set(result.id, scenario);
+            if (scenario.sefa_indicator !== undefined && !sefaByProcess.has(result.process_id)) {
+                sefaByProcess.set(result.process_id, scenario.sefa_indicator);
+            }
+        }
+        if (waiting.length === pending.length) {
+            // 더 풀리지 않는다(순환). 남은 것은 사내 몫 없이 계산한다.
+            for (const result of waiting) done.set(result.id, computeScenario(result));
+            break;
+        }
+        pending = waiting;
+    }
+    return reportable.map((result) => done.get(result.id) as ProductScenarioResult);
 }

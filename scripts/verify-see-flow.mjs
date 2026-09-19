@@ -184,4 +184,36 @@ assert.match(describeSeeFlowIndirect('MIXED', false).basisVsTotalNote, /한 줄�
 // 문안 검사는 여기서만 강제된다).
 assert.equal(VIEWS.length, 4, '집계 상태가 늘면 문안 검사도 확장할 것');
 
+// --- 사내 이송(공정 간 전가): 함께 볼 때 두 번 세지 않는다 ---
+// 두 번째 시험 원장(동성특수강 2025)의 값. 슬래브 2,234,000 t 중 1,227,000 t을 압연이 받는다.
+{
+  const close = (actual, expected, label) => assert.ok(Math.abs(actual - expected) < 1e-6, `${label}: ${actual} (기대 ${expected})`);
+  const slabSee = 1.1583909860; const slabIndirect = 0.8301017547;
+  const sender = makeResult({
+    id: 'slab', process_id: 'p_eaf', output_mass_t: 2234000, direct_emissions_tco2e: 484734.06272, indirect_emissions_gross_tco2e: 718409.72,
+    precursor_direct_see: 2103111.4 / 2234000, precursor_indirect_see: 1136037.6 / 2234000,
+    see_cbam_basis: slabSee, see_indirect_incl_precursor: slabIndirect, see_informational_total: slabSee + slabIndirect,
+  });
+  const received = { transfer_id: 't', source_process_id: 'p_eaf', source_process_name: 'EAF', source_product_name: 'Slab', mass_t: 1227000, direct_see: slabSee, indirect_see: slabIndirect };
+  const sheetDirect = 1227000 * slabSee / 1133000; const sheetIndirect = (149167.18 + 1227000 * slabIndirect) / 1133000;
+  const receiver = makeResult({
+    id: 'sheet', process_id: 'p_roll', output_mass_t: 1133000, direct_emissions_tco2e: 0, indirect_emissions_gross_tco2e: 149167.18,
+    precursor_direct_see: 0, precursor_indirect_see: 0, internal_precursor_inputs: [received],
+    see_cbam_basis: sheetDirect, see_indirect_incl_precursor: sheetIndirect, see_informational_total: sheetDirect + sheetIndirect,
+  });
+  // 받는 공정만 볼 때: 사내에서 받은 원료의 배출이 ③에 들어간다.
+  const onlyReceiver = buildSeeFlowBinding([receiver]);
+  close(onlyReceiver.precursorDirectEmissions, 1227000 * slabSee, '받는 공정의 ③ 직접');
+  close(onlyReceiver.outputMassT, 1133000, '받는 공정의 분모');
+  close(onlyReceiver.seeCbamBasis, sheetDirect, '받는 공정의 기준 SEE');
+  // 함께 볼 때: ③는 구매분만, 분모는 시장에 나간 양, 기준 SEE는 시장 제품의 가중 평균.
+  const both = buildSeeFlowBinding([sender, receiver]);
+  close(both.precursorDirectEmissions, 2103111.4, '전체 합계의 ③에 사내 전가분을 또 더하면 두 번 센다');
+  close(both.outputMassT, 2234000 + 1133000 - 1227000, '전체 합계의 분모는 시장에 나간 양');
+  close(both.seeCbamBasis, (1007000 * slabSee + 1133000 * sheetDirect) / 2140000, '전체 합계의 기준 SEE = 시장 제품의 생산량 가중 평균');
+  close(both.seeCbamBasis, (484734.06272 + 2103111.4) / 2140000, '…그리고 사업장 전체 직접배출 ÷ 시장 출하량과 같다');
+  // 이송이 없으면 종전과 같다.
+  close(buildSeeFlowBinding([sender]).outputMassT, 2234000, '이송이 없는 보기의 분모는 그대로');
+}
+
 console.log('SEE flow verification passed (집계 4상태 · 항등식 성립 조건 · 판정 불가 우선 · 문안 4상태 전수).');
