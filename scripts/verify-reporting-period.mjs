@@ -206,4 +206,40 @@ assert.match(
   '지도의 준비도 계산이 기간을 넘기지 않는다 — 8단계에 가야만 문제를 알게 된다'
 );
 
+// ── 산정보고서·전달 패키지도 EU 사본과 같은 기간만 담는다 ─────────────────
+{
+  const start = exportSource.indexOf('export function scopeRecordsToExportPeriod');
+  assert.ok(start >= 0, 'scopeRecordsToExportPeriod가 없다');
+  const resolveStart = exportSource.indexOf('export function resolveExportPeriod');
+  const cut = (from) => exportSource.slice(from, exportSource.indexOf('\n}\n', from) + 3).replace(/^export /, '');
+  const ctx = vm.createContext({});
+  vm.runInContext(
+    ts.transpileModule(`${cut(resolveStart)}\n${cut(start)}\nglobalThis.scope = scopeRecordsToExportPeriod;`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText,
+    ctx
+  );
+  const periods = [{ id: 'p25' }, { id: 'p26' }];
+  const data = {
+    periods,
+    processes: [{ id: 'a', period_id: 'p25' }, { id: 'b', period_id: 'p26' }],
+    productOutputLines: [{ id: 'la', process_id: 'a' }, { id: 'lb', process_id: 'b' }],
+    sourceStreams: [{ id: 'sa', period_id: 'p25', process_id: 'a' }, { id: 'sb', period_id: 'p26', process_id: 'b' }, { id: 'sx', period_id: 'p25', process_id: 'b' }],
+    precursors: [{ id: 'ra', period_id: 'p25', process_id: 'a' }, { id: 'rb', period_id: 'p26', process_id: 'b' }],
+    results: [{ period_id: 'p25', process_id: 'a' }, { period_id: 'p26', process_id: 'b' }],
+  };
+  const scoped = JSON.parse(JSON.stringify(ctx.scope({ ...data, reportingPeriodId: 'p26' })));
+  assert.deepEqual(scoped.periods.map((x) => x.id), ['p26'], '보고서에 고르지 않은 기간이 실린다');
+  assert.deepEqual(scoped.processes.map((x) => x.id), ['b']);
+  assert.deepEqual(scoped.productOutputLines.map((x) => x.id), ['lb']);
+  assert.deepEqual(scoped.sourceStreams.map((x) => x.id), ['sb'], '다른 기간 배출원이 섞인다');
+  assert.deepEqual(scoped.precursors.map((x) => x.id), ['rb']);
+  assert.equal(scoped.results.length, 1, '다른 기간 산정결과가 보고서에 실린다');
+  // 기간이 하나면 period_id가 빈 옛 자료도 그대로 나간다
+  const single = ctx.scope({ ...data, periods: [periods[0]], processes: [{ id: 'z' }], results: [{ process_id: 'z' }] });
+  assert.equal(single.processes.length, 1, '단일 기간에서 period_id 없는 자료가 빠진다');
+  assert.equal(single.results.length, 1);
+}
+const exportPageSource = readFileSync('src/app/export/page.tsx', 'utf8');
+assert.equal((exportPageSource.match(/periods: docScope\.periods,/g) ?? []).length, 3, '산정보고서 2곳·전달 패키지 1곳이 모두 기간 범위를 따라야 한다');
+assert.match(exportPageSource, /보고서가 다룰 기간을 먼저 고르세요/, '기간 미선택 상태로 산정보고서가 나간다');
+
 console.log('Reporting period verification passed (정렬 결정성 · 단일 선택 지점 · 기간 필터 · 미선택 차단 · 선택 저장).');

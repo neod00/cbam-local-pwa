@@ -377,10 +377,12 @@ function createReadmeText(input: DeliveryPackageInput, files: string[]) {
         '- The DOCX files are editable working summaries/checklists, not official verification reports.',
         '- 04_Calculation_Report.docx: items marked "기재 필요" / "확인 필요" are not yet completed. Review and complete them, and sign the operator declaration, before submitting to a verifier.',
         '- The .cbam backup can contain sensitive local project data. Share it only when explicitly intended.',
+        '- The template copy, summaries and calculation report cover one reporting period only. The .cbam backup is a full restore file and holds every period in the project.',
         '- 작성된 Communication Template은 외부 공유 전 Microsoft Excel에서 열고 재계산해야 합니다.',
         '- DOCX 파일은 수정 가능한 실무 요약/체크리스트이며 공식 검증보고서가 아닙니다.',
         '- 04_Calculation_Report.docx: 「기재 필요」·「확인 필요」로 표기된 항목은 아직 완료되지 않았습니다. 제3자 검증 제출 전에 해당 항목을 채우고 운영자 선언에 서명하세요.',
         '- .cbam 백업에는 민감한 로컬 프로젝트 자료가 포함될 수 있으므로 명시적으로 의도한 경우에만 공유하세요.',
+        '- 템플릿 사본·요약·산정보고서는 고른 보고기간 하나만 다룹니다. .cbam 백업은 복원용 전체 파일이라 프로젝트의 모든 기간이 들어 있습니다.',
     ].join('\n');
 }
 

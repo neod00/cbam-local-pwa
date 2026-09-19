@@ -13,6 +13,7 @@ import {
     DEFAULT_EU_TEMPLATE_VERSION,
     downloadBlob,
     evaluateEuExportReadiness,
+    scopeRecordsToExportPeriod,
     getEuExportDownloadStatusMessage,
     getEuExportIssueEditHref,
     loadDefaultEuTemplateFile,
@@ -296,6 +297,11 @@ export default function ExportPage() {
         loadPreviewData();
     }, []);
     const reportableResults = useMemo(() => results.filter((result) => result.is_cbam_reportable && result.see_cbam_basis !== null), [results]);
+    // 산정보고서·전달 패키지는 EU 사본과 같은 기간만 담는다. 백업(.cbam)은 복원용이라 전체를 담는다.
+    const docScope = useMemo(
+        () => scopeRecordsToExportPeriod({ periods, reportingPeriodId, processes, productOutputLines, sourceStreams, precursors, results: reportableResults }),
+        [periods, reportingPeriodId, processes, productOutputLines, sourceStreams, precursors, reportableResults]
+    );
 
     const summary = useMemo(() => {
         const productNames = new Set(reportableResults.map((result) => result.product_name));
@@ -607,13 +613,13 @@ export default function ExportPage() {
             // 패키지 생성 자체가 중단된다 — 미완성 보고서를 담아 내보내지 않기 위함.
             const calculationReport = createCalculationReport({
                 installations,
-                periods,
+                periods: docScope.periods,
                 products,
-                processes,
-                productOutputLines,
-                sourceStreams,
-                precursors,
-                results: reportableResults,
+                processes: docScope.processes,
+                productOutputLines: docScope.productOutputLines,
+                sourceStreams: docScope.sourceStreams,
+                precursors: docScope.precursors,
+                results: docScope.results,
                 generatedAt,
                 defaultValues: defaultValueReference,
                 reportInputs,
@@ -629,13 +635,13 @@ export default function ExportPage() {
                 exportWorkbookFilename,
                 generatedAt,
                 installations,
-                periods,
-                precursors,
-                processes,
+                periods: docScope.periods,
+                precursors: docScope.precursors,
+                processes: docScope.processes,
                 products,
                 readiness,
-                results: reportableResults,
-                sourceStreams,
+                results: docScope.results,
+                sourceStreams: docScope.sourceStreams,
                 templateFilename: templateFile.name,
                 writtenCellCount: exportResult.writtenCellCount,
             });
@@ -666,18 +672,23 @@ export default function ExportPage() {
     async function handleCalculationReport() {
         setReportError(null);
         setReportNotices([]);
+        // 기간이 둘 이상인데 고르지 않았으면 앱이 대신 고르지 않는다 — 어느 해의 보고서인지 모른 채 나간다.
+        if (periods.length > 1 && !periods.some((period) => period.id === reportingPeriodId)) {
+            setReportError(`보고기간이 ${periods.length}개입니다. 이 화면 위쪽의 「EU 문서에 나갈 기간」에서 보고서가 다룰 기간을 먼저 고르세요.`);
+            return;
+        }
         setIsReporting(true);
 
         try {
             const report = createCalculationReport({
                 installations,
-                periods,
+                periods: docScope.periods,
                 products,
-                processes,
-                productOutputLines,
-                sourceStreams,
-                precursors,
-                results: reportableResults,
+                processes: docScope.processes,
+                productOutputLines: docScope.productOutputLines,
+                sourceStreams: docScope.sourceStreams,
+                precursors: docScope.precursors,
+                results: docScope.results,
                 generatedAt: new Date(),
                 defaultValues: defaultValueReference,
                 reportInputs,
