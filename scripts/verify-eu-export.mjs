@@ -812,6 +812,21 @@ assertEqual(String(euExport.internalConsumptionSlot(2, 2)), 'undefined', 'a proc
   const short = euExport.evaluateEuExportReadiness({ ...chainData, internalTransfers: transfers.filter((t) => t.id !== 't2') }, validation.cnCodeMap)
     .issues.filter((issue) => issue.severity === 'error' && /지정한 양의 합/.test(issue.message));
   assertEqual(String(short.length), '1', 'transfers that do not add up must be an error');
+  // run16: the engine refuses to chain in three cases and only warns. The readiness check must refuse the export too,
+  // otherwise the receiving good goes out with SEE 0 and the map still says the document is ready.
+  const structural = (extra) => euExport.evaluateEuExportReadiness({ ...chainData, ...extra }, validation.cnCodeMap)
+    .issues.filter((issue) => issue.severity === 'error').map((issue) => issue.message);
+  const cyclic = structural({ processes: [a, { ...b, internal_consumption_mass_t: 110 }, c], internalTransfers: [...transfers, { id: 't5', source_process_id: b.id, target_process_id: a.id, mass_t: 10 }] });
+  assertEqual(String(cyclic.some((message) => message.includes('순환'))), 'true', 'a cyclic transfer must block the export');
+  const crossPeriod = structural({ processes: [a, { ...b, period_id: 'another_period' }, c] });
+  assertEqual(String(crossPeriod.some((message) => message.includes('보고기간이 다른'))), 'true', 'a transfer across reporting periods must block the export');
+  const lineOf = (id, productId) => ({ ...data.productOutputLines[0], id, process_id: a.id, product_id: productId, output_mass_t: 500 });
+  const twoLines = [lineOf('line_x', data.products[0].id), lineOf('line_y', data.products[0].id)];
+  const ambiguous = structural({ productOutputLines: twoLines });
+  assertEqual(String(ambiguous.some((message) => message.includes('어느 제품을 넘기는지'))), 'true', 'a multi-product sender without a chosen line must block the export');
+  const named = structural({ productOutputLines: twoLines, internalTransfers: transfers.map((t) => (t.source_process_id === a.id ? { ...t, source_output_line_id: 'line_x' } : t)) });
+  assertEqual(String(named.some((message) => message.includes('어느 제품을 넘기는지'))), 'false', 'naming the sending line clears the error');
+  assertEqual(String(structural({}).some((message) => /순환|보고기간이 다른|어느 제품/.test(message))), 'false', 'a sound chain raises none of the structural errors');
   // Legacy data (amount without transfer records) keeps the old single-cell write and stays blocked.
   const legacyWrites = euExport.createEuTemplateExportCellWrites({ ...chainData, internalTransfers: [] }, validation.cnCodeMap);
   assertEqual(cell(legacyWrites, 'L32'), '300', 'legacy data still writes the total to the first slot');
