@@ -116,6 +116,8 @@ export function withAssumptionYear(
 }
 
 export interface ProductScenarioResult {
+    /** Reporting period of the underlying result. Two periods give two rows for the same product. */
+    period_name?: string;
     result_id: string;
     product_name: string;
     cn_code?: string;
@@ -418,6 +420,7 @@ export function calculateProductScenarios(
         return {
             result_id: result.id,
             product_name: result.product_name,
+            period_name: result.period_name,
             cn_code: cnCode,
             production_route: result.production_route,
             output_mass_t: result.output_mass_t,

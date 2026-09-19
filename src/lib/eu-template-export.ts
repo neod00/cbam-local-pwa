@@ -656,7 +656,9 @@ export function evaluateEuExportReadiness(
         });
     }
 
-    if (exportScope.period && excludedTotal > unassignedTotal) {
+    // The exclusion notice only makes sense once a period is settled. Before the user chooses, it named a period nobody picked.
+    const periodSettled = !allPeriods || allPeriods.length <= 1 || periodChoiceValid;
+    if (exportScope.period && periodSettled && excludedTotal > unassignedTotal) {
         issues.push({
             severity: 'warning',
             area: '보고기간',

@@ -514,7 +514,7 @@ export default function ScenariosPage() {
                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                                     <div>
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <h3 className="text-sm font-semibold text-slate-950">{scenario.product_name}</h3>
+                                            <h3 className="text-sm font-semibold text-slate-950">{scenario.product_name}{scenario.period_name ? ` · ${scenario.period_name}` : ''}</h3>
                                             {scenario.cn_code ? (
                                                 <StatusBadge tone="neutral">CN {scenario.cn_code}</StatusBadge>
                                             ) : (
@@ -598,7 +598,7 @@ export default function ScenariosPage() {
                             return (
                                 <div key={`${scenario.result_id}-verdict`} className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl px-4 py-3.5" style={{ border: `1px solid ${S.hairline}`, backgroundColor: S.canvas }}>
                                     <div className="min-w-40">
-                                        <p className="text-[14px] font-semibold" style={{ color: S.ink }}>{scenario.product_name}</p>
+                                        <p className="text-[14px] font-semibold" style={{ color: S.ink }}>{scenario.product_name}{scenario.period_name ? ` · ${scenario.period_name}` : ''}</p>
                                         <p className="mt-0.5 text-[12px] font-normal" style={{ color: S.inkMute, ...TNUM }}>
                                             {scenario.cn_code ? `CN ${scenario.cn_code}` : 'CN 미입력'} · EU {formatInteger(scenario.import_mass_t)}t
                                         </p>
@@ -848,7 +848,7 @@ export default function ScenariosPage() {
                         <div key={`${scenario.result_id}-mobile`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                             <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                    <h3 className="break-words text-sm font-semibold text-slate-950">{scenario.product_name}</h3>
+                                    <h3 className="break-words text-sm font-semibold text-slate-950">{scenario.product_name}{scenario.period_name ? ` · ${scenario.period_name}` : ''}</h3>
                                     <p className="mt-1 break-words text-xs text-slate-600">
                                         {scenario.cn_code ? `CN ${scenario.cn_code}` : 'CN 미입력'} / 생산량 {formatNumber(scenario.output_mass_t)} t / EU 수입 {formatNumber(scenario.import_mass_t)} t
                                     </p>
@@ -931,6 +931,7 @@ export default function ScenariosPage() {
                                 <tr key={scenario.result_id} className="transition hover:bg-slate-50">
                                     <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-slate-950">
                                         {scenario.product_name}
+                                        {scenario.period_name && <div className="text-xs font-normal text-slate-500">{scenario.period_name}</div>}
                                         <div className="mt-1 text-xs font-normal text-slate-500">
                                             {scenario.cn_code ? `CN ${scenario.cn_code}` : 'CN 미입력'}
                                         </div>
