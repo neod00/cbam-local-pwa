@@ -446,8 +446,9 @@ const process = {
   name: 'Rolling and finishing',
   production_route: 'Flat steel processing',
   output_mass_t: 1000,
-  market_output_mass_t: 950,
-  internal_consumption_mass_t: 50,
+  // No in-plant transfer in the base fixture: the engine does not chain processes yet, so any transfer blocks the export.
+  market_output_mass_t: 1000,
+  internal_consumption_mass_t: 0,
   direct_attributable_emissions_tco2e: 120,
   electricity_mwh: 500,
   electricity_ef_tco2e_per_mwh: 0.47,
@@ -559,6 +560,25 @@ assertEqual(String(validation.isValid), 'true', 'synthetic workbook validity');
 assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
 const readiness = euExport.evaluateEuExportReadiness(data, validation.cnCodeMap);
 assertEqual(String(readiness.errorCount), '0', 'readiness error count');
+
+// ── in-plant transfer guard (docs/internal-precursor-design.md §7-6) ──
+// Until the engine chains processes, a transfer makes the document wrong either way: the receiving good is
+// understated in the app, or doubled in the template when the transfer was also entered as a purchased precursor.
+{
+  const sender = { ...data.processes[0], market_output_mass_t: 950, internal_consumption_mass_t: 50 };
+  const plain = euExport.evaluateEuExportReadiness({ ...data, processes: [sender] }, validation.cnCodeMap);
+  const plainErrors = plain.issues.filter((issue) => issue.severity === 'error');
+  assertEqual(String(plainErrors.length), '1', 'a transfer alone must block the export');
+  assertEqual(String(/실제보다 낮게/.test(plainErrors[0].message)), 'true', 'transfer-only message must say the receiving good is understated');
+  assertEqual(String(plainErrors[0].target?.id === sender.id), 'true', 'transfer error must link to the sending process');
+
+  const receiver = { ...data.processes[0], id: 'process_receiver', name: 'Receiver', market_output_mass_t: 40, internal_consumption_mass_t: 0, output_mass_t: 40 };
+  const workaround = { ...data.precursors[0], id: 'precursor_workaround', name: 'Slab from process 1', process_id: receiver.id, precursor_cn_code: product.cn_code };
+  const doubled = euExport.evaluateEuExportReadiness({ ...data, processes: [sender, receiver], precursors: [...data.precursors, workaround] }, validation.cnCodeMap);
+  const doubledErrors = doubled.issues.filter((issue) => issue.severity === 'error' && /두 배/.test(issue.message));
+  assertEqual(String(doubledErrors.length), '1', 'a transfer plus a same-CN purchased precursor elsewhere must be flagged as double counting');
+  assertEqual(String(doubledErrors[0].message.includes('Slab from process 1')), 'true', 'the double-counting message must name the precursor');
+}
 // 기준 픽스처의 전구물질은 간접 SEE 0.25에 전력 분해값이 없다 → EU 문서에 「1 MWh/t × 0.25」로 나간다는 경고 1건(run11 P1-17).
 assertEqual(String(readiness.warningCount), '2', 'readiness warning count (bridge-less precursor indirect SEE + empty UN/LOCODE)');
 assertEqual(String(readiness.issues.some((issue) => issue.message.includes('1 MWh/t × 0.25'))), 'true', 'run11 P1-17: bridge-less indirect SEE is announced');
@@ -1004,8 +1024,8 @@ assertEqual(readCell(sourceStreamSheet, 'P17'), '100', 'B_EmInst P17');
 assertEqual(readCell(sourceStreamSheet, 'R17'), '0', 'B_EmInst R17');
 assertEqual(readCell(emissionsEnergySheet, 'M26'), '', 'C_Emissions&Energy M26');
 assertEqual(readCell(processSheet, 'L16'), '1000', 'D_Processes L16');
-assertEqual(readCell(processSheet, 'L27'), '950', 'D_Processes L27');
-assertEqual(readCell(processSheet, 'L32'), '50', 'D_Processes L32');
+assertEqual(readCell(processSheet, 'L27'), '1000', 'D_Processes L27');
+assertEqual(readCell(processSheet, 'L32'), '0', 'D_Processes L32');
 assertEqual(readCell(processSheet, 'L54'), '120', 'D_Processes L54');
 assertEqual(readCell(processSheet, 'L65'), '500', 'D_Processes L65');
 assertEqual(readCell(processSheet, 'L66'), '0.47', 'D_Processes L66');

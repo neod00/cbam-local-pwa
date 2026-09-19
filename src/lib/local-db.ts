@@ -856,8 +856,9 @@ export async function seedLocalData(): Promise<void> {
         name: "Rolling and finishing",
         production_route: "Flat steel processing",
         output_mass_t: 1000,
-        market_output_mass_t: 950,
-        internal_consumption_mass_t: 50,
+        // The demo is a single process: nothing can receive an in-plant transfer, and a transfer blocks the export until chaining exists.
+        market_output_mass_t: 1000,
+        internal_consumption_mass_t: 0,
         direct_attributable_emissions_tco2e: 120,
         electricity_mwh: 500,
         electricity_ef_tco2e_per_mwh: 0.47,
