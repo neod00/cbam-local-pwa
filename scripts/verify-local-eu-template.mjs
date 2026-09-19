@@ -94,20 +94,23 @@ function loadEuExportModule() {
   const allocationRulesSource = readFileSync('src/lib/allocation-rules.ts', 'utf8')
     .replace(/^import .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
+  const reportingScopeSource = readFileSync('src/lib/reporting-scope.ts', 'utf8')
+    .replace(/^import type .*;\r?\n/gm, '')
+    .replace(/^export /gm, '');
   const source = readFileSync('src/lib/eu-template-export.ts', 'utf8')
     .replace(
       "import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';",
       'const { strFromU8, strToU8, unzipSync, zipSync } = fflate;'
     )
-    .replace("import { summarizeProductOutputLines } from './calculation-engine';", '')
-    .replace("import { calculateSourceStreamEmissions, getSourceStreamEmissionFactorBasis } from './source-stream-calculation';", '')
-    .replace("import { getIndirectEmissionsApplicability } from './cbam-product-rules';", '')
-    .replace("import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, reconcileSourceStreams } from './allocation-rules';", '')
+    // Strip every relative import as a whole (same as verify-eu-export.mjs). Listing them one by one went stale:
+    // the reporting-scope and cn-master imports were added later and this harness died with "exports is not defined".
+    .replace(/^import \{[\s\S]*?\} from '\.\/[^']*';\r?\n/gm, '')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
   const compiled = ts.transpileModule(
     `${sourceStreamCalculationSource}
 ${productRulesSource}
+${reportingScopeSource}
 ${allocationRulesSource}
 function summarizeProductOutputLines(processOutputMassT, outputLines) {
   const activeLines = outputLines.filter((line) => line.output_mass_t > 0);
@@ -274,8 +277,8 @@ function makeSampleData() {
     name: 'Rolling and finishing',
     production_route: 'Flat steel processing',
     output_mass_t: 1000,
-    market_output_mass_t: 950,
-    internal_consumption_mass_t: 50,
+    market_output_mass_t: 1000,
+    internal_consumption_mass_t: 0,
     direct_attributable_emissions_tco2e: 120,
     electricity_mwh: 500,
     electricity_ef_tco2e_per_mwh: 0.47,

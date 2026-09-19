@@ -1,5 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import type { BackupStatus, Installation, Product, ProductOutputLine, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
+import type { BackupStatus, Installation, InternalTransfer, Product, ProductOutputLine, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import type { CnCodeOption } from './cn-code-options';
 import type { ScenarioRiskSummary } from './scenario-calculation';
 import { summarizeProductOutputLines } from './calculation-engine';
@@ -52,6 +52,11 @@ export interface EuTemplateExportData {
     sourceStreams?: SourceStream[];
     precursors: PurchasedPrecursor[];
     products: Product[];
+    /**
+     * 사내 이송(공정 간 전가). D_Processes (c)칸에 받는 공정별 양으로 나간다 — 템플릿 수식이 상류 SEE를 하류에 얹는다.
+     * E_PurchPrec에는 싣지 않는다(둘 다 실리면 템플릿이 두 번 더한다).
+     */
+    internalTransfers?: InternalTransfer[];
 }
 type ReportableExportScope = {
     products: Product[];
@@ -868,16 +873,35 @@ export function evaluateEuExportReadiness(
                 (precursor) => precursor.process_id !== process.id
                     && senderCns.has((precursor.precursor_cn_code ?? '').replace(/\D/g, ''))
             );
-            issues.push({
-                severity: 'error',
-                area: '생산공정',
-                message: workaround.length > 0
-                    ? `${process.name}: 사내 다른 공정으로 넘긴 양(${process.internal_consumption_mass_t.toFixed(1)} t)이 있는데, 같은 CN의 원료가 「구매 전구물질」로도 들어가 있습니다(${workaround.map((item) => item.name).join(', ')}).`
-                        + ' 이대로 EU 문서를 만들면 템플릿이 두 경로를 모두 더해 받는 제품의 SEE가 두 배가 됩니다. 공정 간 전가는 아직 지원되지 않아 이 구성으로는 문서를 만들 수 없습니다.'
-                    : `${process.name}: 사내 다른 공정으로 넘긴 양(${process.internal_consumption_mass_t.toFixed(1)} t)이 있습니다.`
-                        + ' 앱은 아직 이 양의 배출을 받는 공정에 얹지 않습니다 — 받는 제품의 SEE가 실제보다 낮게(0일 수도) 나옵니다. 공정 간 전가는 아직 지원되지 않아 이 구성으로는 문서를 만들 수 없습니다.',
-                target: { type: 'process', id: process.id },
-            });
+            // 이송 레코드(받는 공정별 양)가 있으면 (c)칸에 바르게 나간다 — 그때 이 검사는 차단이 아니라 검산이다.
+            const transferredOut = (data.internalTransfers ?? [])
+                .filter((transfer) => transfer.source_process_id === process.id && transfer.mass_t > 0)
+                .reduce((sum, transfer) => sum + transfer.mass_t, 0);
+            const amount = `${process.internal_consumption_mass_t.toFixed(1)} t`;
+            if (workaround.length > 0) {
+                issues.push({
+                    severity: 'error',
+                    area: '생산공정',
+                    message: `${process.name}: 사내 다른 공정으로 넘긴 양(${amount})이 있는데, 같은 CN의 원료가 「구매 전구물질」로도 들어가 있습니다(${workaround.map((item) => item.name).join(', ')}).`
+                        + ' 이대로 EU 문서를 만들면 템플릿이 두 경로를 모두 더해 받는 제품의 SEE가 두 배가 됩니다. 구매 전구물질 쪽을 지우세요 — 사내에서 받은 원료는 사내 이송으로만 넣습니다.',
+                    target: { type: 'process', id: process.id },
+                });
+            } else if (transferredOut <= 0) {
+                issues.push({
+                    severity: 'error',
+                    area: '생산공정',
+                    message: `${process.name}: 사내 다른 공정으로 넘긴 양(${amount})이 있는데 **어느 공정이 받았는지** 지정되지 않았습니다.`
+                        + ' 받는 공정을 모르면 그 배출을 얹을 수 없어 받는 제품의 SEE가 실제보다 낮게(0일 수도) 나옵니다. 이 구성으로는 문서를 만들 수 없습니다.',
+                    target: { type: 'process', id: process.id },
+                });
+            } else if (Math.abs(transferredOut - process.internal_consumption_mass_t) > Math.max(0.01, process.internal_consumption_mass_t * 0.001)) {
+                issues.push({
+                    severity: 'error',
+                    area: '생산공정',
+                    message: `${process.name}: 사내 다른 공정으로 넘긴 양(${amount})과 받는 공정별로 지정한 양의 합(${transferredOut.toFixed(1)} t)이 다릅니다. EU 문서 (c)칸의 합이 총량 검산((e) Control)과 어긋납니다.`,
+                    target: { type: 'process', id: process.id },
+                });
+            }
         }
 
         if (outputLineSummary.hasMixedAllocationBasis) {
@@ -1632,16 +1656,35 @@ const ELECTRICITY_EF_SOURCE_TO_TEMPLATE: Record<string, string> = {
     MIX: 'Mix',
 };
 
-function createProcessCellWrites(processes: ProductionProcess[]): EuTemplateExportCellWrite[] {
-    const writes: EuTemplateExportCellWrite[] = [];
+/**
+ * D_Processes (c) 「Consumed in other production processes within the installation」의 칸 배치.
+ *
+ * 공정 블록마다 9칸(L+21 … L+29)이 있고, 각 칸은 **자기 자신을 건너뛴** 공정 번호를 가리킨다
+ * (템플릿 S열: `=MAX(위)+IF(D=자기번호,2,1)`). 공정 1의 칸은 [2,3,4,…], 공정 2는 [1,3,4,…], 공정 3은 [1,2,4,…].
+ * 공식 예제 「Example Steel 2 EAF alloys」에서 확인했다. 번호는 1부터.
+ */
+export function internalConsumptionSlot(senderNumber: number, receiverNumber: number): number | undefined {
+    if (senderNumber === receiverNumber || senderNumber < 1 || receiverNumber < 1) {
+        return undefined;
+    }
+    const slot = receiverNumber < senderNumber ? receiverNumber : receiverNumber - 1;
+    return slot >= 1 && slot <= 9 ? slot : undefined;
+}
 
-    processes.slice(0, 10).forEach((process, index) => {
+function createProcessCellWrites(
+    processes: ProductionProcess[],
+    internalTransfers: InternalTransfer[] = []
+): EuTemplateExportCellWrite[] {
+    const writes: EuTemplateExportCellWrite[] = [];
+    const exported = processes.slice(0, 10);
+    const numberById = new Map(exported.map((process, index) => [process.id, index + 1]));
+
+    exported.forEach((process, index) => {
         const startRow = 11 + index * 65;
 
         writes.push(
             { sheetName: 'D_Processes', cell: `L${startRow + 5}`, label: '총 생산량', value: process.output_mass_t, sourceId: process.id },
             { sheetName: 'D_Processes', cell: `L${startRow + 16}`, label: '시장 출하량', value: process.market_output_mass_t, sourceId: process.id },
-            { sheetName: 'D_Processes', cell: `L${startRow + 21}`, label: '내부 소비량', value: process.internal_consumption_mass_t, sourceId: process.id },
             {
                 sheetName: 'D_Processes',
                 cell: `L${startRow + 43}`,
@@ -1658,6 +1701,34 @@ function createProcessCellWrites(processes: ProductionProcess[]): EuTemplateExpo
                 sourceId: process.id,
             }
         );
+
+        // (c) 사내 다른 공정에서 소비된 양 — 받는 공정별 칸. (d) 비CBAM 재화에 소비된 양(L+30).
+        // 이송 레코드가 없는 옛 자료는 받는 공정을 모르므로 종전처럼 합계를 첫 칸에 적는다(공정이 둘이면 맞는 칸이다).
+        const outgoing = internalTransfers.filter((transfer) => transfer.source_process_id === process.id && transfer.mass_t > 0);
+        if (outgoing.length === 0) {
+            writes.push({ sheetName: 'D_Processes', cell: `L${startRow + 21}`, label: '내부 소비량', value: process.internal_consumption_mass_t, sourceId: process.id });
+        } else {
+            const bySlot = new Map<number, number>();
+            let outsideTemplate = 0;
+            for (const transfer of outgoing) {
+                const receiverNumber = numberById.get(transfer.target_process_id);
+                const slot = receiverNumber ? internalConsumptionSlot(index + 1, receiverNumber) : undefined;
+                if (slot) {
+                    bySlot.set(slot, (bySlot.get(slot) ?? 0) + transfer.mass_t);
+                } else {
+                    // 받는 공정이 이 문서에 없다(비CBAM 공정) → 템플릿에 그 공정의 칸이 없다. (d)로 간다.
+                    outsideTemplate += transfer.mass_t;
+                }
+            }
+            // 칸을 비워 두지 않고 0도 적는다 — 템플릿 사본을 다시 쓸 때 옛 값이 남지 않게.
+            if (!bySlot.has(1)) bySlot.set(1, 0);
+            for (const [slot, mass] of [...bySlot].sort((a, b) => a[0] - b[0])) {
+                writes.push({ sheetName: 'D_Processes', cell: `L${startRow + 20 + slot}`, label: `사내 이송 → 공정 ${slot < index + 1 ? slot : slot + 1}`, value: mass, sourceId: process.id });
+            }
+            if (outsideTemplate > 0) {
+                writes.push({ sheetName: 'D_Processes', cell: `L${startRow + 30}`, label: '비CBAM 재화에 소비', value: outsideTemplate, sourceId: process.id });
+            }
+        }
 
         // 전력 EF 출처 유형(분류된 경우만) → D_Processes "Source of the emission factor" 셀(L+56, 예: L67)
         const efSourceCode = process.electricity_ef_source
@@ -2324,10 +2395,16 @@ export function createEuTemplateExportCellWrites(
         ...createAggregatedGoodsAndBoundaryCellWrites(exportData, cnCodeMap, countryMaps),
         ...createSourceStreamCellWrites(exportScope.sourceStreams),
         ...createEmissionsEnergyCellWrites(exportScope.processes, exportScope.products),
-        ...createProcessCellWrites(exportScope.processes),
+        ...createProcessCellWrites(exportScope.processes, scopeInternalTransfers(data, exportScope)),
         ...createPrecursorCellWrites(exportScope.precursors, exportScope.processes),
         ...createSummaryProductCellWrites(exportData),
     ];
+}
+
+/** 이 문서의 기간·공정에 속한 이송만. 보내는 공정이 문서에 없으면 그 이송은 이 문서의 일이 아니다. */
+function scopeInternalTransfers(data: EuTemplateExportData, exportScope: ReportableExportScope): InternalTransfer[] {
+    const exportedIds = new Set(exportScope.processes.map((process) => process.id));
+    return (data.internalTransfers ?? []).filter((transfer) => exportedIds.has(transfer.source_process_id));
 }
 
 function verifyExportCellWrites(
