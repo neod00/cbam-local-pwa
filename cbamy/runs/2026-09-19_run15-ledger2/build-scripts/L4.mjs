@@ -1,0 +1,20 @@
+import { open, mapText, openStep, dumpForm } from './lib.mjs';
+const { browser, page } = await open();
+page.on('dialog', (d) => d.accept());
+const addProc = async (name, route, sheet, slab, internal) => {
+  const i = page.locator('main input:visible');
+  await i.nth(0).fill(name); await i.nth(1).fill(route);
+  await i.nth(2).fill(sheet); await i.nth(3).fill(slab); await i.nth(4).fill(internal);
+  await page.getByRole('button', { name: '공정 저장' }).click();
+  await page.waitForTimeout(2200);
+  console.log('proc', name.slice(0, 10), '| msg:', (await page.locator('main').innerText()).match(/(저장했습니다|입력하세요|많습니다)[^\n]*/)?.[0]?.slice(0, 50));
+};
+await addProc('P1 전기로 제강+연주', '스크랩 전기로(EAF)', '', '2234000', '1227000');
+await addProc('P2 압연+정정', '가공(압연·정정)', '1133000', '', '');
+let t = await mapText(page);
+console.log('map:', t.match(/\d \/ 6 완료/)?.[0], '|', t.match(/3 생산공정 \| [^|]+/)?.[0]);
+await openStep(page, 4);
+await dumpForm(page, 'step4');
+const kinds = await page.locator('main select').nth(1).locator('option').allInnerTexts().catch(() => []);
+console.log('select1 options:', kinds.slice(0, 20));
+await browser.close();

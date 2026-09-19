@@ -1,0 +1,15 @@
+import { open, mapText, openStep, dumpForm } from './lib.mjs';
+const { browser, page } = await open();
+page.on('dialog', (d) => d.accept());
+const inputs = page.locator('main input:visible');
+await inputs.nth(0).fill('동성특수강 포항공장 (Dongseong Special Steel Pohang Works)');
+await page.getByRole('button', { name: '사업장 저장' }).click();
+await page.waitForTimeout(2000);
+await page.getByRole('button', { name: '2025년 연간' }).click();
+await page.getByRole('button', { name: '보고기간 저장' }).click();
+await page.waitForTimeout(2000);
+let t = await mapText(page);
+console.log('map:', t.match(/\d \/ 6 완료/)?.[0], '|', t.match(/1 사업장·보고기간 \| [^|]+/)?.[0]);
+await openStep(page, 2);
+await dumpForm(page, 'step2');
+await browser.close();

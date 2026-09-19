@@ -1,0 +1,20 @@
+import { open, mapText, openStep, dumpForm } from './lib.mjs';
+const { browser, page } = await open();
+page.on('dialog', (d) => d.accept());
+const add = async (name, cn) => {
+  const inputs = page.locator('main input:visible');
+  await inputs.nth(0).fill(name);
+  await inputs.nth(1).fill(cn);
+  await page.waitForTimeout(600);
+  await page.getByRole('button', { name: '제품 추가' }).click();
+  await page.waitForTimeout(1800);
+  const txt = await page.locator('main').innerText();
+  console.log('added', cn, '| msg:', txt.match(/(저장했습니다|추가했습니다|입력하세요|8자리)[^\n]*/)?.[0]?.slice(0, 60));
+};
+await add('STS 304 슬래브 (반제품)', '72189911');
+await add('STS 304 열연 평판재', '72191310');
+let t = await mapText(page);
+console.log('map:', t.match(/\d \/ 6 완료/)?.[0], '|', t.match(/2 제품·CN 코드 \| [^|]+/)?.[0]);
+await openStep(page, 3);
+await dumpForm(page, 'step3');
+await browser.close();

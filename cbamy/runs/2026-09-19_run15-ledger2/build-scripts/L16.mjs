@@ -1,0 +1,14 @@
+import { open, mapText } from './lib.mjs';
+const { browser, page } = await open();
+page.on('dialog', (d) => d.accept());
+await page.goto('http://127.0.0.1:3000/settings', { waitUntil: 'load', timeout: 180000 });
+await page.waitForTimeout(3000);
+await page.locator('input[type="file"]').first().setInputFiles('D:/OneDrive/Business/ai automation/CBAM_Platform/cbamy/runs/2026-09-19_run14/downloads/00-baseline-run14.cbam');
+await page.waitForTimeout(2500);
+await page.getByRole('button', { name: '복원' }).last().click();
+await page.waitForTimeout(4500);
+const t = await mapText(page);
+console.log('restored:', t.match(/· CN \d+ · [^|]+/)?.[0], '|', t.match(/\d \/ 6 완료/)?.[0], '|', t.match(/기준 [\d.]+/)?.[0], '|', t.match(/8 EU 문서 생성 \| [^|]+/)?.[0]);
+const s = await page.evaluate(async () => { const dbs = await indexedDB.databases(); for (const info of dbs) { const db = await new Promise((res) => { const r = indexedDB.open(info.name); r.onsuccess = () => res(r.result); }); if (![...db.objectStoreNames].includes('settings')) { db.close(); continue; } const rows = await new Promise((res) => { const r = db.transaction('settings').objectStore('settings').getAll(); r.onsuccess = () => res(r.result); }); db.close(); return rows.map((x) => x.key).sort(); } });
+console.log('settings:', s.join(','));
+await browser.close();
