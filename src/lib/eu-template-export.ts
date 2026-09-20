@@ -943,13 +943,15 @@ export function evaluateEuExportReadiness(
         // (지도가 만든 옛 공정은 둘 다 0이었다 — 총 생산량이 있는데도.)
         const splitTotal = process.market_output_mass_t + process.internal_consumption_mass_t;
         const splitDelta = Math.abs(splitTotal - process.output_mass_t);
+        // 합이 안 맞으면 템플릿의 (e) Control이 0이 아니게 된다 — 나가는 문서가 스스로 앞뒤가 안 맞는 말을 한다.
+        // 경고로 두면 그대로 제출된다(run18: 검산 −1,104,300인 사본이 만들어졌다).
         if (process.output_mass_t > 0 && splitDelta > Math.max(0.01, process.output_mass_t * 0.001)) {
             issues.push({
-                severity: 'warning',
+                severity: 'error',
                 area: '생산공정',
                 message: `${process.name}: 시장 출하량(${process.market_output_mass_t.toFixed(1)} t) + 내부 소비량(${process.internal_consumption_mass_t.toFixed(1)} t)이`
                     + ` 총 생산량(${process.output_mass_t.toFixed(1)} t)과 ${splitDelta.toFixed(1)} t 차이납니다.`
-                    + ' EU 문서에 두 값이 그대로 기재되므로 3단계에서 사내 이송량을 확인하세요.',
+                    + ' 이대로면 EU 문서 D_Processes의 검산((e) Control)이 0이 아닌 채로 나갑니다 — 생산공정 화면에서 사내 이송량과 총 생산량을 확인하세요.',
                 target: { type: 'process', id: process.id },
             });
         }
