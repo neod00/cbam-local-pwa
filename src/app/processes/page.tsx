@@ -111,6 +111,11 @@ export default function ProcessesPage() {
     const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
     // 사내 이송(받는 공정별 양)은 작업 지도 3단계에서 넣는다. 여기서는 합계와 어긋나지 않게 읽기만 한다.
     const [internalTransfers, setInternalTransfers] = useState<InternalTransfer[]>([]);
+    // 사내 이송은 **받는 공정별로** 받는다(2025/2547 부속서 III — 각 생산공정에서 쓴 양). 합계만 받으면 그 배출을
+    // 누구에게 얹을지 알 수 없고, EU 문서 D_Processes (c)칸도 받는 공정별 칸이다. 공정의 internal_consumption_mass_t는 이 값들의 합이다.
+    const [transferMasses, setTransferMasses] = useState<Record<string, string>>({});
+    // 보내는 공정에 제품 라인이 둘 이상이면 어느 제품을 넘기는지 알아야 한다 — 라인마다 SEE가 다를 수 있다.
+    const [transferSourceLineId, setTransferSourceLineId] = useState('');
     const [sourceStreams, setSourceStreams] = useState<SourceStream[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
@@ -139,7 +144,8 @@ export default function ProcessesPage() {
             setProcesses(sortedProcesses);
             setProductOutputLines(outputLineData);
             setPrecursors(precursorData);
-            setInternalTransfers(await listLocalItems('internal_transfers'));
+            const transferData = await listLocalItems('internal_transfers');
+            setInternalTransfers(transferData);
             setSourceStreams(sourceStreamData);
             setProducts(productData.sort((a, b) => a.name.localeCompare(b.name)));
             setPeriods(periodData.sort((a, b) => b.start_date.localeCompare(a.start_date)));
@@ -174,6 +180,15 @@ export default function ProcessesPage() {
                     }))
                     : [createOutputLineDraft(editProcess.product_id ?? '', editProcess.output_mass_t)]
                 );
+                {
+                    const outgoing = transferData.filter((transfer) => transfer.source_process_id === editProcess.id);
+                    const masses: Record<string, string> = {};
+                    outgoing.forEach((transfer) => {
+                        masses[transfer.target_process_id] = String(toNumber(masses[transfer.target_process_id] ?? '0') + transfer.mass_t);
+                    });
+                    setTransferMasses(masses);
+                    setTransferSourceLineId(outgoing[0]?.source_output_line_id ?? '');
+                }
                 setEditingProcessId(editProcess.id);
                 setShowForm(true);
             } else {
@@ -247,6 +262,8 @@ export default function ProcessesPage() {
         setNewItem(defaultDraft);
         setOutputLineDrafts(createDefaultOutputLineDrafts(defaultDraft));
         setErrors({});
+        setTransferMasses({});
+        setTransferSourceLineId('');
         setEditingProcessId(null);
         setShowForm(false);
     }
@@ -260,6 +277,8 @@ export default function ProcessesPage() {
         const defaultDraft = createDefaultDraft();
         setNewItem(defaultDraft);
         setOutputLineDrafts(createDefaultOutputLineDrafts(defaultDraft));
+        setTransferMasses({});
+        setTransferSourceLineId('');
         setEditingProcessId(null);
         setShowForm(true);
     }
@@ -297,8 +316,51 @@ export default function ProcessesPage() {
             }))
             : [createOutputLineDraft(process.product_id ?? '', process.output_mass_t)]
         );
+        {
+            const outgoing = internalTransfers.filter((transfer) => transfer.source_process_id === process.id);
+            const masses: Record<string, string> = {};
+            outgoing.forEach((transfer) => {
+                masses[transfer.target_process_id] = String(toNumber(masses[transfer.target_process_id] ?? '0') + transfer.mass_t);
+            });
+            setTransferMasses(masses);
+            setTransferSourceLineId(outgoing[0]?.source_output_line_id ?? '');
+        }
         setEditingProcessId(process.id);
         setShowForm(true);
+    }
+
+    // 이송할 수 있는 상대는 **같은 보고기간**의 다른 공정뿐이다(기간이 다르면 내보내기 준비도가 오류로 막는다).
+    const transferReceivers = processes.filter(
+        (process) => process.id !== editingProcessId && (process.period_id ?? '') === (newItem.period_id || undefined ? newItem.period_id : '')
+    );
+    const internalTransferTotal = transferReceivers.reduce((sum, process) => sum + toNumber(transferMasses[process.id] ?? '0'), 0);
+    // 총 생산량 = 시장 출하 + 사내 이송. 둘 다 사람이 적으면 합이 총량과 어긋나고, EU 문서 D_Processes의
+    // (e) Control이 0이 아니게 된다 — 문서가 스스로 앞뒤가 안 맞는 말을 한다(실제로 −1,104,300이 나왔다).
+    // 이송을 넣을 수 있는 화면에서는 시장 출하량을 빼서 구한다(지도 3단계와 같은 규칙).
+    const marketOutputIsDerived = transferReceivers.length > 0;
+    const derivedMarketOutput = Math.max(newItem.output_mass_t - internalTransferTotal, 0);
+    const effectiveMarketOutput = marketOutputIsDerived ? derivedMarketOutput : newItem.market_output_mass_t;
+
+    /** 받는 공정별 이송 레코드를 폼의 값에 맞춘다: 양이 있으면 만들거나 고치고, 0이면 지운다. */
+    async function syncTransfers(processId: string) {
+        const savedLines = (await listLocalItems('product_output_lines')).filter((line) => line.process_id === processId);
+        const productLines = savedLines.filter((line) => line.product_id && line.activity_level_role !== 'EXCLUDED');
+        const sourceLineId = productLines.length > 1
+            ? productLines.find((line) => line.id === transferSourceLineId)?.id
+            : undefined;
+        const existing = internalTransfers.filter((transfer) => transfer.source_process_id === processId);
+        for (const receiver of transferReceivers) {
+            const mass = toNumber(transferMasses[receiver.id] ?? '0');
+            const [current, ...duplicates] = existing.filter((transfer) => transfer.target_process_id === receiver.id);
+            await Promise.all(duplicates.map((transfer) => deleteLocalItem('internal_transfers', transfer.id)));
+            if (mass > 0) {
+                const fields = { period_id: newItem.period_id || undefined, source_process_id: processId, source_output_line_id: sourceLineId, target_process_id: receiver.id, mass_t: mass };
+                await (current ? updateLocalItem('internal_transfers', { ...current, ...fields }) : createLocalItem('internal_transfers', fields));
+            } else if (current) {
+                await deleteLocalItem('internal_transfers', current.id);
+            }
+        }
+        setInternalTransfers(await listLocalItems('internal_transfers'));
     }
 
     async function saveOutputLines(processId: string) {
@@ -395,6 +457,14 @@ export default function ProcessesPage() {
             nextErrors.electricity_mwh = '전력 사용량은 0 이상이어야 합니다.';
         }
 
+        if (internalTransferTotal > newItem.output_mass_t + 1e-9) {
+            nextErrors.internal_consumption_mass_t = `사내 이송량 합계(${internalTransferTotal.toLocaleString('ko-KR')} t)가 총 생산량보다 많습니다.`;
+        }
+
+        if (internalTransferTotal > 0 && outputLineDrafts.filter((line) => line.product_id && line.output_mass_t > 0 && line.activity_level_role !== 'EXCLUDED').length > 1 && !transferSourceLineId) {
+            nextErrors.internal_consumption_mass_t = '제품 생산라인이 둘 이상입니다. 다른 공정으로 넘기는 것이 어느 라인의 산출물인지 고르세요.';
+        }
+
         if (newItem.electricity_ef_tco2e_per_mwh < 0) {
             nextErrors.electricity_ef_tco2e_per_mwh = '전력 배출계수는 0 이상이어야 합니다.';
         }
@@ -421,6 +491,8 @@ export default function ProcessesPage() {
             const updatedProcess = await updateLocalItem('processes', {
                 ...existingProcess,
                 ...newItem,
+                internal_consumption_mass_t: internalTransferTotal,
+                market_output_mass_t: effectiveMarketOutput,
                 direct_attributable_emissions_tco2e: resolveDirectTotal(existingProcess.id),
                 name: newItem.name.trim(),
                 production_route: newItem.production_route.trim(),
@@ -428,6 +500,7 @@ export default function ProcessesPage() {
                 product_id: newItem.product_id || undefined,
             });
             await saveOutputLines(updatedProcess.id);
+            await syncTransfers(updatedProcess.id);
             setProcesses(processes.map((process) => (process.id === updatedProcess.id ? updatedProcess : process)));
             resetForm();
             return;
@@ -435,6 +508,8 @@ export default function ProcessesPage() {
 
         const process = await createLocalItem('processes', {
             ...newItem,
+            internal_consumption_mass_t: internalTransferTotal,
+            market_output_mass_t: effectiveMarketOutput,
             direct_attributable_emissions_tco2e: resolveDirectTotal(null),
             name: newItem.name.trim(),
             production_route: newItem.production_route.trim(),
@@ -443,6 +518,7 @@ export default function ProcessesPage() {
         });
 
         await saveOutputLines(process.id);
+        await syncTransfers(process.id);
         setProcesses([process, ...processes]);
         resetForm();
     }
@@ -824,29 +900,68 @@ export default function ProcessesPage() {
                         >
                         <div>
                             <label className="text-sm font-semibold text-slate-700">시장 출하량(t)</label>
-                            <input type="number" min="0" step="0.0001" className={fieldClass} value={newItem.market_output_mass_t} onChange={(event) => setNewItem({ ...newItem, market_output_mass_t: toNumber(event.target.value) })} />
-                            {errors.market_output_mass_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.market_output_mass_t}</p>}
-                        </div>
-                        <div>
-                            <label className="text-sm font-semibold text-slate-700">내부 소비량(t)</label>
                             <input
                                 type="number"
                                 min="0"
                                 step="0.0001"
                                 className={fieldClass}
-                                value={newItem.internal_consumption_mass_t}
-                                // 받는 공정별 이송이 있으면 이 값은 그 합계다. 여기서 따로 고치면 EU 문서 (c)칸의 합과 어긋난다.
-                                disabled={internalTransfers.some((transfer) => transfer.source_process_id === editingProcessId && transfer.mass_t > 0)}
-                                onChange={(event) => setNewItem({ ...newItem, internal_consumption_mass_t: toNumber(event.target.value) })}
+                                value={effectiveMarketOutput}
+                                disabled={marketOutputIsDerived}
+                                onChange={(event) => setNewItem({ ...newItem, market_output_mass_t: toNumber(event.target.value) })}
                             />
-                            {internalTransfers.some((transfer) => transfer.source_process_id === editingProcessId && transfer.mass_t > 0) ? (
+                            {marketOutputIsDerived && (
+                                <p className="mt-1 text-xs leading-5 text-slate-500">총 생산량 − 사내 이송 합계로 구합니다. 둘 다 적으면 합이 총 생산량과 어긋나 EU 문서의 검산이 맞지 않습니다.</p>
+                            )}
+                            {errors.market_output_mass_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.market_output_mass_t}</p>}
+                        </div>
+                        <div>
+                            <label className="text-sm font-semibold text-slate-700">사내 다른 공정으로 넘긴 양(t)</label>
+                            {transferReceivers.length === 0 ? (
                                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                                    받는 공정별 이송량의 합계입니다({internalTransfers.filter((transfer) => transfer.source_process_id === editingProcessId && transfer.mass_t > 0).map((transfer) => `${processes.find((item) => item.id === transfer.target_process_id)?.name ?? '알 수 없는 공정'} ${transfer.mass_t.toLocaleString('ko-KR')} t`).join(' · ')}). 작업 지도 3단계에서 이 공정을 열어 고치세요.
+                                    {newItem.period_id
+                                        ? '같은 보고기간에 다른 생산공정이 없습니다. 받는 공정을 먼저 등록하면 여기에 칸이 생깁니다.'
+                                        : '보고기간을 먼저 고르세요. 같은 기간의 다른 공정으로만 넘길 수 있습니다.'}
                                 </p>
                             ) : (
-                                <p className="mt-1 text-xs leading-5 text-slate-500">사내 다른 공정으로 넘기는 양은 작업 지도 3단계에서 받는 공정별로 넣으세요. 여기에 합계만 넣으면 받는 공정을 알 수 없어 EU 문서를 만들 수 없습니다.</p>
+                                <>
+                                    <div className="mt-1 space-y-2">
+                                        {transferReceivers.map((receiver) => (
+                                            <div key={receiver.id} className="flex items-center gap-2">
+                                                <span className="w-40 flex-none truncate text-sm text-slate-700" title={receiver.name}>→ {receiver.name}</span>
+                                                <input
+                                                    aria-label={`${receiver.name}(으)로 넘긴 양`}
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.0001"
+                                                    className={fieldClass}
+                                                    value={transferMasses[receiver.id] ?? ''}
+                                                    onChange={(event) => setTransferMasses((current) => ({ ...current, [receiver.id]: event.target.value }))}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {/* 받는 공정의 제품에 이 공정의 배출이 실린다. 어느 라인의 산출물인지는 라인이 둘 이상일 때만 묻는다. */}
+                                    {internalTransferTotal > 0 && outputLineDrafts.filter((line) => line.product_id && line.output_mass_t > 0 && line.activity_level_role !== 'EXCLUDED').length > 1 && (
+                                        <select
+                                            aria-label="넘기는 제품 라인"
+                                            className={`${fieldClass} mt-2`}
+                                            value={transferSourceLineId}
+                                            onChange={(event) => setTransferSourceLineId(event.target.value)}
+                                        >
+                                            <option value="">— 넘기는 제품 라인을 고르세요 —</option>
+                                            {outputLineDrafts
+                                                .filter((line) => line.existing_id && line.product_id && line.output_mass_t > 0 && line.activity_level_role !== 'EXCLUDED')
+                                                .map((line) => (
+                                                    <option key={line.existing_id} value={line.existing_id}>{line.name || products.find((product) => product.id === line.product_id)?.name}</option>
+                                                ))}
+                                        </select>
+                                    )}
+                                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                                        합계 {internalTransferTotal.toLocaleString('ko-KR')} t — 이 값이 EU 문서 D_Processes의 「내부 소비량」으로 나갑니다.
+                                        받는 공정의 제품에 이 공정의 배출이 그 양만큼 실립니다.
+                                    </p>
+                                </>
                             )}
-                            {errors.internal_consumption_mass_t && <p className="mt-1 text-xs font-medium text-red-600">{errors.internal_consumption_mass_t}</p>}
                         </div>
                         <div>
                             <label className="text-sm font-semibold text-slate-700"><Term term="직접귀속배출량">직접귀속배출량</Term>(tCO2e)</label>{' '}
