@@ -4,7 +4,7 @@ import type { CnCodeOption } from './cn-code-options';
 import type { ScenarioRiskSummary } from './scenario-calculation';
 import { summarizeProductOutputLines } from './calculation-engine';
 import { calculateSourceStreamEmissions, getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
-import { getIndirectEmissionsApplicability } from './cbam-product-rules';
+import { APP_SCOPE_EXCLUSION_TEXT, getAppScopeExclusion, getIndirectEmissionsApplicability, isIntegratedSteelRoute } from './cbam-product-rules';
 import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';
 import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, reconcileSourceStreams } from './allocation-rules';
 import { CN_MASTER } from './cn-master.generated';
@@ -150,7 +150,12 @@ function isReportableOutputLine(line: ProductOutputLine, productById: Map<string
     if (line.activity_level_role === 'EXCLUDED') {
         return false;
     }
-    return isCbamReportingScope(getProductReportingScope(line.product_id ? productById.get(line.product_id) : undefined, line));
+    const lineProduct = line.product_id ? productById.get(line.product_id) : undefined;
+    // 앱 지원 범위 밖(다른 분야·고로 일관제철)의 제품은 문서에 담지 않는다 — 엔진이 결과에 넣지 않는 것과 같은 판정.
+    if (getAppScopeExclusion(lineProduct)) {
+        return false;
+    }
+    return isCbamReportingScope(getProductReportingScope(lineProduct, line));
 }
 
 function createReportableExportScope(data: EuTemplateExportData): ReportableExportScope {
@@ -164,7 +169,7 @@ function createReportableExportScope(data: EuTemplateExportData): ReportableExpo
     const unassigned = (row: { period_id?: string }) => !singlePeriod && !row.period_id;
 
     const productById = new Map(data.products.map((product) => [product.id, product]));
-    const products = data.products.filter((product) => isCbamReportingScope(getProductReportingScope(product)));
+    const products = data.products.filter((product) => isCbamReportingScope(getProductReportingScope(product)) && !getAppScopeExclusion(product));
     const productIds = new Set(products.map((product) => product.id));
     const productOutputLines = (data.productOutputLines ?? []).filter((line) => isReportableOutputLine(line, productById));
     const outputLineIds = new Set(productOutputLines.map((line) => line.id));
@@ -792,6 +797,32 @@ export function evaluateEuExportReadiness(
             area: '템플릿 한계',
             message: `현재 Export MVP는 Summary_Products 제품 행을 100개까지 지원합니다. 현재 ${summaryProductLineCount}개입니다.`,
         });
+    }
+
+    // ── 앱 지원 범위 밖 ───────────────────────────────────────────────────
+    // 범위 밖 제품은 문서에 담기지 않는다(위 범위 계산). 그 사실을 말한다 — 말없이 빠지면 담당자는 문서가 완전한 줄 안다.
+    for (const product of data.products) {
+        const exclusion = isCbamReportingScope(getProductReportingScope(product)) ? getAppScopeExclusion(product) : undefined;
+        if (exclusion) {
+            issues.push({
+                severity: 'warning',
+                area: '제품',
+                message: `${product.name}: ${APP_SCOPE_EXCLUSION_TEXT[exclusion]} 이 제품은 이 문서에 담기지 않습니다.`,
+                target: { type: 'product', id: product.id },
+            });
+        }
+    }
+    // 자체 공정이 고로·전로라고 적혀 있으면 품목이 조강·철강제품이어도 일관제철이다. 폐가스·열 이전을 계산하지 않으므로
+    // 이 공정의 결과는 맞지 않는다 — 문서를 만들지 않는다. (구매 전구물질의 생산경로와는 무관하다.)
+    for (const process of exportScope.processes) {
+        if (isIntegratedSteelRoute(process.production_route)) {
+            issues.push({
+                severity: 'error',
+                area: '생산공정',
+                message: `${process.name}: 생산 방식이 고로·전로(일관제철)로 적혀 있습니다. ${APP_SCOPE_EXCLUSION_TEXT.INTEGRATED_STEEL} 전기로·가공 공정이라면 3단계에서 생산 방식을 고치세요.`,
+                target: { type: 'process', id: process.id },
+            });
+        }
     }
 
     for (const product of exportScope.products) {

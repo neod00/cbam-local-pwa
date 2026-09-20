@@ -775,6 +775,19 @@ assertEqual(
 );
 assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '47', 'planned cell writes');
 
+// ── app scope: steel only, no integrated (BF/BOF) steelmaking yet ──
+{
+  const errorsOf = (extra) => euExport.evaluateEuExportReadiness({ ...data, ...extra }, validation.cnCodeMap).issues;
+  const bf = errorsOf({ processes: [{ ...data.processes[0], production_route: 'BF/BOF integrated' }] }).filter((issue) => issue.severity === 'error' && /일관제철/.test(issue.message));
+  assertEqual(String(bf.length), '1', 'an own process on the BF/BOF route must block the export');
+  const eaf = errorsOf({ processes: [{ ...data.processes[0], production_route: 'Scrap EAF' }] }).filter((issue) => /일관제철/.test(issue.message));
+  assertEqual(String(eaf.length), '0', 'an EAF process is in scope');
+  const aluminium = { ...data.products[0], id: 'product_aluminium', name: 'Aluminium plate', cn_code: '76061191', hs_code: '7606', hs_group: '76' };
+  const mixed = errorsOf({ products: [...data.products, aluminium] });
+  assertEqual(String(mixed.filter((issue) => issue.severity === 'warning' && /철강 전용/.test(issue.message) && /담기지 않습니다/.test(issue.message)).length), '1', 'an out-of-scope product must be announced as left out of the document');
+  assertEqual(String(mixed.filter((issue) => issue.severity === 'error' && /Aluminium plate/.test(issue.message)).length), '0', 'an out-of-scope product is left out, it does not block the steel document');
+}
+
 // ── D_Processes (c): in-plant transfers go to the receiving process's slot ──
 // Slot layout confirmed against the official "Example Steel 2 EAF alloys" workbook (column S of the template):
 // each block lists the other processes in order, skipping itself. Process 1 -> [2,3,4..], 2 -> [1,3,4..], 3 -> [1,2,4..].

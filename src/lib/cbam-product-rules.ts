@@ -205,6 +205,14 @@ export function getCbamCoverage(product?: Pick<Product, 'cn_code' | 'hs_code'>):
 
     const meta = getCbamGoodsMetadata(product);
 
+    if (meta.annex_i_candidate && meta.steel_app_supported && getAppScopeExclusion(product) === 'INTEGRATED_STEEL') {
+        return {
+            status: 'NOT_COVERED',
+            label: `앱 범위 밖 · 고로 일관제철`,
+            reason: `${meta.note} ${APP_SCOPE_EXCLUSION_TEXT.INTEGRATED_STEEL}`,
+        };
+    }
+
     if (meta.annex_i_candidate && meta.steel_app_supported) {
         return {
             status: 'COVERED',
@@ -217,7 +225,7 @@ export function getCbamCoverage(product?: Pick<Product, 'cn_code' | 'hs_code'>):
         return {
             status: 'NOT_COVERED',
             label: `앱 범위 밖 · ${meta.sector_label}`,
-            reason: `${meta.note} 현재 씨밤이는 철강 분야 전용 앱이라 이 품목군은 산정/Export 대상으로 처리하지 않습니다.`,
+            reason: `${meta.note} ${APP_SCOPE_EXCLUSION_TEXT.OTHER_SECTOR}`,
         };
     }
 
@@ -257,6 +265,42 @@ const SECTOR_LABELS: Record<CbamGoodsSector, string> = {
     fertilisers: 'Fertilisers',
     hydrogen: 'Hydrogen',
     other: '확인 필요',
+};
+
+/**
+ * 이 앱의 지원 범위 — **철강만**, 그 안에서도 **고로 일관제철은 아직 지원하지 않는다**.
+ *
+ * 범위 밖 입력을 만났을 때 앱은 그럴듯한 숫자를 내지 않고 「지원하지 않는다」고 말해야 한다. 혼자 쓰는 담당자는
+ * 그 숫자가 검증된 적 없다는 것을 알 길이 없다.
+ *
+ *  · OTHER_SECTOR      알루미늄·시멘트·비료·수소·전기 — CBAM 대상이지만 이 앱이 다루지 않는 분야. 산정 결과·EU 문서에 넣지 않는다.
+ *  · INTEGRATED_STEEL  선철 — 고로(또는 용융환원)로만 만드는 품목. 폐가스·열의 공정 간 이전(2025/2547 부속서 III A.2.2·A.2.3)을
+ *                      앱이 계산하지 않으므로 결과가 맞지 않는다. EU 문서를 만들지 않는다.
+ *                      조강·철강제품을 고로·전로로 만드는 경우는 품목이 아니라 자체 공정의 생산 방식 글자로 잡는다(isIntegratedSteelRoute).
+ *                      소결광·펠릿(CN 2601 12 00)은 막지 않는다 — 단독 펠릿 공장이 있고, 철강에서 간접배출이 기준에 포함되는 유일한 품목이다.
+ * 구매 전구물질로 들어오는 선철·고로 강괴는 해당 없다 — 공급사가 준 SEE를 그대로 쓰기 때문이다.
+ */
+export type AppScopeExclusion = 'OTHER_SECTOR' | 'INTEGRATED_STEEL';
+
+const INTEGRATED_STEEL_GOODS = new Set(['Pig iron']);
+
+export function getAppScopeExclusion(product?: Pick<Product, 'cn_code' | 'hs_code'>): AppScopeExclusion | undefined {
+    if (!product) return undefined;
+    const meta = getCbamGoodsMetadata(product);
+    if (meta.annex_i_candidate && !meta.steel_app_supported) return 'OTHER_SECTOR';
+    const goods = getIndirectEmissionsApplicability(product).goods ?? [];
+    if (goods.length > 0 && goods.every((good) => INTEGRATED_STEEL_GOODS.has(good))) return 'INTEGRATED_STEEL';
+    return undefined;
+}
+
+/** 공정의 생산 방식 글자가 고로·전로를 말하는가 — 자체 공정에만 묻는다(구매 전구물질의 경로는 상관없다). */
+export function isIntegratedSteelRoute(routeText?: string): boolean {
+    return /\bbf\b|\bbof\b|bf\s*[\/·-]\s*bof|blast\s*furnace|고로|전로|일관제철/i.test(routeText ?? '');
+}
+
+export const APP_SCOPE_EXCLUSION_TEXT: Record<AppScopeExclusion, string> = {
+    OTHER_SECTOR: '이 앱은 철강 전용입니다. 이 품목군은 산정 결과와 EU 문서에 넣지 않습니다.',
+    INTEGRATED_STEEL: '고로 일관제철은 아직 지원하지 않습니다 — 폐가스·열의 공정 간 이전을 계산하지 않아 결과가 맞지 않습니다. 산정 결과와 EU 문서에 넣지 않습니다.',
 };
 
 export function getCbamGoodsMetadata(product?: Pick<Product, 'cn_code' | 'hs_code'>): CbamGoodsMetadata {

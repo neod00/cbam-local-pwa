@@ -1,6 +1,6 @@
 import type { DirectEmissionsInputMode, Product, ProductOutputLine, ProductReportingScope, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';
-import { getIndirectEmissionsApplicability } from './cbam-product-rules';
+import { APP_SCOPE_EXCLUSION_TEXT, getAppScopeExclusion, getIndirectEmissionsApplicability } from './cbam-product-rules';
 import type { IndirectEmissionsRelevance } from './cbam-product-rules';
 import { getProductReportingScope, getProductReportingScopeLabel, isCbamReportingScope } from './reporting-scope';
 import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, RECONCILIATION_REVIEW_DEVIATION, getDirectEmissionsInputMode, hasManualAllocationReason, reconcileSourceStreams, resolveActivityLevelRole } from './allocation-rules';
@@ -565,7 +565,10 @@ function calculateOwnResults(input: {
         const warningDetails: LocalCalculationWarning[] = [];
         const product = process.product_id ? productById.get(process.product_id) : undefined;
         const processReportingScope = getProductReportingScope(product);
-        const processIsCbamReportable = isCbamReportingScope(processReportingScope);
+        // 앱 지원 범위 밖(다른 분야, 고로 일관제철)의 제품은 「CBAM 신고 대상」으로 저장돼 있어도 결과에 넣지 않는다.
+        // 범위 안내문은 「처리하지 않는다」고 말하는데 종전에는 계산에 그대로 들어갔다 — 말과 동작이 달랐다.
+        const processScopeExclusion = getAppScopeExclusion(product);
+        const processIsCbamReportable = isCbamReportingScope(processReportingScope) && !processScopeExclusion;
         const period = process.period_id ? periodById.get(process.period_id) : undefined;
         const processPrecursors = precursorsByProcess.get(process.id) ?? [];
         const processSourceStreams = sourceStreamsByProcess.get(process.id) ?? [];
@@ -573,6 +576,10 @@ function calculateOwnResults(input: {
             warnings.push(message);
             warningDetails.push({ message, target });
         };
+
+        if (processScopeExclusion && product) {
+            addWarning(`범위 밖: ${product.name} — ${APP_SCOPE_EXCLUSION_TEXT[processScopeExclusion]}`, { type: 'process', id: process.id });
+        }
 
         if (process.output_mass_t <= 0) {
             addWarning('생산량이 0 이하입니다. SEE 산정이 제한됩니다.', { type: 'process', id: process.id });
@@ -874,7 +881,8 @@ function calculateOwnResults(input: {
         }
 
         const lineResults = lineContexts.map(({ line, lineProduct, lineScope, role }) => {
-            const lineIsCbamReportable = isCbamReportingScope(lineScope);
+            const lineScopeExclusion = getAppScopeExclusion(lineProduct);
+            const lineIsCbamReportable = isCbamReportingScope(lineScope) && !lineScopeExclusion;
             const lineIndirectApplicability = getIndirectEmissionsApplicability(lineProduct);
             const lineIndirectIncluded = lineIndirectApplicability.relevance === 'INCLUDED';
             const base = {

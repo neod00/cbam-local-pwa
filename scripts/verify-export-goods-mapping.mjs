@@ -75,7 +75,7 @@ const productsEnd = panels.indexOf('// ── 3단계', productsStart);
 const productsBody = panels.slice(productsStart, productsEnd);
 assert.match(
   productsBody,
-  /아직 EU 문서 생성이 지원되지 않습니다/,
+  /이 앱의 지원 범위가 아닙니다/,
   '2단계가 지원 범위를 말하지 않는다 — 등록은 되는데 8단계에서야 막힌다'
 );
 assert.match(productsBody, /exportSupport\.supported/, '2단계가 지원 여부를 화면 조건으로 쓰지 않는다');
