@@ -1,6 +1,30 @@
 import { PageHeader, SectionCard, StatusBadge } from '@/components/ui';
+import { getOperatorInfoGaps, isOperatorInfoComplete, operatorField } from '@/lib/operator-info';
 import { AlertTriangle, Database, FileSpreadsheet, Mail, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
+
+/**
+ * 운영자 정보가 비어 있으면 그 사실을 화면이 말한다. 「검토 필요」 배지만으로는 무엇을 채워야 하는지 알 수 없고,
+ * 빠뜨린 채 공개되기 쉽다. 채우면(src/lib/operator-info.ts) 이 배너는 저절로 사라진다.
+ */
+function OperatorInfoGapNotice() {
+    const gaps = getOperatorInfoGaps();
+
+    if (gaps.length === 0) {
+        return null;
+    }
+
+    return (
+        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-900">
+            <p className="font-semibold">배포 전 확정 필요 — 아직 채우지 않은 항목 {gaps.length}건</p>
+            <p className="mt-1">{gaps.join(' · ')}</p>
+            <p className="mt-1 text-xs text-red-800">
+                <code className="rounded bg-red-100 px-1">src/lib/operator-info.ts</code>에서 채우면 이 안내가 사라집니다.
+                절차는 <code className="rounded bg-red-100 px-1">docs/pre-release-checklist.md</code>를 보세요.
+            </p>
+        </div>
+    );
+}
 
 const termsSections = [
     {
@@ -36,11 +60,27 @@ const termsSections = [
         ],
     },
     {
-        title: '5. 업데이트와 접근 제한',
+        title: '5. 무료 라이선스 등록',
+        items: [
+            '앱을 쓰려면 무료 라이선스 등록이 필요하며, 등록 시 이메일, 회사명, 담당자명, 연락처, 국가, 업종을 운영 서버에 보냅니다. 처리 내용은 개인정보 처리방침에 있습니다.',
+            '라이선스는 무료이며, 등록 정보는 배포 관리와 문의 응대에만 씁니다. CBAM 산정 자료, EU 템플릿, .cbam 백업은 등록과 무관하게 서버로 보내지 않습니다.',
+            '등록 정보가 사실과 다르거나 약관을 위반하면 라이선스가 제한될 수 있습니다.',
+        ],
+    },
+    {
+        title: '6. 업데이트와 접근 제한',
         items: [
             '무료 PWA는 오류 수정, 보안 안내, 공식 템플릿 대응을 위해 선택, 권장, 필수 업데이트 안내를 표시할 수 있습니다.',
             '업데이트 확인은 버전과 배포 상태 확인을 위한 기능이며 CBAM 계산 데이터, EU 템플릿, .cbam 백업 파일을 수집하기 위한 기능이 아닙니다.',
             '약관 위반, 무단 재배포, 보안 위협, 악의적 자동화 사용이 확인되는 경우 무료 라이선스 또는 접근이 제한될 수 있습니다.',
+        ],
+    },
+    {
+        title: `7. 준거법과 관할`,
+        items: [
+            `이 약관은 ${operatorField('governing_law')}에 따릅니다.`,
+            `이 약관 또는 서비스 이용과 관련한 분쟁은 ${operatorField('jurisdiction')}을 전속 관할 법원으로 합니다.`,
+            `시행일: ${operatorField('terms_effective_date')}`,
         ],
     },
 ];
@@ -51,9 +91,13 @@ export default function TermsPage() {
             <PageHeader
                 eyebrow="무료 베타 고지"
                 title="CBAM Local 무료 사용 약관 및 책임 고지"
-                description="이 페이지는 v0.1.0-beta 배포 전 검토용 약관/고지 초안입니다. 최종 공개 전 법무 또는 운영 책임자 검토가 필요합니다."
-                actions={<StatusBadge tone="warning">검토 필요</StatusBadge>}
+                description={isOperatorInfoComplete()
+                    ? `${operatorField('service_name')} 무료 베타의 사용 약관과 책임 고지입니다.`
+                    : '이 페이지는 배포 전 검토용 약관 초안입니다. 운영자 정보를 채우고 법무 또는 운영 책임자 검토를 거쳐야 공개할 수 있습니다.'}
+                actions={<StatusBadge tone={isOperatorInfoComplete() ? 'success' : 'warning'}>{isOperatorInfoComplete() ? '공개본' : '검토 필요'}</StatusBadge>}
             />
+
+            <OperatorInfoGapNotice />
 
             <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <SectionCard className="lg:col-span-2">
@@ -124,17 +168,21 @@ export default function TermsPage() {
                 </SectionCard>
             ))}
 
-            <SectionCard>
-                <div className="flex gap-3 text-sm leading-6 text-amber-900">
-                    <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-700" />
-                    <div>
-                        <h2 className="font-semibold text-slate-950">배포 전 확정 필요</h2>
-                        <p className="mt-1">
-                            이 페이지는 현재 운영 검토용 문구입니다. 서비스명, 운영자명 또는 회사명, 개인정보 처리 안내 필요 여부,
-                            최종 책임 제한 문구, 약관 적용 법령과 관할은 공개 전 확정해야 합니다.
-                        </p>
-                    </div>
-                </div>
+            <SectionCard title="운영자">
+                <dl className="grid grid-cols-1 gap-3 text-sm leading-6 text-slate-700 sm:grid-cols-2">
+                    {([
+                        ['서비스명', 'service_name'],
+                        ['운영자', 'operator_name'],
+                        ['사업자등록번호', 'business_registration_no'],
+                        ['주소', 'address'],
+                        ['문의', 'contact_email'],
+                    ] as const).map(([label, field]) => (
+                        <div key={field}>
+                            <dt className="text-xs font-semibold text-slate-500">{label}</dt>
+                            <dd className="mt-0.5 break-words text-slate-900">{operatorField(field)}</dd>
+                        </div>
+                    ))}
+                </dl>
             </SectionCard>
         </div>
     );
