@@ -9,10 +9,13 @@ import ts from 'typescript';
 const require = createRequire(import.meta.url);
 const fflate = require('fflate');
 
-const templatePath = process.argv[2];
+// 저장소에 들어 있는 내장 공식 템플릿을 기본값으로 쓴다. 종전에는 경로를 반드시 인자로 받아야 해서
+// `npm run verify` 체인에 넣을 수 없었고, 체인 밖에 있는 동안 기대값이 조용히 낡았다(로더가 깨진 줄도 몰랐다).
+const DEFAULT_TEMPLATE = 'public/templates/CBAM_Communication_template_for_installations_en_20241213.xlsx';
+const templatePath = process.argv[2] ?? DEFAULT_TEMPLATE;
 
 if (!templatePath) {
-  console.error('Usage: node scripts/verify-local-eu-template.mjs <path-to-eu-template.xlsx>');
+  console.error('Usage: node scripts/verify-local-eu-template.mjs [path-to-eu-template.xlsx]');
   process.exit(1);
 }
 
@@ -465,12 +468,13 @@ assert.equal(checkedCells['A_InstData!I9'], '45292');
 assert.equal(checkedCells['A_InstData!L9'], '45657');
 assert.equal(checkedCells['A_InstData!I20'], 'Main Factory A');
 assert.equal(checkedCells['A_InstData!E62'], 'Iron or steel products');
-assert.equal(checkedCells['A_InstData!I62'], 'Flat steel processing');
+// 품목군의 허용 드롭다운 값으로 정규화된다 — 'Iron or steel products'는 'All production routes' 하나뿐이다.
+assert.equal(checkedCells['A_InstData!I62'], 'All production routes');
 assert.equal(checkedCells['A_InstData!E83'], 'Iron or steel products');
 assert.equal(checkedCells['A_InstData!F83'], 'Only direct production');
 assert.equal(checkedCells['A_InstData!L83'], 'Rolling and finishing');
 assert.equal(checkedCells['A_InstData!E102'], 'Iron or steel products');
-assert.equal(checkedCells['A_InstData!F102'], 'South Korea');
+assert.equal(checkedCells['A_InstData!F102'], 'KR');
 assert.equal(checkedCells['A_InstData!L102'], 'Purchased hot rolled coil');
 assert.equal(checkedCells['B_EmInst!D17'], 'Combustion');
 assert.equal(checkedCells['B_EmInst!E17'], 'Natural gas combustion');
