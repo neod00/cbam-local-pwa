@@ -158,3 +158,16 @@ near(rolled.see_direct_incl_precursor, rolled.direct_see + rolled.precursor_dire
 near(rolled.see_indirect_incl_precursor, rolled.own_indirect_see + rolled.precursor_indirect_see + rolled.internal_precursor_indirect_see, 1e-12, '간접 소계의 세 구성 항목');
 
 console.log('Internal transfer verification passed (공식 EAF 예제 정답지 1.0015/1.3784 → 1.4396/1.7315 · 3단계 사슬 · 순환·라인 모호·기간 불일치 차단).');
+
+// ── /processes 상세 화면도 받는 공정별로 받는다 ──────────────────────────
+// 종전에는 합계 한 칸(읽기 전용)이라, 지도를 쓰지 않는 사용자는 이송을 만들 수 없었다.
+const processesPage = readFileSync('src/app/processes/page.tsx', 'utf8');
+assert.match(processesPage, /const transferReceivers = processes\.filter\(/, '/processes가 받는 공정별 입력을 만들지 않는다');
+assert.match(processesPage, /\(process\.period_id \?\? ''\) === \(newItem\.period_id/, '/processes가 다른 보고기간의 공정까지 이송 상대로 제시한다');
+assert.match(processesPage, /internal_consumption_mass_t: internalTransferTotal/, '/processes의 내부 소비량이 받는 공정별 합계가 아니다');
+assert.equal((processesPage.match(/await syncTransfers\(/g) ?? []).length, 2, '신규·수정 저장이 모두 이송을 저장해야 한다');
+assert.match(processesPage, /넘기는 것이 어느 라인의 산출물인지 고르세요/, '다제품 공정에서 보내는 라인을 묻지 않는다');
+console.log('processes transfer input gate passed.');
+assert.match(processesPage, /const marketOutputIsDerived = transferReceivers\.length > 0;/, '/processes에서 이송을 넣어도 시장 출하량이 줄지 않는다 — EU 문서 검산이 깨진다');
+assert.equal((processesPage.match(/market_output_mass_t: effectiveMarketOutput/g) ?? []).length, 2, '신규·수정 저장이 모두 파생된 시장 출하량을 써야 한다');
+assert.match(readFileSync('src/lib/eu-template-export.ts', 'utf8'), /\(e\) Control\)이 0이 아닌 채로 나갑니다/, '시장+내부≠총량이 경고에 머문다 — 자기모순인 문서가 제출된다');
