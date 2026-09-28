@@ -273,6 +273,14 @@ const transferRoundTrip = parseBackupFile(JSON.stringify(transferBackup));
 assert.equal(transferRoundTrip.data.internal_transfers[0].mass_t, 1227000, 'transfers must survive a round trip');
 const legacyNoStore = parseBackupFile(JSON.stringify({ manifest: { format: 'cbam-local-backup', format_version: 1 }, data: emptyStores }));
 assert.deepEqual(JSON.parse(JSON.stringify(legacyNoStore.data.internal_transfers)), [], 'an older backup gets an empty transfer store');
-assert.throws(() => parseBackupFile(JSON.stringify({ manifest: { format: 'cbam-local-backup', format_version: 3 }, data: emptyStores })), /지원하지 않는/, 'unknown future versions are refused');
+// format_version 3 = a process uses purchased measurable heat (2025/2547 ANNEX III A.2.2). An older app would drop
+// the heat fields and print a lower SEE, so it must refuse the file instead.
+const heatProcess = { id: 'process_heat', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z', name: 'Pickling', measurable_heat_import: 'YES', imported_heat_amount: 1200, imported_heat_unit: 'Gcal', imported_heat_ef_basis: 'STANDARD_FUEL_BOILER', imported_heat_standard_fuel: 'NATURAL_GAS' };
+const heatBackup = createLocalBackup({ ...emptyStores, processes: [heatProcess], internal_transfers: [transferRow] });
+assert.equal(heatBackup.manifest.format_version, 3, 'a backup with purchased heat must be version 3 (even with transfers)');
+assert.equal(createLocalBackup({ ...emptyStores, processes: [{ ...heatProcess, measurable_heat_import: 'NO' }] }).manifest.format_version, 1, 'answering "no heat" keeps the backup readable by older apps');
+const heatRoundTrip = parseBackupFile(JSON.stringify(heatBackup));
+assert.equal(heatRoundTrip.data.processes[0].imported_heat_amount, 1200, 'heat fields must survive a round trip');
+assert.throws(() => parseBackupFile(JSON.stringify({ manifest: { format: 'cbam-local-backup', format_version: 4 }, data: emptyStores })), /지원하지 않는/, 'unknown future versions are refused');
 
 console.log('Local backup verification passed (할당로직 optional 필드 왕복·옛 백업 호환 포함).');

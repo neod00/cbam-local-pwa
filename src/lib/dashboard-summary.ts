@@ -170,7 +170,7 @@ export function createDashboardSummary(input: DashboardSummaryInput): DashboardS
     const sourceStreamIssueProcessIds = new Set(
         results
             .filter((result) =>
-                (result.direct_emissions_tco2e > 0 && result.source_stream_count === 0)
+                (result.direct_emissions_tco2e - (result.imported_heat_emissions_tco2e ?? 0) > 0 && result.source_stream_count === 0)
                 || (result.source_stream_count > 0 && Math.abs(result.source_stream_delta_tco2e) > 0.01)
             )
             .map((result) => result.process_id)

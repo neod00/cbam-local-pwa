@@ -314,7 +314,8 @@ function describeAttributionMethod(input: CalculationReportInput) {
         parts.push(`공용 계량기 정합계수(2025/2547 ANNEX III A.1 식 41·42): ${groups.map((group) => `'${group.group}' RecF ${formatForReport(group.factor, 4)} (사업장 ${formatForReport(group.installation_total, 2)} / 공정 합계 ${formatForReport(group.sub_total, 2)} ${group.unit})`).join(' · ')}.`);
     }
     parts.push('활동수준(SEE 분모)은 ANNEX II 점 F에 따라 판매 가능하거나 다른 생산공정의 전구물질로 직접 쓰이는 재화만 포함하며, 「활동수준 제외」로 표시된 라인(불량·부산물·폐기물·스크랩)은 배출 0으로 둔다.');
-    parts.push(`측정 가능한 열·폐가스·자가발전 보정(ANNEX III A.3 식 55, ${ALLOCATION_RULES.ADJUSTMENTS.id})은 현재 버전에서 미지원 — 해당 시 별도 산정이 필요하다.`);
+    parts.push(`사업장 밖에서 산 측정가능열(스팀·온수)의 배출 EmH,imp는 직접배출에 더한다(ANNEX III A.2.2·A.3 식 52·55, ${ALLOCATION_RULES.HEAT_IMPORT.id}).`);
+    parts.push(`열 수출·폐가스 수입·수출·자가발전 차감(식 55의 나머지 항, ${ALLOCATION_RULES.ADJUSTMENTS.id})은 현재 버전에서 미지원 — 해당 시 별도 산정이 필요하다.`);
     return parts.join(' ');
 }
 
@@ -340,7 +341,7 @@ function topLimitation(input: CalculationReportInput) {
         return undefined;
     }
 
-    return `CBAM 기준 SEE의 약 ${formatPercentShare(top.share)}가 제3자 검증을 받지 않은 공급사 통지값(${top.precursor.name})에서 유래한다. 불인정 시 영향은 제9.2장 민감도 참조 — 상세는 제8·9·14장.`;
+    return `CBAM 기준 SEE의 약 ${formatPercentShare(top.share)}가 제3자 검증을 받지 않은 공급사 통지값(${top.precursor.name})에서 유래한다. 검증보고서가 없으면 규정상 기본값을 써야 하므로(2025/2547 부속서 II A.1 4·5항) 그 영향은 제9.2장 민감도 참조 — 상세는 제8·9·14장.`;
 }
 
 function formatDate(date: Date) {
@@ -1046,7 +1047,8 @@ function activityDataSection(input: CalculationReportInput) {
 
     const reconRows: Array<[string, string]> = reportable.map((result) => [
         result.process_name,
-        `배출원 합계 ${formatForReport(result.source_stream_emissions_tco2e)} tCO2e · 공정 직접배출 ${formatForReport(result.direct_emissions_tco2e)} tCO2e · 차이 ${formatForReport(result.source_stream_delta_tco2e)} tCO2e`,
+        // 배출원 대조는 DirEm*끼리 한다. 산 열(EmH,imp)은 배출원에 없으므로 빼고 따로 적는다.
+        `배출원 합계 ${formatForReport(result.source_stream_emissions_tco2e)} tCO2e · 공정 직접배출 ${formatForReport(result.direct_emissions_tco2e - (result.imported_heat_emissions_tco2e ?? 0))} tCO2e · 차이 ${formatForReport(result.source_stream_delta_tco2e)} tCO2e${(result.imported_heat_emissions_tco2e ?? 0) > 0 ? ` (별도: 산 열 ${formatForReport(result.imported_heat_emissions_tco2e ?? 0)} tCO2e)` : ''}`,
     ]);
     body.push(table(['생산공정', '정합 결과'], reconRows, { widths: [2700, 6300], headerShade: SOFT, headerBold: true, repeatHeader: true }));
     // 지도·간편 입력 흐름에서 공정 직접배출량은 배출원 합계의 캐시다. 그 경우 이 「대조」는 항등식이라
@@ -1358,7 +1360,7 @@ function precursorSection(input: CalculationReportInput) {
         if (precursor.verification_status !== 'VERIFIED' && precursor.data_mode !== 'DEFAULT') {
             const share = precursorContributionShare(input, precursor);
             body.push(paragraph(
-                `리스크 고지: 본 전구물질의 실측값은 제3자 검증이 완료되지 않았다.${share === undefined ? '' : ` 이 값이 CBAM 기준 SEE의 약 ${formatPercentShare(share)}를 차지한다.`}${vintageMismatch ? ` 자료 대상기간(${vintage})도 본 보고기간과 다르다.` : ''} 확정기간의 실측 인정 요건(검증 수준·기간 대응)은 확인 필요(규정)이며, 불인정 시 공식 기본값 대체가 발동된다 — 그 영향은 제9장에 정량화한다.`,
+                `리스크 고지: 본 전구물질의 실측값은 제3자 검증이 완료되지 않았다.${share === undefined ? '' : ` 이 값이 CBAM 기준 SEE의 약 ${formatPercentShare(share)}를 차지한다.`}${vintageMismatch ? ` 자료 대상기간(${vintage})도 본 보고기간과 다르다.` : ''} 2025/2547 부속서 II A.1 4·5항에 따라 제3국 전구물질의 실측값은 공인 검증기관이 그 생산기간을 다룬 검증보고서가 있을 때만 쓸 수 있고, 없으면 공식 기본값을 써야 한다. 따라서 이 값은 검증보고서 수령 전까지 잠정값이다 — 기본값으로 바꿀 때의 영향은 제9장에 정량화한다.`,
                 undefined,
                 { color: AMBER }
             ));
@@ -1576,7 +1578,7 @@ function defaultValueSection(input: CalculationReportInput) {
     }
 
     // 9.2 민감도 — 실측이 인정되지 않아 DV로 대체될 경우의 영향
-    body.push(paragraph('9.2 민감도 — 실측 불인정 시 DV 대체 영향', 'Heading2'));
+    body.push(paragraph('9.2 민감도 — 검증보고서 없이 기본값(DV)을 써야 할 때의 영향', 'Heading2'));
 
     const sensitivityRows: string[][] = [];
     const sensitivityColumns = [
@@ -1695,6 +1697,11 @@ function resultSection(input: CalculationReportInput) {
 
     for (const result of reportable) {
         rows.push([result.product_name, '자체 공정 직접배출', formatForReport(result.direct_see), '자체 배출 ÷ 생산량']);
+        // 「그중」 행 — 위 행에 이미 들어 있다. 합계 자가검사는 결과 필드로 하므로 이 행을 더하지 않는다.
+        const heatEmissions = result.imported_heat_emissions_tco2e ?? 0;
+        if (heatEmissions > 0) {
+            rows.push([result.product_name, '　그중 산 열(스팀·온수)', formatForReport(result.output_mass_t > 0 ? heatEmissions / result.output_mass_t : 0), 'EmH,imp ÷ 생산량 (부속서 III 식 52·55)']);
+        }
         rows.push([result.product_name, '전구물질 직접 내재배출', formatForReport(result.precursor_direct_see), '소비비율 × 전구물질 SEE']);
         // 2025/2547 부속서 III: 사업장 안의 다른 생산공정에서 만든 전구물질 — 기간 평균 SEE × 이 공정에서 쓴 양.
         for (const internal of result.internal_precursor_inputs ?? []) {
@@ -2082,7 +2089,7 @@ function improvementSection(input: CalculationReportInput) {
             rows.push([
                 `전구물질 검증 — ${precursor.name}`,
                 `${precursor.verification_status === 'SUPPLIER_CONFIRMED' ? '공급사 확인 단계 — 제3자 검증 미완료' : '미검증'}${share === undefined ? '' : `. CBAM 기준 SEE의 약 ${formatPercentShare(share)}를 차지`}`,
-                '공급사 제3자 검증보고서 수령. 미수령·불인정 시 공식 기본값 대체 가능성과 SEE 영향은 제9.2장 참조.',
+                '공급사 제3자 검증보고서(해당 생산기간 포함) 수령. 받지 못하면 규정상 공식 기본값을 써야 한다(2025/2547 부속서 II A.1 4·5항) — SEE 영향은 제9.2장 참조.',
             ]);
         }
 

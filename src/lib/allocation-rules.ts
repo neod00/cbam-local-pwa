@@ -72,11 +72,17 @@ export const ALLOCATION_RULES = {
         anchor: 'Article 4(6) · Article 4(2)',
         text: 'Where goods to which the same functional unit applies are produced using different production routes within an installation, a single production process shall be used encompassing all production routes.',
     },
+    HEAT_IMPORT: {
+        id: 'CBAM-ALLOC-HEAT-01',
+        kind: '규정 필수',
+        anchor: 'ANNEX III, point A.2.2 · point A.3, Equations 52, 55',
+        text: 'EmH,imp = Qimp × EFheat — 사업장 밖에서 산 측정가능열(스팀·온수)의 배출을 직접배출에 더한다. 열 배출계수는 공급사의 검증된 자료, 없으면 그 나라 산업부문 주 연료의 표준계수 ÷ 보일러 효율 90%.',
+    },
     ADJUSTMENTS: {
         id: 'CBAM-ALLOC-ADJ-01',
         kind: '규정 필수',
         anchor: 'ANNEX III, point A.3, Equation 55',
-        text: 'AttrEmDir = DirEm* + EmH,imp − EmH,exp + WGcorr,imp − WGcorr,exp − Emel,prod (측정 가능한 열 수입·수출, 폐가스 수입·수출, 공정 내 자가발전 보정)',
+        text: 'AttrEmDir = DirEm* + EmH,imp − EmH,exp + WGcorr,imp − WGcorr,exp − Emel,prod — 이 중 EmH,imp(산 열)는 CBAM-ALLOC-HEAT-01로 반영한다. 나머지(열 수출, 폐가스 수입·수출, 공정 내 자가발전 차감)는 미지원.',
         unsupported: true,
     },
 } as const satisfies Record<string, AllocationRule>;

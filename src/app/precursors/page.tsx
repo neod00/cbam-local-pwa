@@ -17,6 +17,7 @@ import {
     resolveDefaultSeeForYear,
     type ImportedDefaultValueReference,
 } from '@/lib/reference-workbooks';
+import { isUnverifiedActualPrecursor } from '@/lib/precursor-verification';
 import { Term } from '@/components/ux/Term';
 import { FieldHelp } from '@/components/ux/FieldHelp';
 import { AlertTriangle, ArrowRight, Boxes, Factory, Pencil, Plus, Scale, Trash2, X } from 'lucide-react';
@@ -606,11 +607,13 @@ export default function PrecursorsPage() {
                                 placeholder="예: 검증보고서 번호·발행일"
                             />
                         </div>
-                        {newItem.data_mode !== 'DEFAULT' && newItem.verification_status === 'UNVERIFIED' && (
+                        {/* 「공급사 확인」도 제3자 검증이 아니므로 같은 안내를 낸다(2025/2547 부속서 II A.1 4·5항). */}
+                        {isUnverifiedActualPrecursor(newItem) && (
                             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 md:col-span-3">
-                                <p className="font-semibold">실측자료 검증 상태를 확인하세요</p>
+                                <p className="font-semibold">검증보고서가 없는 실측값은 최종 산정에 쓸 수 없습니다</p>
                                 <p className="mt-2 text-amber-900">
-                                    실측/혼합 전구물질 자료가 미검증 상태입니다. 공급사 회신, 검증 문서, 내부 확인 근거 중 어떤 자료로 확인했는지 정리해 두세요.
+                                    제3국(EU·면제국 외)에서 산 전구물질의 실측 SEE는 공인 검증기관이 그 생산기간을 다룬 검증보고서가 있을 때만 쓸 수 있고, 없으면 공식 기본값을 써야 합니다(2025/2547 부속서 II A.1 4·5항).
+                                    지금 값으로 계산은 되지만 결과는 잠정값입니다. 공급사에 검증보고서를 요청하거나, 받기 어려우면 「공식 기본값」으로 바꾸세요.
                                 </p>
                             </div>
                         )}

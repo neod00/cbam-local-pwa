@@ -136,7 +136,9 @@ includesAll(readFileSync('src/app/source-streams/page.tsx', 'utf8'), [
 
 includesAll(readFileSync('src/app/processes/page.tsx', 'utf8'), [
   '산정경계 포함·제외 검토',
-  '제외 후보',
+  // 「제외 후보 — 최신 기준 확인」은 규정(2025/2547 부속서 I 3.16.2)이 정한 것을 미뤘다. 이제 제외 공정으로 말한다.
+  '제외 공정',
+  'IRON_STEEL_PRODUCTS_BOUNDARY.excluded',
   '같은 제품의 여러 생산경로 처리',
 ], 'process boundary guidance');
 

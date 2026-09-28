@@ -201,7 +201,7 @@ export const PRODUCT_FAMILY_PRESETS: ProductFamilyPreset[] = [
                 cnCandidates: [
                     { code: '7318', label: '철강제 파스너', status: 'covered', note: '볼트·너트·스크류·와셔·리벳의 대표 후보입니다.' },
                 ],
-                requiredData: ['제품별 생산량', '매입 선재·봉강 사용량', '전력 사용량', '열처리·표면처리 연료 사용량', '스크랩·수율'],
+                requiredData: ['제품별 생산량', '매입 선재·봉강 사용량', '전력 사용량', '열처리·아연도금 연료 사용량(도금(plating)은 경계 밖)', '스크랩·수율'],
             },
         ],
     },
@@ -233,13 +233,13 @@ export const PRODUCT_FAMILY_PRESETS: ProductFamilyPreset[] = [
             {
                 id: 'steel-structure',
                 label: '철골·구조물 부품',
-                description: '절단·용접·조립 제품은 프로젝트별 경계 확인이 중요합니다.',
+                description: '절단·용접·마무리는 규정상 경계 밖(2025/2547 부속서 I 3.16.2)이라, SEE는 대부분 매입 강재(전구물질)에서 나옵니다.',
                 productTypeEnum: 'HS73_STRUCTURE',
                 hsGroup: '73',
                 cnCandidates: [
                     { code: '7308', label: '철강 구조물', status: 'covered', note: '철골·구조물 부품 후보입니다.' },
                 ],
-                requiredData: ['제품 또는 프로젝트별 생산량', '강판·형강 매입량', '전력 사용량', '용접·절단 연료 사용량', '스크랩·수율'],
+                requiredData: ['제품 또는 프로젝트별 생산량', '강판·형강 매입량', '전력 사용량', '경계 안 공정(열처리 등)의 연료 사용량 — 용접·절단은 제외', '스크랩·수율'],
             },
         ],
     },
@@ -260,7 +260,7 @@ export const PRODUCT_FAMILY_PRESETS: ProductFamilyPreset[] = [
                     { code: '7310', label: '탱크·드럼·캔', status: 'covered', note: '300L 이하 탱크·드럼 후보입니다.' },
                     { code: '7311', label: '압축·액화가스 용기', status: 'covered', note: '가스용기일 때 확인합니다.' },
                 ],
-                requiredData: ['제품별 생산량', '강판·부품 매입량', '전력 사용량', '용접·도장 연료 사용량', '스크랩·수율'],
+                requiredData: ['제품별 생산량', '강판·부품 매입량', '전력 사용량', '경계 안 공정(열처리 등)의 연료 사용량 — 용접·마무리는 제외', '스크랩·수율'],
             },
         ],
     },
@@ -427,7 +427,7 @@ const DETAIL_CALCULATION_SETUPS: Record<string, ProductCalculationSetup> = {
         dataRequests: [
             ...COMMON_DATA_REQUESTS,
             { item: 'HRC·후판·코일 매입량', owner: '구매팀', description: '강관 생산에 투입된 매입 강재량' },
-            { item: '용접·절단 자료', owner: '생산기술/공무팀', description: '용접, 절단, 열처리 관련 전력·연료 자료' },
+            { item: '열처리 등 경계 안 공정 자료', owner: '생산기술/공무팀', description: '열처리·소둔·아연도금의 연료·전력. 용접·절단에만 쓰는 연료는 경계 밖(2025/2547 부속서 I 3.16.2)이라 넣지 않습니다 — 따로 계량되지 않으면 그 사유를 남기세요.' },
         ],
     },
     'stainless-cold-rolled': {
@@ -473,7 +473,7 @@ const DETAIL_CALCULATION_SETUPS: Record<string, ProductCalculationSetup> = {
         dataRequests: [
             ...COMMON_DATA_REQUESTS,
             { item: '선재·봉강 매입량', owner: '구매팀', description: '볼트·너트·스크류에 투입된 소재 사용량' },
-            { item: '열처리·표면처리 에너지', owner: '설비/공무팀', description: '열처리로, 도금, 세척 등 에너지 사용량' },
+            { item: '열처리·표면처리 에너지', owner: '설비/공무팀', description: '열처리로, 아연도금, 세척 등 에너지 사용량. 도금(plating)은 경계 밖(2025/2547 부속서 I 3.16.2)입니다.' },
         ],
     },
     'pipe-fitting': {
@@ -496,7 +496,7 @@ const DETAIL_CALCULATION_SETUPS: Record<string, ProductCalculationSetup> = {
         dataRequests: [
             ...COMMON_DATA_REQUESTS,
             { item: '강판·형강 매입량', owner: '구매팀', description: '구조물 제작에 투입된 철강재 사용량' },
-            { item: '용접·절단 자료', owner: '생산기술/공무팀', description: '절단기, 용접기, 도장 등 전력·연료 자료' },
+            { item: '경계 안 공정 자료', owner: '생산기술/공무팀', description: '절단·용접·마무리는 경계 밖(2025/2547 부속서 I 3.16.2)입니다. 열처리 등 경계 안 공정이 있으면 그 연료·전력을 모으세요.' },
         ],
     },
     'tank-container': {
@@ -508,7 +508,7 @@ const DETAIL_CALCULATION_SETUPS: Record<string, ProductCalculationSetup> = {
         dataRequests: [
             ...COMMON_DATA_REQUESTS,
             { item: '강판·부품 매입량', owner: '구매팀', description: '탱크, 드럼, 용기에 투입된 소재 사용량' },
-            { item: '용접·도장 에너지', owner: '설비/공무팀', description: '용접, 도장, 건조 공정 전력·연료 자료' },
+            { item: '경계 안 공정 에너지', owner: '설비/공무팀', description: '용접·마무리는 경계 밖(2025/2547 부속서 I 3.16.2)입니다. 도장·건조가 마무리에 해당하는지는 검증인과 확인하세요.' },
         ],
     },
     'railway-parts': {

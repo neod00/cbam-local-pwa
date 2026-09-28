@@ -338,3 +338,26 @@ export function getCbamGoodsMetadata(product?: Pick<Product, 'cn_code' | 'hs_cod
         note: applicability.lookup,
     };
 }
+
+/**
+ * 「철강제품(Iron or steel products)」 품목군의 시스템 경계 — 2025/2547 부속서 I 3.16.2.
+ *
+ * 종전 화면은 절단·도금·용접·마감을 「제외 후보 — 최신 기준 확인 필요」로 미뤘고, 제품군 안내는 오히려
+ * 「용접·절단 연료」·「도금 에너지」를 모으라고 했다. 규정은 이미 정해 두었다: 아연도금·코팅은 **포함**,
+ * 도금(plating)·절단·용접·마무리는 **제외**. 조강(7206·7207·7218·7224)은 3.15로 경계가 다르다.
+ * 우리말 「도금」이 galvanizing과 plating을 모두 가리키므로, 둘을 나눠 적는다.
+ */
+export const IRON_STEEL_PRODUCTS_BOUNDARY = {
+    anchor: '2025/2547 ANNEX I, point 3.16.2',
+    text: 'all processes directly or indirectly linked to the production processes emitting CO2 emissions from combustion of fuels and process emissions from flue gas treatment, including re-heating, re-melting, casting, hot rolling, cold rolling, forging, annealing, coating, galvanizing, wire drawing, pickling and excluding the following processes: plating, cutting, welding and finishing of iron or steel products.',
+    included: '재가열·재용해·주조·열간압연·냉간압연·단조·소둔(풀림)·코팅·아연도금(galvanizing)·신선(wire drawing)·산세',
+    excluded: '도금(plating)·절단·용접·마무리(finishing)',
+    /** 규정이 두 말을 따로 쓰지만 현장 설비가 어느 쪽인지 애매한 경우 — 앱이 대신 정하지 않는다. */
+    ambiguity: '전기아연도금처럼 「아연도금」과 「도금」 어느 쪽인지 애매한 설비, 도장이 「마무리」에 해당하는지는 검증인과 확인해 모니터링 계획에 적어 두세요.',
+} as const;
+
+/** 제품이 「철강제품」 품목군(3.16)인가 — 경계 안내를 이 품목군에만 띄운다. 판정 불가면 false. */
+export function isIronOrSteelProductsGood(product?: Pick<Product, 'cn_code' | 'hs_code'>): boolean {
+    const goods = getIndirectEmissionsApplicability(product).goods ?? [];
+    return goods.length > 0 && goods.every((good) => good === 'Iron or steel products');
+}

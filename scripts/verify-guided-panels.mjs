@@ -235,13 +235,22 @@ for (const panel of ['FuelPanel', 'ElectricityPanel', 'PrecursorPanel']) {
   );
 }
 
-// 공정별 저장값을 useState 초깃값으로 읽는 곳은 키잉된 ElectricityForm 안에만 있어야 한다.
-const electricityFormStart = source.indexOf('function ElectricityForm(');
-assert.ok(electricityFormStart > 0, 'ElectricityForm이 사라졌다');
-const electricityFormEnd = source.indexOf('\n// ──', electricityFormStart);
+// 공정별 저장값을 useState 초깃값으로 읽는 곳은 키잉된 폼(전력·산 열) 안에만 있어야 한다.
+assert.match(
+  source,
+  /<PurchasedHeatForm\s+key=\{process\.id\}/,
+  'PurchasedHeatForm은 key={process.id}로 렌더해야 한다 — 없으면 공정 전환 시 옛 값이 남아 다른 공정에 기록된다'
+);
+const keyedFormRanges = ['function ElectricityForm(', 'function PurchasedHeatForm('].map((marker) => {
+  const start = source.indexOf(marker);
+  assert.ok(start > 0, `${marker}가 사라졌다`);
+  // 다음 최상위 선언(주석 구분선·JSDoc·function)까지를 폼 본문으로 본다.
+  const ends = ['\n// ──', '\n/**', '\nfunction '].map((token) => source.indexOf(token, start + marker.length)).filter((index) => index > 0);
+  return [start, Math.min(...ends)];
+});
 for (const match of source.matchAll(/useState\(([^\n]*)\)/g)) {
   if (!/process[.?]/.test(match[1])) continue;
-  const inKeyedForm = match.index > electricityFormStart && match.index < electricityFormEnd;
+  const inKeyedForm = keyedFormRanges.some(([start, end]) => match.index > start && match.index < end);
   assert.ok(
     inKeyedForm,
     `panels.tsx:${lineOf(match.index)} useState 초깃값이 공정별 값을 읽는데 키잉된 폼 밖이다 — `

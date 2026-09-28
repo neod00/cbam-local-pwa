@@ -103,6 +103,22 @@ export interface ProductionProcess extends LocalEntity {
   direct_emissions_input_mode?: DirectEmissionsInputMode;
   /** MANUAL_TOTAL일 때 사유·근거(모니터링 계획 A.5 방법 기술). */
   direct_emissions_input_note?: string;
+  /**
+   * 사업장 밖에서 산 측정가능열(스팀·온수)을 이 공정이 쓰는가 — 2025/2547 부속서 III A.2.2, 식 55의 EmH,imp.
+   * undefined = 아직 답하지 않음(기존 자료). 산정은 0으로 두되 EU 문서 점검이 묻는다.
+   * 계산: src/lib/measurable-heat.ts
+   */
+  measurable_heat_import?: "YES" | "NO";
+  /** 이 공정이 쓴 순 측정가능열의 양(명세서 단위 그대로) */
+  imported_heat_amount?: number;
+  imported_heat_unit?: "Gcal" | "GJ" | "MWh" | "TJ";
+  /** SUPPLIER = 공급사의 검증된 열 배출계수(A.2.2 (1)) · STANDARD_FUEL_BOILER = 연료 표준계수 ÷ 0.9(A.2.2 (2)) */
+  imported_heat_ef_basis?: "SUPPLIER" | "STANDARD_FUEL_BOILER";
+  imported_heat_supplier_ef_tco2_per_tj?: number;
+  /** 표준값일 때 연료(HEAT_STANDARD_FUELS의 key) */
+  imported_heat_standard_fuel?: string;
+  /** 공급사·명세서·계수 근거 */
+  imported_heat_source?: string;
 }
 
 /** TEMPLATE_UPLOAD = 활동자료 엑셀 업로드가 값을 채움(수기 값과 같이 다루되 출처를 남긴다). */
@@ -386,8 +402,9 @@ export interface CbamBackupManifest {
   /**
    * 2 = 사내 이송(internal_transfers)이 들어 있다. 이송을 모르는 옛 앱이 이 백업을 열면 이송을 조용히 버려
    * 받는 제품의 SEE가 낮아진다 — 그래서 옛 앱이 거부하도록 버전을 올린다. 이송이 없으면 1로 써서 옛 앱도 읽는다.
+   * 3 = 공정이 사업장 밖에서 산 측정가능열을 쓴다(measurable_heat_import). 같은 이유로 옛 앱이 거부해야 한다.
    */
-  format_version: 1 | 2;
+  format_version: 1 | 2 | 3;
   app_name: typeof CBAM_LOCAL_APP_NAME;
   app_version: string;
   exported_at: string;
@@ -600,7 +617,11 @@ export function createLocalBackup(data: BackupData, exportedAt = nowIso()): Cbam
   return {
     manifest: {
       format: "cbam-local-backup",
-      format_version: (data.internal_transfers ?? []).length > 0 ? 2 : 1,
+      // 옛 앱이 새 자료를 조용히 버리고 더 작은 SEE를 내지 않도록, 그 자료가 있을 때만 판본을 올린다.
+      // 3 = 공정이 산 측정가능열(EmH,imp)을 쓴다 · 2 = 사내 이송이 있다 · 1 = 둘 다 없다.
+      format_version: data.processes.some((process) => process.measurable_heat_import === "YES")
+        ? 3
+        : (data.internal_transfers ?? []).length > 0 ? 2 : 1,
       app_name: CBAM_LOCAL_APP_NAME,
       app_version: CBAM_LOCAL_APP_VERSION,
       exported_at: exportedAt,
@@ -683,7 +704,7 @@ export function parseBackupFile(content: string): CbamBackupFile {
 
   if (
     parsed.manifest?.format !== "cbam-local-backup" ||
-    (parsed.manifest.format_version !== 1 && parsed.manifest.format_version !== 2) ||
+    ![1, 2, 3].includes(parsed.manifest.format_version as number) ||
     !parsed.data
   ) {
     throw new Error("유효하지 않거나 지원하지 않는 .cbam 백업 파일입니다.");

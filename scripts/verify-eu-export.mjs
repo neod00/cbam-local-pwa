@@ -87,6 +87,10 @@ function loadEuExportModule() {
   const allocationRulesSource = readFileSync('src/lib/allocation-rules.ts', 'utf8')
     .replace(/^import .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
+  // export·엔진이 import 한다 — 산 열(EmH,imp)과 전구물질 검증 규칙(2025/2547). 의존이 없는 작은 모듈이다.
+  const helperSources = ['src/lib/measurable-heat.ts', 'src/lib/precursor-verification.ts']
+    .map((path) => readFileSync(path, 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, ''))
+    .join('\n');
   const source = readFileSync('src/lib/eu-template-export.ts', 'utf8')
     .replace(
       "import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';",
@@ -104,6 +108,7 @@ function loadEuExportModule() {
 ${productRulesSource}
 ${reportingScopeSource}
 ${allocationRulesSource}
+${helperSources}
 function summarizeProductOutputLines(processOutputMassT, outputLines) {
   const activeLines = outputLines.filter((line) => line.output_mass_t > 0);
   const totalOutput = activeLines.reduce((sum, line) => sum + line.output_mass_t, 0);
@@ -453,6 +458,8 @@ const process = {
   direct_attributable_emissions_tco2e: 120,
   electricity_mwh: 500,
   electricity_ef_tco2e_per_mwh: 0.47,
+  // 산 열(스팀·온수)을 쓰지 않는다고 답했다 — 답하지 않으면 경고가 하나 는다(2025/2547 부속서 III A.2.2).
+  measurable_heat_import: 'NO',
 };
 const sourceStream = {
   id: 'source-stream-1',
@@ -581,13 +588,35 @@ assertEqual(String(readiness.errorCount), '0', 'readiness error count');
   assertEqual(String(doubledErrors[0].message.includes('Slab from process 1')), 'true', 'the double-counting message must name the precursor');
 }
 // 기준 픽스처의 전구물질은 간접 SEE 0.25에 전력 분해값이 없다 → EU 문서에 「1 MWh/t × 0.25」로 나간다는 경고 1건(run11 P1-17).
-assertEqual(String(readiness.warningCount), '2', 'readiness warning count (bridge-less precursor indirect SEE + empty UN/LOCODE)');
+// 「공급사 확인」은 제3자 검증이 아니다 — 종전엔 조용히 통과했다(2025/2547 부속서 II A.1 4·5항).
+assertEqual(String(readiness.warningCount), '3', 'readiness warning count (bridge-less precursor indirect SEE + empty UN/LOCODE + supplier-confirmed actual precursor)');
+assertEqual(String(readiness.issues.some((issue) => issue.message.includes('공급사 확인 — 제3자 검증 아님') && issue.message.includes('A.1 4·5항'))), 'true', 'supplier-confirmed actual precursor must be announced as not usable without a verification report');
 assertEqual(String(readiness.issues.some((issue) => issue.message.includes('1 MWh/t × 0.25'))), 'true', 'run11 P1-17: bridge-less indirect SEE is announced');
 const bridgedReadiness = euExport.evaluateEuExportReadiness({
   ...data,
   precursors: [{ ...precursor, indirect_electricity_mwh_per_t: 0.5, indirect_electricity_factor_tco2e_per_mwh: 0.5 }],
 }, validation.cnCodeMap);
 assertEqual(String(bridgedReadiness.issues.some((issue) => issue.message.includes('1 MWh/t'))), 'false', 'run11 P1-17: supplier electricity breakdown clears the warning');
+
+// [2547 A.2.2] 산 열(스팀·온수): D_Processes (h) 수입 칸(L+46 열량 TJ · L+47 계수)에 적고, DirEm*(L+43)에는 넣지 않는다 —
+// 템플릿 T열 수식이 L×L을 직접 내재배출에 더하므로 L+43에도 넣으면 두 번 센다.
+{
+  const heatProcess = { ...process, measurable_heat_import: 'YES', imported_heat_amount: 1000, imported_heat_unit: 'Gcal', imported_heat_ef_basis: 'STANDARD_FUEL_BOILER', imported_heat_standard_fuel: 'NATURAL_GAS' };
+  const heatWrites = euExport.createEuTemplateExportCellWrites({ ...data, processes: [heatProcess] }, validation.cnCodeMap);
+  const cell = (ref) => heatWrites.find((write) => write.sheetName === 'D_Processes' && write.cell === ref)?.value;
+  assertEqual(String(Math.abs(cell('L57') - 4.1868) < 1e-12), 'true', 'D_Processes L57 imported heat TJ');
+  assertEqual(String(Math.abs(cell('L58') - 56.1 / 0.9) < 1e-12), 'true', 'D_Processes L58 heat EF = natural gas / 0.9');
+  assertEqual(String(cell('L54')), '120', 'DirEm* (L54) must not include the purchased heat');
+  assertEqual(String(cell('M57') === undefined), 'true', 'heat export (M) is not asked, so it is not written');
+  const noHeatWrites = euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap);
+  assertEqual(String(noHeatWrites.some((write) => write.sheetName === 'D_Processes' && write.cell === 'L57')), 'false', 'no heat, no heat cells');
+
+  const unanswered = euExport.evaluateEuExportReadiness({ ...data, processes: [{ ...process, measurable_heat_import: undefined }] }, validation.cnCodeMap);
+  assertEqual(String(unanswered.issues.some((issue) => issue.severity === 'warning' && issue.message.includes('스팀·온수') && issue.message.includes('답하지 않았습니다'))), 'true', 'an unanswered heat question is announced');
+  const brokenHeat = euExport.evaluateEuExportReadiness({ ...data, processes: [{ ...heatProcess, imported_heat_amount: 0 }] }, validation.cnCodeMap);
+  assertEqual(String(brokenHeat.issues.some((issue) => issue.severity === 'error' && issue.message.includes('적게 나갑니다'))), 'true', '"uses heat" without an amount must block — the document would understate');
+  assertEqual(String(euExport.evaluateEuExportReadiness({ ...data, processes: [heatProcess] }, validation.cnCodeMap).errorCount), '0', 'complete heat input adds no error');
+}
 
 // [run11 P1-12] 철강 가공품 공정에 구매 전구물질이 하나도 없으면 알린다. 사람이 「없음」을 확인하면 조용해진다.
 const noPrecursorReadiness = euExport.evaluateEuExportReadiness({ ...data, precursors: [] }, validation.cnCodeMap);
@@ -606,7 +635,7 @@ const installationReadiness = euExport.evaluateEuExportReadiness({
 }, validation.cnCodeMap);
 assertEqual(String(installationReadiness.issues.filter((issue) => issue.area === '사업장').length), '2', 'run11 P1-16: operator identity and UN/LOCODE gaps are announced');
 assertEqual(String(installationReadiness.warningCount), String(installationReadiness.issues.filter((issue) => issue.severity === 'warning').length), 'warning count must include every listed warning');
-assertEqual(String(installationReadiness.warningCount), '3', 'installation warnings are counted (2) on top of the bridge warning (1)');
+assertEqual(String(installationReadiness.warningCount), '4', 'installation warnings are counted (2) on top of the bridge warning (1) and the supplier-confirmed precursor (1)');
 assertEqual(String(euExport.evaluateEuExportReadiness({ ...data, installations: undefined }, validation.cnCodeMap).issues.filter((issue) => issue.area === '사업장').length), '0', 'callers that do not pass installations keep their results');
 const completeInstallationReadiness = euExport.evaluateEuExportReadiness({
   ...data,
@@ -631,7 +660,7 @@ const sharedMeterReadiness = euExport.evaluateEuExportReadiness({
 assertEqual(String(sharedMeterReadiness.issues.filter((issue) => issue.message.includes('배분 근거')).length), '2', 'run11 P1-10: shared electricity meter without a note is announced per process');
 const scopedReadiness = euExport.evaluateEuExportReadiness(scopedData, validation.cnCodeMap);
 assertEqual(String(scopedReadiness.errorCount), '0', 'non-CBAM coproduct readiness error count');
-assertEqual(String(scopedReadiness.warningCount), '2', 'non-CBAM coproduct readiness warning count (same two warnings only)');
+assertEqual(String(scopedReadiness.warningCount), '3', 'non-CBAM coproduct readiness warning count (same three warnings only — the non-CBAM precursor adds none)');
 const scopedWrites = euExport.createEuTemplateExportCellWrites(scopedData, validation.cnCodeMap);
 assertEqual(String(scopedWrites.filter((write) => write.sheetName === 'Summary_Products').length), '3', 'only one reportable Summary_Products row');
 assertEqual(
@@ -749,7 +778,7 @@ assertEqual(
   'default precursor justification warning'
 );
 assertEqual(
-  String(precursorEvidenceReadiness.issues.some((issue) => issue.message.includes('미검증 상태'))),
+  String(precursorEvidenceReadiness.issues.some((issue) => issue.message.includes('(미검증)') && issue.message.includes('A.1 4·5항'))),
   'true',
   'unverified precursor warning'
 );
@@ -762,7 +791,7 @@ const allocationReadiness = euExport.evaluateEuExportReadiness({
   ],
 }, validation.cnCodeMap);
 assertEqual(String(allocationReadiness.errorCount), '1', 'allocation readiness error count');
-assertEqual(String(allocationReadiness.warningCount), '4', 'allocation readiness warning count');
+assertEqual(String(allocationReadiness.warningCount), '5', 'allocation readiness warning count (+1 supplier-confirmed actual precursor)');
 assertEqual(
   String(allocationReadiness.issues.some((issue) => issue.message.includes('제품 생산라인 합계'))),
   'true',

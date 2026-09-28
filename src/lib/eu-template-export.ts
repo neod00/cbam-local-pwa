@@ -3,11 +3,13 @@ import type { BackupStatus, Installation, InternalTransfer, Product, ProductOutp
 import type { CnCodeOption } from './cn-code-options';
 import type { ScenarioRiskSummary } from './scenario-calculation';
 import { summarizeProductOutputLines } from './calculation-engine';
+import { isUnverifiedActualPrecursor, unverifiedActualPrecursorMessage } from './precursor-verification';
 import { calculateSourceStreamEmissions, getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
 import { APP_SCOPE_EXCLUSION_TEXT, getAppScopeExclusion, getIndirectEmissionsApplicability, isIntegratedSteelRoute } from './cbam-product-rules';
 import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';
 import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, reconcileSourceStreams } from './allocation-rules';
 import { CN_MASTER } from './cn-master.generated';
+import { IMPORTED_HEAT_RULE, resolveImportedHeat } from './measurable-heat';
 
 export const REQUIRED_EU_TEMPLATE_SHEETS = [
     '0_Versions',
@@ -1065,6 +1067,25 @@ export function evaluateEuExportReadiness(
                 });
             }
         }
+
+        // 산 열(스팀·온수) — 부속서 III A.2.2. 사업장 안에 연료가 없어 배출원 점검으로는 누락을 잡을 수 없다.
+        // 묻지 않으면 빠진 줄도 모른다. 「쓴다」고 했는데 값이 모자라면 직접배출이 적게 나가므로 막는다.
+        const importedHeat = resolveImportedHeat(process);
+        if (!importedHeat.answered) {
+            issues.push({
+                severity: 'warning',
+                area: '생산공정',
+                message: `${process.name}: 사업장 밖에서 산 스팀·온수(측정가능열)를 쓰는지 답하지 않았습니다. 쓰면 그 배출을 직접배출에 더해야 합니다(${IMPORTED_HEAT_RULE.anchor}). 지도 4단계에서 답하세요.`,
+                target: { type: 'process', id: process.id },
+            });
+        } else if (importedHeat.problem) {
+            issues.push({
+                severity: 'error',
+                area: '생산공정',
+                message: `${process.name}: 산 열(스팀·온수)을 쓴다고 했는데 ${importedHeat.problem} 이대로면 그 배출이 빠져 직접배출이 적게 나갑니다. 지도 4단계에서 채우세요.`,
+                target: { type: 'process', id: process.id },
+            });
+        }
     }
 
     for (const sourceStream of exportScope.sourceStreams) {
@@ -1142,11 +1163,13 @@ export function evaluateEuExportReadiness(
             });
         }
 
-        if (precursor.data_mode !== 'DEFAULT' && precursor.verification_status === 'UNVERIFIED') {
+        // 「공급사 확인」도 제3자 검증이 아니다 — 종전엔 「미검증」만 경고해 공급사 확인 값은 조용히 나갔다.
+        // 수입자에게 잠정 자료를 먼저 넘기는 일은 흔하므로 막지는 않되, 규정상 쓸 수 없는 값임을 밝힌다.
+        if (isUnverifiedActualPrecursor(precursor)) {
             issues.push({
                 severity: 'warning',
                 area: '구매 전구물질',
-                message: `${precursor.name}: 실측 또는 혼합 전구물질 자료가 아직 미검증 상태입니다.`,
+                message: unverifiedActualPrecursorMessage(precursor),
                 target: { type: 'precursor', id: precursor.id },
             });
         }
@@ -1803,6 +1826,17 @@ function createProcessCellWrites(
                 sourceId: process.id,
             }
         );
+
+        // (h) 측정가능열 수입 — i. 순 열량(TJ) L+46 · ii. 배출계수(tCO2/TJ) L+47. 템플릿 T열 수식이
+        // L×L − M×M을 직접 내재배출에 더한다(식 52·55). L+43의 DirEm*에는 넣지 않는다 — 넣으면 두 번 센다.
+        // 수출(M열)은 앱이 묻지 않으므로 비워 둔다(템플릿이 빈칸을 표시한다).
+        const importedHeat = resolveImportedHeat(process);
+        if (importedHeat.applicable && !importedHeat.problem && importedHeat.emissionsTco2e > 0) {
+            writes.push(
+                { sheetName: 'D_Processes', cell: `L${startRow + 46}`, label: '측정가능열 수입량(TJ)', value: importedHeat.tj, sourceId: process.id },
+                { sheetName: 'D_Processes', cell: `L${startRow + 47}`, label: '측정가능열 수입 배출계수', value: importedHeat.efTco2PerTj, sourceId: process.id },
+            );
+        }
 
         // (c) 사내 다른 공정에서 소비된 양 — 받는 공정별 칸. (d) 비CBAM 재화에 소비된 양(L+30).
         // 이송 레코드가 없는 옛 자료는 받는 공정을 모르므로 종전처럼 합계를 첫 칸에 적는다(공정이 둘이면 맞는 칸이다).

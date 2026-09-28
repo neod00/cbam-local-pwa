@@ -70,7 +70,10 @@ function describeAllocationBasis(result: LocalCalculationResult) {
     if (result.allocation_basis === 'MANUAL') {
         parts.push(`사유: ${result.allocation_reason ?? '미기재'}`);
     }
-    parts.push(`열·폐가스·자가발전 보정(식 55): ${ALLOCATION_RULES.ADJUSTMENTS.unsupported ? '현재 버전에서 미지원' : '적용'}`);
+    if ((result.imported_heat_emissions_tco2e ?? 0) > 0) {
+        parts.push(`산 열(스팀·온수) ${formatNumber(result.imported_heat_emissions_tco2e ?? 0)} tCO₂e 포함(식 52·55)`);
+    }
+    parts.push(`열 수출·폐가스·자가발전 보정(식 55): ${ALLOCATION_RULES.ADJUSTMENTS.unsupported ? '현재 버전에서 미지원' : '적용'}`);
     return parts.join(' · ');
 }
 

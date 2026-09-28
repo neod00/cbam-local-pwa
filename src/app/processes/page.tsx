@@ -16,7 +16,7 @@ import {
 } from '@/lib/local-db';
 import { summarizeProductOutputLines } from '@/lib/calculation-engine';
 import { calculateSourceStreamEnergyBreakdown } from '@/lib/source-stream-calculation';
-import { getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
+import { IRON_STEEL_PRODUCTS_BOUNDARY, getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
 import { getProductReportingScope } from '@/lib/reporting-scope';
 import { ACTIVITY_LEVEL_ROLE_LABEL, ALLOCATION_BASIS_LABEL, DIRECT_EMISSIONS_INPUT_MODE_LABEL, sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
 import { Term } from '@/components/ux/Term';
@@ -633,22 +633,22 @@ export default function ProcessesPage() {
 
             <SectionCard
                 title="산정경계 포함·제외 검토"
-                description="철강 제품은 생산공정 경계를 먼저 정해야 합니다. 절단·도금·용접·마감처럼 제외 후보가 있어도 자동 제외하지 말고 제품, CN, 전구물질 흐름과 함께 근거를 남기세요."
+                description={`철강제품(Iron or steel products — 강판·선재·강관·볼트 등)의 경계는 규정이 정해 두었습니다(${IRON_STEEL_PRODUCTS_BOUNDARY.anchor}). 조강(7206·7207·7218·7224)은 경계가 다릅니다.`}
             >
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                     <ActionItemCard
                         title="포함 공정"
-                        description="제품 생산에 필요한 연료 사용, 공정 원료 투입, 전력 사용, 전구물질 소비가 있는 공정은 우선 산정경계에 포함해 검토합니다."
-                        badge={<StatusBadge tone="info">경계 설정</StatusBadge>}
+                        description={`${IRON_STEEL_PRODUCTS_BOUNDARY.included}. 이 공정들의 연료·공정배출은 직접배출에 넣습니다.`}
+                        badge={<StatusBadge tone="info">경계 안</StatusBadge>}
                     />
                     <ActionItemCard
-                        title="제외 후보"
-                        description="철강의 절단, 도금, 용접, 마감 등 후단 공정은 제외 후보가 될 수 있으나 최신 기준과 거래 품목을 기준으로 확인해야 합니다."
-                        badge={<StatusBadge tone="warning">근거 필요</StatusBadge>}
+                        title="제외 공정"
+                        description={`${IRON_STEEL_PRODUCTS_BOUNDARY.excluded}. 이 공정에서만 쓰는 연료(예: 절단용 LPG·산소-프로판)는 배출원에 넣지 않습니다. ${IRON_STEEL_PRODUCTS_BOUNDARY.ambiguity}`}
+                        badge={<StatusBadge tone="warning">경계 밖</StatusBadge>}
                     />
                     <ActionItemCard
                         title="수량은 계속 연결"
-                        description="제외 후보 공정을 거친 제품도 생산량, 시장 출하량, 전구물질 소비량은 Export와 검증 추적을 위해 연결해서 관리하세요."
+                        description="경계 밖 공정을 거친 제품도 생산량, 시장 출하량, 전구물질 소비량은 그대로 연결합니다. 빠지는 것은 그 공정의 배출뿐입니다."
                         badge={<StatusBadge tone="pending">수량 추적</StatusBadge>}
                     />
                 </div>

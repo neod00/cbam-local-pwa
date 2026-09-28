@@ -20,6 +20,8 @@ const source = [
   strip('src/lib/cbam-product-rules.ts'),
   strip('src/lib/reporting-scope.ts', false),
   strip('src/lib/allocation-rules.ts'),
+  strip('src/lib/measurable-heat.ts'),
+  strip('src/lib/precursor-verification.ts'),
   strip('src/lib/calculation-engine.ts'),
   'globalThis.engine = { calculateLocalResults, applyInternalTransfers };',
 ].join('\n');
