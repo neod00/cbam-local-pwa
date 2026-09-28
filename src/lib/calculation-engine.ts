@@ -2,6 +2,8 @@ import type { DirectEmissionsInputMode, Product, ProductOutputLine, ProductRepor
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';
 import { APP_SCOPE_EXCLUSION_TEXT, getAppScopeExclusion, getIndirectEmissionsApplicability } from './cbam-product-rules';
 import type { IndirectEmissionsRelevance } from './cbam-product-rules';
+import { IMPORTED_HEAT_RULE, resolveImportedHeat } from './measurable-heat';
+import { isUnverifiedActualPrecursor, unverifiedActualPrecursorMessage } from './precursor-verification';
 import { getProductReportingScope, getProductReportingScopeLabel, isCbamReportingScope } from './reporting-scope';
 import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, RECONCILIATION_REVIEW_DEVIATION, getDirectEmissionsInputMode, hasManualAllocationReason, reconcileSourceStreams, resolveActivityLevelRole } from './allocation-rules';
 import type { ReconciliationGroup } from './allocation-rules';
@@ -92,7 +94,10 @@ export interface LocalCalculationResult {
     cn_code?: string;
     production_route: string;
     output_mass_t: number;
+    /** 귀속 직접배출 AttrEmDir = DirEm* + EmH,imp (부속서 III 식 55). 배출원 대조(source_stream_delta)는 DirEm*만 본다. */
     direct_emissions_tco2e: number;
+    /** 그중 사업장 밖에서 산 측정가능열의 배출 EmH,imp — 이 결과(라인)에 배분된 몫. 없으면 0. */
+    imported_heat_emissions_tco2e?: number;
     /**
      * 간접배출 관련성 — 3상태. 판정 불가면 see_cbam_basis가 null이다.
      *
@@ -621,6 +626,17 @@ function calculateOwnResults(input: {
             ? sourceStreamEmissions
             : process.direct_attributable_emissions_tco2e;
         const sourceStreamDelta = sourceStreamEmissions - process.direct_attributable_emissions_tco2e;
+        // 식 55: AttrEmDir = DirEm* + EmH,imp (− 열 수출·폐가스·자가발전 보정은 미지원). 산 열은 사업장 안에
+        // 연료가 없어 배출원(DirEm*)에 잡히지 않는다 — 따로 더하지 않으면 직접배출이 적게 나온다.
+        const importedHeat = resolveImportedHeat(process);
+        const importedHeatEmissions = importedHeat.emissionsTco2e;
+        const attributedDirectEmissions = directEmissions + importedHeatEmissions;
+        if (importedHeat.problem) {
+            addWarning(
+                `확인 필요(자료): ${process.name}이 밖에서 산 열(스팀·온수)을 쓴다고 했는데 ${importedHeat.problem} 그 배출을 0으로 계산했습니다 — 직접배출이 적게 나옵니다(${IMPORTED_HEAT_RULE.anchor}).`,
+                { type: 'process', id: process.id }
+            );
+        }
         const grossIndirectEmissions = process.electricity_mwh * process.electricity_ef_tco2e_per_mwh;
         const processIndirectApplicability = getIndirectEmissionsApplicability(product);
         // 판정 불가(UNDETERMINED)일 때 간접배출을 「포함」으로도 「제외」로도 확정하지 않는다.
@@ -678,6 +694,13 @@ function calculateOwnResults(input: {
                 addWarning(`${precursor.name}의 SEE 출처가 비어 있습니다.`, { type: 'precursor', id: precursor.id });
             }
 
+            // 계산은 입력값으로 하되(자료를 받는 중에도 숫자를 볼 수 있어야 한다), 이 값이 규정상 아직
+            // 쓸 수 없는 값이라는 사실을 결과에 남긴다. 종전에는 EU 문서 점검에서 「미검증」만 경고했고
+            // 「공급사 확인」은 아무 말 없이 통과했다 — 공급사 확인은 제3자 검증이 아니다.
+            if (isUnverifiedActualPrecursor(precursor) && precursor.consumed_mass_t > 0) {
+                addWarning(unverifiedActualPrecursorMessage(precursor), { type: 'precursor', id: precursor.id });
+            }
+
             if ((precursor.output_allocations?.length ?? 0) > 0) {
                 const allocatedMass = getPrecursorExplicitAllocationMass(precursor);
                 const allocationTolerance = Math.max(0.01, precursor.consumed_mass_t * 0.01);
@@ -708,7 +731,7 @@ function calculateOwnResults(input: {
             }
         }
 
-        const direct_see = output > 0 ? directEmissions / output : 0;
+        const direct_see = output > 0 ? attributedDirectEmissions / output : 0;
         const own_indirect_see = output > 0 ? grossIndirectEmissions / output : 0;
         const indirect_see = output > 0 ? indirectEmissions / output : 0;
         const indirect_see_excluded = output > 0 ? indirectEmissionsExcluded / output : 0;
@@ -854,7 +877,8 @@ function calculateOwnResults(input: {
                 cn_code: product?.cn_code,
                 production_route: process.production_route,
                 output_mass_t: process.output_mass_t,
-                direct_emissions_tco2e: directEmissions,
+                direct_emissions_tco2e: attributedDirectEmissions,
+                imported_heat_emissions_tco2e: importedHeatEmissions,
                 indirect_emissions_relevance: processIndirectApplicability.relevance,
                 indirect_emissions_rule: processIndirectApplicability.rule_code,
                 indirect_emissions_excluded_tco2e: indirectEmissionsExcluded,
@@ -917,6 +941,7 @@ function calculateOwnResults(input: {
                     allocation_share: 0,
                     is_cbam_reportable: false,
                     direct_emissions_tco2e: 0,
+                    imported_heat_emissions_tco2e: 0,
                     indirect_emissions_excluded_tco2e: 0,
                     indirect_emissions_gross_tco2e: 0,
                     source_stream_emissions_tco2e: 0,
@@ -943,7 +968,7 @@ function calculateOwnResults(input: {
             const lineGrossIndirectEmissions = grossIndirectEmissions * allocationShare;
             const allocatedIndirectEmissions = lineIndirectIncluded ? lineGrossIndirectEmissions : 0;
             const allocatedExcludedIndirectEmissions = lineIndirectIncluded ? 0 : lineGrossIndirectEmissions;
-            const allocatedDirectEmissions = directEmissions * allocationShare;
+            const allocatedDirectEmissions = attributedDirectEmissions * allocationShare;
             const allocatedPrecursorDirectEmissions = processPrecursors.reduce((sum, precursor) => {
                 const allocatedMass = getPrecursorAllocatedMassForLine(
                     precursor,
@@ -988,6 +1013,7 @@ function calculateOwnResults(input: {
                 allocation_reason: line.allocation_basis === 'MANUAL' ? line.manual_allocation_reason?.trim() || undefined : undefined,
                 is_cbam_reportable: lineIsCbamReportable,
                 direct_emissions_tco2e: allocatedDirectEmissions,
+                imported_heat_emissions_tco2e: importedHeatEmissions * allocationShare,
                 indirect_emissions_excluded_tco2e: allocatedExcludedIndirectEmissions,
                 indirect_emissions_gross_tco2e: lineGrossIndirectEmissions,
                 source_stream_emissions_tco2e: sourceStreamEmissions * allocationShare,

@@ -30,12 +30,17 @@ function loadLocalCalculationModule() {
   const allocationRulesSource = readFileSync('src/lib/allocation-rules.ts', 'utf8')
     .replace(/^import .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
+  // 엔진이 import 한다(구매 열 EmH,imp).
+  const measurableHeatSource = ['src/lib/measurable-heat.ts', 'src/lib/precursor-verification.ts']
+    .map((path) => readFileSync(path, 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, ''))
+    .join('\n');
 
   const compiled = ts.transpileModule(
     `${sourceStreamCalculationSource}
 ${productRulesSource}
 ${reportingScopeSource}
 ${allocationRulesSource}
+${measurableHeatSource}
 ${calculationEngineSource}
 globalThis.localCalculation = {
   calculateLocalResults,
@@ -130,6 +135,9 @@ const precursor = {
   name: 'Purchased hot rolled coil',
   aggregated_goods_category: 'Iron or steel products',
   production_route: 'External precursor',
+  // 검증된 실측값 — 미검증 경고(부속서 II A.1 4·5항)는 verify-2547-alignment.mjs가 따로 본다.
+  data_mode: 'ACTUAL',
+  verification_status: 'VERIFIED',
   purchased_mass_t: 1100,
   consumed_mass_t: 1000,
   consumed_for_non_cbam_mass_t: 0,

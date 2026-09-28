@@ -100,6 +100,10 @@ function loadEuExportModule() {
   const reportingScopeSource = readFileSync('src/lib/reporting-scope.ts', 'utf8')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
+  // export·엔진이 import 한다 — 산 열(EmH,imp)과 전구물질 검증 규칙(2025/2547). 의존이 없는 작은 모듈이다.
+  const helperSources = ['src/lib/measurable-heat.ts', 'src/lib/precursor-verification.ts']
+    .map((path) => readFileSync(path, 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, ''))
+    .join('\n');
   const source = readFileSync('src/lib/eu-template-export.ts', 'utf8')
     .replace(
       "import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';",
@@ -115,6 +119,7 @@ function loadEuExportModule() {
 ${productRulesSource}
 ${reportingScopeSource}
 ${allocationRulesSource}
+${helperSources}
 function summarizeProductOutputLines(processOutputMassT, outputLines) {
   const activeLines = outputLines.filter((line) => line.output_mass_t > 0);
   const totalOutput = activeLines.reduce((sum, line) => sum + line.output_mass_t, 0);

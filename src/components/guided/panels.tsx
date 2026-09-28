@@ -2,7 +2,7 @@
 
 import { Button, StatusBadge } from '@/components/ui';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
-import { getCbamCoverage } from '@/lib/cbam-product-rules';
+import { IRON_STEEL_PRODUCTS_BOUNDARY, getCbamCoverage, isIronOrSteelProductsGood } from '@/lib/cbam-product-rules';
 import { CN_CODE_OPTIONS } from '@/lib/cn-code-options';
 import {
     createEuExportFilename,
@@ -37,6 +37,17 @@ import {
     type PrecursorDraft,
 } from '@/lib/guided-edit';
 import type { GuidedStepId, GuidedStepState } from '@/lib/guided-map';
+import {
+    HEAT_STANDARD_BOILER_EFFICIENCY,
+    HEAT_STANDARD_FUELS,
+    HEAT_UNIT_TO_TJ,
+    IMPORTED_HEAT_RULE,
+    buildImportedHeatUpdate,
+    resolveImportedHeat,
+    validateImportedHeatDraft,
+    type ImportedHeatDraft,
+    type ImportedHeatUnit,
+} from '@/lib/measurable-heat';
 import {
     createLocalItem,
     deleteLocalItem,
@@ -1323,6 +1334,16 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
                 }}
             />
 
+            {/* 철강제품의 경계는 규정이 정했다(3.16.2). 넣을 연료를 고르는 곳이 여기라서 여기서 알린다. */}
+            {isIronOrSteelProductsGood(data.products.find((item) => item.id === process.product_id)) && (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-950">
+                    <p className="font-semibold">철강제품의 산정 경계 ({IRON_STEEL_PRODUCTS_BOUNDARY.anchor})</p>
+                    <p className="mt-1">넣는 공정: {IRON_STEEL_PRODUCTS_BOUNDARY.included}</p>
+                    <p>빼는 공정: {IRON_STEEL_PRODUCTS_BOUNDARY.excluded} — 이 공정에만 쓰는 연료(예: 절단용 LPG)는 배출원에 넣지 않습니다.</p>
+                    <p className="mt-1 text-sky-800">{IRON_STEEL_PRODUCTS_BOUNDARY.ambiguity}</p>
+                </div>
+            )}
+
             {processStreams.length > 0 && (
                 <ul className="space-y-2">
                     {processStreams.map((stream) => {
@@ -1450,7 +1471,107 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
 
             {message && <p className="text-sm text-amber-700">{message}</p>}
             {saved && !message && <SavedNotice message="저장했습니다. 지도의 ① 상자에 반영됩니다." next={nextStepId(steps, 'fuel')} onSelectStep={onSelectStep} />}
+
+            {/* 공정을 바꾸면 폼을 그 공정의 저장값으로 다시 만든다(전력 폼과 같은 이유). */}
+            <PurchasedHeatForm key={process.id} process={process} onSaved={onSaved} />
         </>
+    );
+}
+
+/**
+ * 밖에서 산 스팀·온수(측정가능열) — 2025/2547 부속서 III A.2.2, 식 52·55의 EmH,imp.
+ * 사업장 안에 연료가 없으니 위 배출원 목록에는 잡히지 않는다. 묻지 않으면 빠진 줄도 모른다.
+ */
+function PurchasedHeatForm({ process, onSaved }: { process: ProductionProcess; onSaved: () => Promise<void> | void }) {
+    const [answer, setAnswer] = useState<ImportedHeatDraft['answer']>(process.measurable_heat_import ?? '');
+    const [amount, setAmount] = useState(process.imported_heat_amount ? String(process.imported_heat_amount) : '');
+    const [unit, setUnit] = useState<ImportedHeatUnit>(process.imported_heat_unit ?? 'Gcal');
+    const [basis, setBasis] = useState<ImportedHeatDraft['basis']>(process.imported_heat_ef_basis ?? '');
+    const [supplierEf, setSupplierEf] = useState(process.imported_heat_supplier_ef_tco2_per_tj ? String(process.imported_heat_supplier_ef_tco2_per_tj) : '');
+    const [fuel, setFuel] = useState(process.imported_heat_standard_fuel ?? '');
+    const [source, setSource] = useState(process.imported_heat_source ?? '');
+    const [message, setMessage] = useState('');
+    const [saved, setSaved] = useState(false);
+
+    const draft: ImportedHeatDraft = { answer, amount: num(amount), unit, basis, supplierEf: num(supplierEf), fuel, source };
+    const preview = resolveImportedHeat(buildImportedHeatUpdate(process, draft));
+
+    const save = async () => {
+        const error = validateImportedHeatDraft(draft);
+        if (error) {
+            setMessage(error);
+            return;
+        }
+        await updateLocalItem('processes', buildImportedHeatUpdate(process, draft));
+        setMessage('');
+        setSaved(true);
+        await onSaved();
+    };
+
+    return (
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-800">밖에서 산 스팀·온수 (측정가능열)</p>
+            <Field
+                label="이 공정이 산업단지나 다른 회사에서 스팀·온수를 사서 쓰나요?"
+                hint="사업장 안 보일러로 만든 스팀은 여기가 아니라 위 배출원(연료)으로 넣습니다. 산 열은 사업장에 연료가 없어 위 목록에 잡히지 않으므로, 쓰면 여기서 따로 더해야 합니다."
+            >
+                <select className={fieldClass} value={answer} onChange={(event) => { setAnswer(event.target.value as ImportedHeatDraft['answer']); setSaved(false); }}>
+                    <option value="">선택하세요</option>
+                    <option value="NO">아니요 — 사서 쓰는 열이 없습니다</option>
+                    <option value="YES">예 — 스팀·온수를 사서 씁니다</option>
+                </select>
+            </Field>
+
+            {answer === 'YES' && (
+                <>
+                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                        <Field label="이 공정이 쓴 열의 양 (1년)" hint="공급사 명세서의 순 열량(보낸 열 − 돌아간 응축수 열). 스팀 톤만 있으면 공급사에 열량(Gcal)을 요청하세요.">
+                            <input className={fieldClass} inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="1200" />
+                        </Field>
+                        <Field label="단위">
+                            <select className={fieldClass} value={unit} onChange={(event) => setUnit(event.target.value as ImportedHeatUnit)}>
+                                {(Object.keys(HEAT_UNIT_TO_TJ) as ImportedHeatUnit[]).map((key) => <option key={key} value={key}>{key}</option>)}
+                            </select>
+                        </Field>
+                    </div>
+                    <Field label="열 배출계수를 어떻게 정하나요?" hint="규정은 두 가지만 인정합니다(부속서 III A.2.2).">
+                        <select className={fieldClass} value={basis} onChange={(event) => setBasis(event.target.value as ImportedHeatDraft['basis'])}>
+                            <option value="">선택하세요</option>
+                            <option value="SUPPLIER">공급사가 준 검증된 열 배출계수</option>
+                            <option value="STANDARD_FUEL_BOILER">표준값 — 연료 표준계수 ÷ 보일러 효율 90%</option>
+                        </select>
+                    </Field>
+                    {basis === 'SUPPLIER' && (
+                        <Field label="공급사 열 배출계수 (tCO₂/TJ)" hint="열을 만든 사업장이 이 규정대로 모니터링하고 검증받은 값만 쓸 수 있습니다. 검증되지 않았으면 표준값을 고르세요.">
+                            <input className={fieldClass} inputMode="decimal" value={supplierEf} onChange={(event) => setSupplierEf(event.target.value)} placeholder="62.3" />
+                        </Field>
+                    )}
+                    {basis === 'STANDARD_FUEL_BOILER' && (
+                        <Field label="표준값에 쓸 연료" hint="규정: 그 나라 산업부문에서 가장 흔히 쓰는 연료. 어느 연료인지는 앱이 정하지 않습니다 — 고른 근거를 아래 출처에 적으세요.">
+                            <select className={fieldClass} value={fuel} onChange={(event) => setFuel(event.target.value)}>
+                                <option value="">선택하세요</option>
+                                {HEAT_STANDARD_FUELS.map((item) => (
+                                    <option key={item.key} value={item.key}>{item.label} — {item.ef} ÷ {HEAT_STANDARD_BOILER_EFFICIENCY} = {fmt(item.ef / HEAT_STANDARD_BOILER_EFFICIENCY, 2)} tCO₂/TJ</option>
+                                ))}
+                            </select>
+                        </Field>
+                    )}
+                    <Field label="출처" hint="검증인이 묻습니다. 예: ○○집단에너지 2026 열 공급 명세서, 표준 연료 선택 근거">
+                        <input className={fieldClass} value={source} onChange={(event) => setSource(event.target.value)} />
+                    </Field>
+                    {!preview.problem && preview.emissionsTco2e > 0 && (
+                        <p className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-700">
+                            {fmt(preview.tj, 4)} TJ × {fmt(preview.efTco2PerTj, 2)} tCO₂/TJ = <span className="font-semibold">{fmt(preview.emissionsTco2e, 1)} tCO₂e</span> — 직접배출(①)에 더해집니다.
+                        </p>
+                    )}
+                </>
+            )}
+
+            <p className="text-xs leading-5 text-slate-500">근거: {IMPORTED_HEAT_RULE.anchor}. 열을 밖으로 내보내는 경우(수출)는 아직 계산하지 않습니다.</p>
+            <Button type="button" onClick={save}>열 저장</Button>
+            {message && <p className="text-sm text-amber-700">{message}</p>}
+            {saved && !message && <p className="text-sm text-emerald-700">저장했습니다. 지도의 ① 직접배출에 반영됩니다.</p>}
+        </div>
     );
 }
 
