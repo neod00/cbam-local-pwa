@@ -33,6 +33,14 @@ export interface TalkState {
     precursorCount: number;
 }
 
+/**
+ * 이 화면이 질문을 붙이는 공정. 지금 보는 제품(첫 신고 제품)을 만드는 공정을 먼저 고른다 — 같은 기간에 비CBAM 제품의 공정이 앞에 있어도
+ * 구매 강재·연료·전력 질문이 엉뚱한 공정에 붙지 않게(대일기업처럼 탄소강 공정이 함께 있는 사업장). 없으면 첫 공정.
+ */
+export function pickTalkProcess<T extends Pick<ProductionProcess, 'product_id'>>(processes: T[], product: Pick<Product, 'id'> | undefined): T | undefined {
+    return (product ? processes.find((process) => process.product_id === product.id) : undefined) ?? processes[0];
+}
+
 export function deriveTalkState(input: {
     installations: Installation[];
     periods: ReportingPeriod[];
@@ -73,7 +81,7 @@ export function deriveTalkState(input: {
     }
 
     // 구매 강재: 첫 공정에 전구물질이 있거나 「구매 강재를 쓰지 않음」을 확인했으면 답한 것이다.
-    const firstProcess = periodProcesses[0];
+    const firstProcess = pickTalkProcess(periodProcesses, product);
     const processPrecursors = firstProcess ? (input.precursors ?? []).filter((precursor) => precursor.process_id === firstProcess.id) : [];
     const noPrecursorsConfirmed = Boolean(firstProcess?.no_purchased_precursors);
     if (processPrecursors.length > 0) {
