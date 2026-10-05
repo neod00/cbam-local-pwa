@@ -933,6 +933,15 @@ assertEqual(String(euExport.internalConsumptionSlot(2, 2)), 'undefined', 'a proc
 }
 // 집계품목 라우트 정규화: 조강(Crude steel) 등 자유텍스트 경로도 허용 드롭다운 값('All production routes')으로.
 const crudeProduct = { ...product, id: 'product-crude', name: 'Crude steel billet', hs_code: '7207', cn_code: '72071111', hs_group: '72', product_type_enum: 'HS72_SEMI' };
+// run21: 구매 강재의 생산 경로 칸(A_InstData G102…)도 드롭다운이다 — 자유 문장을 그대로 쓰면 템플릿 X열 MATCH가 #N/A가 된다(Excel 재계산에서 발견).
+{
+  const routeOf = (productionRoute) => euExport
+    .createEuTemplateExportCellWrites({ ...data, precursors: [{ ...precursor, production_route: productionRoute }] }, validation.cnCodeMap)
+    .find((write) => write.sheetName === 'A_InstData' && write.cell === 'G102')?.value;
+  assertEqual(routeOf('STS 선재 신선(CHQ 와이어) — 상위 제강 경로는 모름'), 'All production routes', 'Precursor free-text route normalized to the allowed dropdown value (G102)');
+  assertEqual(routeOf('External precursor'), undefined, 'External precursor leaves the route cell empty');
+  assertEqual(routeOf('   '), undefined, 'Blank precursor route leaves the cell empty (no invented route)');
+}
 const crudeProcess = { ...process, id: 'process-crude', product_id: crudeProduct.id, name: 'EAF steelmaking', production_route: 'Electric arc furnace' };
 const crudeLine = { ...outputLine, id: 'line-crude', process_id: crudeProcess.id, product_id: crudeProduct.id };
 const crudeWrites = euExport.createEuTemplateExportCellWrites(
