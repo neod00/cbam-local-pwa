@@ -10,7 +10,7 @@ The MVP currently uses `total_see` as the main actual-data result:
 total_see = direct_see + indirect_see + precursor_see
 ```
 
-That is useful as an operational review total, but it is not always the same as the 2026 CBAM certificate-basis SEE. Annex II direct-only goods, especially iron and steel goods, need a separate certificate-basis view.
+That is useful as an operational review total, but it is not always the same as the 2026 CBAM certificate-basis SEE. Goods the EU official CN list classifies as indirect-not-relevant for the definitive period ("Indir.em relevant? (definitive)" = 0), especially iron and steel goods, need a separate certificate-basis view.
 
 ## Required Field Split
 
@@ -21,7 +21,7 @@ Keep existing fields during migration for backwards compatibility, but introduce
 | `direct_see` | Final-good specific direct embedded emissions | Existing direct SEE. |
 | `own_indirect_see` | Final-good own electricity-related indirect SEE | Gross electricity SEE, even when excluded from certificate basis. |
 | `indirect_see` | Backwards-compatible included indirect SEE | Keep for now; equals included indirect SEE. |
-| `indirect_see_excluded` | Final-good own indirect SEE excluded from certificate-basis treatment | Gross electricity SEE when Annex II direct-only applies. |
+| `indirect_see_excluded` | Final-good own indirect SEE excluded from certificate-basis treatment | Gross electricity SEE when the EU official CN list classifies the good as indirect-not-relevant. |
 | `precursor_see` | Eligible precursor contribution used in current result | Existing precursor contribution until precursor CN classification is added. |
 | `see_informational_total` | Review total: direct + own indirect + precursor | New preferred UI field for operational review. |
 | `see_cbam_basis` | Certificate-basis SEE | New preferred field for scenarios and certificate indicators. |
@@ -39,8 +39,8 @@ Required changes:
 
 - Rename the user-facing indirect rule from "excluded" to "certificate-basis excluded".
 - Return both gross own indirect emissions and certificate-basis included indirect emissions.
-- For Annex II final goods, set own indirect to zero only in `see_cbam_basis`, not in `see_informational_total`.
-- Keep precursor contribution in both fields for now, with a `precursor_treatment_status` or warning that per-precursor Annex II classification is not fully implemented yet.
+- For final goods the EU official CN list classifies as indirect-not-relevant, set own indirect to zero only in `see_cbam_basis`, not in `see_informational_total`.
+- Keep precursor contribution in both fields for now, with a `precursor_treatment_status` or warning that per-precursor indirect-relevance classification is not fully implemented yet.
 - Use `see_cbam_basis` for actual certificate quantity/cost indicators.
 - Use `see_informational_total` only for operational review and comparison.
 
@@ -56,12 +56,12 @@ Files:
 
 Required copy changes:
 
-- Replace "간접 제외" with "인증서 산정 제외" or "Annex II direct-only".
+- Replace "간접 제외" with "인증서 산정 제외" or "EU 공식 CN 목록상 간접배출 비관련".
 - Show "보고/검토용 간접배출" separately where gross electricity emissions exist.
 - Show both:
   - `CBAM 산정 기준 SEE`
   - `참고용 총 SEE`
-- Add helper text that Annex II direct-only excludes the final good's own indirect emissions from certificate-basis calculations, but not necessarily every precursor indirect component.
+- Add helper text that indirect-not-relevant classification (EU official CN list) excludes the final good's own indirect emissions from certificate-basis calculations, but not necessarily every precursor indirect component.
 
 ## Export Changes
 
@@ -108,8 +108,8 @@ Files:
 
 Required checks:
 
-- Annex II steel example keeps own indirect emissions visible as review data.
-- Annex II steel example excludes own indirect emissions from `see_cbam_basis`.
+- Indirect-not-relevant steel example keeps own indirect emissions visible as review data.
+- Indirect-not-relevant steel example excludes own indirect emissions from `see_cbam_basis`.
 - `see_informational_total` includes direct + own indirect + precursor.
 - Scenario certificate indicator uses `see_cbam_basis`.
 - Export preview labels distinguish app certificate-basis SEE, app informational SEE, and Excel formula outputs.
