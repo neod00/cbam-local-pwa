@@ -8,11 +8,11 @@ import { Button } from '@/components/ui';
 import { calculateLocalResults } from '@/lib/calculation-engine';
 import { summarizeEnergySplits } from '@/lib/energy-split-summary';
 import { evaluateEuExportReadiness, getEuExportIssueEditHref } from '@/lib/eu-template-export';
-import { ELECTRICITY_DEFAULT_EF_SOURCE, ELECTRICITY_EF_SOURCE_OPTIONS, ELECTRICITY_PLACEHOLDER_EF, TALK_FUEL_KINDS } from '@/lib/conversation-energy';
-import { fillEuDefault, type DefaultFill } from '@/lib/conversation-precursor';
-import { defaultProcessName } from '@/lib/conversation-process';
-import { EXPORT_PERIOD_SETTING_KEY, getLocalSetting, listLocalItems, type Installation, type Product, type ProductionProcess, type PurchasedPrecursor, type ReportingPeriod, type SourceStream } from '@/lib/local-db';
-import { FACTOR_SOURCE_TYPE_OPTIONS } from '@/lib/source-stream-input';
+import { describeFuelEditBlock, ELECTRICITY_DEFAULT_EF_SOURCE, ELECTRICITY_EF_SOURCE_OPTIONS, ELECTRICITY_PLACEHOLDER_EF, TALK_FUEL_KINDS } from '@/lib/conversation-energy';
+import { describePrecursorEditBlock, fillEuDefault, precursorAnswerFromExisting, type DefaultFill } from '@/lib/conversation-precursor';
+import { defaultProcessName, describeOutputEditBlock } from '@/lib/conversation-process';
+import { EXPORT_PERIOD_SETTING_KEY, getLocalSetting, listLocalItems, type Installation, type InternalTransfer, type Product, type ProductionProcess, type ProductOutputLine, type PurchasedPrecursor, type ReportingPeriod, type SourceStream } from '@/lib/local-db';
+import { FACTOR_SOURCE_TYPE_OPTIONS, matchGuidedStreamKind } from '@/lib/source-stream-input';
 import type { ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { buildSeeFlowBinding } from '@/lib/see-flow';
@@ -22,7 +22,7 @@ import { summarizeTalkResult, type TalkIssue } from '@/lib/talk-summary';
 import { AlertTriangle, ArrowRight, CheckCircle2, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { confirmNoImportedHeat, confirmNoPrecursors, saveCompany, saveElectricity, saveFuel, saveOutput, savePeriod, savePrecursor, saveProduct } from './talk-writes';
+import { confirmNoImportedHeat, confirmNoPrecursors, saveCompany, saveElectricity, saveFuel, saveFuelEdit, saveOutput, saveOutputEdit, savePeriod, savePrecursor, savePrecursorEdit, saveProduct } from './talk-writes';
 
 const fieldClass =
     'mt-1 block h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100';
@@ -35,6 +35,9 @@ interface TalkData {
     processes: ProductionProcess[];
     precursors: PurchasedPrecursor[];
     sourceStreams: SourceStream[];
+    /** 생산량 고치기가 단순한 경우인지 보려고(제품 라인·사내 이송) */
+    productOutputLines: ProductOutputLine[];
+    internalTransfers: InternalTransfer[];
     /** EU 문서를 만들기 전에 막거나 알릴 항목 — 지도 7단계와 같은 준비도 검사 */
     issues: TalkIssue[];
     /** 막대용 — 지도 화면과 같은 엔진으로 계산한 결과(첫 보고기간 것만) */
@@ -53,7 +56,7 @@ const SKIPPED_NOTE: Record<TalkQuestionId, string> = {
     heat: '밖에서 산 스팀·온수는 지도 4단계 아래쪽에서 답할 수 있습니다',
 };
 const MAP_STEP_OF: Partial<Record<TalkQuestionId, string>> = { output: '3', precursor: '6', fuel: '4', electricity: '5', heat: '4' };
-const EMPTY: TalkData = { loaded: false, installations: [], periods: [], products: [], processes: [], precursors: [], sourceStreams: [], issues: [], results: [] };
+const EMPTY: TalkData = { loaded: false, installations: [], periods: [], products: [], processes: [], precursors: [], sourceStreams: [], productOutputLines: [], internalTransfers: [], issues: [], results: [] };
 
 /**
  * 저장소는 제품·공정을 만든 순서가 아니라 id(무작위) 순으로 돌려준다. 이 화면은 「첫 제품」과 「나중에 만든 제품」을 구분해야 하므로(S6)
@@ -88,6 +91,8 @@ async function loadTalkData(): Promise<TalkData> {
         processes,
         precursors,
         sourceStreams,
+        productOutputLines,
+        internalTransfers,
         issues,
         results,
         products: allProducts.filter((product) => isCbamReportingScope(getProductReportingScope(product))),
@@ -146,6 +151,8 @@ export function TalkWorkspace() {
     const [fuelFactorSource, setFuelFactorSource] = useState<SourceStream['factor_source_type']>('UNCLASSIFIED');
     const [fuelSource, setFuelSource] = useState('');
     const [addingFuel, setAddingFuel] = useState(false);
+    // 고치는 중인 연료·구매 강재 하나(고르기 전에는 빈 값)
+    const [editItemId, setEditItemId] = useState('');
     // 전력(S4)
     const [elecMwh, setElecMwh] = useState('');
     const [elecEf, setElecEf] = useState(String(ELECTRICITY_PLACEHOLDER_EF));
@@ -197,6 +204,15 @@ export function TalkWorkspace() {
     const question: TalkQuestionId | undefined = editing ?? (addingProduct ? 'product' : addingPrecursor ? 'precursor' : addingFuel ? 'fuel' : current);
     const periodProcesses = data.processes.filter((process) => process.period_id === data.periods[0]?.id);
     const focusProcess = pickFocusProcess(periodProcesses, data.products, focusProduct);
+    // 칩으로 고칠 수 있는 단순한 경우(S7). 아니면 칩은 지도 화면 링크로 남는다(이유는 칩 설명에).
+    const focusLines = data.productOutputLines.filter((line) => line.process_id === focusProcess?.id);
+    const outputBlock = focusProcess ? describeOutputEditBlock({ process: focusProcess, lines: data.productOutputLines, transfers: data.internalTransfers }) : '공정이 없습니다.';
+    const productLine = focusLines.find((line) => line.activity_level_role !== 'EXCLUDED');
+    const excludedLine = focusLines.find((line) => line.activity_level_role === 'EXCLUDED');
+    const fuelEditables = data.sourceStreams.filter((stream) => stream.process_id === focusProcess?.id && !describeFuelEditBlock(stream));
+    const precursorEditables = data.precursors.filter((precursor) => precursor.process_id === focusProcess?.id && !describePrecursorEditBlock(precursor));
+    const editingStream = data.sourceStreams.find((stream) => stream.id === editItemId);
+    const editingPrecursor = data.precursors.find((precursor) => precursor.id === editItemId);
     // 한 제품이라도 생산량·구매 강재·연료/전력이 비었으면 막대의 숫자는 일부일 뿐이다(제품이 하나일 때와 같은 문안).
     const barPartial = describeTalkPartial({ products: data.products, processes: periodProcesses, precursors: data.precursors, sourceStreams: data.sourceStreams });
     const summary = useMemo(() => summarizeTalkResult({ binding, issues: data.issues, partialNote: barPartial }), [binding, data.issues, barPartial]);
@@ -244,6 +260,8 @@ export function TalkWorkspace() {
         setPFill(null);
         setHasPrecursors(null);
         setAddingPrecursor(false);
+        setEditItemId('');
+        setEditing(null);
     }
 
     function submitPrecursor() {
@@ -252,12 +270,32 @@ export function TalkWorkspace() {
             setMessage('SEE 값을 어떻게 하시겠어요? 「공급사가 준 값이 있어요」나 「모르겠어요」를 고르세요.');
             return;
         }
-        if (pMode === 'DEFAULT' && !pFill?.ok) {
+        // 고치는 중이고 기본값 그대로(CN·공급국가도 안 바꿈)면 저장된 SEE 값을 그대로 쓴다. 바뀌었으면 새 기본값을 채워야 한다.
+        const defaultKeyChanged = !editingPrecursor || editingPrecursor.data_mode !== 'DEFAULT'
+            || pCn.replace(/\D/g, '') !== (editingPrecursor.precursor_cn_code ?? '') || pCountry !== (editingPrecursor.supplier_country ?? '');
+        if (pMode === 'DEFAULT' && !pFill?.ok && defaultKeyChanged) {
             setMessage('먼저 「EU 기본값 채우기」를 누르세요.');
             return;
         }
         const fill = pFill?.ok ? pFill : null;
         void submit(async () => {
+            const answer = {
+                name: pName,
+                cn: pCn,
+                consumed: pConsumed,
+                purchased: pPurchased,
+                country: pCountry,
+                mode: pMode,
+                directSee: pMode === 'DEFAULT' && fill ? String(fill.direct) : pDirect,
+                indirectSee: pMode === 'DEFAULT' && fill ? String(fill.indirect) : pIndirect,
+                source: pMode === 'DEFAULT' && fill ? fill.source : pSource,
+                justification: pMode === 'DEFAULT' && fill ? fill.justification : (editingPrecursor ? precursorAnswerFromExisting(editingPrecursor).justification : ''),
+            };
+            if (editingPrecursor) {
+                const editError = await savePrecursorEdit(editingPrecursor, answer);
+                if (!editError) resetPrecursorForm();
+                return editError;
+            }
             const error = await savePrecursor(focusProcess, {
                 name: pName,
                 cn: pCn,
@@ -275,11 +313,26 @@ export function TalkWorkspace() {
         });
     }
 
+    /** 저장이 끝나면 입력칸을 비운다 — 다음 제품의 같은 질문에 앞 제품의 값이 미리 채워져 보이면 그대로 답하기 쉽다 */
+    function resetOutputForm() {
+        setMass('');
+        setScrap('');
+        setProcessName('');
+    }
+
+    function resetElectricityForm() {
+        setElecMwh('');
+        setElecEf(String(ELECTRICITY_PLACEHOLDER_EF));
+        setElecSource(ELECTRICITY_DEFAULT_EF_SOURCE);
+    }
+
     function resetFuelForm() {
         setFuelAmount('');
         setFuelName('');
         setFuelSource('');
         setAddingFuel(false);
+        setEditItemId('');
+        setEditing(null);
     }
 
     function chooseFuelKind(key: string) {
@@ -291,12 +344,53 @@ export function TalkWorkspace() {
         setMessage('');
     }
 
+    /** 저장된 연료를 고치기 칸에 채운다 — 지도 4단계 startEdit과 같은 값(유형은 저장된 것에서 되짚는다) */
+    function loadFuelEdit(stream: SourceStream) {
+        const kind = matchGuidedStreamKind(stream);
+        setFuelKindKey(TALK_FUEL_KINDS.some((item) => item.key === kind.key) ? kind.key : TALK_FUEL_KINDS[0].key);
+        setFuelAmount(String(stream.activity_data));
+        setFuelName(stream.name);
+        setFuelNcv(String(stream.ncv_gj_per_unit));
+        setFuelFactor(String(stream.emission_factor_tco2e_per_unit));
+        setFuelFactorSource(stream.factor_source_type ?? 'UNCLASSIFIED');
+        setFuelSource(stream.source);
+        setEditItemId(stream.id);
+        setMessage('');
+    }
+
+    function loadPrecursorEdit(precursor: PurchasedPrecursor) {
+        const answer = precursorAnswerFromExisting(precursor);
+        setPName(answer.name);
+        setPCn(answer.cn);
+        setPConsumed(answer.consumed);
+        setPPurchased(answer.purchased);
+        setPCountry(answer.country);
+        setPMode(answer.mode);
+        setPDirect(answer.directSee);
+        setPIndirect(answer.indirectSee);
+        setPSource(answer.source);
+        setPFill(null);
+        setHasPrecursors(true);
+        setEditItemId(precursor.id);
+        setMessage('');
+    }
+
     function openEditor(id: TalkQuestionId) {
         setMessage('');
         setEditing(id);
         if (id === 'company') {
             setCompanyName(data.installations[0]?.name ?? '');
             setCountry(data.installations[0]?.country ?? '');
+        } else if (id === 'output') {
+            setMass(focusProcess ? String(focusProcess.output_mass_t) : '');
+            setScrap(excludedLine ? String(excludedLine.output_mass_t) : '');
+            setProcessName(focusProcess?.name ?? '');
+        } else if (id === 'fuel') {
+            setEditItemId('');
+            if (fuelEditables.length === 1) loadFuelEdit(fuelEditables[0]);
+        } else if (id === 'precursor') {
+            setEditItemId('');
+            if (precursorEditables.length === 1) loadPrecursorEdit(precursorEditables[0]);
         } else if (id === 'electricity') {
             // 지도 5단계의 수정과 같은 저장(buildElectricityUpdate)을 쓴다. 공용 계량기에서 나눈 값은 여기서 고치지 않는다(칩이 지도로 안내).
             setElecMwh(focusProcess && focusProcess.electricity_mwh > 0 ? String(focusProcess.electricity_mwh) : '');
@@ -354,7 +448,7 @@ export function TalkWorkspace() {
 
             {data.loaded && state.chips.length > 0 && (
                 <ul className="flex flex-wrap gap-2" aria-label="지금까지의 답">
-                    {state.chips.map((chip) => chip.id === 'output' || chip.id === 'precursor' || chip.id === 'fuel' || chip.id === 'heat' || (chip.id === 'electricity' && Boolean(focusProcess?.electricity_shared_meter)) ? (
+                    {state.chips.map((chip) => (chip.id === 'output' && Boolean(outputBlock)) || (chip.id === 'precursor' && precursorEditables.length === 0) || (chip.id === 'fuel' && fuelEditables.length === 0) || chip.id === 'heat' || (chip.id === 'electricity' && Boolean(focusProcess?.electricity_shared_meter)) ? (
                         <li key={chip.id}>
                             <Link
                                 href="/"
@@ -581,7 +675,7 @@ export function TalkWorkspace() {
 
             {data.loaded && question === 'output' && focusProduct && (
                 <section className="rounded-2xl border border-teal-200 bg-white p-5 shadow-sm" aria-label="질문 생산량">
-                    <p className="text-xs font-bold text-teal-800">질문 4</p>
+                    <p className="text-xs font-bold text-teal-800">질문 4{editing === 'output' ? ' · 고치기' : ''}</p>
                     <h2 className="mt-1 text-base font-bold text-slate-950">「{focusProduct.name}」을 {data.periods[0]?.name ?? '이 기간'}에 몇 톤 만드셨나요?</h2>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
                         시장에 내보낸(판매했거나 다른 공정에 넣은) 양만 적으세요. 생산일지나 ERP의 완제품 입고 기준, 포장재를 뺀 순중량입니다.
@@ -603,40 +697,59 @@ export function TalkWorkspace() {
                     <Footer
                         busy={busy}
                         message={message}
-                        onSave={() => void submit(() => saveOutput({
-                            name: processName.trim() || defaultProcessName(focusProduct.name),
-                            route: '',
-                            periodId: data.periods[0]?.id,
-                            product: focusProduct,
-                            massT: massNumber,
-                            excludedMassT: scrapNumber,
-                        }))}
-                        label="답하기"
+                        onSave={() => void submit(() => (editing === 'output' && focusProcess && productLine
+                            ? saveOutputEdit({ process: focusProcess, productLine, excludedLine, product: focusProduct, name: processName.trim() || defaultProcessName(focusProduct.name), massT: massNumber, excludedMassT: scrapNumber, precursors: data.precursors }).then((error) => {
+                                if (!error) resetOutputForm();
+                                return error;
+                            })
+                            : saveOutput({
+                                name: processName.trim() || defaultProcessName(focusProduct.name),
+                                route: '',
+                                periodId: data.periods[0]?.id,
+                                product: focusProduct,
+                                massT: massNumber,
+                                excludedMassT: scrapNumber,
+                            }).then((error) => {
+                                if (!error) resetOutputForm();
+                                return error;
+                            })))}
+                        onCancel={editing === 'output' ? () => { resetOutputForm(); setEditing(null); } : undefined}
+                        label={editing === 'output' ? '고쳐 저장' : '답하기'}
                     />
-                    <button type="button" onClick={() => skip('output')} className="mt-2 text-xs font-semibold text-slate-500 hover:underline">
-                        지금은 모릅니다 — 나중에 입력 (생산량은 추정할 수 없어서 비워 둡니다)
-                    </button>
+                    {editing !== 'output' && (
+                        <button type="button" onClick={() => skip('output')} className="mt-2 text-xs font-semibold text-slate-500 hover:underline">
+                            지금은 모릅니다 — 나중에 입력 (생산량은 추정할 수 없어서 비워 둡니다)
+                        </button>
+                    )}
                 </section>
             )}
 
             {data.loaded && question === 'precursor' && focusProcess && (
                 <section className="rounded-2xl border border-teal-200 bg-white p-5 shadow-sm" aria-label="질문 구매 강재">
-                    <p className="text-xs font-bold text-teal-800">질문 5</p>
+                    <p className="text-xs font-bold text-teal-800">질문 5{editing === 'precursor' ? ' · 고치기' : ''}</p>
                     <h2 className="mt-1 text-base font-bold text-slate-950">
-                        {addingPrecursor ? '구매한 강재를 하나 더 넣어 주세요.' : `「${focusProduct?.name ?? '제품'}」을 만들려고 구매한 강재(선재·코일 등)가 있나요?`}
+                        {editing === 'precursor' ? '어느 구매 강재를 고칠까요?' : addingPrecursor ? '구매한 강재를 하나 더 넣어 주세요.' : `「${focusProduct?.name ?? '제품'}」을 만들려고 구매한 강재(선재·코일 등)가 있나요?`}
                     </h2>
                     <p className="mt-1 text-xs leading-5 text-slate-500">철강 가공업체는 SEE의 대부분이 구매한 강재가 지니고 온 배출에서 나옵니다. 공급사의 실제 값을 모르면 EU 기본값으로 먼저 계산을 끝내고 나중에 바꾸면 됩니다.</p>
 
-                    {hasPrecursors === null && !addingPrecursor && (
+                    {editing === 'precursor' && !editItemId && (
+                        <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="고칠 구매 강재 고르기">
+                            {precursorEditables.map((item) => (
+                                <button key={item.id} type="button" onClick={() => loadPrecursorEdit(item)} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-teal-400">{item.name} · {item.consumed_mass_t} t</button>
+                            ))}
+                            <button type="button" onClick={() => setEditing(null)} className="text-sm font-semibold text-slate-500 hover:underline">취소</button>
+                        </div>
+                    )}
+                    {hasPrecursors === null && !addingPrecursor && !editing && (
                         <div className="mt-3 flex flex-wrap gap-2">
                             <Button type="button" onClick={() => setHasPrecursors(true)}>네, 구매한 강재가 있어요</Button>
                             <Button type="button" variant="secondary" disabled={busy} onClick={() => void submit(() => confirmNoPrecursors(focusProcess))}>아니요, 강재를 사다 쓰지 않아요</Button>
                             <button type="button" onClick={() => skip('precursor')} className="text-xs font-semibold text-slate-500 hover:underline">지금은 모릅니다 — 나중에 입력</button>
                         </div>
                     )}
-                    {hasPrecursors === null && !addingPrecursor && message && <p className="mt-3 text-sm text-amber-700" role="alert">{message}</p>}
+                    {hasPrecursors === null && !addingPrecursor && !editing && message && <p className="mt-3 text-sm text-amber-700" role="alert">{message}</p>}
 
-                    {(hasPrecursors === true || addingPrecursor) && (
+                    {(hasPrecursors === true || addingPrecursor || Boolean(editingPrecursor)) && (editing !== 'precursor' || Boolean(editingPrecursor)) && (
                         <div className="mt-3 space-y-3">
                             {precursorSetup.precursorCandidates.length > 0 && (
                                 <div className="flex flex-wrap items-center gap-1.5">
@@ -717,10 +830,23 @@ export function TalkWorkspace() {
                 </section>
             )}
 
-            {data.loaded && question === 'fuel' && focusProcess && (
+            {data.loaded && question === 'fuel' && focusProcess && editing === 'fuel' && !editingStream && (
+                <section className="rounded-2xl border border-teal-200 bg-white p-5 shadow-sm" aria-label="질문 연료 고르기">
+                    <p className="text-xs font-bold text-teal-800">질문 6 · 고치기</p>
+                    <h2 className="mt-1 text-base font-bold text-slate-950">어느 연료를 고칠까요?</h2>
+                    <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="고칠 연료 고르기">
+                        {fuelEditables.map((item) => (
+                            <button key={item.id} type="button" onClick={() => loadFuelEdit(item)} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-teal-400">{item.name} · {item.activity_data}</button>
+                        ))}
+                        <button type="button" onClick={() => setEditing(null)} className="text-sm font-semibold text-slate-500 hover:underline">취소</button>
+                    </div>
+                </section>
+            )}
+
+            {data.loaded && question === 'fuel' && focusProcess && !(editing === 'fuel' && !editingStream) && (
                 <section className="rounded-2xl border border-teal-200 bg-white p-5 shadow-sm" aria-label="질문 연료">
-                    <p className="text-xs font-bold text-teal-800">질문 6</p>
-                    <h2 className="mt-1 text-base font-bold text-slate-950">{addingFuel ? '연료를 하나 더 넣어 주세요.' : '공장 안에서 태운 연료(도시가스·유류 등)가 있나요?'}</h2>
+                    <p className="text-xs font-bold text-teal-800">질문 6{editing === 'fuel' ? ' · 고치기' : ''}</p>
+                    <h2 className="mt-1 text-base font-bold text-slate-950">{editing === 'fuel' ? '연료 값을 고칩니다.' : addingFuel ? '연료를 하나 더 넣어 주세요.' : '공장 안에서 태운 연료(도시가스·유류 등)가 있나요?'}</h2>
                     <p className="mt-1 text-xs leading-5 text-slate-500">고지서·구매 전표의 12개월 사용량을 그대로 적으면 앱이 배출량을 계산합니다. 연료를 전혀 안 쓰는 공정이면 「쓰지 않아요」를 누르세요.</p>
                     {periodProcesses.length >= 2 && (
                         <p className="mt-1 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900" data-testid="talk-shared-fuel-note">
@@ -776,14 +902,17 @@ export function TalkWorkspace() {
                             type="button"
                             disabled={busy}
                             onClick={() => focusProcess && void submit(async () => {
-                                const error = await saveFuel(focusProcess, data.sourceStreams, { kind: fuelKind, amount: fuelAmount, name: fuelName, ncv: fuelNcv, factor: fuelFactor, factorSource: fuelFactorSource, source: fuelSource });
+                                const fuelAnswer = { kind: fuelKind, amount: fuelAmount, name: fuelName, ncv: fuelNcv, factor: fuelFactor, factorSource: fuelFactorSource, source: fuelSource };
+                                const error = editingStream
+                                    ? await saveFuelEdit(focusProcess, editingStream, data.sourceStreams, fuelAnswer)
+                                    : await saveFuel(focusProcess, data.sourceStreams, fuelAnswer);
                                 if (!error) resetFuelForm();
                                 return error;
                             })}
                         >
                             {busy ? '저장 중…' : '답하기'}
                         </Button>
-                        {addingFuel
+                        {addingFuel || editing === 'fuel'
                             ? <button type="button" onClick={resetFuelForm} className="text-sm font-semibold text-slate-500 hover:underline">취소</button>
                             : <button type="button" onClick={() => skip('fuel')} className="text-sm font-semibold text-slate-500 hover:underline">연료를 쓰지 않아요 / 지금은 모릅니다 — 나중에 입력</button>}
                     </div>
@@ -820,9 +949,9 @@ export function TalkWorkspace() {
                         </select>
                     </label>
                     <div className="mt-4 flex flex-wrap items-center gap-2">
-                        <Button type="button" disabled={busy} onClick={() => focusProcess && void submit(() => saveElectricity(focusProcess, { mwh: Number(elecMwh.replace(/,/g, '')) || 0, ef: Number(elecEf.replace(/,/g, '')) || 0, efSource: elecSource }))}>{busy ? '저장 중…' : '답하기'}</Button>
+                        <Button type="button" disabled={busy} onClick={() => focusProcess && void submit(() => saveElectricity(focusProcess, { mwh: Number(elecMwh.replace(/,/g, '')) || 0, ef: Number(elecEf.replace(/,/g, '')) || 0, efSource: elecSource }).then((error) => { if (!error) resetElectricityForm(); return error; }))}>{busy ? '저장 중…' : '답하기'}</Button>
                         {editing === 'electricity'
-                            ? <button type="button" onClick={() => setEditing(null)} className="text-sm font-semibold text-slate-500 hover:underline">취소</button>
+                            ? <button type="button" onClick={() => { resetElectricityForm(); setEditing(null); }} className="text-sm font-semibold text-slate-500 hover:underline">취소</button>
                             : <button type="button" onClick={() => skip('electricity')} className="text-sm font-semibold text-slate-500 hover:underline">지금은 모릅니다 — 나중에 입력</button>}
                     </div>
                     {message && <p className="mt-2 text-sm text-amber-700" role="alert">{message}</p>}

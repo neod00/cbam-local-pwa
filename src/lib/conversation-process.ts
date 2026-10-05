@@ -1,5 +1,5 @@
 import { getProductReportingScope } from './reporting-scope';
-import type { Product } from './local-db';
+import type { InternalTransfer, Product, ProductionProcess, ProductOutputLine } from './local-db';
 
 /**
  * 질문으로 입력(대화형 모드 S2) — 「제품별 생산량」 답을 공정과 생산라인으로 만드는 **순수 빌더**.
@@ -128,5 +128,71 @@ export function buildProcessCreation(draft: ProcessAnswerDraft): ProcessCreation
                 activity_level_role: 'EXCLUDED',
             }
             : undefined,
+    };
+}
+
+/**
+ * 질문 화면에서 생산량을 직접 고칠 수 있는 **단순한 경우**인지. 아니면 고칠 수 없는 이유(사람에게 보일 문장)를 돌려준다.
+ * 지도 3단계의 수정은 제품 라인 여럿·보고범위 밖 라인·사내 이송까지 함께 맞추는데, 이 화면이 만드는 공정은 제품 라인 하나(+선택한 제외 라인)뿐이다 —
+ * 그 밖의 모양이면 질문 화면이 일부만 맞추고 나머지를 어긋나게 둘 수 있으므로 지도 3단계로 보낸다.
+ */
+export function describeOutputEditBlock(input: { process: ProductionProcess; lines: ProductOutputLine[]; transfers: InternalTransfer[] }): string | null {
+    const { process } = input;
+    const lines = input.lines.filter((line) => line.process_id === process.id);
+    const excluded = lines.filter((line) => line.activity_level_role === 'EXCLUDED');
+    const others = lines.filter((line) => line.activity_level_role !== 'EXCLUDED');
+    if (others.length !== 1 || others[0].product_id !== process.product_id) {
+        return '이 공정은 제품 라인이 하나가 아니거나 다른 제품이 섞여 있어 지도 화면 3단계에서 고칩니다.';
+    }
+    if (excluded.length > 1 || excluded.some((line) => line.product_id)) {
+        return '이 공정의 활동수준 제외 라인이 여러 개라 지도 화면 3단계에서 고칩니다.';
+    }
+    if ((process.internal_consumption_mass_t ?? 0) !== 0 || input.transfers.some((transfer) => transfer.source_process_id === process.id || transfer.target_process_id === process.id)) {
+        return '이 공정은 다른 공정과 사내 이송이 있어 지도 화면 3단계에서 고칩니다.';
+    }
+    return null;
+}
+
+export interface OutputEdit {
+    process: ProductionProcess;
+    productLine: ProductOutputLine;
+    /** 활동수준 제외 라인: 값이 있으면 만들거나 고치고, 0이면 있던 것을 지운다 */
+    excluded:
+        | { action: 'none' }
+        | { action: 'update'; line: ProductOutputLine }
+        | { action: 'create'; line: ReturnType<typeof buildProcessCreation>['excludedLine'] & object }
+        | { action: 'delete'; id: string };
+}
+
+/**
+ * 생산량 수정 → 저장할 레코드들. 지도 3단계 수정 경로와 같은 규칙이다:
+ *  · 제품 라인: 기존 라인을 펼치고 질량·보고범위만 덮는다(이름·비고·배분은 보존).
+ *  · 제외 라인: 기존 라인은 질량만 고치고(이름·비고 보존), 없으면 새로 만들고, 값이 0이면 지운다.
+ *  · 공정: 기존을 펼치고 이름·총량·시장 출하량(= 총량 − 사내 이송 0)만 덮는다. 생산 방식·기간·전력·배출원 값은 건드리지 않는다.
+ * 호출부가 describeOutputEditBlock으로 단순한 경우만 부른다.
+ */
+export function buildOutputUpdate(input: { process: ProductionProcess; productLine: ProductOutputLine; excludedLine?: ProductOutputLine; product: ProcessAnswerDraft['product']; name: string; massT: number; excludedMassT: number }): OutputEdit {
+    const mass = finite(input.massT);
+    const excludedMass = finite(input.excludedMassT);
+    const creation = buildProcessCreation({ name: input.name, route: '', periodId: input.process.period_id, product: input.product, massT: mass, excludedMassT: excludedMass });
+    let excluded: OutputEdit['excluded'] = { action: 'none' };
+    if (excludedMass > 0) {
+        excluded = input.excludedLine
+            ? { action: 'update', line: { ...input.excludedLine, output_mass_t: excludedMass } }
+            : { action: 'create', line: creation.excludedLine as NonNullable<typeof creation.excludedLine> };
+    } else if (input.excludedLine) {
+        excluded = { action: 'delete', id: input.excludedLine.id };
+    }
+    return {
+        process: {
+            ...input.process,
+            name: input.name.trim(),
+            production_route: input.process.production_route || DEFAULT_PROCESS_ROUTE,
+            output_mass_t: mass,
+            internal_consumption_mass_t: 0,
+            market_output_mass_t: mass,
+        },
+        productLine: { ...input.productLine, output_mass_t: mass, reporting_scope: creation.productLine.reporting_scope },
+        excluded,
     };
 }

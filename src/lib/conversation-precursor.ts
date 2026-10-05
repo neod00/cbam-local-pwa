@@ -1,5 +1,6 @@
 import { findDefaultValueReference, resolveDefaultSeeForYear, type ImportedDefaultValueReference } from './reference-workbooks';
 import type { PrecursorDraft } from './guided-edit';
+import type { PurchasedPrecursor } from './local-db';
 
 /**
  * 질문으로 입력(대화형 모드 S3) — 「구매한 강재」 답을 전구물질 초안(PrecursorDraft)으로 바꾸고, 「모르겠어요」면 EU 기본값으로 채우는 순수 함수.
@@ -104,5 +105,55 @@ export function buildPrecursorDraft(answer: PrecursorAnswer): PrecursorDraft {
         supplierPeriod: '',
         supplierCountry: answer.country,
         outputAllocations: undefined,
+    };
+}
+
+/**
+ * 질문 화면에서 고칠 수 있는 구매 강재인지. 아니면 이유를 돌려준다.
+ *  · 「혼합(일부 실측)」 자료는 이 화면의 두 가지(공급사 값 / EU 기본값)로 나타낼 수 없다 → 지도 6단계.
+ *  · 제품별 배분이 둘 이상이면 소비량을 바꿀 때 합계를 맞추는 화면이 필요하다 → 지도 6단계. 하나뿐이면 지도 패널처럼 소비량에 맞춰 따라간다.
+ */
+export function describePrecursorEditBlock(existing: Pick<PurchasedPrecursor, 'data_mode' | 'output_allocations'>): string | null {
+    if (existing.data_mode !== 'ACTUAL' && existing.data_mode !== 'DEFAULT') {
+        return '일부만 실측한(혼합) 자료는 지도 화면 6단계에서 고칩니다.';
+    }
+    if ((existing.output_allocations ?? []).length > 1) {
+        return '제품별 배분이 둘 이상인 구매 강재는 지도 화면 6단계에서 고칩니다.';
+    }
+    return null;
+}
+
+/** 저장된 전구물질 → 이 화면의 고치기 칸에 채울 답 */
+export function precursorAnswerFromExisting(existing: PurchasedPrecursor): PrecursorAnswer {
+    return {
+        name: existing.name,
+        cn: existing.precursor_cn_code ?? '',
+        consumed: String(existing.consumed_mass_t),
+        purchased: existing.purchased_mass_t > 0 ? String(existing.purchased_mass_t) : '',
+        country: existing.supplier_country ?? '',
+        mode: existing.data_mode === 'DEFAULT' ? 'DEFAULT' : 'ACTUAL',
+        directSee: String(existing.direct_see_tco2e_per_t),
+        indirectSee: String(existing.indirect_see_tco2e_per_t),
+        source: existing.source,
+        justification: existing.default_value_justification,
+    };
+}
+
+/**
+ * 수정용 초안: 이 화면의 답 + **칸이 없는 값은 저장된 것 그대로**(전력 분해값·공급사 설비·생산경로·보고기간·제품별 배분).
+ * 신규 초안(buildPrecursorDraft)은 이 값들을 비워 두므로 그대로 수정에 쓰면 공급사 회신으로 채운 값이 지워진다 — 지도 패널은 칸에 되살려 같은 결과를 낸다.
+ * 제품별 배분이 하나뿐이면 지도 패널처럼 소비량에 맞춰 따라가게 한다(100%).
+ */
+export function buildPrecursorEditDraft(existing: PurchasedPrecursor, answer: PrecursorAnswer): PrecursorDraft {
+    const draft = buildPrecursorDraft(answer);
+    const kept = existing.output_allocations ?? [];
+    return {
+        ...draft,
+        bridgeUsage: existing.indirect_electricity_mwh_per_t ?? 0,
+        bridgeFactor: existing.indirect_electricity_factor_tco2e_per_mwh ?? 0,
+        supplierInstallation: existing.supplier_installation,
+        supplierRoute: existing.production_route,
+        supplierPeriod: existing.supplier_reporting_period ?? '',
+        outputAllocations: kept.length === 1 ? [{ ...kept[0], allocated_mass_t: draft.consumedMass, allocation_percent: 100 }] : existing.output_allocations,
     };
 }
