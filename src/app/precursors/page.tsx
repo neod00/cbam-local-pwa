@@ -402,7 +402,7 @@ export default function PrecursorsPage() {
                     newItem.default_value_justification ||
                     `공급사 measured SEE 미입수 — EU 국가/CN 기본값(${newItem.default_value_year}) 적용 예정`,
             });
-            setDefaultLookupMessage('공식 기본값 파일(DVs as adopted)을 먼저 가져오세요. [자료 업로드] 화면에서 가져온 뒤 다시 "기본값 채우기"를 누르면 국가/CN 기본값(연도 mark-up 포함)이 자동 입력됩니다.');
+            setDefaultLookupMessage('EU 기본값 자료를 아직 불러오지 못했습니다. 앱을 다시 열거나, [자료 업로드] 화면에서 공식 기본값 파일(DVs as adopted)을 직접 가져온 뒤 다시 "기본값 채우기"를 누르면 국가/CN 기본값(연도 mark-up 포함)이 자동 입력됩니다.');
             return;
         }
 

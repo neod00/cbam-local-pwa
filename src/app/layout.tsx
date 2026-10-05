@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import AppShell from '@/components/AppShell';
+import BundledReferenceLoader from '@/components/BundledReferenceLoader';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 
 // Apple 롤아웃: SF Pro 대체로 Inter를 앱 전체에 로드(가변 웨이트 300/400/600/700). --font-inter로 노출.
@@ -27,6 +28,7 @@ export default function RootLayout({
     <html lang="ko" className={`${inter.variable} h-full bg-[#f5f5f7]`}>
       <body className="min-h-full">
         <ServiceWorkerRegistration />
+        <BundledReferenceLoader />
         <AppShell>{children}</AppShell>
       </body>
     </html>

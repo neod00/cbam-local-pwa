@@ -1,4 +1,4 @@
-const CACHE_NAME = "cbam-local-v6";
+const CACHE_NAME = "cbam-local-v7";
 const APP_SHELL = [
   "/",
   "/announcement",
@@ -21,6 +21,8 @@ const APP_SHELL = [
   "/manifest.webmanifest",
   "/update-manifest.json",
   "/icon.svg",
+  "/reference/cbam-default-values.json",
+  "/reference/cbam-benchmarks.json",
   "/templates/CBAM_Communication_template_for_installations_en_20241213.xlsx"
 ];
 

@@ -418,7 +418,7 @@ Next.js 16 · React 19 · Tailwind 4 · IndexedDB 로컬 우선 PWA. 상태 관�
 | 철강 공정 템플릿 | `product-family-presets.ts` | 이미 있음 |
 | 대량 엑셀 업로드 | 활동자료 템플릿(`activity-data-template.ts`, 고정 양식) | 이미 있음 |
 | 공급업체 요청 양식 | 없음(재료는 있음) | 신규 |
-| EU 기본값 내장 | `data/cbam-defaults.json`(2026-02 공식값)이 있으나 `src`에서 미사용. 지금은 사용자 업로드 필수 | 선결 과제 |
+| EU 기본값 내장 | **구현됨(2026-10-05)**: 공식 DV·벤치마크 워크북 전체(115개국·10,904행 / 1,804행)를 `public/reference/*.json`으로 내장, 앱 시작 때 비어 있으면 IndexedDB에 주입(`src/lib/bundled-references.ts`). 업로드한 파일이 우선, 백업에는 싣지 않음 | 완료 |
 | UI 셸 | `AppShell.tsx`에 guided / modern / previous / legacy 4종(`cbam-local-ui-mode`) | 선결 과제 |
 | 질문 스키마 | 없음. `panels.tsx`는 2,772줄 수작업 폼. 단, 검증·저장 로직은 순수 함수로 분리돼 있음(`guided-edit.ts`, `source-stream-input.ts`) | 대화형의 기반 |
 | 회귀 안전망 | 검증 스크립트 41개(`npm run verify`), 그중 10개가 지도 화면 소스를 **텍스트로** 읽어 검사. 씨밤이 회귀(`cbamy/runs`, run17까지) | 지킬 것 |
@@ -480,7 +480,7 @@ Next.js 16 · React 19 · Tailwind 4 · IndexedDB 로컬 우선 PWA. 상태 관�
 1. **AI API 비용 부담 주체**와 키 방식(무상배포 앱에서 운영자 부담 / 사용자 키 / 유상판 전용).
 2. **직접배출만 해당하는 품목의 간접배출 보고가 법적으로 필수인가** — 화면은 "입력 필수", 근거 문서(`docs/harness/cbam-2026-definitive-basis.md`)는 "증빙·검토·템플릿 기재에 유용". 규정 확인 필요. 결과에 따라 대화형에서 전력 질문을 건너뛸 수 있게 할지가 갈린다.
 3. **대화형 모드 진행 여부**는 5단계까지 해본 뒤 결정.
-4. **내장 EU 기본값의 범위**(철강 CN × 어느 공급국가까지).
+4. ~~내장 EU 기본값의 범위~~ — 결정됨: 일부만 넣으면 대만 같은 국가가 조용히 비므로 공식 워크북 전체(115개국·전 CN)를 넣었다(압축 시 약 120KB). 새 판이 나오면 `npm run generate:bundled-references`로 다시 만든다.
 5. **SEMI_ACTUAL(혼합) 자료의 출처 태그** 표시 방법.
 6. **시각 토큰 조정** — 단색 명도 계열 요구 vs `DESIGN.md` teal 토큰·`verify:design-system`.
 7. **막대 위치** — 입력폼 모드 "하단 고정"과 현재 2열 레이아웃(지도 | 패널)의 배치.

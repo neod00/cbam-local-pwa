@@ -80,10 +80,15 @@ function ReferenceSummaryCard({ summary }: { summary?: ReferenceWorkbookSummary 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h3 className="text-sm font-semibold text-slate-950">{summary.filename}</h3>
-                    <p className="mt-1 text-xs text-slate-500">{formatDateTime(summary.imported_at)}에 로컬 저장</p>
+                    <p className="mt-1 text-xs text-slate-500">{formatDateTime(summary.imported_at)}에 로컬 {summary.origin === 'bundled' ? '준비' : '저장'}</p>
                 </div>
-                <StatusBadge tone="success">가져오기 완료</StatusBadge>
+                <StatusBadge tone="success">{summary.origin === 'bundled' ? '앱 내장 EU 공표본' : '가져오기 완료'}</StatusBadge>
             </div>
+            {summary.origin === 'bundled' && (
+                <p className="mt-3 rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
+                    EU가 공표한 이 파일은 앱에 들어 있어 따로 가져오지 않아도 됩니다. 더 새 판이 나왔다면 위에서 직접 가져오세요 — 가져온 파일이 언제나 우선합니다.
+                </p>
+            )}
             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
                 <div>
                     <dt className="text-xs text-slate-500">데이터 행</dt>
