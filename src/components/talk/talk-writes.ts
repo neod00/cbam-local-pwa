@@ -12,6 +12,7 @@ import {
     type PeriodDraft,
     type ProductDraft,
 } from '@/lib/guided-edit';
+import { buildProcessCreation, validateProcessAnswer, type ProcessAnswerDraft } from '@/lib/conversation-process';
 import { createLocalItem, updateLocalItem, type Installation, type Product, type ReportingPeriod } from '@/lib/local-db';
 
 /**
@@ -57,6 +58,24 @@ export async function saveProduct(existing: Product | undefined, draft: ProductD
         await updateLocalItem('products', buildProductUpdate(existing, draft));
     } else {
         await createLocalItem('products', buildProductPayload(draft, installationId));
+    }
+    return null;
+}
+
+/**
+ * 「생산량」 답 — 새 공정 하나와 그 제품의 생산라인(+ 불량·스크랩이 있으면 활동수준 제외 라인)을 만든다.
+ * 지도 3단계의 신규 경로와 같은 순서(공정 → 제품 라인 → 제외 라인)·같은 값이다(빌더: conversation-process.ts).
+ */
+export async function saveOutput(draft: ProcessAnswerDraft): Promise<string | null> {
+    const error = validateProcessAnswer(draft);
+    if (error) {
+        return error;
+    }
+    const creation = buildProcessCreation(draft);
+    const process = await createLocalItem('processes', creation.process);
+    await createLocalItem('product_output_lines', { process_id: process.id, ...creation.productLine });
+    if (creation.excludedLine) {
+        await createLocalItem('product_output_lines', { process_id: process.id, ...creation.excludedLine });
     }
     return null;
 }

@@ -1,5 +1,5 @@
 import { getAppScopeExclusion, APP_SCOPE_EXCLUSION_TEXT, getCbamCoverage } from './cbam-product-rules';
-import type { Installation, Product, ReportingPeriod } from './local-db';
+import type { Installation, Product, ProductionProcess, ReportingPeriod } from './local-db';
 
 /**
  * 질문으로 입력(대화형 모드 S1) — 어느 질문이 지금 차례인지와 답을 칩으로 보여 주는 순수 규칙.
@@ -8,7 +8,7 @@ import type { Installation, Product, ReportingPeriod } from './local-db';
  * 값의 원본은 지도 화면과 같은 IndexedDB 하나라서, 질문으로 넣은 값을 지도 화면에서 고치고 돌아와도 칩이 따라간다 — 상태를 따로 두지 않는다.
  */
 
-export type TalkQuestionId = 'company' | 'period' | 'product';
+export type TalkQuestionId = 'company' | 'period' | 'product' | 'output';
 
 export interface TalkChip {
     id: TalkQuestionId;
@@ -23,7 +23,7 @@ export interface TalkState {
     current?: TalkQuestionId;
     chips: TalkChip[];
     /** 첫 번째 말고 더 있는 것들 — 질문 화면은 첫 번째만 다루므로 나머지는 지도 화면으로 안내한다 */
-    more: { installations: number; periods: number; products: number };
+    more: { installations: number; periods: number; products: number; processes: number };
 }
 
 export function deriveTalkState(input: {
@@ -31,6 +31,8 @@ export function deriveTalkState(input: {
     periods: ReportingPeriod[];
     /** 신고 대상 제품(reporting scope)만 */
     products: Product[];
+    /** 모든 기간의 공정 — 이 파일이 지금 보는 기간(첫 기간)의 것만 골라 쓴다 */
+    processes?: ProductionProcess[];
 }): TalkState {
     const [installation] = input.installations;
     const [period] = input.periods;
@@ -47,8 +49,28 @@ export function deriveTalkState(input: {
         chips.push({ id: 'product', title: '만드는 제품', answer: `${product.name} · CN ${product.cn_code ?? '—'}` });
     }
 
+    // 지금 보는 기간(첫 기간)의 공정. 공정이 하나라도 있으면 「생산량」 질문에는 이미 답한 것으로 본다 —
+    // 이 화면은 새 공정 하나만 만들고, 이미 있는 공정(여러 개·이송·고치기)은 지도 화면의 몫이다.
+    const periodProcesses = (input.processes ?? []).filter((process) => period && process.period_id === period.id);
+    if (periodProcesses.length > 0) {
+        const total = periodProcesses.reduce((sum, process) => sum + process.output_mass_t, 0);
+        chips.push({
+            id: 'output',
+            title: '생산량',
+            answer: periodProcesses.length === 1 ? `${periodProcesses[0].name} · ${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 3 }).format(total)} t` : `공정 ${periodProcesses.length}개 · ${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 3 }).format(total)} t`,
+        });
+    }
+
     // 앞 질문에 답이 있어야 다음 질문이 뜬다 — 사업장이 없으면 제품을 저장할 곳이 없다.
-    const current: TalkQuestionId | undefined = !installation ? 'company' : !period ? 'period' : !product ? 'product' : undefined;
+    const current: TalkQuestionId | undefined = !installation
+        ? 'company'
+        : !period
+            ? 'period'
+            : !product
+                ? 'product'
+                : periodProcesses.length === 0
+                    ? 'output'
+                    : undefined;
 
     return {
         current,
@@ -57,6 +79,7 @@ export function deriveTalkState(input: {
             installations: Math.max(0, input.installations.length - 1),
             periods: Math.max(0, input.periods.length - 1),
             products: Math.max(0, input.products.length - 1),
+            processes: Math.max(0, periodProcesses.length - 1),
         },
     };
 }
