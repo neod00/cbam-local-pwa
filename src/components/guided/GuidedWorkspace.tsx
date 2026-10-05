@@ -8,6 +8,7 @@ import { deriveGuidedSteps, getGuidedProgress, type GuidedStepId } from '@/lib/g
 import { CBAM_LAST_BACKUP_AT_KEY, describeNewProjectEffects, EXPORT_PERIOD_SETTING_KEY, exportLocalBackup, getLocalSetting, listLocalItems, setLocalSetting, startNewProject } from '@/lib/local-db';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { buildSeeFlowBinding } from '@/lib/see-flow';
+import { buildMapFlow } from '@/lib/guided-map-flow';
 import { CumulativeBar } from './CumulativeBar';
 import { BarChart3, CircleHelp, FilePlus, Map as MapIcon, ShieldCheck, Upload } from 'lucide-react';
 import Link from 'next/link';
@@ -231,6 +232,11 @@ export function GuidedWorkspace() {
         exportWarningCount: data.exportWarningCount,
     }, binding), [data, viewData, reportingProducts, binding]);
 
+    const mapFlow = useMemo(
+        () => buildMapFlow({ binding, steps, results: scopedResults, precursors: viewData.precursors }),
+        [binding, steps, scopedResults, viewData.precursors]
+    );
+
     // 사용자가 상자를 고르기 전에는 '지금 여기' 단계를 자동으로 보여준다(파생값 — effect 불필요).
     const activeStep: GuidedStepId | null = selectedStep
         ?? (data.loaded ? (steps.find((step) => step.status === 'current')?.id ?? 'setup') : null);
@@ -375,6 +381,7 @@ export function GuidedWorkspace() {
                         // 데이터가 없으면 예시(강선 1,000 t) 숫자가 그대로 뜬다. 다른 상자는
                         // 「수출 제품을 등록하세요」 같은 안내인데 이 노드만 숫자여서 자기 값으로 읽힌다.
                         outputLabel={binding.isExample ? '생산량 미입력' : `${fmtT(binding.outputMassT)} t`}
+                        flow={mapFlow}
                     />
                     <CumulativeBar binding={binding} results={scopedResults} precursors={viewData.precursors} />
                 </section>
