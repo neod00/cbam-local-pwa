@@ -61,6 +61,7 @@ const pageTitles: Record<string, string> = {
     '/settings': '데이터 안전',
     '/terms': '무료 약관 및 고지',
     '/privacy': '개인정보 안내',
+    '/talk': '질문으로 입력',
 };
 
 const modernNavigation = [

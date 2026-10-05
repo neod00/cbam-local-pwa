@@ -13,7 +13,7 @@ import { CumulativeBar } from './CumulativeBar';
 import { ExplainLevelProvider, ExplainLevelToggle } from './ExplainLevel';
 import { START_GUIDE_DISMISSED_KEY, StartGuide } from './StartGuide';
 import { useLocalPref } from './useLocalPref';
-import { BarChart3, CircleHelp, FilePlus, Map as MapIcon, ShieldCheck, Upload } from 'lucide-react';
+import { BarChart3, CircleHelp, FilePlus, Map as MapIcon, MessageCircleQuestion, ShieldCheck, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -22,6 +22,7 @@ const UTILITY_LINKS = [
     { href: '/settings', label: '데이터 안전·백업', icon: ShieldCheck },
     { href: '/scenarios', label: '인증서 비용 시나리오', icon: BarChart3 },
     { href: '/upload', label: '자료 업로드', icon: Upload },
+    { href: '/talk', label: '질문으로 입력(시험)', icon: MessageCircleQuestion },
     { href: '/guide', label: '시작 가이드', icon: CircleHelp },
 ] as const;
 

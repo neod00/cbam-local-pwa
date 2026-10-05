@@ -1,4 +1,4 @@
-const CACHE_NAME = "cbam-local-v7";
+const CACHE_NAME = "cbam-local-v8";
 const APP_SHELL = [
   "/",
   "/announcement",
@@ -15,6 +15,7 @@ const APP_SHELL = [
   "/scenarios",
   "/settings",
   "/source-streams",
+  "/talk",
   "/terms",
   "/upload",
   "/workspace",
