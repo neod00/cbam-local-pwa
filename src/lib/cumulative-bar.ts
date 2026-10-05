@@ -42,6 +42,8 @@ export interface CumulativeBarModel {
     measuredShare: number | null;
     /** 블록을 못 쌓은 이유(있을 때만) */
     blocksNote?: string;
+    /** 지금 값은 일부만 들어온 것이라 기본값과 견주지 않는다는 안내(있을 때만) */
+    partialNote?: string;
     /** 기본값 − 내 값. 둘 다 있을 때만 */
     gap: { perTonne: number; percent: number } | null;
 }
@@ -168,14 +170,21 @@ export function buildCumulativeBar(input: {
     precursors: PurchasedPrecursor[];
     /** 신고 대상 제품 — 결과가 아직 없을 때 CN만으로 EU 기본값 기둥을 세우는 데 쓴다. */
     products?: Array<Pick<Product, 'name' | 'cn_code' | 'hs_code'>>;
+    /**
+     * 아직 들어오지 않은 큰 입력이 있다는 사유(예: 구매 강재 전구물질). 있으면 기본값과의 차이·실측 비율을 내지 않는다 —
+     * 전구물질이 SEE의 대부분인 가공업체가 연료만 넣고 「기본값보다 98% 낮다」를 보면 안 된다.
+     */
+    partialReason?: string;
     defaultValues?: ImportedDefaultValueReference;
     originCountry: string;
     year: '2026' | '2027' | '2028_ONWARDS';
 }): CumulativeBarModel {
     const { binding } = input;
 
-    if (binding.isExample) {
-        // 결과가 없다 = 내 값 기둥은 없다. 제품 CN이 있으면 EU 기본값 기둥만 먼저 세운다.
+    // 내 값 기둥이 설 만큼 입력이 없다 — 결과가 없거나(예시 집계), 공정·생산량만 있고 배출 입력이 하나도 없다(기준 SEE 0.000을 「내 값」으로 그리면 거짓이다).
+    const nothingEntered = [binding.directEmissions, binding.ownIndirectEmissions, binding.precursorDirectEmissions, binding.precursorIndirectEmissions].every((value) => value === 0);
+    if (binding.isExample || nothingEntered) {
+        // 제품 CN이 있으면 EU 기본값 기둥만 먼저 세운다.
         const productsOnly = input.products
             ? buildProductsOnlyDefaultColumn({ products: input.products, defaultValues: input.defaultValues, originCountry: input.originCountry, year: input.year })
             : buildDefaultColumn(input);
@@ -187,11 +196,11 @@ export function buildCumulativeBar(input: {
     const out = binding.outputMassT;
     const reportable = input.results.filter((result) => result.is_cbam_reportable);
     const gapOf = (): CumulativeBarModel['gap'] =>
-        defaultColumn.available && headline !== null && defaultColumn.value > 0
+        !input.partialReason && defaultColumn.available && headline !== null && defaultColumn.value > 0
             ? { perTonne: defaultColumn.value - headline, percent: ((defaultColumn.value - headline) / defaultColumn.value) * 100 }
             : null;
 
-    const base = { empty: false, defaultColumn, headline, gap: gapOf() };
+    const base = { empty: false, defaultColumn, headline, gap: gapOf(), partialNote: input.partialReason };
     const noBlocks = (note: string): CumulativeBarModel => ({ ...base, blocks: [], reportOnly: 0, measuredShare: null, blocksNote: note });
 
     if (headline === null || out <= 0) {
@@ -234,6 +243,6 @@ export function buildCumulativeBar(input: {
         ...base,
         blocks,
         reportOnly: includeIndirect ? 0 : perT(binding.ownIndirectEmissions + binding.precursorIndirectEmissions),
-        measuredShare: split && headline > 0 ? Math.min(1, measured / headline) : null,
+        measuredShare: !input.partialReason && split && headline > 0 ? Math.min(1, measured / headline) : null,
     };
 }

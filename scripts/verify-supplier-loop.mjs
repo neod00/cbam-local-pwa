@@ -125,6 +125,20 @@ const withProblem = match([precursor('rail', '73021028', { period_id: 'per23' })
 assert.equal(withProblem.defaultSelected, false, '값이 비어 있는 행은 기본 선택이 아니다');
 assert.equal(match([precursor('coil', '72081000', { period_id: 'per23' })]).unmatchedRows.length, 4, '안 쓰인 회신 행을 알려 준다');
 
+// ── run19 회귀에서 나온 결함: 같은 CN의 국산·수입 원료가 한 회신에 함께 「적용」으로 잡혔다 ──
+const domestic = match([precursor('dom', '72081000', { period_id: 'per23', supplier_country: 'South Korea', supplier_installation: '(주)국내선재' })]).proposals[0];
+assert.equal(domestic.status, 'READY', '후보 행은 있다');
+assert.equal(domestic.defaultSelected, false, '회신 설비 국가(China)와 공급국가(South Korea)가 다르면 자동 선택하지 않는다');
+assert.match(domestic.warnings.join(' '), /회신 설비의 국가\(China\)가 .* 공급국가\(South Korea\)와 다릅니다/);
+const sameCountryAlias = match([precursor('tw', '72081000', { period_id: 'per23', supplier_country: 'Taiwan' })], ours).proposals[0];
+const aliasReply = { ...reply, country: 'Chinese Taipei' };
+const aliasMatch = lib.matchReplyToPrecursors({ reply: aliasReply, precursors: [precursor('tw', '72081000', { period_id: 'per23', supplier_country: 'Taiwan' })], periods: ours }).proposals[0];
+assert.equal(aliasMatch.defaultSelected, true, '같은 나라의 다른 표기(Chinese Taipei = Taiwan)는 다른 국가로 보지 않는다');
+assert.ok(sameCountryAlias.warnings.some((warning) => /공급국가\(Taiwan\)/.test(warning)), '반대로 China 회신에 Taiwan 원료는 걸린다');
+const measured = match([precursor('m', '72081000', { period_id: 'per23', data_mode: 'ACTUAL', verification_status: 'SUPPLIER_CONFIRMED' })]).proposals[0];
+assert.equal(measured.defaultSelected, false, '이미 실측인 값을 바꾸는 것은 사람이 켠다');
+assert.match(measured.warnings.join(' '), /이미 공급사 실측값이 들어 있습니다/);
+
 // ── 적용 값 ──────────────────────────────────────────────────────────
 const upd = lib.buildReplyUpdate(wire, reply);
 assert.equal(upd.data_mode, 'ACTUAL');
@@ -178,6 +192,8 @@ assert.match(panels, /<SupplierLoop precursors=\{data\.precursors\} periods=\{da
 const component = readFileSync('src/components/guided/SupplierLoop.tsx', 'utf8');
 assert.match(component, /buildReplyUpdate\(row, reply\)/, '적용은 파일 값 그대로(buildReplyUpdate)');
 assert.match(component, /selectedProposals/, '사람이 고른 것만 적용한다');
+assert.match(component, /recipientNames\[original\.key\] \?\? original\.supplierName/, '요청서 수신 이름은 보내기 전에 고칠 수 있다(저장된 값에 내부 메모가 섞여 있을 수 있다)');
+assert.match(component, /요청서 수신\(공급사 이름\) — 보내기 전에 확인하세요/);
 assert.ok(!/VERIFIED'/.test(component.replace(/UNVERIFIED/g, '')), '화면이 검증됨으로 올리지 않는다');
 
 console.log('Supplier loop verified (회신 읽기 · 대조 · 공급사 확인까지만 · 엔진 반영 · 요청서에 우리 자료 없음).');

@@ -28,11 +28,14 @@ export function CumulativeBar({
     results,
     precursors,
     products,
+    partialReason,
 }: {
     binding: SeeFlowBinding;
     results: LocalCalculationResult[];
     precursors: PurchasedPrecursor[];
     products?: Array<Pick<Product, 'name' | 'cn_code' | 'hs_code'>>;
+    /** 아직 안 들어온 큰 입력이 있을 때의 안내 — 있으면 기본값과의 비교를 내지 않는다. */
+    partialReason?: string;
 }) {
     const [defaultValues, setDefaultValues] = useState<ImportedDefaultValueReference>();
     const [assumptions, setAssumptions] = useState<ScenarioAssumptions>(DEFAULT_SCENARIO_ASSUMPTIONS);
@@ -53,8 +56,8 @@ export function CumulativeBar({
     }, []);
 
     const model = useMemo(
-        () => buildCumulativeBar({ binding, results, precursors, products, defaultValues, originCountry: assumptions.origin_country, year: assumptions.default_value_year }),
-        [binding, results, precursors, products, defaultValues, assumptions]
+        () => buildCumulativeBar({ binding, results, precursors, products, partialReason, defaultValues, originCountry: assumptions.origin_country, year: assumptions.default_value_year }),
+        [binding, results, precursors, products, partialReason, defaultValues, assumptions]
     );
     const labels = describeSeeFlowIndirect(binding.indirectRelevance, binding.basisExcludesUndetermined);
 
@@ -168,8 +171,13 @@ export function CumulativeBar({
                             실측 비율 = 인증서 기준 부분 중 우리가 직접 넣은 값(연료·공정)과 실측으로 받은 전구물질의 몫. 전력을 넣는다고 오르지 않습니다.
                         </p>
 
+                        {model.partialNote && (
+                            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900" data-testid="bar-partial">{model.partialNote}</p>
+                        )}
                         <p className="text-xs leading-5 text-slate-700" data-testid="bar-gap">
-                            {!model.defaultColumn.available
+                            {model.partialNote
+                                ? '기본값과의 차이는 입력이 갖춰진 뒤에 보여 드립니다.'
+                                : !model.defaultColumn.available
                                 ? model.defaultColumn.reason
                                 : model.gap === null
                                     ? '기준 SEE를 산출하면 기본값과의 차이를 보여줍니다.'
