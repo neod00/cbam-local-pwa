@@ -31,6 +31,10 @@ export interface TalkState {
     more: { installations: number; periods: number; products: number; processes: number };
     /** 첫 공정에 연결된 구매 전구물질 수 */
     precursorCount: number;
+    /** 지금 질문이 붙은 제품 */
+    focusProductId?: string;
+    /** 모든 신고 제품과 제품별 남은 질문(S6 — 제품이 여럿일 때 어디가 비었는지 보이게) */
+    products: TalkProductSummary[];
 }
 
 /**
@@ -39,6 +43,38 @@ export interface TalkState {
  */
 export function pickTalkProcess<T extends Pick<ProductionProcess, 'product_id'>>(processes: T[], product: Pick<Product, 'id'> | undefined): T | undefined {
     return (product ? processes.find((process) => process.product_id === product.id) : undefined) ?? processes[0];
+}
+
+/**
+ * 제품이 둘 이상일 때(S6) 「지금 묻는 제품」의 공정. 첫 제품은 예전 규칙 그대로(자기 공정, 없으면 첫 공정 — 이미 있는 공정이 생산량 질문을 대신한다),
+ * 둘째 이후 제품은 **자기 공정만** — 없으면 공정이 없는 것이다(다른 제품의 공정에 질문이 붙으면 안 된다).
+ */
+export function pickFocusProcess<T extends Pick<ProductionProcess, 'product_id'>>(processes: T[], products: Pick<Product, 'id'>[], product: Pick<Product, 'id'> | undefined): T | undefined {
+    if (!product) return undefined;
+    const own = processes.find((process) => process.product_id === product.id);
+    if (own) return own;
+    return product.id === products[0]?.id ? processes[0] : undefined;
+}
+
+/** 「나중에 입력」으로 건너뛴 질문을 제품별로 기억하는 열쇠 — 한 제품의 건너뛰기가 다른 제품의 같은 질문을 가리지 않게 */
+export const talkSkipKey = (productId: string | undefined, id: TalkQuestionId) => `${productId ?? ''}:${id}`;
+
+export interface TalkProductSummary {
+    id: string;
+    name: string;
+    cnCode: string;
+    /** 이 제품에 아직 답하지 않은 질문 차례대로(사업장·보고기간이 없으면 빈 목록) */
+    pending: TalkQuestionId[];
+}
+
+/**
+ * 지금 물을 제품: 사용자가 고른 제품 → 건너뛰지 않은 남은 질문이 있는 첫 제품 → 첫 제품.
+ * 제품을 새로 만들면 그 제품에 생산량 질문이 남으므로 따로 고르게 하지 않아도 새 제품으로 넘어간다.
+ */
+export function pickFocusProductId(products: TalkProductSummary[], skipped: string[], preferredId?: string): string | undefined {
+    if (preferredId && products.some((product) => product.id === preferredId)) return preferredId;
+    const needing = products.find((product) => product.pending.some((id) => !skipped.includes(talkSkipKey(product.id, id))));
+    return (needing ?? products[0])?.id;
 }
 
 export function deriveTalkState(input: {
@@ -52,10 +88,13 @@ export function deriveTalkState(input: {
     precursors?: PurchasedPrecursor[];
     /** 모든 배출원 — 첫 공정의 것만 센다 */
     sourceStreams?: SourceStream[];
+    /** 지금 물을 제품(없거나 모르면 첫 제품). 질문 5~8은 이 제품의 공정에 붙는다 */
+    focusProductId?: string;
 }): TalkState {
     const [installation] = input.installations;
     const [period] = input.periods;
-    const [product] = input.products;
+    const product = (input.focusProductId ? input.products.find((item) => item.id === input.focusProductId) : undefined) ?? input.products[0];
+    const isFirstProduct = !product || product.id === input.products[0]?.id;
     const chips: TalkChip[] = [];
 
     if (installation) {
@@ -71,7 +110,24 @@ export function deriveTalkState(input: {
     // 지금 보는 기간(첫 기간)의 공정. 공정이 하나라도 있으면 「생산량」 질문에는 이미 답한 것으로 본다 —
     // 이 화면은 새 공정 하나만 만들고, 이미 있는 공정(여러 개·이송·고치기)은 지도 화면의 몫이다.
     const periodProcesses = (input.processes ?? []).filter((process) => period && process.period_id === period.id);
-    if (periodProcesses.length > 0) {
+    const firstProcess = pickFocusProcess(periodProcesses, input.products, product);
+    if (!isFirstProduct) {
+        // 둘째 이후 제품: 자기 공정이 있을 때만 칩이 선다(첫 제품의 생산량을 이 제품의 답으로 보이지 않는다).
+        if (firstProcess) {
+            chips.push({
+                id: 'output',
+                title: '생산량',
+                answer: `${firstProcess.name} · ${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 3 }).format(firstProcess.output_mass_t)} t`,
+            });
+        }
+    } else if (firstProcess && firstProcess.product_id === product?.id && periodProcesses.length > 1) {
+        // 첫 제품도 자기 공정이 있고 공정이 여럿이면 자기 공정만 말한다(전체 합계는 제품 고르기 줄과 결과 요약이 보여 준다).
+        chips.push({
+            id: 'output',
+            title: '생산량',
+            answer: `${firstProcess.name} · ${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 3 }).format(firstProcess.output_mass_t)} t`,
+        });
+    } else if (periodProcesses.length > 0) {
         const total = periodProcesses.reduce((sum, process) => sum + process.output_mass_t, 0);
         chips.push({
             id: 'output',
@@ -81,7 +137,6 @@ export function deriveTalkState(input: {
     }
 
     // 구매 강재: 첫 공정에 전구물질이 있거나 「구매 강재를 쓰지 않음」을 확인했으면 답한 것이다.
-    const firstProcess = pickTalkProcess(periodProcesses, product);
     const processPrecursors = firstProcess ? (input.precursors ?? []).filter((precursor) => precursor.process_id === firstProcess.id) : [];
     const noPrecursorsConfirmed = Boolean(firstProcess?.no_purchased_precursors);
     if (processPrecursors.length > 0) {
@@ -106,6 +161,18 @@ export function deriveTalkState(input: {
         chips.push({ id: 'heat', title: '산 스팀·온수', answer: heatAnswer === 'NO' ? '없음' : '있음 (지도 4단계에서 입력)' });
     }
 
+    // 제품 하나의 남은 질문(공정이 생긴 뒤의 것). 첫 제품은 이미 있는 공정이 생산량 질문을 대신하고, 둘째 이후 제품은 자기 공정이 있어야 한다.
+    const pendingOf = (target: Product, first: boolean): TalkQuestionId[] => {
+        const process = pickFocusProcess(periodProcesses, input.products, target);
+        if (first ? periodProcesses.length === 0 : !process) return ['output'];
+        if (!process) return [];
+        const list: TalkQuestionId[] = [];
+        if (!(input.precursors ?? []).some((precursor) => precursor.process_id === process.id) && !process.no_purchased_precursors) list.push('precursor');
+        if (!(input.sourceStreams ?? []).some((stream) => stream.process_id === process.id)) list.push('fuel');
+        if (!(process.electricity_mwh > 0)) list.push('electricity');
+        if (!process.measurable_heat_import) list.push('heat');
+        return list;
+    };
     const pending: TalkQuestionId[] = [];
     if (!installation) {
         pending.push('company');
@@ -113,13 +180,8 @@ export function deriveTalkState(input: {
         pending.push('period');
     } else if (!product) {
         pending.push('product');
-    } else if (periodProcesses.length === 0) {
-        pending.push('output');
     } else {
-        if (processPrecursors.length === 0 && !noPrecursorsConfirmed) pending.push('precursor');
-        if (processStreams.length === 0) pending.push('fuel');
-        if (!electricityAnswered) pending.push('electricity');
-        if (!heatAnswer) pending.push('heat');
+        pending.push(...pendingOf(product, isFirstProduct));
     }
     const current: TalkQuestionId | undefined = pending[0];
 
@@ -134,7 +196,25 @@ export function deriveTalkState(input: {
             processes: Math.max(0, periodProcesses.length - 1),
         },
         precursorCount: processPrecursors.length,
+        focusProductId: product?.id,
+        products: input.products.map((item) => ({
+            id: item.id,
+            name: item.name,
+            cnCode: item.cn_code ?? '',
+            pending: installation && period ? pendingOf(item, item.id === input.products[0]?.id) : [],
+        })),
     };
+}
+
+/**
+ * 둘째 제품의 CN이 이미 입력한 제품과 같으면 알린다 — 같은 CN은 한 사업장·기간에 생산공정 하나로 묶는 것이 규정이다(2025/2547 제4조 6항, 지도 7단계 검사와 같은 근거).
+ * 크기·모양만 다른 같은 CN 제품은 공정을 새로 만들지 말고 지도 3단계에서 제품 라인으로 더한다. 막지 않는다 — 알릴 뿐이다.
+ */
+export function describeDuplicateCn(cnDigits: string, others: Array<{ name: string; cnCode: string }>): string | undefined {
+    if (cnDigits.length !== 8) return undefined;
+    const same = others.find((other) => other.cnCode.replace(/\D/g, '') === cnDigits);
+    if (!same) return undefined;
+    return `「${same.name}」과 CN 코드가 같습니다. 같은 CN은 한 보고기간에 공정 하나로 묶는 것이 규정(2025/2547 제4조 6항)입니다 — 크기·모양만 다른 같은 제품이면 여기서 새로 만들지 말고 지도 화면 3단계에서 제품 라인으로 더하세요.`;
 }
 
 /** 연간 보고기간 한 칸 — 지도 1단계의 「2025년 연간」 버튼과 같은 값 */
@@ -199,4 +279,35 @@ export function describeTalkBarPartial(input: { hasFuelOrElectricity: boolean; p
     return input.hasFuelOrElectricity
         ? undefined
         : '연료·전기는 아직 넣지 않았습니다 — 지도 화면 4·5단계에서 넣으면 기본값과의 비교를 보여 드립니다. 지금 값은 일부일 뿐입니다.';
+}
+
+/**
+ * 제품이 둘 이상일 때의 「일부일 뿐」 안내. 한 제품이라도 생산량·구매 강재·연료/전력이 비었으면 막대가 말하는 숫자는 일부만 반영한 중간 값이다.
+ * 공정이 하나도 없으면(CN만 있는 시작 막대) 말하지 않는다 — 그때는 막대 자체가 기본값 기둥 하나다.
+ */
+export function describeTalkPartial(input: {
+    products: Pick<Product, 'id' | 'name'>[];
+    /** 지금 보는 기간의 공정 */
+    processes: ProductionProcess[];
+    precursors: PurchasedPrecursor[];
+    sourceStreams: SourceStream[];
+}): string | undefined {
+    if (input.processes.length === 0) return undefined;
+    const missingOutput: string[] = [];
+    let precursorsPending = false;
+    let energyMissing = false;
+    for (const product of input.products) {
+        const process = pickFocusProcess(input.processes, input.products, product);
+        if (!process) {
+            missingOutput.push(product.name);
+            continue;
+        }
+        if (!input.precursors.some((precursor) => precursor.process_id === process.id) && !process.no_purchased_precursors) precursorsPending = true;
+        const hasEnergy = input.sourceStreams.some((stream) => stream.process_id === process.id) || process.electricity_mwh > 0 || process.direct_attributable_emissions_tco2e > 0;
+        if (!hasEnergy) energyMissing = true;
+    }
+    if (missingOutput.length > 0) {
+        return `${missingOutput.map((name) => `「${name}」`).join(', ')}의 생산량을 아직 넣지 않았습니다 — 지금 값은 일부 제품만 반영한 중간 값입니다.`;
+    }
+    return describeTalkBarPartial({ hasFuelOrElectricity: !energyMissing, precursorsPending });
 }

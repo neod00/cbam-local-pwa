@@ -17,7 +17,7 @@ import type { ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { buildSeeFlowBinding } from '@/lib/see-flow';
 import { PRODUCT_FAMILY_PRESETS, findDetailPreset, findDetailPresetForProduct, findFamilyPreset, getCalculationSetupForDetail } from '@/lib/product-family-presets';
-import { deriveTalkState, describeCnInput, describeTalkBarPartial, pickTalkProcess, yearlyPeriodDraft, type TalkQuestionId } from '@/lib/talk-flow';
+import { deriveTalkState, describeCnInput, describeDuplicateCn, describeTalkPartial, pickFocusProcess, pickFocusProductId, talkSkipKey, yearlyPeriodDraft, type TalkQuestionId } from '@/lib/talk-flow';
 import { summarizeTalkResult, type TalkIssue } from '@/lib/talk-summary';
 import { AlertTriangle, ArrowRight, CheckCircle2, Pencil } from 'lucide-react';
 import Link from 'next/link';
@@ -39,15 +39,30 @@ interface TalkData {
     issues: TalkIssue[];
     /** 막대용 — 지도 화면과 같은 엔진으로 계산한 결과(첫 보고기간 것만) */
     results: ReturnType<typeof calculateLocalResults>;
-    hasFuelOrElectricity: boolean;
 }
 
 const EDIT_EXISTING = 'edit-existing';
+const SKIPPED_NOTE: Record<TalkQuestionId, string> = {
+    company: '회사·공장은 질문 1에서 입력할 수 있습니다',
+    period: '보고기간은 질문 2에서 입력할 수 있습니다',
+    product: '제품은 질문 3에서 입력할 수 있습니다',
+    output: '생산량은 지도 3단계에서 입력할 수 있습니다',
+    precursor: '구매 강재는 지도 6단계에서 입력할 수 있습니다',
+    fuel: '연료는 지도 4단계에서 입력할 수 있습니다',
+    electricity: '전력은 지도 5단계에서 입력할 수 있습니다',
+    heat: '밖에서 산 스팀·온수는 지도 4단계 아래쪽에서 답할 수 있습니다',
+};
 const MAP_STEP_OF: Partial<Record<TalkQuestionId, string>> = { output: '3', precursor: '6', fuel: '4', electricity: '5', heat: '4' };
-const EMPTY: TalkData = { loaded: false, installations: [], periods: [], products: [], processes: [], precursors: [], sourceStreams: [], issues: [], results: [], hasFuelOrElectricity: false };
+const EMPTY: TalkData = { loaded: false, installations: [], periods: [], products: [], processes: [], precursors: [], sourceStreams: [], issues: [], results: [] };
+
+/**
+ * 저장소는 제품·공정을 만든 순서가 아니라 id(무작위) 순으로 돌려준다. 이 화면은 「첫 제품」과 「나중에 만든 제품」을 구분해야 하므로(S6)
+ * 만든 순서(created_at, 같으면 id)로 고정한다 — 안 하면 방금 만든 둘째 제품이 첫 제품으로 보여 질문이 끝난 것처럼 된다.
+ */
+const byCreation = <T extends { created_at: string; id: string }>(rows: T[]): T[] => [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
 
 async function loadTalkData(): Promise<TalkData> {
-    const [installations, periods, allProducts, processes, productOutputLines, sourceStreams, precursors, internalTransfers] = await Promise.all([
+    const [installations, periods, rawProducts, rawProcesses, productOutputLines, sourceStreams, precursors, internalTransfers] = await Promise.all([
         listLocalItems('installations'),
         listLocalItems('periods'),
         listLocalItems('products'),
@@ -57,6 +72,8 @@ async function loadTalkData(): Promise<TalkData> {
         listLocalItems('precursors'),
         listLocalItems('internal_transfers'),
     ]);
+    const allProducts = byCreation(rawProducts);
+    const processes = byCreation(rawProcesses);
     // 막대는 지도 화면과 같은 엔진·같은 집계로 그린다(자체 산술 없음). 이 화면은 첫 보고기간만 다룬다.
     const results = calculateLocalResults({ internalTransfers, products: allProducts, periods, processes, productOutputLines, sourceStreams, precursors })
         .filter((result) => periods.length <= 1 || result.period_id === periods[0]?.id);
@@ -64,8 +81,6 @@ async function loadTalkData(): Promise<TalkData> {
     const reportingPeriodId = await getLocalSetting<string>(EXPORT_PERIOD_SETTING_KEY);
     const readiness = evaluateEuExportReadiness({ internalTransfers, periods, reportingPeriodId, products: allProducts, processes, productOutputLines, sourceStreams, precursors, installations });
     const issues: TalkIssue[] = readiness.issues.map((issue) => ({ severity: issue.severity === 'error' ? 'error' : 'warning', area: issue.area, message: issue.message, href: getEuExportIssueEditHref(issue) }));
-    const hasFuelOrElectricity = sourceStreams.length > 0
-        || processes.some((process) => process.electricity_mwh > 0 || process.direct_attributable_emissions_tco2e > 0);
     return {
         loaded: true,
         installations,
@@ -75,7 +90,6 @@ async function loadTalkData(): Promise<TalkData> {
         sourceStreams,
         issues,
         results,
-        hasFuelOrElectricity,
         products: allProducts.filter((product) => isCbamReportingScope(getProductReportingScope(product))),
     };
 }
@@ -103,9 +117,11 @@ export function TalkWorkspace() {
     const [mass, setMass] = useState('');
     const [scrap, setScrap] = useState('');
     const [processName, setProcessName] = useState('');
-    // 「나중에 입력」으로 건너뛴 질문 — 저장하지 않는다(다시 열면 다시 묻는다).
-    const [skipped, setSkipped] = useState<TalkQuestionId[]>([]);
-    const skip = (id: TalkQuestionId) => setSkipped((list) => [...list, id]);
+    // 「나중에 입력」으로 건너뛴 질문 — 저장하지 않는다(다시 열면 다시 묻는다). 제품마다 따로 기억한다(talkSkipKey).
+    const [skipped, setSkipped] = useState<string[]>([]);
+    // 지금 묻는 제품을 사용자가 고른 것(없으면 남은 질문이 있는 첫 제품) / 「다른 제품도」 입력 중
+    const [focusId, setFocusId] = useState<string>();
+    const [addingProduct, setAddingProduct] = useState(false);
     // 구매 강재(S3)
     const [reference, setReference] = useState<ImportedDefaultValueReference>();
     const [addingPrecursor, setAddingPrecursor] = useState(false);
@@ -169,27 +185,51 @@ export function TalkWorkspace() {
         };
     }, []);
 
-    const firstProduct = data.products[0];
-    const state = useMemo(() => deriveTalkState(data), [data]);
+    // 제품이 여럿일 수 있다(S6): 질문 5~8은 「지금 묻는 제품」의 공정에 붙는다. 전체 현황(overview)으로 어느 제품에 남은 질문이 있는지 보고 고른다.
+    const overview = useMemo(() => deriveTalkState(data), [data]);
+    const focusProductId = pickFocusProductId(overview.products, skipped, focusId);
+    const state = useMemo(() => deriveTalkState({ ...data, focusProductId }), [data, focusProductId]);
+    const focusProduct = data.products.find((product) => product.id === focusProductId) ?? data.products[0];
+    const skip = (id: TalkQuestionId) => setSkipped((list) => [...list, talkSkipKey(focusProductId, id)]);
     const binding = useMemo(() => buildSeeFlowBinding(data.results), [data.results]);
-    // 「나중에 입력」으로 넘긴 생산량 질문은 이번 화면에서만 건너뛴다(저장하지 않는다 — 다시 열면 다시 묻는다).
-    const current = state.pending.find((id) => !skipped.includes(id));
-    const question: TalkQuestionId | undefined = editing ?? (addingPrecursor ? 'precursor' : addingFuel ? 'fuel' : current);
+    // 「나중에 입력」으로 넘긴 질문은 이번 화면에서만 건너뛴다(저장하지 않는다 — 다시 열면 다시 묻는다).
+    const current = state.pending.find((id) => !skipped.includes(talkSkipKey(focusProductId, id)));
+    const question: TalkQuestionId | undefined = editing ?? (addingProduct ? 'product' : addingPrecursor ? 'precursor' : addingFuel ? 'fuel' : current);
     const periodProcesses = data.processes.filter((process) => process.period_id === data.periods[0]?.id);
-    const firstProcess = pickTalkProcess(periodProcesses, firstProduct);
-    const precursorsPending = Boolean(firstProcess) && state.precursorCount === 0 && !firstProcess?.no_purchased_precursors;
-    const barPartial = firstProcess ? describeTalkBarPartial({ hasFuelOrElectricity: data.hasFuelOrElectricity, precursorsPending }) : undefined;
+    const focusProcess = pickFocusProcess(periodProcesses, data.products, focusProduct);
+    // 한 제품이라도 생산량·구매 강재·연료/전력이 비었으면 막대의 숫자는 일부일 뿐이다(제품이 하나일 때와 같은 문안).
+    const barPartial = describeTalkPartial({ products: data.products, processes: periodProcesses, precursors: data.precursors, sourceStreams: data.sourceStreams });
     const summary = useMemo(() => summarizeTalkResult({ binding, issues: data.issues, partialNote: barPartial }), [binding, data.issues, barPartial]);
     const energySplit = useMemo(() => summarizeEnergySplits({ processes: periodProcesses, sourceStreams: data.sourceStreams }), [periodProcesses, data.sourceStreams]);
     const countries = useMemo(() => Array.from(new Set((reference?.rows ?? []).map((row) => row.country))).filter((name) => !name.startsWith('_')).sort((a, b) => a.localeCompare(b)), [reference]);
     const fuelKind = TALK_FUEL_KINDS.find((item) => item.key === fuelKindKey) ?? TALK_FUEL_KINDS[0];
-    const precursorSetup = getCalculationSetupForDetail(firstProduct ? findDetailPresetForProduct(firstProduct) : undefined);
+    const precursorSetup = getCalculationSetupForDetail(focusProduct ? findDetailPresetForProduct(focusProduct) : undefined);
     const massNumber = Number(mass.replace(/,/g, ''));
     const scrapNumber = scrap.trim() === '' ? 0 : Number(scrap.replace(/,/g, ''));
     const family = findFamilyPreset(familyId);
     const detail = findDetailPreset(familyId, detailId);
     const cnDigits = cn.replace(/\D/g, '');
     const cnHint = describeCnInput(cnDigits, detail?.cnCandidates.map((candidate) => candidate.code) ?? []);
+    // 둘째 제품이 이미 입력한 제품과 CN이 같으면 알린다(막지 않는다). 고치는 중이면 자기 자신은 뺀다.
+    const duplicateCn = describeDuplicateCn(cnDigits, overview.products.filter((item) => addingProduct || item.id !== focusProductId));
+
+    function startAddingProduct() {
+        setMessage('');
+        setFamilyId('');
+        setDetailId('');
+        setProductName('');
+        setCn('');
+        setAddingProduct(true);
+    }
+
+    function cancelProductForm() {
+        setEditing(null);
+        setAddingProduct(false);
+        setFamilyId('');
+        setDetailId('');
+        setProductName('');
+        setCn('');
+    }
 
     function resetPrecursorForm() {
         setPName('');
@@ -207,7 +247,7 @@ export function TalkWorkspace() {
     }
 
     function submitPrecursor() {
-        if (!firstProcess) return;
+        if (!focusProcess) return;
         if (pMode === '') {
             setMessage('SEE 값을 어떻게 하시겠어요? 「공급사가 준 값이 있어요」나 「모르겠어요」를 고르세요.');
             return;
@@ -218,7 +258,7 @@ export function TalkWorkspace() {
         }
         const fill = pFill?.ok ? pFill : null;
         void submit(async () => {
-            const error = await savePrecursor(firstProcess, {
+            const error = await savePrecursor(focusProcess, {
                 name: pName,
                 cn: pCn,
                 consumed: pConsumed,
@@ -259,19 +299,19 @@ export function TalkWorkspace() {
             setCountry(data.installations[0]?.country ?? '');
         } else if (id === 'electricity') {
             // 지도 5단계의 수정과 같은 저장(buildElectricityUpdate)을 쓴다. 공용 계량기에서 나눈 값은 여기서 고치지 않는다(칩이 지도로 안내).
-            setElecMwh(firstProcess && firstProcess.electricity_mwh > 0 ? String(firstProcess.electricity_mwh) : '');
-            setElecEf(String(firstProcess?.electricity_ef_tco2e_per_mwh || ELECTRICITY_PLACEHOLDER_EF));
-            setElecSource(firstProcess?.electricity_ef_source ?? ELECTRICITY_DEFAULT_EF_SOURCE);
+            setElecMwh(focusProcess && focusProcess.electricity_mwh > 0 ? String(focusProcess.electricity_mwh) : '');
+            setElecEf(String(focusProcess?.electricity_ef_tco2e_per_mwh || ELECTRICITY_PLACEHOLDER_EF));
+            setElecSource(focusProcess?.electricity_ef_source ?? ELECTRICITY_DEFAULT_EF_SOURCE);
         } else if (id === 'period') {
             setPeriodName(data.periods[0]?.name ?? '');
             setStartDate(data.periods[0]?.start_date ?? '');
             setEndDate(data.periods[0]?.end_date ?? '');
         } else {
             // 이미 답한 제품은 이름·CN 칸을 바로 연다(제품군 고르기를 다시 시키지 않는다). 처음이면 제품군부터 묻는다.
-            setFamilyId(data.products[0] ? EDIT_EXISTING : '');
+            setFamilyId(focusProduct ? EDIT_EXISTING : '');
             setDetailId('');
-            setProductName(data.products[0]?.name ?? '');
-            setCn(data.products[0]?.cn_code ?? '');
+            setProductName(focusProduct?.name ?? '');
+            setCn(focusProduct?.cn_code ?? '');
         }
     }
 
@@ -302,7 +342,7 @@ export function TalkWorkspace() {
             <header className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <h1 className="text-lg font-bold tracking-tight text-slate-950">질문에 답만 하면 됩니다</h1>
-                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900">시험 버전 · 사업장·기간·제품·생산량·구매 강재·연료·전력까지</span>
+                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900">시험 버전 · 사업장·기간·제품(여러 개 가능)·생산량·구매 강재·연료·전력까지</span>
                 </div>
                 <p className="mt-1 text-sm leading-6 text-slate-600">
                     한 번에 질문 하나씩 묻습니다. 답은 지도 화면과 <span className="font-semibold">같은 곳</span>에 저장되어서, 언제든 지도 화면으로 넘어가도 입력한 내용은 그대로입니다.
@@ -314,7 +354,7 @@ export function TalkWorkspace() {
 
             {data.loaded && state.chips.length > 0 && (
                 <ul className="flex flex-wrap gap-2" aria-label="지금까지의 답">
-                    {state.chips.map((chip) => chip.id === 'output' || chip.id === 'precursor' || chip.id === 'fuel' || chip.id === 'heat' || (chip.id === 'electricity' && Boolean(firstProcess?.electricity_shared_meter)) ? (
+                    {state.chips.map((chip) => chip.id === 'output' || chip.id === 'precursor' || chip.id === 'fuel' || chip.id === 'heat' || (chip.id === 'electricity' && Boolean(focusProcess?.electricity_shared_meter)) ? (
                         <li key={chip.id}>
                             <Link
                                 href="/"
@@ -344,9 +384,26 @@ export function TalkWorkspace() {
                 </ul>
             )}
 
-            {data.loaded && (state.more.installations > 0 || state.more.periods > 0 || state.more.products > 0 || state.more.processes > 0) && (
+            {data.loaded && data.products.length >= 2 && (
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="제품 고르기" data-testid="talk-products">
+                    <span className="text-xs font-semibold text-slate-500">제품</span>
+                    {state.products.map((item) => (
+                        <button
+                            key={item.id}
+                            type="button"
+                            aria-pressed={item.id === focusProductId && !addingProduct}
+                            onClick={() => { setFocusId(item.id); setEditing(null); setAddingProduct(false); setAddingFuel(false); setAddingPrecursor(false); setMessage(''); }}
+                            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${item.id === focusProductId && !addingProduct ? 'border-teal-500 bg-teal-50 text-teal-900' : 'border-slate-200 bg-white text-slate-600 hover:border-teal-400'}`}
+                        >
+                            {item.name} · CN {item.cnCode || '—'}{item.pending.length > 0 ? ` · 남은 질문 ${item.pending.length}개` : ' · 완료'}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {data.loaded && (state.more.installations > 0 || state.more.periods > 0) && (
                 <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-                    사업장·보고기간·제품·공정이 더 있습니다. 이 화면은 첫 번째만 다룹니다 — 나머지는 지도 화면에서 보고 고칠 수 있습니다.
+                    사업장이나 보고기간이 더 있습니다. 이 화면은 첫 번째만 다룹니다 — 나머지는 지도 화면에서 보고 고칠 수 있습니다.
                 </p>
             )}
 
@@ -404,7 +461,13 @@ export function TalkWorkspace() {
             {data.loaded && question === 'product' && (
                 <section className="rounded-2xl border border-teal-200 bg-white p-5 shadow-sm" aria-label="질문 만드는 제품">
                     <p className="text-xs font-bold text-teal-800">질문 3</p>
-                    <h2 className="mt-1 text-base font-bold text-slate-950">무엇을 만드시나요?</h2>
+                    <h2 className="mt-1 text-base font-bold text-slate-950">{addingProduct ? '다른 제품도 만드시나요? 어떤 제품인가요?' : '무엇을 만드시나요?'}</h2>
+                    {addingProduct && (
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                            CN 코드가 다른 제품은 제품마다 공정을 따로 둡니다. 이 제품에도 구매 강재·연료·전력을 같은 순서로 묻습니다.
+                            한 제품이 다른 제품의 재료로 들어가는 사내 이송은 지도 화면 3단계에서 연결하세요.
+                        </p>
+                    )}
 
                     {showFamilyStep && (
                         <>
@@ -490,11 +553,25 @@ export function TalkWorkspace() {
                                 {(cnHint.level === 'warn' || cnHint.level === 'blocked') && <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />}
                                 {cnHint.text}
                             </p>
+                            {duplicateCn && (
+                                <p className="mt-1.5 flex items-start gap-1.5 text-xs leading-5 text-amber-800" data-testid="talk-duplicate-cn">
+                                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />
+                                    {duplicateCn}
+                                </p>
+                            )}
                             <Footer
                                 busy={busy}
                                 message={message}
-                                onSave={() => void submit(() => saveProduct(data.products[0], { name: productName, cnDigits }, data.installations[0]?.id))}
-                                onCancel={editing ? () => setEditing(null) : undefined}
+                                onSave={() => void submit(async () => {
+                                    // 새 제품(addingProduct)은 만들고, 아니면 지금 묻는 제품을 고친다. 새 제품을 만들면 그 제품에 생산량 질문이 남아 자동으로 그쪽으로 넘어간다.
+                                    const error = await saveProduct(addingProduct ? undefined : focusProduct, { name: productName, cnDigits }, data.installations[0]?.id);
+                                    if (!error && addingProduct) {
+                                        setFocusId(undefined);
+                                        cancelProductForm();
+                                    }
+                                    return error;
+                                })}
+                                onCancel={editing || addingProduct ? cancelProductForm : undefined}
                                 label="답하기"
                             />
                         </>
@@ -502,10 +579,10 @@ export function TalkWorkspace() {
                 </section>
             )}
 
-            {data.loaded && question === 'output' && firstProduct && (
+            {data.loaded && question === 'output' && focusProduct && (
                 <section className="rounded-2xl border border-teal-200 bg-white p-5 shadow-sm" aria-label="질문 생산량">
                     <p className="text-xs font-bold text-teal-800">질문 4</p>
-                    <h2 className="mt-1 text-base font-bold text-slate-950">「{firstProduct.name}」을 {data.periods[0]?.name ?? '이 기간'}에 몇 톤 만드셨나요?</h2>
+                    <h2 className="mt-1 text-base font-bold text-slate-950">「{focusProduct.name}」을 {data.periods[0]?.name ?? '이 기간'}에 몇 톤 만드셨나요?</h2>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
                         시장에 내보낸(판매했거나 다른 공정에 넣은) 양만 적으세요. 생산일지나 ERP의 완제품 입고 기준, 포장재를 뺀 순중량입니다.
                         이 양이 SEE(제품 1톤당 배출량)를 나누는 분모가 됩니다.
@@ -521,16 +598,16 @@ export function TalkWorkspace() {
                     </label>
                     <label className="mt-3 block text-sm font-semibold text-slate-700">
                         공정 이름 <span className="font-normal text-slate-500">(바꾸지 않아도 됩니다)</span>
-                        <input className={fieldClass} value={processName} onChange={(event) => setProcessName(event.target.value)} placeholder={defaultProcessName(firstProduct.name)} />
+                        <input className={fieldClass} value={processName} onChange={(event) => setProcessName(event.target.value)} placeholder={defaultProcessName(focusProduct.name)} />
                     </label>
                     <Footer
                         busy={busy}
                         message={message}
                         onSave={() => void submit(() => saveOutput({
-                            name: processName.trim() || defaultProcessName(firstProduct.name),
+                            name: processName.trim() || defaultProcessName(focusProduct.name),
                             route: '',
                             periodId: data.periods[0]?.id,
-                            product: firstProduct,
+                            product: focusProduct,
                             massT: massNumber,
                             excludedMassT: scrapNumber,
                         }))}
@@ -542,18 +619,18 @@ export function TalkWorkspace() {
                 </section>
             )}
 
-            {data.loaded && question === 'precursor' && firstProcess && (
+            {data.loaded && question === 'precursor' && focusProcess && (
                 <section className="rounded-2xl border border-teal-200 bg-white p-5 shadow-sm" aria-label="질문 구매 강재">
                     <p className="text-xs font-bold text-teal-800">질문 5</p>
                     <h2 className="mt-1 text-base font-bold text-slate-950">
-                        {addingPrecursor ? '구매한 강재를 하나 더 넣어 주세요.' : `「${firstProduct?.name ?? '제품'}」을 만들려고 구매한 강재(선재·코일 등)가 있나요?`}
+                        {addingPrecursor ? '구매한 강재를 하나 더 넣어 주세요.' : `「${focusProduct?.name ?? '제품'}」을 만들려고 구매한 강재(선재·코일 등)가 있나요?`}
                     </h2>
                     <p className="mt-1 text-xs leading-5 text-slate-500">철강 가공업체는 SEE의 대부분이 구매한 강재가 지니고 온 배출에서 나옵니다. 공급사의 실제 값을 모르면 EU 기본값으로 먼저 계산을 끝내고 나중에 바꾸면 됩니다.</p>
 
                     {hasPrecursors === null && !addingPrecursor && (
                         <div className="mt-3 flex flex-wrap gap-2">
                             <Button type="button" onClick={() => setHasPrecursors(true)}>네, 구매한 강재가 있어요</Button>
-                            <Button type="button" variant="secondary" disabled={busy} onClick={() => void submit(() => confirmNoPrecursors(firstProcess))}>아니요, 강재를 사다 쓰지 않아요</Button>
+                            <Button type="button" variant="secondary" disabled={busy} onClick={() => void submit(() => confirmNoPrecursors(focusProcess))}>아니요, 강재를 사다 쓰지 않아요</Button>
                             <button type="button" onClick={() => skip('precursor')} className="text-xs font-semibold text-slate-500 hover:underline">지금은 모릅니다 — 나중에 입력</button>
                         </div>
                     )}
@@ -640,11 +717,16 @@ export function TalkWorkspace() {
                 </section>
             )}
 
-            {data.loaded && question === 'fuel' && firstProcess && (
+            {data.loaded && question === 'fuel' && focusProcess && (
                 <section className="rounded-2xl border border-teal-200 bg-white p-5 shadow-sm" aria-label="질문 연료">
                     <p className="text-xs font-bold text-teal-800">질문 6</p>
                     <h2 className="mt-1 text-base font-bold text-slate-950">{addingFuel ? '연료를 하나 더 넣어 주세요.' : '공장 안에서 태운 연료(도시가스·유류 등)가 있나요?'}</h2>
                     <p className="mt-1 text-xs leading-5 text-slate-500">고지서·구매 전표의 12개월 사용량을 그대로 적으면 앱이 배출량을 계산합니다. 연료를 전혀 안 쓰는 공정이면 「쓰지 않아요」를 누르세요.</p>
+                    {periodProcesses.length >= 2 && (
+                        <p className="mt-1 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900" data-testid="talk-shared-fuel-note">
+                            이 기간에 공정이 {periodProcesses.length}개입니다. 연료 고지서 한 장을 여러 공정이 같이 쓴다면 여기에 한 공정 몫을 추정해 적지 말고 「지금은 모릅니다」로 넘긴 뒤, 아래 「같이 쓴 에너지 나누기」에서 나누세요 — 나누는 기준이 규정에 있습니다.
+                        </p>
+                    )}
                     <label className="mt-3 block text-sm font-semibold text-slate-700">
                         어떤 연료인가요?
                         <select className={fieldClass} value={fuelKindKey} onChange={(event) => chooseFuelKind(event.target.value)}>
@@ -693,8 +775,8 @@ export function TalkWorkspace() {
                         <Button
                             type="button"
                             disabled={busy}
-                            onClick={() => firstProcess && void submit(async () => {
-                                const error = await saveFuel(firstProcess, data.sourceStreams, { kind: fuelKind, amount: fuelAmount, name: fuelName, ncv: fuelNcv, factor: fuelFactor, factorSource: fuelFactorSource, source: fuelSource });
+                            onClick={() => focusProcess && void submit(async () => {
+                                const error = await saveFuel(focusProcess, data.sourceStreams, { kind: fuelKind, amount: fuelAmount, name: fuelName, ncv: fuelNcv, factor: fuelFactor, factorSource: fuelFactorSource, source: fuelSource });
                                 if (!error) resetFuelForm();
                                 return error;
                             })}
@@ -709,11 +791,16 @@ export function TalkWorkspace() {
                 </section>
             )}
 
-            {data.loaded && question === 'electricity' && firstProcess && (
+            {data.loaded && question === 'electricity' && focusProcess && (
                 <section className="rounded-2xl border border-teal-200 bg-white p-5 shadow-sm" aria-label="질문 전력">
                     <p className="text-xs font-bold text-teal-800">질문 7</p>
                     <h2 className="mt-1 text-base font-bold text-slate-950">작년 한 해 공장에서 쓴 전기는 얼마인가요?</h2>
                     <p className="mt-1 text-xs leading-5 text-slate-500">한전 전기요금 고지서의 12개월 사용량(kWh) 합계 ÷ 1,000 = MWh 입니다. 한 고지서를 여러 공정이 같이 쓰면 지도 화면의 「전력 나누기」를 쓰세요.</p>
+                    {periodProcesses.length >= 2 && (
+                        <p className="mt-1 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900" data-testid="talk-shared-electricity-note">
+                            이 기간에 공정이 {periodProcesses.length}개입니다. 전기 고지서 한 장을 여러 공정이 같이 쓴다면 여기에 한 공정 몫을 추정해 적지 말고 「지금은 모릅니다」로 넘긴 뒤, 아래 「같이 쓴 에너지 나누기」에서 나누세요 — 나누기 도구가 합계와 기준을 받아 공정별로 저장합니다.
+                        </p>
+                    )}
                     <label className="mt-3 block text-sm font-semibold text-slate-700">
                         연간 전력 사용량 (MWh)
                         <input className={fieldClass} value={elecMwh} onChange={(event) => setElecMwh(event.target.value)} placeholder="500" inputMode="decimal" />
@@ -733,7 +820,7 @@ export function TalkWorkspace() {
                         </select>
                     </label>
                     <div className="mt-4 flex flex-wrap items-center gap-2">
-                        <Button type="button" disabled={busy} onClick={() => firstProcess && void submit(() => saveElectricity(firstProcess, { mwh: Number(elecMwh.replace(/,/g, '')) || 0, ef: Number(elecEf.replace(/,/g, '')) || 0, efSource: elecSource }))}>{busy ? '저장 중…' : '답하기'}</Button>
+                        <Button type="button" disabled={busy} onClick={() => focusProcess && void submit(() => saveElectricity(focusProcess, { mwh: Number(elecMwh.replace(/,/g, '')) || 0, ef: Number(elecEf.replace(/,/g, '')) || 0, efSource: elecSource }))}>{busy ? '저장 중…' : '답하기'}</Button>
                         {editing === 'electricity'
                             ? <button type="button" onClick={() => setEditing(null)} className="text-sm font-semibold text-slate-500 hover:underline">취소</button>
                             : <button type="button" onClick={() => skip('electricity')} className="text-sm font-semibold text-slate-500 hover:underline">지금은 모릅니다 — 나중에 입력</button>}
@@ -742,13 +829,13 @@ export function TalkWorkspace() {
                 </section>
             )}
 
-            {data.loaded && question === 'heat' && firstProcess && (
+            {data.loaded && question === 'heat' && focusProcess && (
                 <section className="rounded-2xl border border-teal-200 bg-white p-5 shadow-sm" aria-label="질문 산 스팀·온수">
                     <p className="text-xs font-bold text-teal-800">질문 8</p>
                     <h2 className="mt-1 text-base font-bold text-slate-950">산업단지나 다른 회사에서 스팀·온수를 사서 쓰나요?</h2>
                     <p className="mt-1 text-xs leading-5 text-slate-500">사업장 안 보일러로 만든 스팀은 위 연료로 넣었습니다. 밖에서 사 온 열은 사업장에 연료가 없어 연료 목록에 잡히지 않아 따로 묻습니다.</p>
                     <div className="mt-3 flex flex-wrap gap-2">
-                        <Button type="button" disabled={busy} onClick={() => void submit(() => confirmNoImportedHeat(firstProcess))}>아니요, 사서 쓰는 열이 없어요</Button>
+                        <Button type="button" disabled={busy} onClick={() => void submit(() => confirmNoImportedHeat(focusProcess))}>아니요, 사서 쓰는 열이 없어요</Button>
                         <Link href="/" className="inline-flex"><Button type="button" variant="secondary">예 — 지도 화면 4단계에서 입력하기</Button></Link>
                         <button type="button" onClick={() => skip('heat')} className="text-sm font-semibold text-slate-500 hover:underline">지금은 모릅니다 — 나중에 입력</button>
                     </div>
@@ -761,16 +848,16 @@ export function TalkWorkspace() {
                     <p className="flex items-center gap-2 text-sm font-bold text-emerald-900"><CheckCircle2 className="h-4 w-4" />여기까지가 이번 시험 버전의 질문입니다.</p>
                     <p className="mt-1 text-sm leading-6 text-emerald-900">
                         지금까지의 결과는 아래에 있습니다. 더 입력하거나 고치려면 지도 화면으로 이어가세요 — 입력한 답이 그대로 보입니다. 7단계에서 결과를, 8단계에서 EU 문서를 만들 수 있습니다.
-                        {skipped.includes('output') && ' 생산량은 지도 3단계에서 입력할 수 있습니다.'}
-                        {skipped.includes('precursor') && ' 구매 강재는 지도 6단계에서 입력할 수 있습니다.'}
-                        {skipped.includes('fuel') && ' 연료는 지도 4단계에서 입력할 수 있습니다.'}
-                        {skipped.includes('electricity') && ' 전력은 지도 5단계에서 입력할 수 있습니다.'}
-                        {skipped.includes('heat') && ' 밖에서 산 스팀·온수는 지도 4단계 아래쪽에서 답할 수 있습니다.'}
+                        {data.products.map((item) => {
+                            const notes = overview.products.find((entry) => entry.id === item.id)?.pending.filter((id) => skipped.includes(talkSkipKey(item.id, id))) ?? [];
+                            return notes.length > 0 ? ` 「${item.name}」: ${notes.map((id) => SKIPPED_NOTE[id]).join(' · ')}.` : '';
+                        })}
                     </p>
-                    {firstProcess && data.sourceStreams.some((stream) => stream.process_id === firstProcess.id) && (
+                    <button type="button" onClick={startAddingProduct} className="mt-3 mr-3 block text-sm font-semibold text-teal-700 hover:underline" data-testid="talk-add-product">다른 제품도 만드시나요? — 제품 하나 더 입력</button>
+                    {focusProcess && data.sourceStreams.some((stream) => stream.process_id === focusProcess.id) && (
                         <button type="button" onClick={() => { setMessage(''); setAddingFuel(true); }} className="mt-3 mr-3 text-sm font-semibold text-teal-700 hover:underline">연료 하나 더 넣기</button>
                     )}
-                    {firstProcess && state.precursorCount > 0 && (
+                    {focusProcess && state.precursorCount > 0 && (
                         <button type="button" onClick={() => { setMessage(''); setAddingPrecursor(true); }} className="mt-3 mr-3 text-sm font-semibold text-teal-700 hover:underline">구매 강재 하나 더 넣기</button>
                     )}
                     <Link href="/" className="mt-3 inline-flex">
@@ -779,7 +866,7 @@ export function TalkWorkspace() {
                 </section>
             )}
 
-            {data.loaded && firstProcess && (
+            {data.loaded && periodProcesses.length > 0 && (
                 <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="지금까지의 결과" data-testid="talk-summary">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                         <h2 className="text-base font-bold text-slate-950">지금까지의 답으로 나온 결과</h2>
@@ -821,7 +908,7 @@ export function TalkWorkspace() {
                 </section>
             )}
 
-            {data.loaded && firstProcess && periodProcesses.length >= 2 && (
+            {data.loaded && periodProcesses.length >= 2 && (
                 <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="같이 쓴 에너지 나누기" data-testid="talk-energy-split">
                     <h2 className="text-base font-bold text-slate-950">한 고지서를 여러 공정이 같이 쓰나요?</h2>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
