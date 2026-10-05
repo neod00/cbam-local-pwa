@@ -155,7 +155,7 @@ close(results[0].indirect_emissions_gross_tco2e, 5412 * 0.47, '전력은 보고�
 const ui = readFileSync('src/components/talk/TalkWorkspace.tsx', 'utf8');
 assert.match(ui, /임시 자리값/, '자리값은 임시값이라고 말한다');
 assert.match(ui, /앱은 한국 계통 평균값을 갖고 있지 않습니다/);
-assert.match(ui, /state\.pending\.find\(\(id\) => !skipped\.includes\(id\)\)/, '건너뛴 질문을 빼고 다음을 고른다');
+assert.match(ui, /state\.pending\.find\(\(id\) => !skipped\.includes\(talkSkipKey\(focusProductId, id\)\)\)/, '건너뛴 질문을 (제품별로) 빼고 다음을 고른다');
 assert.match(ui, /지금은 모릅니다 — 나중에 입력/);
 assert.match(ui, /예 — 지도 화면 4단계에서 입력하기/, '산 열 「예」는 이 화면이 받지 않는다');
 assert.ok(!/\bAI\b|챗봇/.test(ui));

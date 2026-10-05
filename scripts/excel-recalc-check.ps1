@@ -25,7 +25,12 @@ try {
         }
     }
     $sp = $wb.Worksheets.Item('Summary_Products')
-    Write-Output ('Summary_Products I10/J10/K10 = {0} / {1} / {2}' -f $sp.Range('I10').Value2, $sp.Range('J10').Value2, $sp.Range('K10').Value2)
+    # One line per product row (rows 10..19 hold the example/real rows): goods category | direct / indirect / total SEE
+    foreach ($row in 10..19) {
+        if ($sp.Range("E$row").Value2) {
+            Write-Output ('Summary_Products row {0}: {1} | I/J/K = {2} / {3} / {4}' -f $row, $sp.Range("G$row").Value2, $sp.Range("I$row").Value2, $sp.Range("J$row").Value2, $sp.Range("K$row").Value2)
+        }
+    }
     Write-Output ('error cells: {0}' -f $errors.Count)
     $errors | Select-Object -First 20
     $wb.Close($false)

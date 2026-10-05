@@ -92,7 +92,7 @@ for (const tool of ['ElectricitySplit', 'FuelSplit', 'SharedHeat']) {
 assert.match(ui, /<ElectricitySplit processes=\{periodProcesses\} results=\{data\.results\} onApplied=\{reload\} \/>/);
 assert.match(ui, /<FuelSplit processes=\{periodProcesses\} sourceStreams=\{data\.sourceStreams\} results=\{data\.results\} onApplied=\{reload\} \/>/);
 assert.match(ui, /<SharedHeat processes=\{periodProcesses\} sourceStreams=\{data\.sourceStreams\} onApplied=\{reload\} \/>/);
-assert.match(ui, /firstProcess && periodProcesses\.length >= 2 && \(/, '공정이 둘 이상일 때만 보인다');
+assert.match(ui, /periodProcesses\.length >= 2 && \(/, '공정이 둘 이상일 때만 보인다');
 assert.match(ui, /summarizeEnergySplits\(\{ processes: periodProcesses, sourceStreams: data\.sourceStreams \}\)/, '현황은 지도 화면과 같은 순수 요약');
 for (const name of readdirSync('src/components/talk').filter((file) => /\.(ts|tsx)$/.test(file))) {
   const text = readFileSync(`src/components/talk/${name}`, 'utf8');
@@ -106,7 +106,7 @@ assert.match(ui, /getLocalSetting<string>\(EXPORT_PERIOD_SETTING_KEY\)/);
 
 // ── 4) 전력 고치기 ───────────────────────────────────────────────────
 assert.match(ui, /openEditor\('electricity'\)|id === 'electricity'/, '전력 칩은 고칠 수 있다');
-assert.match(ui, /chip\.id === 'electricity' && Boolean\(firstProcess\?\.electricity_shared_meter\)/, '공용 계량기에서 나눈 값이면 지도로 안내(여기서 고치면 합계가 고지서와 어긋난다)');
+assert.match(ui, /chip\.id === 'electricity' && Boolean\(focusProcess\?\.electricity_shared_meter\)/, '공용 계량기에서 나눈 값이면 지도로 안내(여기서 고치면 합계가 고지서와 어긋난다)');
 const writes = readFileSync('src/components/talk/talk-writes.ts', 'utf8');
 assert.match(writes, /buildElectricityUpdate\(process, full\)/, '수정도 지도 5단계와 같은 빌더');
 assert.match(writes, /allocationNote: process\.electricity_allocation_note \?\? ''/, '고치기가 저장된 배분 근거 메모를 지우지 않는다(지도 5단계는 칸에 되살려 같은 결과를 낸다)');
