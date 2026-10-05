@@ -4,8 +4,10 @@ import {
     buildPeriodPayload,
     buildPeriodUpdate,
     buildProductPayload,
+    buildPrecursorCreate,
     buildProductUpdate,
     validateInstallationDraft,
+    validatePrecursorDraft,
     validatePeriodDraft,
     validateProductDraft,
     type InstallationDraft,
@@ -13,7 +15,8 @@ import {
     type ProductDraft,
 } from '@/lib/guided-edit';
 import { buildProcessCreation, validateProcessAnswer, type ProcessAnswerDraft } from '@/lib/conversation-process';
-import { createLocalItem, updateLocalItem, type Installation, type Product, type ReportingPeriod } from '@/lib/local-db';
+import { buildPrecursorDraft, type PrecursorAnswer } from '@/lib/conversation-precursor';
+import { createLocalItem, updateLocalItem, type Installation, type Product, type ProductionProcess, type ReportingPeriod } from '@/lib/local-db';
 
 /**
  * 질문으로 입력(대화형 모드)의 **유일한 쓰기 자리**. 이 폴더의 다른 파일은 저장소를 직접 부르지 않는다(scripts/verify-talk-s1.mjs가 잠근다).
@@ -77,5 +80,29 @@ export async function saveOutput(draft: ProcessAnswerDraft): Promise<string | nu
     if (creation.excludedLine) {
         await createLocalItem('product_output_lines', { process_id: process.id, ...creation.excludedLine });
     }
+    return null;
+}
+
+/**
+ * 「구매한 강재」 답 — 첫 공정에 전구물질을 하나 만든다. 지도 6단계의 신규 경로와 같은 검증·같은 빌더·같은 연결(기간·공정·공정의 대표 제품)이다.
+ * 기본값이면 호출부가 채운 값(conversation-precursor.ts의 fillEuDefault)이 답에 들어 있다.
+ */
+export async function savePrecursor(process: ProductionProcess, answer: PrecursorAnswer): Promise<string | null> {
+    const draft = buildPrecursorDraft(answer);
+    const error = validatePrecursorDraft(draft);
+    if (error) {
+        return error;
+    }
+    await createLocalItem('precursors', buildPrecursorCreate(draft, {
+        period_id: process.period_id,
+        process_id: process.id,
+        product_id: process.product_id,
+    }));
+    return null;
+}
+
+/** 「구매한 강재를 쓰지 않습니다」 확인 — 지도 6단계의 체크 칸과 같은 값(true)을 같은 방식으로 저장한다. */
+export async function confirmNoPrecursors(process: ProductionProcess): Promise<string | null> {
+    await updateLocalItem('processes', { ...process, no_purchased_precursors: true });
     return null;
 }

@@ -100,7 +100,7 @@ assert.equal(app.deriveTalkState({ ...base, processes: [] }).current, 'output', 
 assert.equal(app.deriveTalkState(base).current, 'output', 'processes를 안 넘겨도(S1 호출부) 같다');
 assert.equal(app.deriveTalkState({ ...base, processes: [proc({ period_id: 'other' })] }).current, 'output', '다른 기간의 공정은 이 기간의 답이 아니다');
 const answered = app.deriveTalkState({ ...base, processes: [proc()] });
-assert.equal(answered.current, undefined);
+assert.equal(answered.current, 'precursor', '공정까지 답하면 다음은 구매 강재(S3)');
 assert.deepEqual(plain(answered.chips.at(-1)), { id: 'output', title: '생산량', answer: 'STS 나사 공정 · 3,240 t' });
 const several = app.deriveTalkState({ ...base, processes: [proc(), proc({ id: 'p2', output_mass_t: 1860 })] });
 assert.equal(several.chips.at(-1).answer, '공정 2개 · 5,100 t');
@@ -109,7 +109,8 @@ assert.equal(app.deriveTalkState({ installations: [inst], periods: [period], pro
 
 // ── 4) 쓰기·화면 ─────────────────────────────────────────────────────
 const writes = readFileSync('src/components/talk/talk-writes.ts', 'utf8');
-const saveOutput = writes.slice(writes.indexOf('export async function saveOutput'));
+const outputStart = writes.indexOf('export async function saveOutput');
+const saveOutput = writes.slice(outputStart, writes.indexOf('export async function', outputStart + 10) > 0 ? writes.indexOf('export async function', outputStart + 10) : undefined);
 assert.ok(saveOutput.indexOf("createLocalItem('processes', creation.process)") < saveOutput.indexOf("createLocalItem('product_output_lines', { process_id: process.id, ...creation.productLine })") && saveOutput.indexOf("...creation.productLine") < saveOutput.indexOf('...creation.excludedLine'), '공정 → 제품 라인 → 제외 라인');
 assert.match(saveOutput, /validateProcessAnswer\(draft\)/);
 assert.ok(!/updateLocalItem|deleteLocalItem/.test(saveOutput), 'S2는 새로 만들기만 한다(고치기·지우기는 지도 화면)');
@@ -118,6 +119,6 @@ assert.match(ui, /지금은 모릅니다 — 나중에 입력 \(생산량은 추
 assert.match(ui, /setSkippedOutput\(true\)/);
 assert.ok(!/saveOutput\([^)]*localStorage/.test(ui) && !/localStorage/.test(ui), '건너뛰기는 저장하지 않는다');
 assert.match(ui, /chip\.id === 'output'/, '생산량 칩은 지도 3단계로 안내한다(고치기는 지도에서)');
-assert.match(ui, /다음 질문\(구매한 강재\)은 아직 준비 중입니다/);
+assert.match(ui, /다음 질문\(연료·전력\)은 아직 준비 중입니다/);
 
 console.log('Talk S2 verified (공정 빌더 = 지도 패널 신규 경로와 필드·고정값 일치 · 차례 · 생산량은 추정하지 않음 · 쓰기 순서).');

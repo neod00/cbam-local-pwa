@@ -1,5 +1,5 @@
 import { getAppScopeExclusion, APP_SCOPE_EXCLUSION_TEXT, getCbamCoverage } from './cbam-product-rules';
-import type { Installation, Product, ProductionProcess, ReportingPeriod } from './local-db';
+import type { Installation, Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod } from './local-db';
 
 /**
  * 질문으로 입력(대화형 모드 S1) — 어느 질문이 지금 차례인지와 답을 칩으로 보여 주는 순수 규칙.
@@ -8,7 +8,7 @@ import type { Installation, Product, ProductionProcess, ReportingPeriod } from '
  * 값의 원본은 지도 화면과 같은 IndexedDB 하나라서, 질문으로 넣은 값을 지도 화면에서 고치고 돌아와도 칩이 따라간다 — 상태를 따로 두지 않는다.
  */
 
-export type TalkQuestionId = 'company' | 'period' | 'product' | 'output';
+export type TalkQuestionId = 'company' | 'period' | 'product' | 'output' | 'precursor';
 
 export interface TalkChip {
     id: TalkQuestionId;
@@ -24,6 +24,8 @@ export interface TalkState {
     chips: TalkChip[];
     /** 첫 번째 말고 더 있는 것들 — 질문 화면은 첫 번째만 다루므로 나머지는 지도 화면으로 안내한다 */
     more: { installations: number; periods: number; products: number; processes: number };
+    /** 첫 공정에 연결된 구매 전구물질 수 */
+    precursorCount: number;
 }
 
 export function deriveTalkState(input: {
@@ -33,6 +35,8 @@ export function deriveTalkState(input: {
     products: Product[];
     /** 모든 기간의 공정 — 이 파일이 지금 보는 기간(첫 기간)의 것만 골라 쓴다 */
     processes?: ProductionProcess[];
+    /** 모든 전구물질 — 첫 공정의 것만 센다 */
+    precursors?: PurchasedPrecursor[];
 }): TalkState {
     const [installation] = input.installations;
     const [period] = input.periods;
@@ -61,6 +65,16 @@ export function deriveTalkState(input: {
         });
     }
 
+    // 구매 강재: 첫 공정에 전구물질이 있거나 「구매 강재를 쓰지 않음」을 확인했으면 답한 것이다.
+    const firstProcess = periodProcesses[0];
+    const processPrecursors = firstProcess ? (input.precursors ?? []).filter((precursor) => precursor.process_id === firstProcess.id) : [];
+    const noPrecursorsConfirmed = Boolean(firstProcess?.no_purchased_precursors);
+    if (processPrecursors.length > 0) {
+        chips.push({ id: 'precursor', title: '구매 강재', answer: `${processPrecursors.length}건 · ${processPrecursors.map((precursor) => precursor.name).join(', ')}` });
+    } else if (noPrecursorsConfirmed) {
+        chips.push({ id: 'precursor', title: '구매 강재', answer: '없음 (확인함)' });
+    }
+
     // 앞 질문에 답이 있어야 다음 질문이 뜬다 — 사업장이 없으면 제품을 저장할 곳이 없다.
     const current: TalkQuestionId | undefined = !installation
         ? 'company'
@@ -70,7 +84,9 @@ export function deriveTalkState(input: {
                 ? 'product'
                 : periodProcesses.length === 0
                     ? 'output'
-                    : undefined;
+                    : processPrecursors.length === 0 && !noPrecursorsConfirmed
+                        ? 'precursor'
+                        : undefined;
 
     return {
         current,
@@ -81,6 +97,7 @@ export function deriveTalkState(input: {
             products: Math.max(0, input.products.length - 1),
             processes: Math.max(0, periodProcesses.length - 1),
         },
+        precursorCount: processPrecursors.length,
     };
 }
 
@@ -132,4 +149,18 @@ export function describeCnInput(cnDigits: string, candidateCodes: string[]): CnH
         return { level: 'warn', text: `${coverage.reason || 'CBAM 대상 여부를 확인하세요.'}` };
     }
     return { level: 'ok', text: 'CBAM 대상 품목으로 보입니다.' };
+}
+
+/**
+ * 막대 아래에 붙일 「아직 일부일 뿐」 안내. 값이 일부만 들어온 상태에서 「기본값보다 N% 낮다」를 그리면 거짓이다(run19 결함 02와 같은 원리).
+ *  · 구매 강재가 필요한데 아직 없으면 — 가공업체는 SEE의 대부분이 여기서 나온다.
+ *  · 질문으로 연료·전력을 아직 묻지 않는 동안(S3)에는 연료·전력 입력이 없으면.
+ */
+export function describeTalkBarPartial(input: { hasFuelOrElectricity: boolean; precursorsPending: boolean }): string | undefined {
+    if (input.precursorsPending) {
+        return '구매한 강재(전구물질)를 아직 넣지 않았습니다. 철강 가공품은 SEE의 대부분이 여기서 나오므로 지금 값은 일부일 뿐입니다 — 위 질문에 답하거나 「없음」을 확인하세요.';
+    }
+    return input.hasFuelOrElectricity
+        ? undefined
+        : '연료·전기는 아직 넣지 않았습니다 — 지도 화면 4·5단계에서 넣으면 기본값과의 비교를 보여 드립니다. 지금 값은 일부일 뿐입니다.';
 }
