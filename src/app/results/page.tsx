@@ -70,8 +70,13 @@ function describeAllocationBasis(result: LocalCalculationResult) {
     if (result.allocation_basis === 'MANUAL') {
         parts.push(`사유: ${result.allocation_reason ?? '미기재'}`);
     }
-    if ((result.imported_heat_emissions_tco2e ?? 0) > 0) {
-        parts.push(`산 열(스팀·온수) ${formatNumber(result.imported_heat_emissions_tco2e ?? 0)} tCO₂e 포함(식 52·55)`);
+    const sharedHeat = Math.min(result.shared_heat_emissions_tco2e ?? 0, result.imported_heat_emissions_tco2e ?? 0);
+    const boughtHeat = (result.imported_heat_emissions_tco2e ?? 0) - sharedHeat;
+    if (boughtHeat > 1e-9) {
+        parts.push(`산 열(스팀·온수) ${formatNumber(boughtHeat)} tCO₂e 포함(식 52·55)`);
+    }
+    if (sharedHeat > 1e-9) {
+        parts.push(`사내 공용 열 ${formatNumber(sharedHeat)} tCO₂e 포함(쓴 열량 비율 귀속 · 부속서 III A.3)`);
     }
     parts.push(`열 수출·폐가스·자가발전 보정(식 55): ${ALLOCATION_RULES.ADJUSTMENTS.unsupported ? '현재 버전에서 미지원' : '적용'}`);
     return parts.join(' · ');

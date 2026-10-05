@@ -281,6 +281,21 @@ assert.equal(heatBackup.manifest.format_version, 3, 'a backup with purchased hea
 assert.equal(createLocalBackup({ ...emptyStores, processes: [{ ...heatProcess, measurable_heat_import: 'NO' }] }).manifest.format_version, 1, 'answering "no heat" keeps the backup readable by older apps');
 const heatRoundTrip = parseBackupFile(JSON.stringify(heatBackup));
 assert.equal(heatRoundTrip.data.processes[0].imported_heat_amount, 1200, 'heat fields must survive a round trip');
-assert.throws(() => parseBackupFile(JSON.stringify({ manifest: { format: 'cbam-local-backup', format_version: 4 }, data: emptyStores })), /지원하지 않는/, 'unknown future versions are refused');
+// format_version 4 = an in-plant heat system (boiler / steam header): the fuel row carries heat_system and has no process, and the
+// consuming processes carry heat_consumption. An older app would attribute that fuel to no process at all and print a lower SEE.
+const heatSystemFuel = { id: 'source_stream_boiler', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z', name: 'Boiler gas', stream_type: 'FUEL', heat_system: { name: 'Boiler', outside_quantity: 1, outside_unit: 'Gcal' } };
+const heatConsumer = { id: 'process_consumer', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z', name: 'Washing', heat_consumption: [{ system: 'Boiler', quantity: 4, unit: 'Gcal', basis: 'INDIRECT_ESTIMATE', note: 'rated x hours' }] };
+assert.equal(createLocalBackup({ ...emptyStores, source_streams: [heatSystemFuel] }).manifest.format_version, 4, 'a heat-system fuel row alone makes the backup version 4');
+assert.equal(createLocalBackup({ ...emptyStores, processes: [heatConsumer] }).manifest.format_version, 4, 'a process consuming shared heat alone makes the backup version 4');
+const sharedHeatBackup = createLocalBackup({ ...emptyStores, processes: [heatProcess, heatConsumer], source_streams: [heatSystemFuel], internal_transfers: [transferRow] });
+assert.equal(sharedHeatBackup.manifest.format_version, 4, 'version 4 wins over 3 and 2 when everything is present');
+assert.equal(createLocalBackup({ ...emptyStores, processes: [{ ...heatConsumer, heat_consumption: [] }], source_streams: [{ ...heatSystemFuel, heat_system: undefined }] }).manifest.format_version, 1, 'empty heat fields keep the backup readable by older apps');
+const sharedHeatRoundTrip = parseBackupFile(JSON.stringify(sharedHeatBackup));
+assert.equal(sharedHeatRoundTrip.manifest.format_version, 4);
+assert.equal(JSON.stringify(sharedHeatRoundTrip.data.source_streams[0].heat_system), JSON.stringify(heatSystemFuel.heat_system), 'heat_system must survive a round trip');
+assert.equal(JSON.stringify(sharedHeatRoundTrip.data.processes[1].heat_consumption), JSON.stringify(heatConsumer.heat_consumption), 'heat_consumption must survive a round trip');
+const olderBackup = parseBackupFile(JSON.stringify(createLocalBackup({ ...emptyStores, processes: [heatProcess] })));
+assert.equal(olderBackup.manifest.format_version, 3, 'purchased-heat backups still read as version 3');
+assert.throws(() => parseBackupFile(JSON.stringify({ manifest: { format: 'cbam-local-backup', format_version: 5 }, data: emptyStores })), /지원하지 않는/, 'unknown future versions are refused');
 
 console.log('Local backup verification passed (할당로직 optional 필드 왕복·옛 백업 호환 포함).');

@@ -618,6 +618,64 @@ assertEqual(String(bridgedReadiness.issues.some((issue) => issue.message.include
   assertEqual(String(euExport.evaluateEuExportReadiness({ ...data, processes: [heatProcess] }, validation.cnCodeMap).errorCount), '0', 'complete heat input adds no error');
 }
 
+// [2547 A.3 · CBAM-ALLOC-HEAT-02] 사내 공용 열 공급원(보일러): 연료는 공정에 매이지 않고(process_id 없음) 쓴 열량 비율로 귀속한다.
+// EU 문서에는 같은 (h) 수입 칸(L+46 열량 TJ · L+47 계수)에 적는다 — 밖에서 산 열과 같은 칸이고, DirEm*(L+43)에는 넣지 않는다.
+// 핵심: 열량 비율의 분모는 **전체 공정**의 열 사용량이다. EU 문서에 나가는 공정만 세면 수출하지 않는 공정이 쓴 열이 빠져
+// 나가는 공정의 몫이 100%로 부풀려진다.
+{
+  const heatPeriod = { period_id: period.id };
+  const cbamHeat = { ...process, ...heatPeriod, heat_consumption: [{ system: 'Boiler', quantity: 4, unit: 'TJ', basis: 'METERED' }] };
+  const scrapProcess = { ...process, ...heatPeriod, id: 'process-scrap-line', name: 'Non-CBAM line', product_id: nonCbamProduct.id, direct_attributable_emissions_tco2e: 10, heat_consumption: [{ system: 'Boiler', quantity: 1, unit: 'TJ', basis: 'METERED' }] };
+  const boiler = { ...sourceStream, ...heatPeriod, id: 'boiler-gas', process_id: undefined, name: 'Boiler gas', activity_data: 100, heat_system: { name: 'Boiler' } };
+  const heatData = { ...data, products: [product, nonCbamProduct], processes: [cbamHeat, scrapProcess], sourceStreams: [{ ...sourceStream, ...heatPeriod }, boiler] };
+  const boilerEmissions = 100 * 45 * 73 / 1000;
+  const writes = euExport.createEuTemplateExportCellWrites(heatData, validation.cnCodeMap);
+  const cell = (ref) => writes.find((write) => write.sheetName === 'D_Processes' && write.cell === ref)?.value;
+  assertEqual(String(Math.abs(cell('L57') - 4) < 1e-12), 'true', 'shared heat: D_Processes L57 = this process heat (TJ)');
+  assertEqual(String(Math.abs(cell('L58') - boilerEmissions / 5) < 1e-9), 'true', 'shared heat: L58 = fuel emissions / TOTAL heat of all processes (5 TJ), not only the exported ones');
+  assertEqual(String(Math.abs(cell('L57') * cell('L58') - boilerEmissions * 0.8) < 1e-9), 'true', 'shared heat: the template multiplies L x L to this process share (80%)');
+  assertEqual(String(cell('L54')), '120', 'DirEm* (L54) must not include the shared heat');
+  assertEqual(String(writes.some((write) => write.sheetName === 'B_EmInst' && write.label === 'Source stream name' && write.value === 'Boiler gas')), 'true', 'the boiler fuel is listed in B_EmInst although it has no process');
+  assertEqual(String(writes.some((write) => write.sheetName === 'D_Processes' && write.cell === 'L67')), 'false', 'a process outside the document gets no D_Processes row');
+
+  // 밖에서 산 열이 함께 있으면 한 줄로 합친다: Q = Q밖 + Q안, EF = (E밖 + E안) / Q
+  const bothHeat = { ...cbamHeat, measurable_heat_import: 'YES', imported_heat_amount: 1000, imported_heat_unit: 'Gcal', imported_heat_ef_basis: 'STANDARD_FUEL_BOILER', imported_heat_standard_fuel: 'NATURAL_GAS' };
+  const bothWrites = euExport.createEuTemplateExportCellWrites({ ...heatData, processes: [bothHeat, scrapProcess] }, validation.cnCodeMap);
+  const boughtTj = 1000 * 0.0041868;
+  const bothCell = (ref) => bothWrites.find((write) => write.sheetName === 'D_Processes' && write.cell === ref)?.value;
+  assertEqual(String(Math.abs(bothCell('L57') - (boughtTj + 4)) < 1e-9), 'true', 'bought + shared heat are one line (TJ)');
+  assertEqual(String(Math.abs(bothCell('L57') * bothCell('L58') - (boughtTj * 56.1 / 0.9 + boilerEmissions * 0.8)) < 1e-6), 'true', 'bought + shared heat: Q x EF = both emissions');
+
+  // 소비처가 없으면 연료는 문서에 싣지 않는다(CBAM 재화와 무관)
+  const orphanWrites = euExport.createEuTemplateExportCellWrites({ ...heatData, processes: [{ ...cbamHeat, heat_consumption: undefined }, { ...scrapProcess, heat_consumption: undefined }] }, validation.cnCodeMap);
+  assertEqual(String(orphanWrites.some((write) => write.label === 'Source stream name' && write.value === 'Boiler gas')), 'false', 'a heat system nobody in the document uses is not listed');
+
+  // 준비도: 정상은 오류를 더하지 않고, 귀속하지 못하면 그 연료 배출이 통째로 사라지므로 막는다.
+  const base = euExport.evaluateEuExportReadiness({ ...data, processes: [process], sourceStreams: [sourceStream] }, validation.cnCodeMap);
+  const ok = euExport.evaluateEuExportReadiness(heatData, validation.cnCodeMap);
+  assertEqual(String(ok.errorCount), String(base.errorCount), 'a complete heat system adds no error (the process-less boiler stream is not an error)');
+  assertEqual(String(ok.issues.some((issue) => issue.message.includes('연결된 생산공정이 없어'))), 'false', 'a heat-system fuel stream legitimately has no process');
+  const zero = euExport.evaluateEuExportReadiness({ ...heatData, processes: [{ ...cbamHeat, heat_consumption: [{ system: 'Boiler', quantity: 0, unit: 'TJ', basis: 'METERED' }] }, scrapProcess] }, validation.cnCodeMap);
+  assertEqual(String(zero.issues.some((issue) => issue.severity === 'error' && issue.message.includes('열 공급원 「Boiler」') && issue.message.includes('빠집니다'))), 'true', 'zero heat blocks: the fuel would vanish');
+  assertEqual(String(zero.issues.find((issue) => issue.message.includes('열 공급원 「Boiler」'))?.target?.type), 'process', 'the error links to a consuming process');
+  const noConsumer = euExport.evaluateEuExportReadiness({ ...heatData, processes: [{ ...process, ...heatPeriod }], precursors: data.precursors }, validation.cnCodeMap);
+  assertEqual(String(noConsumer.issues.some((issue) => issue.severity === 'error' && issue.message.includes('열을 받는 공정이 없습니다'))), 'true', 'a heat system without consumers blocks');
+  assertEqual(String(noConsumer.issues.find((issue) => issue.message.includes('열을 받는 공정이 없습니다'))?.target?.type), 'sourceStream', 'the error links to the stream');
+  const missing = euExport.evaluateEuExportReadiness({ ...heatData, sourceStreams: [{ ...sourceStream, ...heatPeriod }] }, validation.cnCodeMap);
+  assertEqual(String(missing.issues.some((issue) => issue.severity === 'error' && issue.message.includes('연료 배출원이 없습니다'))), 'true', 'consuming a heat system that has no fuel blocks');
+  // 공정에도 열 공급원에도 연결되지 않은 연료는 계산과 EU 문서 어디에도 안 들어간다 — 조용히 배출이 사라지므로 막는다(열 공급원 해제 뒤 실제로 생겼다).
+  const orphanFuel = { ...boiler, id: 'orphan-fuel', name: 'Unlinked boiler gas', heat_system: undefined };
+  const orphan = euExport.evaluateEuExportReadiness({ ...heatData, processes: [{ ...process, ...heatPeriod }], sourceStreams: [{ ...sourceStream, ...heatPeriod }, orphanFuel] }, validation.cnCodeMap);
+  const orphanError = orphan.issues.find((issue) => issue.severity === 'error' && issue.message.includes('Unlinked boiler gas'));
+  assertEqual(String(Boolean(orphanError)), 'true', 'a fuel stream linked to no process and no heat system blocks the export');
+  assertEqual(String(orphanError?.message.includes('328.5000')), 'true', 'the message states how much would vanish');
+  assertEqual(String(orphanError?.target?.type), 'sourceStream', 'the error links to the stream');
+  const otherPeriodOrphan = euExport.evaluateEuExportReadiness({ ...heatData, sourceStreams: [...heatData.sourceStreams, { ...orphanFuel, period_id: 'another-period' }], periods: [period, { ...period, id: 'another-period', name: 'Other' }], reportingPeriodId: period.id }, validation.cnCodeMap);
+  assertEqual(String(otherPeriodOrphan.issues.some((issue) => issue.message.includes('Unlinked boiler gas'))), 'false', 'an unlinked stream of another reporting period is not a problem of this document');
+  const estimateNoNote = euExport.evaluateEuExportReadiness({ ...heatData, processes: [{ ...cbamHeat, heat_consumption: [{ system: 'Boiler', quantity: 4, unit: 'TJ', basis: 'INDIRECT_ESTIMATE' }] }, scrapProcess] }, validation.cnCodeMap);
+  assertEqual(String(estimateNoNote.issues.some((issue) => issue.severity === 'warning' && issue.message.includes('추정(간접결정)'))), 'true', 'an estimate without a stated basis is announced');
+}
+
 // [run11 P1-12] 철강 가공품 공정에 구매 전구물질이 하나도 없으면 알린다. 사람이 「없음」을 확인하면 조용해진다.
 const noPrecursorReadiness = euExport.evaluateEuExportReadiness({ ...data, precursors: [] }, validation.cnCodeMap);
 assertEqual(String(noPrecursorReadiness.issues.some((issue) => issue.message.includes('구매 전구물질이 없습니다'))), 'true', 'run11 P1-12: missing precursors are announced');

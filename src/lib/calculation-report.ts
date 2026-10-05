@@ -6,6 +6,7 @@ import { D43_EVIDENCE, ELECTRICITY_EF_BASIS_LABEL, ELECTRICITY_EF_CITATION, reso
 import { CN_MASTER_TEMPLATE_VERSION } from './cn-master.generated';
 import { isCbamReportingScope, getProductReportingScope } from './reporting-scope';
 import { ALLOCATION_RULES, DIRECT_EMISSIONS_INPUT_MODE_LABEL } from './allocation-rules';
+import { SHARED_HEAT_RULE } from './measurable-heat';
 import { findDefaultValueReference, hasAmbiguousDefaultValueRoutes } from './reference-workbooks';
 import type { DefaultValueReferenceRow, ImportedDefaultValueReference } from './reference-workbooks';
 import { getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
@@ -315,6 +316,12 @@ function describeAttributionMethod(input: CalculationReportInput) {
     }
     parts.push('활동수준(SEE 분모)은 ANNEX II 점 F에 따라 판매 가능하거나 다른 생산공정의 전구물질로 직접 쓰이는 재화만 포함하며, 「활동수준 제외」로 표시된 라인(불량·부산물·폐기물·스크랩)은 배출 0으로 둔다.');
     parts.push(`사업장 밖에서 산 측정가능열(스팀·온수)의 배출 EmH,imp는 직접배출에 더한다(ANNEX III A.2.2·A.3 식 52·55, ${ALLOCATION_RULES.HEAT_IMPORT.id}).`);
+    // 사내 공용 열 공급원(보일러·스팀 헤더) — 연료 배출은 어느 공정의 직접귀속배출에도 넣지 않고, 열을 쓴 공정에 쓴 열량 비율로
+    // 귀속했다(ANNEX III A.3 DirEm*·EmH,imp). 방법 진술이므로 어떤 산식으로 나눴는지를 그대로 적는다.
+    const sharedHeatFormulas = [...new Set(results.flatMap((result) => result.shared_heat_formulas ?? []))];
+    if (sharedHeatFormulas.length > 0) {
+        parts.push(`둘 이상의 생산공정이 같이 쓰는 열 공급원(보일러·스팀 헤더)의 연료 배출은 공정의 직접귀속배출(DirEm*)에 넣지 않고 EmH,imp로 쓴 열량 비율에 따라 귀속했다(${SHARED_HEAT_RULE.anchor}, ${SHARED_HEAT_RULE.id}). 열 손실은 열을 쓴 공정과 공정 밖 사용처에 같은 비율로 얹혀 연료 배출 전체가 귀속된다. 귀속 산식: ${sharedHeatFormulas.join(' / ')}.`);
+    }
     parts.push(`열 수출·폐가스 수입·수출·자가발전 차감(식 55의 나머지 항, ${ALLOCATION_RULES.ADJUSTMENTS.id})은 현재 버전에서 미지원 — 해당 시 별도 산정이 필요하다.`);
     return parts.join(' ');
 }
@@ -1699,8 +1706,13 @@ function resultSection(input: CalculationReportInput) {
         rows.push([result.product_name, '자체 공정 직접배출', formatForReport(result.direct_see), '자체 배출 ÷ 생산량']);
         // 「그중」 행 — 위 행에 이미 들어 있다. 합계 자가검사는 결과 필드로 하므로 이 행을 더하지 않는다.
         const heatEmissions = result.imported_heat_emissions_tco2e ?? 0;
-        if (heatEmissions > 0) {
-            rows.push([result.product_name, '　그중 산 열(스팀·온수)', formatForReport(result.output_mass_t > 0 ? heatEmissions / result.output_mass_t : 0), 'EmH,imp ÷ 생산량 (부속서 III 식 52·55)']);
+        const sharedHeatEmissions = Math.min(result.shared_heat_emissions_tco2e ?? 0, heatEmissions);
+        const boughtHeatEmissions = heatEmissions - sharedHeatEmissions;
+        if (boughtHeatEmissions > 1e-9) {
+            rows.push([result.product_name, '　그중 산 열(스팀·온수)', formatForReport(result.output_mass_t > 0 ? boughtHeatEmissions / result.output_mass_t : 0), 'EmH,imp ÷ 생산량 (부속서 III 식 52·55)']);
+        }
+        if (sharedHeatEmissions > 1e-9) {
+            rows.push([result.product_name, '　그중 사내 공용 열(보일러·스팀 헤더)', formatForReport(result.output_mass_t > 0 ? sharedHeatEmissions / result.output_mass_t : 0), '쓴 열량 비율 귀속 ÷ 생산량 (부속서 III A.3)']);
         }
         rows.push([result.product_name, '전구물질 직접 내재배출', formatForReport(result.precursor_direct_see), '소비비율 × 전구물질 SEE']);
         // 2025/2547 부속서 III: 사업장 안의 다른 생산공정에서 만든 전구물질 — 기간 평균 SEE × 이 공정에서 쓴 양.
