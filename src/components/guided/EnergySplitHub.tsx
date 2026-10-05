@@ -12,8 +12,6 @@ const GUIDE: Array<{ kind: EnergySplitKind; question: string; answer: string; st
     { kind: 'FUEL', question: '그 밖의 연료(경유·LPG·가스 등)인가요?', answer: '「연료 나누기」 — 생산량 비율이 기본입니다', step: 'fuel' },
 ];
 
-const KIND_LABEL: Record<EnergySplitKind, string> = { ELECTRICITY: '전기', FUEL: '연료', HEAT: '열' };
-
 /**
  * 에너지 나누기 현황과 길 안내(4·5단계 맨 위). 전력 나누기·연료 나누기·보일러·스팀은 모두 「한 고지서를 여러 공정이 나눠 쓴다」는 같은 일인데
  * 규정이 달라 화면이 셋이다 — 담당자가 어느 것을 눌러야 하는지부터 헤매지 않게 한곳에서 보여준다. 계산하거나 저장하지 않는다.
@@ -71,7 +69,6 @@ export function EnergySplitHub({
                                 <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-emerald-600" />
                             )}
                             <span className="min-w-0">
-                                <span className="mr-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">{KIND_LABEL[item.kind]}</span>
                                 <span className="font-semibold text-slate-900">{item.title}</span>
                                 <span className="ml-1.5 text-xs text-slate-500">{item.detail}</span>
                                 {item.problem && <span className="mt-0.5 block text-xs leading-5 text-amber-800">{item.problem}</span>}
