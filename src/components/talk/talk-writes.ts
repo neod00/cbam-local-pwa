@@ -136,7 +136,8 @@ export async function saveFuel(process: ProductionProcess, existingStreams: Sour
 
 /** 「전력」 답 — 지도 5단계와 같은 검증·같은 갱신 빌더(guided-edit.ts). */
 export async function saveElectricity(process: ProductionProcess, draft: { mwh: number; ef: number; efSource: string }): Promise<string | null> {
-    const full = { ...draft, allocationNote: '' };
+    // 배분 근거 메모는 이 화면에 칸이 없다 — 저장된 것을 그대로 싣는다(비워 보내면 고치기 한 번에 근거가 지워진다. 지도 5단계는 칸에 되살려 같은 결과를 낸다).
+    const full = { ...draft, allocationNote: process.electricity_allocation_note ?? '' };
     const error = validateElectricityDraft(full);
     if (error) {
         return error;

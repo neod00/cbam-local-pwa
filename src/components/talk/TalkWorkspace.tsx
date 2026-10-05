@@ -1,18 +1,24 @@
 'use client';
 
 import { CumulativeBar } from '@/components/guided/CumulativeBar';
+import { ElectricitySplit } from '@/components/guided/ElectricitySplit';
+import { FuelSplit } from '@/components/guided/FuelSplit';
+import { SharedHeat } from '@/components/guided/SharedHeat';
 import { Button } from '@/components/ui';
 import { calculateLocalResults } from '@/lib/calculation-engine';
+import { summarizeEnergySplits } from '@/lib/energy-split-summary';
+import { evaluateEuExportReadiness, getEuExportIssueEditHref } from '@/lib/eu-template-export';
 import { ELECTRICITY_DEFAULT_EF_SOURCE, ELECTRICITY_EF_SOURCE_OPTIONS, ELECTRICITY_PLACEHOLDER_EF, TALK_FUEL_KINDS } from '@/lib/conversation-energy';
 import { fillEuDefault, type DefaultFill } from '@/lib/conversation-precursor';
 import { defaultProcessName } from '@/lib/conversation-process';
-import { getLocalSetting, listLocalItems, type Installation, type Product, type ProductionProcess, type PurchasedPrecursor, type ReportingPeriod, type SourceStream } from '@/lib/local-db';
+import { EXPORT_PERIOD_SETTING_KEY, getLocalSetting, listLocalItems, type Installation, type Product, type ProductionProcess, type PurchasedPrecursor, type ReportingPeriod, type SourceStream } from '@/lib/local-db';
 import { FACTOR_SOURCE_TYPE_OPTIONS } from '@/lib/source-stream-input';
 import type { ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { buildSeeFlowBinding } from '@/lib/see-flow';
 import { PRODUCT_FAMILY_PRESETS, findDetailPreset, findDetailPresetForProduct, findFamilyPreset, getCalculationSetupForDetail } from '@/lib/product-family-presets';
-import { deriveTalkState, describeCnInput, describeTalkBarPartial, yearlyPeriodDraft, type TalkQuestionId } from '@/lib/talk-flow';
+import { deriveTalkState, describeCnInput, describeTalkBarPartial, pickTalkProcess, yearlyPeriodDraft, type TalkQuestionId } from '@/lib/talk-flow';
+import { summarizeTalkResult, type TalkIssue } from '@/lib/talk-summary';
 import { AlertTriangle, ArrowRight, CheckCircle2, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -29,6 +35,8 @@ interface TalkData {
     processes: ProductionProcess[];
     precursors: PurchasedPrecursor[];
     sourceStreams: SourceStream[];
+    /** EU 문서를 만들기 전에 막거나 알릴 항목 — 지도 7단계와 같은 준비도 검사 */
+    issues: TalkIssue[];
     /** 막대용 — 지도 화면과 같은 엔진으로 계산한 결과(첫 보고기간 것만) */
     results: ReturnType<typeof calculateLocalResults>;
     hasFuelOrElectricity: boolean;
@@ -36,7 +44,7 @@ interface TalkData {
 
 const EDIT_EXISTING = 'edit-existing';
 const MAP_STEP_OF: Partial<Record<TalkQuestionId, string>> = { output: '3', precursor: '6', fuel: '4', electricity: '5', heat: '4' };
-const EMPTY: TalkData = { loaded: false, installations: [], periods: [], products: [], processes: [], precursors: [], sourceStreams: [], results: [], hasFuelOrElectricity: false };
+const EMPTY: TalkData = { loaded: false, installations: [], periods: [], products: [], processes: [], precursors: [], sourceStreams: [], issues: [], results: [], hasFuelOrElectricity: false };
 
 async function loadTalkData(): Promise<TalkData> {
     const [installations, periods, allProducts, processes, productOutputLines, sourceStreams, precursors, internalTransfers] = await Promise.all([
@@ -52,6 +60,10 @@ async function loadTalkData(): Promise<TalkData> {
     // 막대는 지도 화면과 같은 엔진·같은 집계로 그린다(자체 산술 없음). 이 화면은 첫 보고기간만 다룬다.
     const results = calculateLocalResults({ internalTransfers, products: allProducts, periods, processes, productOutputLines, sourceStreams, precursors })
         .filter((result) => periods.length <= 1 || result.period_id === periods[0]?.id);
+    // 지도 7단계와 같은 준비도 검사(고른 보고기간을 넘긴다 — 안 넘기면 어느 기간이 나가는지 아무도 검사하지 않는다).
+    const reportingPeriodId = await getLocalSetting<string>(EXPORT_PERIOD_SETTING_KEY);
+    const readiness = evaluateEuExportReadiness({ internalTransfers, periods, reportingPeriodId, products: allProducts, processes, productOutputLines, sourceStreams, precursors, installations });
+    const issues: TalkIssue[] = readiness.issues.map((issue) => ({ severity: issue.severity === 'error' ? 'error' : 'warning', area: issue.area, message: issue.message, href: getEuExportIssueEditHref(issue) }));
     const hasFuelOrElectricity = sourceStreams.length > 0
         || processes.some((process) => process.electricity_mwh > 0 || process.direct_attributable_emissions_tco2e > 0);
     return {
@@ -61,6 +73,7 @@ async function loadTalkData(): Promise<TalkData> {
         processes,
         precursors,
         sourceStreams,
+        issues,
         results,
         hasFuelOrElectricity,
         products: allProducts.filter((product) => isCbamReportingScope(getProductReportingScope(product))),
@@ -68,7 +81,7 @@ async function loadTalkData(): Promise<TalkData> {
 }
 
 /**
- * 질문으로 입력 — S1~S4: 사업장 → 보고기간 → 무엇을 만드시나요(제품군 → CN) → 생산량 → 구매한 강재 → 연료 → 전력 → 밖에서 산 열.
+ * 질문으로 입력 — S1~S5: 사업장 → 보고기간 → 무엇을 만드시나요(제품군 → CN) → 생산량 → 구매한 강재 → 연료 → 전력 → 밖에서 산 열.
  * 한 번에 질문 하나. 답은 칩으로 남고, 칩의 「고치기」로 그 질문만 다시 연다. 저장은 talk-writes.ts 하나를 거친다.
  */
 export function TalkWorkspace() {
@@ -162,9 +175,12 @@ export function TalkWorkspace() {
     // 「나중에 입력」으로 넘긴 생산량 질문은 이번 화면에서만 건너뛴다(저장하지 않는다 — 다시 열면 다시 묻는다).
     const current = state.pending.find((id) => !skipped.includes(id));
     const question: TalkQuestionId | undefined = editing ?? (addingPrecursor ? 'precursor' : addingFuel ? 'fuel' : current);
-    const firstProcess = data.processes.find((process) => process.period_id === data.periods[0]?.id);
+    const periodProcesses = data.processes.filter((process) => process.period_id === data.periods[0]?.id);
+    const firstProcess = pickTalkProcess(periodProcesses, firstProduct);
     const precursorsPending = Boolean(firstProcess) && state.precursorCount === 0 && !firstProcess?.no_purchased_precursors;
     const barPartial = firstProcess ? describeTalkBarPartial({ hasFuelOrElectricity: data.hasFuelOrElectricity, precursorsPending }) : undefined;
+    const summary = useMemo(() => summarizeTalkResult({ binding, issues: data.issues, partialNote: barPartial }), [binding, data.issues, barPartial]);
+    const energySplit = useMemo(() => summarizeEnergySplits({ processes: periodProcesses, sourceStreams: data.sourceStreams }), [periodProcesses, data.sourceStreams]);
     const countries = useMemo(() => Array.from(new Set((reference?.rows ?? []).map((row) => row.country))).filter((name) => !name.startsWith('_')).sort((a, b) => a.localeCompare(b)), [reference]);
     const fuelKind = TALK_FUEL_KINDS.find((item) => item.key === fuelKindKey) ?? TALK_FUEL_KINDS[0];
     const precursorSetup = getCalculationSetupForDetail(firstProduct ? findDetailPresetForProduct(firstProduct) : undefined);
@@ -241,6 +257,11 @@ export function TalkWorkspace() {
         if (id === 'company') {
             setCompanyName(data.installations[0]?.name ?? '');
             setCountry(data.installations[0]?.country ?? '');
+        } else if (id === 'electricity') {
+            // 지도 5단계의 수정과 같은 저장(buildElectricityUpdate)을 쓴다. 공용 계량기에서 나눈 값은 여기서 고치지 않는다(칩이 지도로 안내).
+            setElecMwh(firstProcess && firstProcess.electricity_mwh > 0 ? String(firstProcess.electricity_mwh) : '');
+            setElecEf(String(firstProcess?.electricity_ef_tco2e_per_mwh || ELECTRICITY_PLACEHOLDER_EF));
+            setElecSource(firstProcess?.electricity_ef_source ?? ELECTRICITY_DEFAULT_EF_SOURCE);
         } else if (id === 'period') {
             setPeriodName(data.periods[0]?.name ?? '');
             setStartDate(data.periods[0]?.start_date ?? '');
@@ -293,7 +314,7 @@ export function TalkWorkspace() {
 
             {data.loaded && state.chips.length > 0 && (
                 <ul className="flex flex-wrap gap-2" aria-label="지금까지의 답">
-                    {state.chips.map((chip) => chip.id === 'output' || chip.id === 'precursor' || chip.id === 'fuel' || chip.id === 'electricity' || chip.id === 'heat' ? (
+                    {state.chips.map((chip) => chip.id === 'output' || chip.id === 'precursor' || chip.id === 'fuel' || chip.id === 'heat' || (chip.id === 'electricity' && Boolean(firstProcess?.electricity_shared_meter)) ? (
                         <li key={chip.id}>
                             <Link
                                 href="/"
@@ -713,7 +734,9 @@ export function TalkWorkspace() {
                     </label>
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                         <Button type="button" disabled={busy} onClick={() => firstProcess && void submit(() => saveElectricity(firstProcess, { mwh: Number(elecMwh.replace(/,/g, '')) || 0, ef: Number(elecEf.replace(/,/g, '')) || 0, efSource: elecSource }))}>{busy ? '저장 중…' : '답하기'}</Button>
-                        <button type="button" onClick={() => skip('electricity')} className="text-sm font-semibold text-slate-500 hover:underline">지금은 모릅니다 — 나중에 입력</button>
+                        {editing === 'electricity'
+                            ? <button type="button" onClick={() => setEditing(null)} className="text-sm font-semibold text-slate-500 hover:underline">취소</button>
+                            : <button type="button" onClick={() => skip('electricity')} className="text-sm font-semibold text-slate-500 hover:underline">지금은 모릅니다 — 나중에 입력</button>}
                     </div>
                     {message && <p className="mt-2 text-sm text-amber-700" role="alert">{message}</p>}
                 </section>
@@ -753,6 +776,74 @@ export function TalkWorkspace() {
                     <Link href="/" className="mt-3 inline-flex">
                         <Button type="button">지도 화면에서 이어서 입력하기<ArrowRight className="ml-2 h-4 w-4" /></Button>
                     </Link>
+                </section>
+            )}
+
+            {data.loaded && firstProcess && (
+                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="지금까지의 결과" data-testid="talk-summary">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <h2 className="text-base font-bold text-slate-950">지금까지의 답으로 나온 결과</h2>
+                        {summary.partialNote && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900">중간 값 · 아직 최종이 아닙니다</span>}
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        <div className="rounded-xl bg-emerald-50 p-3 text-center">
+                            <p className="text-xs font-semibold text-emerald-800">CBAM 산정 기준 SEE</p>
+                            <p className="mt-1 text-xl font-bold tabular-nums text-emerald-900" data-testid="talk-summary-headline">{summary.headline === null ? '—' : summary.headline.toFixed(3)}</p>
+                            <p className="text-[11px] text-emerald-700">tCO₂e/t</p>
+                        </div>
+                        <div className="rounded-xl bg-slate-100 p-3 text-center">
+                            <p className="text-xs font-semibold text-slate-600">총 SEE (검토용)</p>
+                            <p className="mt-1 text-xl font-bold tabular-nums text-slate-900">{summary.empty ? '—' : summary.seeTotal.toFixed(3)}</p>
+                            <p className="text-[11px] text-slate-500">tCO₂e/t</p>
+                        </div>
+                    </div>
+                    {!summary.empty && <p className="mt-2 text-[11px] leading-4 text-slate-500">{summary.relationNote}</p>}
+                    <p className="mt-2 text-sm leading-6 text-slate-700" data-testid="talk-summary-message">{summary.message}</p>
+                    {summary.partialNote && <p className="mt-1 text-xs leading-5 text-amber-800">{summary.partialNote}</p>}
+                    {summary.issues.length > 0 && (
+                        <ul className="mt-3 space-y-1.5" aria-label="해결하면 좋은 항목">
+                            {summary.issues.map((issue, index) => (
+                                <li key={`${issue.area}-${index}`} className="flex items-start gap-2 text-sm leading-5">
+                                    <AlertTriangle className={`mt-0.5 h-4 w-4 flex-none ${issue.severity === 'error' ? 'text-red-600' : 'text-amber-600'}`} />
+                                    <span>
+                                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">{issue.area}</span>{' '}
+                                        {issue.href ? <Link href={issue.href} className="text-slate-800 underline decoration-slate-300 hover:decoration-teal-600">{issue.message}</Link> : <span className="text-slate-800">{issue.message}</span>}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                    {(summary.errorCount + summary.warningCount) > summary.issues.length && <p className="mt-1 text-xs text-slate-500">그 밖에 {summary.errorCount + summary.warningCount - summary.issues.length}건은 지도 화면 7단계에서 볼 수 있습니다.</p>}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                        <Link href="/" className="inline-flex"><Button type="button" variant="secondary">지도 화면 7단계 — 결과 자세히</Button></Link>
+                        {summary.nextStep === 'EXPORT' || summary.nextStep === 'REVIEW' ? <Link href="/" className="inline-flex"><Button type="button">지도 화면 8단계 — EU 문서 만들기<ArrowRight className="ml-2 h-4 w-4" /></Button></Link> : null}
+                    </div>
+                </section>
+            )}
+
+            {data.loaded && firstProcess && periodProcesses.length >= 2 && (
+                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="같이 쓴 에너지 나누기" data-testid="talk-energy-split">
+                    <h2 className="text-base font-bold text-slate-950">한 고지서를 여러 공정이 같이 쓰나요?</h2>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                        이 기간에 공정이 {periodProcesses.length}개입니다. 전기·연료·보일러가 공장 전체 한 장의 고지서라면 공정별 몫으로 나눠야 합니다 — 규정이 정한 기준이 다릅니다(전기·일반 연료는 생산량 비율이 기본, 열은 쓴 열량 비율).
+                        아래 도구는 지도 화면 4·5단계의 것과 같은 것이고, 나눈 결과는 같은 곳에 저장됩니다.
+                    </p>
+                    {energySplit.items.length > 0 ? (
+                        <ul className="mt-2 space-y-1 text-sm">
+                            {energySplit.items.map((item) => (
+                                <li key={item.key} className="flex items-start gap-2">
+                                    {item.problem || item.provisional ? <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-amber-600" /> : <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-emerald-600" />}
+                                    <span><span className="font-semibold text-slate-900">{item.title}</span> <span className="text-xs text-slate-500">{item.detail}</span>{item.problem && <span className="block text-xs text-amber-800">{item.problem}</span>}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : <p className="mt-2 text-xs text-slate-500">아직 나눈 것이 없습니다. 공정 하나만 쓰는 에너지는 나눌 필요가 없습니다.</p>}
+                    {energySplit.hints.map((hint) => <p key={hint.text} className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">{hint.text}</p>)}
+                    <div className="mt-3 space-y-3">
+                        <ElectricitySplit processes={periodProcesses} results={data.results} onApplied={reload} />
+                        <FuelSplit processes={periodProcesses} sourceStreams={data.sourceStreams} results={data.results} onApplied={reload} />
+                        <SharedHeat processes={periodProcesses} sourceStreams={data.sourceStreams} onApplied={reload} />
+                    </div>
                 </section>
             )}
 
