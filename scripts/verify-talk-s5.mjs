@@ -110,6 +110,12 @@ assert.match(ui, /chip\.id === 'electricity' && Boolean\(firstProcess\?\.electri
 const writes = readFileSync('src/components/talk/talk-writes.ts', 'utf8');
 assert.match(writes, /buildElectricityUpdate\(process, full\)/, '수정도 지도 5단계와 같은 빌더');
 assert.match(writes, /allocationNote: process\.electricity_allocation_note \?\? ''/, '고치기가 저장된 배분 근거 메모를 지우지 않는다(지도 5단계는 칸에 되살려 같은 결과를 낸다)');
+// 시험용 도움 창구: 기존 문의창을 그대로 쓰고(새 전송 코드 없음) 제목에 막힌 질문이 들어간다. 모든 질문 번호에 이름이 있어야 한다.
+assert.match(ui, /<ContactDialog[\s\S]{0,400}막힌 곳: \$\{questionLabel\}/, '막히셨나요 버튼: 문의창 + 질문 이름이 제목에');
+assert.ok(!/fetch\(|mailto:/.test(ui), '화면에 자체 전송 코드를 두지 않는다');
+for (const id of ['company', 'period', 'product', 'output', 'precursor', 'fuel', 'electricity', 'heat']) {
+  assert.match(ui, new RegExp(`${id}: '질문 \\d `), `질문 이름표 ${id}`);
+}
 assert.ok(!/\bAI\b|챗봇/.test(ui));
 
 console.log('Talk S5 verified (질문은 이 제품의 공정에 · 요약은 엔진 집계 그대로·덜 찬 입력은 중간 값 · 나누기는 지도 화면 도구 그대로 · 전력 고치기).');

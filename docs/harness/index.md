@@ -15,6 +15,7 @@ This folder is the project knowledge base for agent-assisted development. It kee
 - `eu-template-export-map.md`: current official workbook export targets and known gaps.
 - `ux-concept-v4.md`: UX concept (mode selection, live result bar, guided map), checked against the code; includes the 2025/2547 attribution review (§8-1), implementation rules and work order.
 - `conversation-mode-design.md`: draft design for the conversational mode (v4 work order item 6) — question flow mapped to existing pure builders, equivalence checks, slices, and the four decisions still open.
+- `../trial/`: first external trial pack for conversation mode — `tester-guide.md` (what to send a tester), `facilitator-guide.md` (checklist, fictional dataset with expected 1.212 / 1.720, observation sheet, success criteria), `feedback-form.md` (8 questions). The `/talk` header has a help button that opens the existing contact dialog with the stuck question in the mail subject.
 - `quality-gates.md`: checks required before finishing changes.
 - `execution-plans.md`: current roadmap and completed milestones.
 

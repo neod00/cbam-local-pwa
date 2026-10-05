@@ -1,5 +1,6 @@
 'use client';
 
+import { ContactDialog } from '@/components/ContactDialog';
 import { CumulativeBar } from '@/components/guided/CumulativeBar';
 import { ElectricitySplit } from '@/components/guided/ElectricitySplit';
 import { FuelSplit } from '@/components/guided/FuelSplit';
@@ -19,10 +20,21 @@ import { buildSeeFlowBinding } from '@/lib/see-flow';
 import { PRODUCT_FAMILY_PRESETS, findDetailPreset, findDetailPresetForProduct, findFamilyPreset, getCalculationSetupForDetail } from '@/lib/product-family-presets';
 import { deriveTalkState, describeCnInput, describeTalkBarPartial, pickTalkProcess, yearlyPeriodDraft, type TalkQuestionId } from '@/lib/talk-flow';
 import { summarizeTalkResult, type TalkIssue } from '@/lib/talk-summary';
-import { AlertTriangle, ArrowRight, CheckCircle2, Pencil } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, MessageSquare, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { confirmNoImportedHeat, confirmNoPrecursors, saveCompany, saveElectricity, saveFuel, saveOutput, savePeriod, savePrecursor, saveProduct } from './talk-writes';
+
+const TALK_QUESTION_LABELS: Record<TalkQuestionId, string> = {
+    company: '질문 1 회사·공장',
+    period: '질문 2 보고기간',
+    product: '질문 3 만드는 제품',
+    output: '질문 4 생산량',
+    precursor: '질문 5 구매 강재',
+    fuel: '질문 6 연료',
+    electricity: '질문 7 전력',
+    heat: '질문 8 산 스팀·온수',
+};
 
 const fieldClass =
     'mt-1 block h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100';
@@ -175,6 +187,7 @@ export function TalkWorkspace() {
     // 「나중에 입력」으로 넘긴 생산량 질문은 이번 화면에서만 건너뛴다(저장하지 않는다 — 다시 열면 다시 묻는다).
     const current = state.pending.find((id) => !skipped.includes(id));
     const question: TalkQuestionId | undefined = editing ?? (addingPrecursor ? 'precursor' : addingFuel ? 'fuel' : current);
+    const questionLabel = question ? TALK_QUESTION_LABELS[question] : '질문 끝';
     const periodProcesses = data.processes.filter((process) => process.period_id === data.periods[0]?.id);
     const firstProcess = pickTalkProcess(periodProcesses, firstProduct);
     const precursorsPending = Boolean(firstProcess) && state.precursorCount === 0 && !firstProcess?.no_purchased_precursors;
@@ -308,6 +321,18 @@ export function TalkWorkspace() {
                     한 번에 질문 하나씩 묻습니다. 답은 지도 화면과 <span className="font-semibold">같은 곳</span>에 저장되어서, 언제든 지도 화면으로 넘어가도 입력한 내용은 그대로입니다.
                     질문이 끝나면 아래에 지금까지의 결과가 나오고, 공정이 둘 이상이면 같이 쓴 에너지 나누기도 여기서 할 수 있습니다. EU 문서는 지도 화면 8단계에서 만듭니다.
                 </p>
+                {/* 시험 중 막힌 자리에서 바로 알릴 수 있게 — 어느 질문이었는지가 제목에 들어간다. 회사 자료는 첨부하지 않는다는 경고는 문의창이 보여 준다. */}
+                <div className="mt-2" data-testid="talk-help">
+                    <ContactDialog
+                        triggerLabel="막히셨나요? 알려 주세요"
+                        triggerIcon={<MessageSquare className="mr-2 h-4 w-4" />}
+                        inquiryType="오류 제보"
+                        subject={`[CBAM Local · 질문 모드] 막힌 곳: ${questionLabel}`}
+                        description="질문이 이해되지 않거나 화면이 이상하면 알려 주세요. 어느 질문에서 막혔는지가 제목에 자동으로 들어갑니다."
+                        buttonVariant="ghost"
+                        buttonClassName="text-xs"
+                    />
+                </div>
             </header>
 
             {!data.loaded && <p className="rounded-xl bg-white px-4 py-6 text-center text-sm text-slate-500 ring-1 ring-slate-200">저장된 자료를 읽는 중입니다…</p>}
