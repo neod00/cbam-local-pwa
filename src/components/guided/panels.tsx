@@ -74,7 +74,7 @@ import {
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { describeSeeFlowIndirect, type SeeFlowBinding } from '@/lib/see-flow';
 import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
-import { DIRECT_EMISSIONS_INPUT_MODE_LABEL, ELECTRICITY_SPLIT_BASIS_LABEL, sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
+import { ALLOCATION_RULES, DIRECT_EMISSIONS_INPUT_MODE_LABEL, ELECTRICITY_SPLIT_BASIS_LABEL, sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
 import { ElectricitySplit } from '@/components/guided/ElectricitySplit';
 import { SharedHeat } from '@/components/guided/SharedHeat';
 import {
@@ -1045,6 +1045,17 @@ function ProcessPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                         );
                     })}
                 </ul>
+            )}
+
+            {/* 철강제품은 크기·형상만 다르고 원료가 같으면 CN이 달라도 한 공정이다(부속서 II A.4). 공정을 몇 개로 나눌지 정하는 곳이 여기라서 여기서 알린다. */}
+            {reportingProducts.some((item) => isIronOrSteelProductsGood(item)) && (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-950">
+                    <p className="font-semibold">공정은 몇 개로 나눌까요? ({ALLOCATION_RULES.SINGLE_MULTIFUNCTIONAL.anchor})</p>
+                    <p className="mt-1">
+                        크기·형상만 다른 철강제품(CN이 달라도)을 종류·양·비율이 같은 원료로 만든다면 공정을 따로 만들지 말고, <span className="font-semibold">한 공정에 제품을 생산라인으로 추가</span>하세요.
+                        그러면 연료·전력이 제품 질량으로 나뉩니다. 원료 재질이 다르면(예: STS와 탄소강) 공정을 따로 두는 것이 맞습니다.
+                    </p>
+                </div>
             )}
 
             {reportingProducts.length === 0 ? (

@@ -84,6 +84,12 @@ export const ALLOCATION_RULES = {
         anchor: 'ANNEX III, point A.1 (Equations 41–42) · point A.2 second paragraph · ANNEX II, point A.2(1)(e), point A.3(2)',
         text: '한 계량기의 전력을 여러 공정이 나눠 쓰면 공정별 전력 합계가 사업장 계량값과 같아야 한다(「neither double counting nor data gaps」). 나누는 기준은 셋뿐이다 — 공정별 계량기 값(식 41·42로 사업장 값에 맞춤), 공정별 자료가 없으면 기능단위(생산량), 또는 간접결정방법(설비용량 × 가동시간 등)으로 추정한 사용량. 나눈 값·기준·근거를 공정에 남긴다.',
     },
+    SINGLE_MULTIFUNCTIONAL: {
+        id: 'CBAM-ALLOC-ROUTE-02',
+        kind: '규정 필수',
+        anchor: 'ANNEX II, point A.4 · Article 4(8)',
+        text: 'For the goods under the aggregated goods categories crude steel, iron and steel products, unwrought aluminium and aluminium products, where different functional units that only differ in size or shape are produced with the same precursors in types, quantities and proportions, a single multifunctional production process shall be defined for that group of goods and attribution rules set out in point A.2 of Annex III shall apply.',
+    },
     HEAT_IMPORT: {
         id: 'CBAM-ALLOC-HEAT-01',
         kind: '규정 필수',
