@@ -33,13 +33,16 @@ assert.equal(deriveTalkState({ installations: [], periods: [], products: [] }).c
 assert.equal(deriveTalkState({ installations: [], periods: [period], products: [product] }).current, 'company', '사업장이 없으면 다른 답이 있어도 사업장부터(제품을 저장할 곳이 없다)');
 assert.equal(deriveTalkState({ installations: [inst], periods: [], products: [] }).current, 'period');
 assert.equal(deriveTalkState({ installations: [inst], periods: [period], products: [] }).current, 'product');
-const done = deriveTalkState({ installations: [inst], periods: [period], products: [product] });
-assert.equal(done.current, undefined, '이번 단계의 질문을 다 답했으면 차례가 없다');
-assert.deepEqual(plain(done.chips.map((chip) => chip.id)), ['company', 'period', 'product']);
+// S1 질문(사업장·기간·제품)까지만 보는 검사다. 제품 다음에는 S2의 「생산량」 질문이 있다(verify-talk-s2.mjs).
+const asked = deriveTalkState({ installations: [inst], periods: [period], products: [product] });
+assert.equal(asked.current, 'output', '제품까지 답하면 다음은 생산량(S2)');
+assert.deepEqual(plain(asked.chips.map((chip) => chip.id)), ['company', 'period', 'product']);
+const done = deriveTalkState({ installations: [inst], periods: [period], products: [product], processes: [{ id: 'pr', name: '공정', period_id: 'p', output_mass_t: 10 }] });
+assert.equal(done.current, undefined, '모든 질문에 답했으면 차례가 없다');
 assert.equal(done.chips[0].answer, '대일기업 · KR', '이름은 한글 표기가 있으면 그것');
 assert.equal(done.chips[2].answer, 'STS 나사 · CN 73181552');
 const many = deriveTalkState({ installations: [inst, inst], periods: [period, period, period], products: [product] });
-assert.deepEqual(plain(many.more), { installations: 1, periods: 2, products: 0 }, '첫 번째만 다루고 나머지는 알린다');
+assert.deepEqual(plain(many.more), { installations: 1, periods: 2, products: 0, processes: 0 }, '첫 번째만 다루고 나머지는 알린다');
 assert.deepEqual(plain(yearlyPeriodDraft(2025)), { name: '2025년 연간', startDate: '2025-01-01', endDate: '2025-12-31' }, '지도 1단계의 「2025년 연간」과 같은 값');
 
 // ── 2) CN 안내 ───────────────────────────────────────────────────────
