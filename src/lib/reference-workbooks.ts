@@ -26,6 +26,8 @@ export interface DefaultValueReferenceRow {
 
 export interface ReferenceWorkbookSummary {
     kind: ReferenceWorkbookKind;
+    /** 'bundled' = 앱에 내장된 EU 공표본(src/lib/bundled-references.ts). 없으면 사용자가 올린 파일이다. */
+    origin?: 'bundled';
     filename: string;
     imported_at: string;
     sheet_names: string[];

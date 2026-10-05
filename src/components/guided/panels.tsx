@@ -1872,7 +1872,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         }
         const reference = await getLocalSetting<ImportedDefaultValueReference>('reference:default-values');
         if (!reference) {
-            setCompareMessage('공식 기본값 파일이 없습니다. 자료 업로드에서 EU 기본값(DVs)을 가져오면 비교할 수 있습니다.');
+            setCompareMessage('EU 기본값 자료를 아직 불러오지 못했습니다. 앱을 다시 열거나, 자료 업로드에서 EU 기본값(DVs)을 직접 가져오면 비교할 수 있습니다.');
             setCompareResult(null);
             return;
         }
@@ -1947,7 +1947,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         if (!reference) {
             setDataMode('DEFAULT');
             setJustification('공급사 measured SEE 미입수 — EU 국가/CN 기본값(2026) 적용 예정');
-            setMessage('공식 기본값 파일이 아직 없습니다. 자료 업로드 화면에서 EU 기본값(DVs) 파일을 가져오면 자동으로 채워집니다.');
+            setMessage('EU 기본값 자료를 아직 불러오지 못했습니다. 앱을 다시 열거나, 자료 업로드 화면에서 EU 기본값(DVs) 파일을 직접 가져오면 자동으로 채워집니다.');
             return;
         }
         // 기본값은 **원료를 만든 나라** 기준이다. 나라를 고르기 전에는 채우지 않는다 —
@@ -2419,8 +2419,8 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                 <Field
                     label="공급국가 — 이 원료를 만든 나라"
                     hint={referenceCountries.length > 0
-                        ? '공식 기본값 파일의 국가 목록입니다. 기본값과 EU 문서의 국가코드가 이 값으로 정해집니다. 앱이 대신 고르지 않습니다.'
-                        : '영문 국가명으로 적으세요(예: South Korea, Taiwan, China). 자료 업로드에서 EU 기본값 파일을 가져오면 목록에서 고를 수 있습니다.'}
+                        ? 'EU 기본값 자료(앱 내장 또는 직접 가져온 파일)의 국가 목록입니다. 기본값과 EU 문서의 국가코드가 이 값으로 정해집니다. 앱이 대신 고르지 않습니다.'
+                        : '영문 국가명으로 적으세요(예: South Korea, Taiwan, China). EU 기본값 자료가 불러와지면 목록에서 고를 수 있습니다.'}
                 >
                     {referenceCountries.length > 0 ? (
                         <select className={fieldClass} value={supplierCountry} onChange={(event) => changeSupplierCountry(event.target.value)}>

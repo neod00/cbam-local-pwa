@@ -666,7 +666,23 @@ export async function deleteLocalItem(storeName: StoreName, id: string): Promise
   await runTransaction(storeName, "readwrite", (store) => store.delete(id));
 }
 
+/**
+ * 앱에 내장된 EU 기준값을 넣는 일이 끝나길 기다린다(src/lib/bundled-references.ts). 첫 방문에서 화면이 먼저 열려
+ * 「기준자료 없음」으로 보이는 일을 막는다. 내장본을 못 넣어도(오프라인 첫 실행 등) 조용히 넘어간다 — 올리기 경로가 남아 있다.
+ */
+async function waitForBundledReferences(): Promise<void> {
+  try {
+    const { ensureBundledReferences } = await import("./bundled-references");
+    await ensureBundledReferences();
+  } catch {
+    // 내장본이 없어도 앱은 쓸 수 있다.
+  }
+}
+
 export async function getLocalSetting<T = unknown>(key: string): Promise<T | undefined> {
+  if (key.startsWith("reference:")) {
+    await waitForBundledReferences();
+  }
   const settings = await listLocalItems("settings");
   return settings.find((setting) => setting.key === key)?.value as T | undefined;
 }
@@ -763,6 +779,14 @@ export function getBackupStatus(value?: string, now = Date.now()): BackupStatus 
   };
 }
 
+/**
+ * 앱에 내장된 EU 기준값(summary.origin === 'bundled')은 백업에 싣지 않는다 — 앱이 매번 다시 넣을 수 있는 자료이고, 싣으면 .cbam이 4MB 넘게 부푼다.
+ * 사용자가 직접 올린 기준값(origin 없음)은 그대로 싣는다.
+ */
+export function isBundledReferenceSetting(setting: { key?: string; value?: unknown }): boolean {
+  return Boolean(setting.key?.startsWith("reference:")) && (setting.value as { summary?: { origin?: string } } | undefined)?.summary?.origin === "bundled";
+}
+
 export async function exportLocalBackup(): Promise<CbamBackupFile> {
   return createLocalBackup({
     installations: await listLocalItems("installations"),
@@ -773,7 +797,7 @@ export async function exportLocalBackup(): Promise<CbamBackupFile> {
     source_streams: await listLocalItems("source_streams"),
     precursors: await listLocalItems("precursors"),
     internal_transfers: await listLocalItems("internal_transfers"),
-    settings: await listLocalItems("settings"),
+    settings: (await listLocalItems("settings")).filter((setting) => !isBundledReferenceSetting(setting)),
   });
 }
 

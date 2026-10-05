@@ -27,6 +27,7 @@ import {
     SCENARIO_ASSUMPTIONS_SETTING_KEY,
     type ScenarioAssumptions,
 } from '@/lib/scenario-calculation';
+import { ensureBundledReferences } from '@/lib/bundled-references';
 import { evaluateUpdateStatus, fetchUpdateManifest, type UpdateStatus } from '@/lib/update-policy';
 import { AlertTriangle, Database, Download, ExternalLink, FileUp, Mail, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 import Link from 'next/link';
@@ -274,6 +275,8 @@ export default function SettingsPage() {
         const currentLicenseRegistration = licenseRegistration;
         const parsed = parseBackupFile(importContent);
         await importLocalBackup(parsed);
+        // 백업에는 내장 EU 기준값이 없다(싣지 않는다) — 복원이 설정을 통째로 바꿨으니 다시 넣는다. 백업에 직접 올린 기준값이 있으면 그것이 우선이다.
+        await ensureBundledReferences(true);
         const restoredScenarioSetting = parsed.data.settings.find((item) => item.key === SCENARIO_ASSUMPTIONS_SETTING_KEY);
         const restoredLicenseSetting = parsed.data.settings.find((item) => item.key === FREE_LICENSE_SETTING_KEY);
         setScenarioAssumptions(normalizeScenarioAssumptions(restoredScenarioSetting?.value as Partial<ScenarioAssumptions> | undefined));
@@ -300,6 +303,7 @@ export default function SettingsPage() {
         }
 
         await clearLocalData();
+        await ensureBundledReferences(true);
         setScenarioAssumptions(DEFAULT_SCENARIO_ASSUMPTIONS);
         setLicenseRegistration(emptyLicenseRegistration());
         setBackupPreview(null);
