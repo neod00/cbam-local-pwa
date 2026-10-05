@@ -1,5 +1,7 @@
 import {
     buildInstallationPayload,
+    getOutputLineDeleteBlockers,
+    buildPrecursorUpdate,
     buildInstallationUpdate,
     buildPeriodPayload,
     buildPeriodUpdate,
@@ -16,12 +18,12 @@ import {
     type PeriodDraft,
     type ProductDraft,
 } from '@/lib/guided-edit';
-import { buildProcessCreation, validateProcessAnswer, type ProcessAnswerDraft } from '@/lib/conversation-process';
+import { buildOutputUpdate, buildProcessCreation, validateProcessAnswer, type ProcessAnswerDraft } from '@/lib/conversation-process';
 import { sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
-import { buildFuelStreamDraft, noImportedHeatDraft, type FuelAnswer } from '@/lib/conversation-energy';
-import { buildPrecursorDraft, type PrecursorAnswer } from '@/lib/conversation-precursor';
+import { buildFuelStreamDraft, buildFuelStreamEdit, noImportedHeatDraft, type FuelAnswer } from '@/lib/conversation-energy';
+import { buildPrecursorDraft, buildPrecursorEditDraft, type PrecursorAnswer } from '@/lib/conversation-precursor';
 import { buildImportedHeatUpdate, validateImportedHeatDraft } from '@/lib/measurable-heat';
-import { createLocalItem, updateLocalItem, type Installation, type Product, type ProductionProcess, type ReportingPeriod, type SourceStream } from '@/lib/local-db';
+import { createLocalItem, deleteLocalItem, updateLocalItem, type Installation, type Product, type ProductionProcess, type ProductOutputLine, type PurchasedPrecursor, type ReportingPeriod, type SourceStream } from '@/lib/local-db';
 import { createSourceStreamValidationErrors, firstSourceStreamError } from '@/lib/source-stream-input';
 
 /**
@@ -154,5 +156,60 @@ export async function confirmNoImportedHeat(process: ProductionProcess): Promise
         return error;
     }
     await updateLocalItem('processes', buildImportedHeatUpdate(process, draft));
+    return null;
+}
+
+/**
+ * 「생산량」 고치기 — 지도 3단계 수정 경로와 같은 순서(제품 라인 → 제외 라인 → 공정)·같은 값이다(빌더: conversation-process.ts).
+ * 호출부가 describeOutputEditBlock으로 단순한 경우만 부른다. 제외 라인을 지울 때는 지도와 같이 전구물질 배분이 가리키는지 먼저 본다.
+ */
+export async function saveOutputEdit(args: { process: ProductionProcess; productLine: ProductOutputLine; excludedLine?: ProductOutputLine; product: ProcessAnswerDraft['product']; name: string; massT: number; excludedMassT: number; precursors: PurchasedPrecursor[] }): Promise<string | null> {
+    const error = validateProcessAnswer({ name: args.name, route: '', periodId: args.process.period_id, product: args.product, massT: args.massT, excludedMassT: args.excludedMassT });
+    if (error) {
+        return error;
+    }
+    const edit = buildOutputUpdate(args);
+    if (edit.excluded.action === 'delete') {
+        const blockers = getOutputLineDeleteBlockers(edit.excluded.id, { precursors: args.precursors });
+        if (blockers.total > 0) {
+            return '활동수준 제외 라인을 비우면 지워지는데, ' + blockers.reasons.join(' · ') + '이 이 라인을 가리키고 있습니다. 먼저 6단계에서 전구물질 배분을 고치세요.';
+        }
+    }
+    await updateLocalItem('product_output_lines', edit.productLine);
+    if (edit.excluded.action === 'update') {
+        await updateLocalItem('product_output_lines', edit.excluded.line);
+    } else if (edit.excluded.action === 'create') {
+        await createLocalItem('product_output_lines', { process_id: args.process.id, ...edit.excluded.line });
+    } else if (edit.excluded.action === 'delete') {
+        await deleteLocalItem('product_output_lines', edit.excluded.id);
+    }
+    await updateLocalItem('processes', edit.process);
+    return null;
+}
+
+/** 「연료」 고치기 — 지도 4단계 수정 경로와 같다: 검증 → 기존을 펼친 배출원 갱신 → 공정 직접배출을 배출원 합계로 다시 맞춤. */
+export async function saveFuelEdit(process: ProductionProcess, existing: SourceStream, allStreams: SourceStream[], answer: FuelAnswer): Promise<string | null> {
+    const draft = buildFuelStreamEdit(existing, answer, process);
+    if (!(draft.activity_data > 0)) {
+        return '연간 사용량을 입력하세요. 연료를 쓰지 않는 공정이면 이 연료를 지도 화면 4단계에서 지우세요.';
+    }
+    const error = firstSourceStreamError(createSourceStreamValidationErrors(draft));
+    if (error) {
+        return error;
+    }
+    const updated = await updateLocalItem('source_streams', draft as SourceStream);
+    const total = sumReconciledSourceStreamEmissions(process.id, allStreams.map((stream) => (stream.id === updated.id ? updated : stream)));
+    await updateLocalItem('processes', { ...process, direct_attributable_emissions_tco2e: total, direct_emissions_input_mode: 'SOURCE_STREAM_SUM' });
+    return null;
+}
+
+/** 「구매한 강재」 고치기 — 지도 6단계와 같은 검증·같은 갱신 빌더(buildPrecursorUpdate: 연결·검증 상태는 기존 값을 지킨다). */
+export async function savePrecursorEdit(existing: PurchasedPrecursor, answer: PrecursorAnswer): Promise<string | null> {
+    const draft = buildPrecursorEditDraft(existing, answer);
+    const error = validatePrecursorDraft(draft);
+    if (error) {
+        return error;
+    }
+    await updateLocalItem('precursors', buildPrecursorUpdate(existing, draft));
     return null;
 }

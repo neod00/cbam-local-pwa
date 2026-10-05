@@ -1,6 +1,6 @@
 import { litresToTonnes } from './fuel-allocation';
 import type { ImportedHeatDraft } from './measurable-heat';
-import type { ProductionProcess } from './local-db';
+import type { ProductionProcess, SourceStream } from './local-db';
 import { GUIDED_STREAM_KINDS, type GuidedStreamKind, type SourceStreamDraft } from './source-stream-input';
 
 /**
@@ -76,4 +76,25 @@ export function buildFuelStreamDraft(answer: FuelAnswer, process: Pick<Productio
 /** 「밖에서 산 스팀·온수 없음」 — 지도 4단계 열 폼이 「아니요」를 고르고 저장할 때의 초안과 같다. */
 export function noImportedHeatDraft(process: Pick<ProductionProcess, 'imported_heat_unit'>): ImportedHeatDraft {
     return { answer: 'NO', amount: 0, unit: process.imported_heat_unit ?? 'Gcal', basis: '', supplierEf: 0, fuel: '', source: '' };
+}
+
+/**
+ * 질문 화면에서 고칠 수 있는 연료인지. 아니면 이유를 돌려준다.
+ *  · 리터로 입력한 연료는 t로 환산해 저장하고 이름에 리터가 들어 있어, 되돌려 읽으면 어긋날 수 있다 → 지도 4단계.
+ *  · 공용 계량기·열 공급원(보일러)에 묶인 배출원은 나누기 도구가 만든 것이라 여기서 고치면 합계가 어긋난다 → 지도 4단계.
+ *  · 연료 연소가 아닌 배출원(공정배출·물질수지)은 이 화면이 받지 않는다.
+ */
+export function describeFuelEditBlock(stream: Pick<SourceStream, 'stream_type' | 'name' | 'shared_meter' | 'heat_system'>): string | null {
+    if (stream.stream_type !== 'FUEL') return '연료 연소가 아닌 배출원은 지도 화면 4단계에서 고칩니다.';
+    if (stream.shared_meter || stream.heat_system) return '공용 계량기·열 공급원에서 나눈 배출원은 지도 화면 4단계에서 고칩니다.';
+    if (/ · [\d.,]+ L$/.test(stream.name)) return '리터로 입력한 연료는 지도 화면 4단계에서 고칩니다.';
+    return null;
+}
+
+/**
+ * 연료 수정 → 저장할 배출원. 지도 4단계 수정 경로(`{ ...existing, ...buildDraft() }`)와 같다 —
+ * 기존을 펼쳐 이 화면에 칸이 없는 필드를 지키고, 그 위에 폼 값을 덮는다.
+ */
+export function buildFuelStreamEdit(existing: SourceStream, answer: FuelAnswer, process: Pick<ProductionProcess, 'id' | 'period_id'>): SourceStreamDraft {
+    return { ...existing, ...buildFuelStreamDraft(answer, process) } as SourceStreamDraft;
 }
