@@ -13,6 +13,7 @@ This folder is the project knowledge base for agent-assisted development. It kee
 - `cbam-additional-documents-20260530.md`: additional final-period reference review, including benchmarks, default values, SEFA, and certificate implications.
 - `final-period-roadmap.md`: reset roadmap for the free PWA final-period scope and calculation-engine expansion.
 - `eu-template-export-map.md`: current official workbook export targets and known gaps.
+- `ux-concept-v4.md`: UX concept (mode selection, live result bar, guided map), checked against the code; includes the 2025/2547 attribution review (§8-1), implementation rules and work order.
 - `quality-gates.md`: checks required before finishing changes.
 - `execution-plans.md`: current roadmap and completed milestones.
 
