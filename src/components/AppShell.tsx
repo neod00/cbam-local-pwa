@@ -7,6 +7,7 @@ import LicenseGate from '@/components/LicenseGate';
 import { ModernDashboard } from '@/components/ModernDashboard';
 import { ModernProducts } from '@/components/ModernProducts';
 import PeriodBadge from '@/components/PeriodBadge';
+import { TodoNavLink } from '@/components/todo/TodoNavLink';
 import Sidebar from '@/components/Sidebar';
 import UpdateNotice from '@/components/UpdateNotice';
 import { WorkflowRouteBanner } from '@/components/WorkflowRouteBanner';
@@ -62,6 +63,7 @@ const pageTitles: Record<string, string> = {
     '/terms': '무료 약관 및 고지',
     '/privacy': '개인정보 안내',
     '/talk': '질문으로 입력',
+    '/todo': '할 일',
 };
 
 const modernNavigation = [
@@ -286,6 +288,7 @@ function GuidedShell({ children, title }: { children: ReactNode; title: string }
                     {/* 옛 화면(새 UI·이전 버전)으로 나가는 버튼은 뺐다 — 두 셸은 동결이다(UX 컨셉 v4 §14-5).
                         옛 화면에서 지도로 돌아오는 버튼(onUseGuided)은 남겨 두어, 옛 모드 값이 저장된 브라우저의 사용자가 갇히지 않는다. */}
                     <div className="flex items-center gap-2">
+                        <TodoNavLink />
                         <PeriodBadge />
                     </div>
                 </div>

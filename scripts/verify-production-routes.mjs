@@ -27,6 +27,7 @@ const routes = [
   '/report-inputs',
   '/settings',
   '/terms',
+  '/todo',
 ];
 
 function sleep(ms) {
