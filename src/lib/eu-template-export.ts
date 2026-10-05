@@ -2438,7 +2438,10 @@ function createAggregatedGoodsAndBoundaryCellWrites(
             }
         );
 
-        getPrecursorRoutesForEuExport(precursor).slice(0, 5).forEach((route, routeIndex) => {
+        // 이 칸도 드롭다운이다(X열 MATCH가 목록에 없는 글자를 #N/A로 만든다 — run21, Excel 재계산에서 발견). 공정 경로와 같은 정규화를 쓴다.
+        // 경로를 안 적었거나 'external precursor'면 비워 둔다(단일 허용값 품목이 빈 입력을 채우지 않게).
+        const precursorRoutes = getPrecursorRoutesForEuExport(precursor);
+        (precursorRoutes.length > 0 ? getEuAggregatedGoodRoutes(euGood, precursorRoutes) : []).slice(0, 5).forEach((route, routeIndex) => {
             writes.push({
                 sheetName: 'A_InstData',
                 cell: `${String.fromCharCode('G'.charCodeAt(0) + routeIndex)}${sheetRow}`,
