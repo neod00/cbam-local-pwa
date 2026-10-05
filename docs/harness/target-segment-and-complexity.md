@@ -55,7 +55,7 @@ CBAM 산정 난이도는 "복잡하다/단순하다" 하나가 아니라 **독�
 - 강관 = **7304~7306** → 대상
 
 ## 5. 현재 앱 커버리지 (코드 확인)
-- **(A) breadth: 구조적으로 잘 맞음.** 다제품 배분(`ProductOutputLine` MASS/MANUAL), 외부 전구물질 SEE 모델(`PurchasedPrecursor` direct/indirect, supplier_country, ACTUAL/SEMI/DEFAULT, markup), Annex II direct-only 자동제외 — 이미 구현. 엔진 정확성은 EU 예제 재현으로 입증.
+- **(A) breadth: 구조적으로 잘 맞음.** 다제품 배분(`ProductOutputLine` MASS/MANUAL), 외부 전구물질 SEE 모델(`PurchasedPrecursor` direct/indirect, supplier_country, ACTUAL/SEMI/DEFAULT, markup), EU 공식 CN 목록상 간접배출 비관련 자동제외 — 이미 구현. 엔진 정확성은 EU 예제 재현으로 입증.
 - **(B) depth: 의도적 미커버(올바른 경계).** 엔진이 공정별 독립 계산이고 사내 P1→P2 자동전가 없음 → 제철 물질수지 못 함. 결함 아님.
 - **(C) scale: 부분 커버.** 다공정·다기간 입력 가능하나 다거점 집계는 초기. export MVP 상한(공정10·전구20·배출원75·제품100). 세아제강 전사는 OUT.
 
