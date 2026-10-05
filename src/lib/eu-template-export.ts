@@ -296,11 +296,23 @@ export type EuExportIssueTarget =
     | { type: 'precursor'; id: string }
     | { type: 'installation'; id: string };
 
+/**
+ * 이 경고를 **칸 하나를 채워서** 풀 수 있을 때, 무엇을 채우면 되는지(할 일 화면이 입력칸을 붙인다).
+ * 문장을 해석하지 않도록 경고를 만드는 자리에서 같이 낸다 — 조건이 두 곳에 따로 있으면 어긋난다.
+ */
+export type EuExportIssueFix =
+    | { kind: 'installation-fields'; fields: Array<'operator_name' | 'operator_reg_number' | 'operator_address' | 'unlocode'> }
+    | { kind: 'stream-factor-source' }
+    | { kind: 'precursor-source' }
+    | { kind: 'precursor-justification' };
+
 export interface EuExportReadinessIssue {
     severity: 'error' | 'warning';
     area: '제품' | '생산공정' | '구매 전구물질' | '템플릿 한계' | '보고기간' | '사업장';
     message: string;
     target?: EuExportIssueTarget;
+    /** 칸 하나를 채워서 풀 수 있는 경고에만 있다 */
+    fix?: EuExportIssueFix;
 }
 
 export interface EuExportReadinessResult {
@@ -604,6 +616,7 @@ function validateSourceStreamForEuExport(sourceStream: SourceStream): EuExportRe
             area: '생산공정',
             message: `${sourceStream.name}: 배출계수 출처 유형이 분류되지 않았습니다. EU/IPCC 기본계수, 국가 인벤토리, 공급사 보증값·시험분석 중 하나로 근거를 정리하세요.`,
             target,
+            fix: { kind: 'stream-factor-source' },
         });
     }
 
@@ -1226,6 +1239,7 @@ export function evaluateEuExportReadiness(
                 area: '구매 전구물질',
                 message: `${precursor.name}: SEE 출처가 비어 있습니다.`,
                 target: { type: 'precursor', id: precursor.id },
+                fix: { kind: 'precursor-source' },
             });
         }
 
@@ -1235,6 +1249,7 @@ export function evaluateEuExportReadiness(
                 area: '구매 전구물질',
                 message: `${precursor.name}: 기본값을 사용하는 사유가 비어 있습니다. 전달 전 기본값 사용 근거를 남기세요.`,
                 target: { type: 'precursor', id: precursor.id },
+                fix: { kind: 'precursor-justification' },
             });
         }
 
@@ -1258,16 +1273,19 @@ export function evaluateEuExportReadiness(
     // 사업장 자료를 넘겨받았을 때만 검사한다(넘기지 않는 호출부의 결과를 바꾸지 않는다).
     const installationForCheck = (data.installations ?? [])[0];
     if (installationForCheck) {
-        const missingOperator = [
-            !installationForCheck.operator_name?.trim() ? '운영자(법인)명' : '',
-            !installationForCheck.operator_reg_number?.trim() ? '법인/활동 등록번호' : '',
-            !installationForCheck.operator_address?.trim() ? '운영자 주소' : '',
-        ].filter(Boolean);
+        const missingOperatorFields = [
+            !installationForCheck.operator_name?.trim() ? 'operator_name' as const : undefined,
+            !installationForCheck.operator_reg_number?.trim() ? 'operator_reg_number' as const : undefined,
+            !installationForCheck.operator_address?.trim() ? 'operator_address' as const : undefined,
+        ].filter((field): field is NonNullable<typeof field> => Boolean(field));
+        const OPERATOR_FIELD_LABEL = { operator_name: '운영자(법인)명', operator_reg_number: '법인/활동 등록번호', operator_address: '운영자 주소' } as const;
+        const missingOperator = missingOperatorFields.map((field) => OPERATOR_FIELD_LABEL[field]);
         if (missingOperator.length > 0) {
             issues.push({
                 severity: 'warning',
                 area: '사업장',
                 target: { type: 'installation', id: installationForCheck.id },
+                fix: { kind: 'installation-fields', fields: missingOperatorFields },
                 message: `${installationForCheck.name}: 비어 있는 「법정 필수」 항목 — ${missingOperator.join(' · ')}. 검증인이 반드시 확인하며 산정보고서 제2장에 「기재 필요」로 남습니다. 사업장 화면에서 채우세요.`,
             });
         }
@@ -1276,6 +1294,7 @@ export function evaluateEuExportReadiness(
                 severity: 'warning',
                 area: '사업장',
                 target: { type: 'installation', id: installationForCheck.id },
+                fix: { kind: 'installation-fields', fields: ['unlocode'] },
                 message: `${installationForCheck.name}: UN/LOCODE가 비어 있습니다. EU 문서 A_InstData의 UNLOCODE 칸이 빈 채로 나갑니다. UN/LOCODE는 UNECE가 도시·항만에 붙인 5자리 코드입니다(예: 부산 KRPUS, 인천 KRINC) — 가까운 도시 코드를 UNECE 목록에서 찾거나, 없으면 좌표(위도·경도)를 채우세요.`,
             });
         }

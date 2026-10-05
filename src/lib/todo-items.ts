@@ -1,7 +1,10 @@
+import { describePrecursorEditBlock } from './conversation-precursor';
 import type { DefaultSubstitutionImpact } from './default-substitution';
+import type { EuExportIssueFix } from './eu-template-export';
 import type { InternalTransfer, Installation, Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import { isUnverifiedActualPrecursor, PRECURSOR_ACTUAL_VALUE_RULE } from './precursor-verification';
 import { groupPrecursorsBySupplier } from './supplier-request';
+import type { InstallationFieldKey } from './todo-edits';
 import { deriveTalkState, pickFocusProcess, type TalkQuestionId } from './talk-flow';
 
 /**
@@ -18,6 +21,12 @@ import { deriveTalkState, pickFocusProcess, type TalkQuestionId } from './talk-f
  */
 
 export type TodoOwner = 'company' | 'supplier' | 'regulation';
+
+/** 이 자리에서 칸을 채워 풀 수 있는 것(채우는 방법은 점검이 경고와 함께 낸 `fix`) */
+export type TodoInputs =
+    | { kind: 'installation'; installationId: string; fields: InstallationFieldKey[] }
+    | { kind: 'stream-factor-source'; streamId: string }
+    | { kind: 'precursor-text'; precursorId: string; fields: Array<'source' | 'justification'> };
 
 export interface TodoItem {
     id: string;
@@ -37,6 +46,8 @@ export interface TodoItem {
     impact?: DefaultSubstitutionImpact;
     /** 근거(규정 조항·문장) */
     evidence?: string;
+    /** 이 자리에서 바로 채울 수 있는 칸 */
+    inputs?: TodoInputs;
 }
 
 export interface TodoReadinessIssue {
@@ -46,6 +57,10 @@ export interface TodoReadinessIssue {
     href?: string;
     /** 이 항목이 가리키는 전구물질(있을 때) */
     precursorId?: string;
+    /** 이 항목이 가리키는 대상 id(사업장·배출원·전구물질…) */
+    targetId?: string;
+    /** 칸 하나를 채워서 풀 수 있을 때 무엇을 채우면 되는지 */
+    fix?: EuExportIssueFix;
 }
 
 export interface TodoEngineWarning {
@@ -131,6 +146,24 @@ function questionItem(id: TalkQuestionId, productName: string | undefined, proce
 /** 엔진이 제3자 검증이 없는 실측 전구물질마다 내는 경고(문장 조각은 precursor-verification.ts의 원문과 같다). */
 const PROVISIONAL_FRAGMENT = '제3자 검증보고서가 없습니다';
 
+/** 점검이 낸 `fix`를 이 자리의 입력칸으로 옮긴다. 구매 강재는 질문 화면 고치기가 받는 모양일 때만 칸을 붙인다(아니면 링크만). */
+function inputsFor(issue: TodoReadinessIssue, precursorById: Map<string, PurchasedPrecursor>): TodoInputs | undefined {
+    const { fix, targetId } = issue;
+    if (!fix || !targetId) return undefined;
+    switch (fix.kind) {
+        case 'installation-fields':
+            return { kind: 'installation', installationId: targetId, fields: fix.fields };
+        case 'stream-factor-source':
+            return { kind: 'stream-factor-source', streamId: targetId };
+        case 'precursor-source':
+        case 'precursor-justification': {
+            const precursor = precursorById.get(targetId);
+            if (!precursor || describePrecursorEditBlock(precursor)) return undefined;
+            return { kind: 'precursor-text', precursorId: targetId, fields: [fix.kind === 'precursor-source' ? 'source' : 'justification'] };
+        }
+    }
+}
+
 export function buildTodoItems(input: TodoInput): TodoResult {
     const items: TodoItem[] = [];
     const seen = new Set<string>();
@@ -195,7 +228,7 @@ export function buildTodoItems(input: TodoInput): TodoResult {
                 href: base.href ?? '/',
             });
         } else {
-            add({ ...base, owner: 'company' });
+            add({ ...base, owner: 'company', inputs: inputsFor(issue, precursorById) });
         }
     });
 
@@ -239,6 +272,19 @@ export function buildTodoItems(input: TodoInput): TodoResult {
             href: '/',
             hrefLabel: '지도 6단계에서 요청서 만들기',
         });
+    }
+
+    // 같은 구매 강재의 「출처 비어 있음」과 「기본값 사유 비어 있음」은 한 카드(칸 둘)로 합친다 — 기본값 모드는 둘이 다 있어야 저장되므로
+    // (질문 화면 고치기와 같은 검증) 카드를 따로 두면 한 칸만 채워서는 저장이 안 되는 막다른 길이 된다.
+    for (const first of [...items]) {
+        if (first.inputs?.kind !== 'precursor-text') continue;
+        const second = items.find((item) => item !== first && item.inputs?.kind === 'precursor-text' && item.inputs.precursorId === (first.inputs as { precursorId: string }).precursorId);
+        if (!second || second.inputs?.kind !== 'precursor-text' || first.inputs.kind !== 'precursor-text' || !items.includes(first)) continue;
+        const name = precursorById.get(first.inputs.precursorId)?.name ?? '구매 강재';
+        first.inputs = { ...first.inputs, fields: ['source', 'justification'] };
+        first.title = `${name}: SEE 출처와 기본값 사용 사유가 비어 있습니다`;
+        first.detail = '전달 전에 값의 출처와 기본값을 쓰는 근거를 남기세요. 둘을 같이 적어야 저장됩니다.';
+        items.splice(items.indexOf(second), 1);
     }
 
     const rank = (item: TodoItem) => (item.severity === 'error' ? 0 : 1);

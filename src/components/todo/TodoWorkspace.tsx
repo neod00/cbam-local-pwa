@@ -2,11 +2,13 @@
 
 import { confirmNoImportedHeat } from '@/components/talk/talk-writes';
 import { Button } from '@/components/ui';
+import { FACTOR_SOURCE_CHOICES, INSTALLATION_FIELD_SPECS, type FactorSourceType } from '@/lib/todo-edits';
 import type { TodoItem, TodoOwner } from '@/lib/todo-items';
 import { AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { loadTodoData, type TodoData } from './todo-data';
+import { saveInstallationFields, savePrecursorTexts, saveStreamFactorSource } from './todo-writes';
 
 const OWNER_TITLE: Record<TodoOwner, string> = {
     company: '우리 회사가 답할 것',
@@ -20,6 +22,12 @@ const OWNER_HINT: Record<TodoOwner, string> = {
 };
 const AREA_ORDER = ['사업장', '보고기간', '제품', '생산공정', '배출원 자료', '구매 전구물질', '템플릿 한계'];
 
+const inputClass = 'mt-1 block min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-200';
+const PRECURSOR_TEXT_SPEC = {
+    source: { label: '값의 출처', placeholder: '예: 공급사 회신 메일 2025-03-10, EU 기본값 파일' },
+    justification: { label: '기본값을 쓰는 사유', placeholder: '예: 공급사 실측자료 미입수 — EU 기본값(2026) 적용' },
+} as const;
+
 const fmt = (value: number) => new Intl.NumberFormat('ko-KR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(value);
 
 export function TodoWorkspace() {
@@ -27,6 +35,10 @@ export function TodoWorkspace() {
     const [view, setView] = useState<'owner' | 'area'>('owner');
     const [busy, setBusy] = useState('');
     const [message, setMessage] = useState('');
+    // 카드 안 입력칸: 카드(항목 id)마다 값과 오류를 따로 둔다.
+    const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>({});
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const setDraft = (itemId: string, key: string, value: string) => setDrafts((current) => ({ ...current, [itemId]: { ...current[itemId], [key]: value } }));
 
     const reload = useCallback(async () => {
         setData(await loadTodoData());
@@ -62,6 +74,37 @@ export function TodoWorkspace() {
             await reload();
         } catch (error) {
             setMessage(error instanceof Error ? error.message : '저장하지 못했습니다.');
+        } finally {
+            setBusy('');
+        }
+    }
+
+    // 입력칸 저장 — 쓰기는 todo-writes.ts 한 곳(규칙은 todo-edits.ts, 구매 강재는 질문 화면 고치기와 같다).
+    async function saveInputs(item: TodoItem) {
+        const inputs = item.inputs;
+        if (!data || !inputs) return;
+        const draft = drafts[item.id] ?? {};
+        setBusy(item.id);
+        setErrors((current) => ({ ...current, [item.id]: '' }));
+        try {
+            let error: string | null = '저장할 대상을 찾지 못했습니다. 화면을 새로 고쳐 보세요.';
+            if (inputs.kind === 'installation') {
+                const installation = data.installations.find((candidate) => candidate.id === inputs.installationId);
+                if (installation) error = await saveInstallationFields(installation, inputs.fields, draft);
+            } else if (inputs.kind === 'stream-factor-source') {
+                const stream = data.sourceStreams.find((candidate) => candidate.id === inputs.streamId);
+                if (stream) error = await saveStreamFactorSource(stream, (draft.type ?? '') as FactorSourceType | '');
+            } else {
+                const precursor = data.precursors.find((candidate) => candidate.id === inputs.precursorId);
+                if (precursor) error = await savePrecursorTexts(precursor, draft);
+            }
+            if (error) {
+                setErrors((current) => ({ ...current, [item.id]: error }));
+                return;
+            }
+            await reload();
+        } catch (error) {
+            setErrors((current) => ({ ...current, [item.id]: error instanceof Error ? error.message : '저장하지 못했습니다.' }));
         } finally {
             setBusy('');
         }
@@ -113,6 +156,43 @@ export function TodoWorkspace() {
                         : <>기본값으로 바꿨을 때의 숫자는 계산하지 못했습니다{item.impact.reason ? ` — ${item.impact.reason}` : ''}.</>}
                 </p>
             )}
+            {item.inputs && (
+                <form
+                    className="space-y-2.5"
+                    data-testid="todo-inputs"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        void saveInputs(item);
+                    }}
+                >
+                    {item.inputs.kind === 'installation' && item.inputs.fields.map((field) => (
+                        <label key={field} className="block text-sm font-semibold text-slate-700">
+                            {INSTALLATION_FIELD_SPECS[field].label}
+                            <input className={inputClass} value={drafts[item.id]?.[field] ?? ''} onChange={(event) => setDraft(item.id, field, event.target.value)} placeholder={INSTALLATION_FIELD_SPECS[field].placeholder} autoComplete="off" />
+                            {INSTALLATION_FIELD_SPECS[field].hint && <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">{INSTALLATION_FIELD_SPECS[field].hint}</span>}
+                        </label>
+                    ))}
+                    {item.inputs.kind === 'stream-factor-source' && (
+                        <label className="block text-sm font-semibold text-slate-700">
+                            배출계수의 근거 유형
+                            <select className={inputClass} value={drafts[item.id]?.type ?? ''} onChange={(event) => setDraft(item.id, 'type', event.target.value)}>
+                                <option value="">— 고르세요 —</option>
+                                {FACTOR_SOURCE_CHOICES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                            </select>
+                        </label>
+                    )}
+                    {item.inputs.kind === 'precursor-text' && item.inputs.fields.map((field) => (
+                        <label key={field} className="block text-sm font-semibold text-slate-700">
+                            {PRECURSOR_TEXT_SPEC[field].label}
+                            <input className={inputClass} value={drafts[item.id]?.[field] ?? ''} onChange={(event) => setDraft(item.id, field, event.target.value)} placeholder={PRECURSOR_TEXT_SPEC[field].placeholder} autoComplete="off" />
+                        </label>
+                    ))}
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Button type="submit" disabled={busy === item.id}>{busy === item.id ? '저장 중…' : '저장'}</Button>
+                        {errors[item.id] && <span className="text-sm text-amber-800" role="alert">{errors[item.id]}</span>}
+                    </div>
+                </form>
+            )}
             {item.action?.kind === 'heat-none' && (
                 <div className="flex flex-wrap gap-2">
                     <Button type="button" variant="secondary" disabled={busy === item.id} onClick={() => void answerHeatNone(item)}>{busy === item.id ? '저장 중…' : '안 씁니다'}</Button>
@@ -121,7 +201,7 @@ export function TodoWorkspace() {
             )}
             {item.href && item.action?.kind !== 'heat-none' && (
                 <Link href={item.href} className="inline-flex items-center gap-1 text-sm font-bold text-teal-700 hover:underline">
-                    {item.hrefLabel ?? '열기'}
+                    {item.inputs ? '전체 화면에서 열기' : (item.hrefLabel ?? '열기')}
                     <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
             )}
