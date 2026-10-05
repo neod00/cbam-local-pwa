@@ -1,6 +1,6 @@
 import type { DirectEmissionsInputMode, Product, ProductOutputLine, ProductReportingScope, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';
-import { APP_SCOPE_EXCLUSION_TEXT, getAppScopeExclusion, getIndirectEmissionsApplicability } from './cbam-product-rules';
+import { APP_SCOPE_EXCLUSION_TEXT, getAppScopeExclusion, getIndirectEmissionsApplicability, isIronOrSteelProductsGood } from './cbam-product-rules';
 import type { IndirectEmissionsRelevance } from './cbam-product-rules';
 import { IMPORTED_HEAT_RULE, SHARED_HEAT_RULE, resolveImportedHeat, resolveProcessSharedHeat, resolveSharedHeatSystems } from './measurable-heat';
 import { isUnverifiedActualPrecursor, unverifiedActualPrecursorMessage } from './precursor-verification';
@@ -587,6 +587,25 @@ function calculateOwnResults(input: {
         }
     }
 
+    // 부속서 II A.4: 철강제품에서 크기·형상만 다른 재화(CN이 달라도)를 종류·양·비율이 같은 전구물질로 만들면 단일 다기능 생산공정으로
+    // 정의해야 한다. 앱은 원료의 양·비율을 모르므로 「같은 종류의 구매 원료(CN)를 쓰는 철강제품 공정이 둘 이상」일 때 확인을 요구한다.
+    // 재질이 다르면(STS와 탄소강) 원료 CN이 달라 걸리지 않는다. 같은 CN 제품을 여러 공정으로 나눈 경우는 Art 4(6) 경고가 따로 다룬다.
+    const steelProcessIds = new Set<string>();
+    const precursorCnsByProcess = new Map<string, Set<string>>();
+    for (const process of input.processes) {
+        const candidates = [process.product_id, ...(outputLinesByProcess.get(process.id) ?? []).map((line) => line.product_id)];
+        if (candidates.some((productId) => {
+            const candidate = productId ? productById.get(productId) : undefined;
+            return Boolean(candidate) && isCbamReportingScope(getProductReportingScope(candidate)) && isIronOrSteelProductsGood(candidate);
+        })) {
+            steelProcessIds.add(process.id);
+        }
+        precursorCnsByProcess.set(
+            process.id,
+            new Set((precursorsByProcess.get(process.id) ?? []).map((precursor) => (precursor.precursor_cn_code ?? '').replace(/\D/g, '')).filter((cn) => cn.length >= 4))
+        );
+    }
+
     return input.processes.flatMap<LocalCalculationResult>((process) => {
         const warnings: string[] = [];
         const warningDetails: LocalCalculationWarning[] = [];
@@ -630,6 +649,25 @@ function calculateOwnResults(input: {
                 { type: 'process', id: process.id }
             );
             break;
+        }
+
+        if (steelProcessIds.has(process.id)) {
+            const keys = processKeysById.get(process.id) ?? new Set<string>();
+            const own = precursorCnsByProcess.get(process.id) ?? new Set<string>();
+            const partners = input.processes.filter((other) => {
+                if (other.id === process.id || !steelProcessIds.has(other.id) || (other.period_id ?? '') !== (process.period_id ?? '')) return false;
+                if ([...(processKeysById.get(other.id) ?? [])].some((key) => keys.has(key))) return false;
+                return [...(precursorCnsByProcess.get(other.id) ?? [])].some((cn) => own.has(cn));
+            });
+            if (partners.length > 0) {
+                const sharedCns = [...new Set(partners.flatMap((other) => [...(precursorCnsByProcess.get(other.id) ?? [])].filter((cn) => own.has(cn))))];
+                addWarning(
+                    `확인 필요(규정): ${process.name}과(와) ${partners.map((other) => other.name).join(' · ')}은(는) 둘 다 철강제품이고 같은 종류의 구매 원료(CN ${sharedCns.join('·')})를 씁니다. `
+                    + `${ALLOCATION_RULES.SINGLE_MULTIFUNCTIONAL.anchor}: 크기·형상만 다른 재화를 종류·양·비율이 같은 전구물질로 만든다면 CN이 달라도 단일 다기능 생산공정으로 정의하고 질량(기능단위)으로 귀속해야 합니다 — `
+                    + '공정을 하나로 합치고 제품을 생산라인으로 넣으세요. 원료 재질이나 비율이 다르면 해당하지 않으니 사유를 보고서에 남기세요.',
+                    { type: 'process', id: process.id }
+                );
+            }
         }
 
         const output = process.output_mass_t > 0 ? process.output_mass_t : 0;
