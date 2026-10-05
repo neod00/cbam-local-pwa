@@ -78,6 +78,7 @@ import { ALLOCATION_RULES, DIRECT_EMISSIONS_INPUT_MODE_LABEL, ELECTRICITY_SPLIT_
 import { ElectricitySplit } from '@/components/guided/ElectricitySplit';
 import { EnergySplitHub } from '@/components/guided/EnergySplitHub';
 import { FuelSplit } from '@/components/guided/FuelSplit';
+import { SupplierLoop } from '@/components/guided/SupplierLoop';
 import { SharedHeat } from '@/components/guided/SharedHeat';
 import {
     createSourceStreamValidationErrors,
@@ -2168,6 +2169,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
 
     return (
         <>
+            <SupplierLoop precursors={data.precursors} periods={data.periods} installations={data.installations} onApplied={onSaved} />
             {/* 공정을 바꾸면 수정 세션을 닫는다 — 목록에서 사라진 줄을 계속 편집하고 있으면 안 된다.
                 이 폼은 칸이 스무 개 가까이 된다. 입력 중인 값이 있으면 먼저 묻는다. */}
             <ProcessSelect

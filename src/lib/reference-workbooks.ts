@@ -678,3 +678,23 @@ export function resolveDefaultSeeForYear(
     return { direct, indirect, hasIndirect, total: roundDefaultSee(direct + indirect) };
 }
 
+
+/**
+ * 엑셀 한 시트를 「행 번호 + 열 글자 → 값」으로 읽는다(수식 칸은 엑셀이 저장해 둔 계산값을 읽는다).
+ * 공급사 회신 파일(EU Communication Template)처럼 기준자료가 아닌 통합문서를 읽는 데 쓴다. 시트가 없으면 undefined.
+ */
+export async function readWorkbookSheetRows(
+    file: File,
+    sheetName: string
+): Promise<Array<{ rowNumber: number; valuesByColumn: Map<string, string> }> | undefined> {
+    assertXlsxFile(file);
+
+    const zip = unzipSync(new Uint8Array(await file.arrayBuffer()));
+    const sheet = parseWorkbookSheets(zip).find((item) => item.name.toLowerCase() === sheetName.toLowerCase());
+
+    if (!sheet || !zip[sheet.path]) {
+        return undefined;
+    }
+
+    return parseRows(strFromU8(zip[sheet.path]), parseSharedStrings(zip));
+}
