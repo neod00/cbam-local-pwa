@@ -76,6 +76,7 @@ import { describeSeeFlowIndirect, type SeeFlowBinding } from '@/lib/see-flow';
 import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
 import { DIRECT_EMISSIONS_INPUT_MODE_LABEL, ELECTRICITY_SPLIT_BASIS_LABEL, sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
 import { ElectricitySplit } from '@/components/guided/ElectricitySplit';
+import { FuelSplit } from '@/components/guided/FuelSplit';
 import { SharedHeat } from '@/components/guided/SharedHeat';
 import {
     createSourceStreamValidationErrors,
@@ -1321,6 +1322,9 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
 
     return (
         <>
+            {/* 한 고지서의 연료를 여러 공정이 같이 쓰면 앱이 공정별 몫으로 나눈다(CBAM-ALLOC-RECF-01·02·03). */}
+            <FuelSplit processes={data.processes} sourceStreams={data.sourceStreams} results={data.results} onApplied={onSaved} />
+
             {/* 한 보일러·스팀을 여러 공정이 같이 쓰면 연료 배출은 쓴 열량 비율로 귀속한다(CBAM-ALLOC-HEAT-02). */}
             <SharedHeat processes={data.processes} sourceStreams={data.sourceStreams} onApplied={onSaved} />
 
