@@ -413,7 +413,7 @@ function GuidedWorkspaceInner() {
                         outputLabel={binding.isExample ? '생산량 미입력' : `${fmtT(binding.outputMassT)} t`}
                         flow={mapFlow}
                     />
-                    <CumulativeBar binding={binding} results={scopedResults} precursors={viewData.precursors} />
+                    <CumulativeBar binding={binding} results={scopedResults} precursors={viewData.precursors} products={reportingProducts} />
                 </section>
                 <div ref={panelRef} className="min-w-0 xl:sticky xl:top-20 xl:self-start">
                     <GuidedStepPanel

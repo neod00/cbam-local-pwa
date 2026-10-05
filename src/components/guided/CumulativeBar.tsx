@@ -2,7 +2,7 @@
 
 import { buildCumulativeBar, type BarBlockKind } from '@/lib/cumulative-bar';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
-import { getLocalSetting, type PurchasedPrecursor } from '@/lib/local-db';
+import { getLocalSetting, type Product, type PurchasedPrecursor } from '@/lib/local-db';
 import type { ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import { DEFAULT_SCENARIO_ASSUMPTIONS, normalizeScenarioAssumptions, SCENARIO_ASSUMPTIONS_SETTING_KEY, type ScenarioAssumptions } from '@/lib/scenario-calculation';
 import { describeSeeFlowIndirect, type SeeFlowBinding } from '@/lib/see-flow';
@@ -27,10 +27,12 @@ export function CumulativeBar({
     binding,
     results,
     precursors,
+    products,
 }: {
     binding: SeeFlowBinding;
     results: LocalCalculationResult[];
     precursors: PurchasedPrecursor[];
+    products?: Array<Pick<Product, 'name' | 'cn_code' | 'hs_code'>>;
 }) {
     const [defaultValues, setDefaultValues] = useState<ImportedDefaultValueReference>();
     const [assumptions, setAssumptions] = useState<ScenarioAssumptions>(DEFAULT_SCENARIO_ASSUMPTIONS);
@@ -51,8 +53,8 @@ export function CumulativeBar({
     }, []);
 
     const model = useMemo(
-        () => buildCumulativeBar({ binding, results, precursors, defaultValues, originCountry: assumptions.origin_country, year: assumptions.default_value_year }),
-        [binding, results, precursors, defaultValues, assumptions]
+        () => buildCumulativeBar({ binding, results, precursors, products, defaultValues, originCountry: assumptions.origin_country, year: assumptions.default_value_year }),
+        [binding, results, precursors, products, defaultValues, assumptions]
     );
     const labels = describeSeeFlowIndirect(binding.indirectRelevance, binding.basisExcludesUndetermined);
 
@@ -71,9 +73,24 @@ export function CumulativeBar({
             </div>
 
             {model.empty ? (
-                <p className="mt-3 rounded-lg bg-white px-3 py-3 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
-                    제품 CN과 생산량을 넣으면 EU 기본값 기둥이 먼저 서고, 연료·전구물질을 넣을 때마다 내 값 기둥이 쌓입니다.
-                </p>
+                model.defaultColumn.available ? (
+                    // 제품 CN만 넣은 단계 — 내 값은 아직 없고 아무것도 안 넣으면 신고될 EU 기본값만 먼저 선다.
+                    <div className="mt-3 flex items-end gap-5" data-testid="bar-products-only">
+                        <div className="flex h-40 w-20 flex-col items-center justify-end border-b border-slate-300">
+                            <span className="mb-1 text-xs font-bold tabular-nums text-slate-700">{fmt(model.defaultColumn.value)}</span>
+                            <div className="h-[75%] w-full rounded-t-md bg-slate-300" title={`EU 기본값 ${model.defaultColumn.country} · ${model.defaultColumn.yearLabel}년(mark-up 포함) ${fmt(model.defaultColumn.value)} tCO₂e/t`} data-testid="bar-default" />
+                        </div>
+                        <p className="pb-2 text-xs leading-5 text-slate-600">
+                            이 제품(CN)의 EU 기본값은 <span className="font-semibold text-slate-900">{fmt(model.defaultColumn.value)} tCO₂e/t</span>
+                            ({model.defaultColumn.country} · {model.defaultColumn.yearLabel}년, mark-up 포함)입니다. 아무것도 안 넣으면 이 숫자로 신고됩니다.
+                            생산량·연료·전구물질을 넣을 때마다 오른쪽에 내 값 기둥이 쌓이고, 기본값보다 얼마나 낮아졌는지 보입니다.
+                        </p>
+                    </div>
+                ) : (
+                    <p className="mt-3 rounded-lg bg-white px-3 py-3 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
+                        {model.defaultColumn.reason} 연료·전구물질을 넣을 때마다 내 값 기둥이 쌓입니다.
+                    </p>
+                )
             ) : (
                 <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
                     <div className="flex h-52 items-end justify-center gap-6 border-b border-slate-300 px-2" role="img" aria-label={`EU 기본값 ${model.defaultColumn.available ? fmt(defaultValue) : '없음'}, 내 값 ${model.headline === null ? '없음' : fmt(model.headline)} tCO₂e/t`}>

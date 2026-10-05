@@ -108,12 +108,27 @@ assert.equal(orphanModel.blocks.some((block) => block.kind === 'OWN'), true);
 const y2028 = bar([makeProcess()], [precursor('p1')], { year: '2028_ONWARDS' });
 close(y2028.model.defaultColumn.value, 4.5162, 'EU 기본값(2028~)');
 
+// ── 4-2) 제품 CN만 알 때(공정·생산량 입력 전) — 첫 답에 EU 기본값 기둥이 선다 ──
+const productsOnly = (products, extra = {}) => buildCumulativeBar({ binding: buildSeeFlowBinding([]), results: [], precursors: [], products, defaultValues: dv, originCountry: 'South Korea', year: '2026', ...extra });
+const first = productsOnly([product]);
+assert.equal(first.empty, true, '내 값은 아직 없다');
+assert.equal(first.headline, null, '엔진 결과가 없으니 기준 SEE를 지어내지 않는다');
+assert.equal(first.defaultColumn.available, true);
+close(first.defaultColumn.value, 3.8214, '제품 CN만으로 선 EU 기본값(한국·7318 15·2026)');
+close(productsOnly([product], { year: '2028_ONWARDS' }).defaultColumn.value, 4.5162, '연도에 따라 바뀐다');
+const bolt = { ...product, id: 'bolt', name: '볼트', cn_code: '73181290' };
+assert.match(productsOnly([product, bolt]).defaultColumn.reason, /CN이 2종입니다/, 'CN이 여럿이면 가중치가 없어 숫자를 내지 않는다');
+assert.equal(productsOnly([product, { ...product, id: 'screw2', name: '나사2' }]).defaultColumn.available, true, '같은 CN의 제품이 여럿이어도 CN이 한 종류면 같은 값이다');
+assert.match(productsOnly([{ ...product, cn_code: '' , hs_code: ''}]).defaultColumn.reason, /CN 코드를 입력하면/, 'CN이 없으면 숫자 대신 안내');
+assert.match(productsOnly([product], { originCountry: 'Narnia' }).defaultColumn.reason, /Narnia/);
+assert.equal(productsOnly([product], { defaultValues: undefined }).defaultColumn.available, false);
+
 // ── 5) 배선·문안 ─────────────────────────────────────────────────────
 const component = readFileSync('src/components/guided/CumulativeBar.tsx', 'utf8');
 assert.match(component, /describeSeeFlowIndirect\(binding\.indirectRelevance, binding\.basisExcludesUndetermined\)/, '간접배출 문안은 상태에서 파생한다');
 assert.ok(!/\bcalculateLocalResults\b|\bbuildSeeFlowBinding\b/.test(component), '컴포넌트는 계산하지 않는다');
 assert.match(component, /motion-reduce:transition-none/, '모션 축소 설정을 존중한다');
 const workspace = readFileSync('src/components/guided/GuidedWorkspace.tsx', 'utf8');
-assert.match(workspace, /<CumulativeBar binding=\{binding\} results=\{scopedResults\} precursors=\{viewData\.precursors\} \/>/, '지도 아래에 붙는다');
+assert.match(workspace, /<CumulativeBar binding=\{binding\} results=\{scopedResults\} precursors=\{viewData\.precursors\} products=\{reportingProducts\} \/>/, '지도 아래에 붙는다(제품 CN만으로도 기본값 기둥이 서도록 제품을 넘긴다)');
 
 console.log('Cumulative bar verified (엔진 기준 SEE와 일치 · EU 기본값 기둥 · 실측 비율 · 전력은 보고용 · 숫자 안 지어냄).');
