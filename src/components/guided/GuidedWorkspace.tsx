@@ -10,6 +10,9 @@ import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-
 import { buildSeeFlowBinding } from '@/lib/see-flow';
 import { buildMapFlow } from '@/lib/guided-map-flow';
 import { CumulativeBar } from './CumulativeBar';
+import { ExplainLevelProvider, ExplainLevelToggle } from './ExplainLevel';
+import { START_GUIDE_DISMISSED_KEY, StartGuide } from './StartGuide';
+import { useLocalPref } from './useLocalPref';
 import { BarChart3, CircleHelp, FilePlus, Map as MapIcon, ShieldCheck, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -82,11 +85,28 @@ const fmtT = (value: number) => new Intl.NumberFormat('ko-KR', { maximumFraction
 // 지도형 작업 공간: 지도 한 장 + 선택한 단계의 입력 패널.
 // 다제품·다공정은 공정 탭으로 전환하며, 지도 가운데 숫자는 선택한 공정 기준으로 채워진다.
 export function GuidedWorkspace() {
+    return (
+        <ExplainLevelProvider>
+            <GuidedWorkspaceInner />
+        </ExplainLevelProvider>
+    );
+}
+
+function GuidedWorkspaceInner() {
     const [data, setData] = useState<GuidedData>(EMPTY_DATA);
     const [selectedStep, setSelectedStep] = useState<GuidedStepId | null>(null);
     const [selectedProcessId, setSelectedProcessId] = useState<string>('ALL');
     const [newProjectBusy, setNewProjectBusy] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
+    // 시작 안내(비어 있는 프로젝트에서 한 번). 닫으면 이 브라우저에서 다시 자동으로 뜨지 않는다 — 헤더의 「시작 안내」로 다시 볼 수 있다.
+    // 저장된 값을 읽기 전(서버 렌더)에는 「닫힘」으로 두어 안내가 번쩍이지 않게 한다.
+    const [dismissedPref, setDismissedPref] = useLocalPref(START_GUIDE_DISMISSED_KEY, '1');
+    const startGuideDismissed = dismissedPref === '1';
+    const [startGuideForced, setStartGuideForced] = useState(false);
+    const closeStartGuide = useCallback(() => {
+        setDismissedPref('1');
+        setStartGuideForced(false);
+    }, [setDismissedPref]);
 
     // 저장 직후 머물 단계. activeStep은 「사용자가 고르기 전에는 첫 미완료 단계」로 파생되는데,
     // 저장하면 그 단계가 완료로 바뀌어 화면이 즉시 다음 단계로 떠났다. 방금 넣은 값을
@@ -273,7 +293,15 @@ export function GuidedWorkspace() {
                         </p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    <ExplainLevelToggle />
+                    <button
+                        type="button"
+                        onClick={() => setStartGuideForced(true)}
+                        className="inline-flex min-h-8 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-teal-300 hover:text-teal-800"
+                    >
+                        시작 안내
+                    </button>
                     <button
                         type="button"
                         onClick={handleNewProject}
@@ -293,6 +321,8 @@ export function GuidedWorkspace() {
                     )}
                 </div>
             </header>
+
+            {data.loaded && (startGuideForced || (!startGuideDismissed && data.installations.length === 0)) && <StartGuide onDone={closeStartGuide} />}
 
             {data.periods.length > 1 && (
                 <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2" role="tablist" aria-label="보고기간 선택">

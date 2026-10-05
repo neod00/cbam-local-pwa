@@ -282,16 +282,10 @@ function GuidedShell({ children, title }: { children: ReactNode; title: string }
                         )}
                         {!isMap && <span className="truncate text-sm font-semibold text-slate-600">{title}</span>}
                     </div>
+                    {/* 옛 화면(새 UI·이전 버전)으로 나가는 버튼은 뺐다 — 두 셸은 동결이다(UX 컨셉 v4 §14-5).
+                        옛 화면에서 지도로 돌아오는 버튼(onUseGuided)은 남겨 두어, 옛 모드 값이 저장된 브라우저의 사용자가 갇히지 않는다. */}
                     <div className="flex items-center gap-2">
                         <PeriodBadge />
-                        <button
-                            type="button"
-                            onClick={() => setUiMode('modern')}
-                            className="hidden min-h-9 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 md:inline-flex"
-                        >
-                            <RotateCcw className="mr-2 h-3.5 w-3.5" />
-                            이전 화면
-                        </button>
                     </div>
                 </div>
             </header>

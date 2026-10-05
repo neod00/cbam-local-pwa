@@ -78,6 +78,7 @@ import { ALLOCATION_RULES, DIRECT_EMISSIONS_INPUT_MODE_LABEL, ELECTRICITY_SPLIT_
 import { ElectricitySplit } from '@/components/guided/ElectricitySplit';
 import { EnergySplitHub } from '@/components/guided/EnergySplitHub';
 import { FuelSplit } from '@/components/guided/FuelSplit';
+import { StepExplainerBox } from '@/components/guided/ExplainLevel';
 import { SupplierLoop } from '@/components/guided/SupplierLoop';
 import { SharedHeat } from '@/components/guided/SharedHeat';
 import {
@@ -2939,6 +2940,7 @@ export function GuidedStepPanel({
 
     return (
         <PanelShell step={stepState} description={meta.description} backstage={meta.backstage}>
+            <StepExplainerBox step={step} />
             {panel}
         </PanelShell>
     );
