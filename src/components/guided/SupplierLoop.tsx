@@ -37,6 +37,8 @@ export function SupplierLoop({
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState('');
     const [applied, setApplied] = useState(0);
+    // 요청서 맨 위 「수신」에 나갈 공급사 이름 — 저장된 값을 그대로 쓰면 내부 메모(「3회 요청 미회신」 등)가 섞여 나갈 수 있어 보내기 전에 고칠 수 있게 한다.
+    const [recipientNames, setRecipientNames] = useState<Record<string, string>>({});
 
     const periodName = (id: string | undefined) => periods.find((period) => period.id === id)?.name ?? '';
     const periodRange = useMemo(
@@ -59,7 +61,8 @@ export function SupplierLoop({
     );
 
     function downloadRequest(index: number) {
-        const group = groups[index];
+        const original = groups[index];
+        const group = { ...original, supplierName: (recipientNames[original.key] ?? original.supplierName).trim() };
         const generatedAt = new Date();
         const bytes = buildSupplierRequestDocx({ group, requester, generatedAt });
         downloadBlob(new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), supplierRequestFilename(group, generatedAt));
@@ -139,9 +142,18 @@ export function SupplierLoop({
                         <ul className="space-y-2">
                             {groups.map((group, index) => (
                                 <li key={group.key} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                                    <span className="min-w-0">
-                                        <span className="font-semibold text-slate-900">{group.supplierName || '공급사 이름 미입력'}</span>
-                                        <span className="ml-1.5 text-xs text-slate-500">{group.country || '국가 미입력'} · 원료 {group.items.length}개 ({group.items.map((item) => item.name).join(', ')})</span>
+                                    <span className="min-w-0 flex-1 space-y-1">
+                                        <label className="block text-xs font-semibold text-slate-600">
+                                            요청서 수신(공급사 이름) — 보내기 전에 확인하세요
+                                            <input
+                                                type="text"
+                                                value={recipientNames[group.key] ?? group.supplierName}
+                                                onChange={(event) => setRecipientNames({ ...recipientNames, [group.key]: event.target.value })}
+                                                placeholder="공급사 이름"
+                                                className="mt-0.5 block h-9 w-full rounded-lg border border-slate-200 px-2 text-sm font-normal text-slate-900"
+                                            />
+                                        </label>
+                                        <span className="block text-xs text-slate-500">{group.country || '국가 미입력'} · 원료 {group.items.length}개 ({group.items.map((item) => item.name).join(', ')}) — 원료 이름도 그대로 요청서에 나가니 내부 메모가 섞여 있으면 먼저 고치세요.</span>
                                     </span>
                                     <Button type="button" variant="secondary" onClick={() => downloadRequest(index)}>
                                         <Download className="mr-1.5 h-4 w-4" />

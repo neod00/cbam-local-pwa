@@ -199,12 +199,22 @@ export interface ReplyProposal {
     defaultSelected: boolean;
 }
 
+const COUNTRY_ALIASES: Record<string, string> = {
+    kr: 'south korea', korea: 'south korea', 'republic of korea': 'south korea', 'korea, republic of': 'south korea', 'korea (republic of)': 'south korea',
+    tw: 'taiwan', 'chinese taipei': 'taiwan', 'taiwan, province of china': 'taiwan',
+    cn: 'china', "people's republic of china": 'china',
+};
+const normalizeCountry = (value: string | undefined) => {
+    const key = (value ?? '').trim().toLowerCase();
+    return COUNTRY_ALIASES[key] ?? key;
+};
+
 const periodOverlaps = (aStart?: string, aEnd?: string, bStart?: string, bEnd?: string) =>
     !aStart || !aEnd || !bStart || !bEnd || (aStart <= bEnd && bStart <= aEnd);
 
 export function matchReplyToPrecursors(input: {
     reply: SupplierReply;
-    precursors: Array<Pick<PurchasedPrecursor, 'id' | 'name' | 'precursor_cn_code' | 'period_id'>>;
+    precursors: Array<Pick<PurchasedPrecursor, 'id' | 'name' | 'precursor_cn_code' | 'period_id'> & Partial<Pick<PurchasedPrecursor, 'data_mode' | 'verification_status' | 'supplier_country' | 'supplier_installation'>>>;
     /** 보고기간 id → 시작·종료일 */
     periods: Map<string, { start: string; end: string }>;
 }): { proposals: ReplyProposal[]; unmatchedRows: SupplierReplyRow[] } {
@@ -231,6 +241,18 @@ export function matchReplyToPrecursors(input: {
         }
         if (picked.every((candidate) => candidate.cnMatch === 'PARTIAL')) {
             warnings.push('CN이 앞자리만 일치합니다 — 같은 제품인지 확인하세요.');
+        }
+        // 같은 CN이라도 다른 공급사일 수 있다 — 국산 원료와 수입 원료가 같은 CN을 쓰는 것이 흔하다. 국가가 다르면 자동 선택하지 않는다.
+        const replyCountry = normalizeCountry(input.reply.country);
+        const ownCountry = normalizeCountry(precursor.supplier_country);
+        const countryMismatch = Boolean(replyCountry && ownCountry && replyCountry !== ownCountry);
+        if (countryMismatch) {
+            warnings.push(`회신 설비의 국가(${input.reply.country})가 이 전구물질의 공급국가(${precursor.supplier_country})와 다릅니다 — 다른 공급사의 회신일 수 있습니다.`);
+        }
+        // 이미 공급사 값이 들어 있는 것을 바꾸는 일은 사람이 켜야 한다(기본값을 실측으로 바꾸는 것이 이 기능의 본래 목적이다).
+        const alreadyMeasured = Boolean(precursor.data_mode) && precursor.data_mode !== 'DEFAULT';
+        if (alreadyMeasured) {
+            warnings.push('이미 공급사 실측값이 들어 있습니다 — 이 회신으로 바꾸면 기존 값이 대체됩니다.');
         }
         const own = precursor.period_id ? input.periods.get(precursor.period_id) : undefined;
         if (own && !periodOverlaps(input.reply.periodStart, input.reply.periodEnd, own.start, own.end)) {

@@ -123,12 +123,31 @@ assert.match(productsOnly([{ ...product, cn_code: '' , hs_code: ''}]).defaultCol
 assert.match(productsOnly([product], { originCountry: 'Narnia' }).defaultColumn.reason, /Narnia/);
 assert.equal(productsOnly([product], { defaultValues: undefined }).defaultColumn.available, false);
 
+// ── 4-3) 씨밤이 run19 회귀에서 나온 두 결함 ─────────────────────────────────
+// (a) 공정·생산량만 있고 배출 입력이 하나도 없는데 막대가 「내 값 0.000 · 기본값보다 100% 낮다」를 그렸다.
+const zeroResults = calculateLocalResults({ products: [product], periods: [period], processes: [makeProcess({ direct_attributable_emissions_tco2e: 0 })], precursors: [], productOutputLines: [] });
+const zeroModel = buildCumulativeBar({ binding: buildSeeFlowBinding(zeroResults), results: zeroResults, precursors: [], products: [product], defaultValues: dv, originCountry: 'South Korea', year: '2026' });
+assert.equal(zeroModel.empty, true, '배출 입력이 하나도 없으면 내 값 기둥을 그리지 않는다');
+assert.equal(zeroModel.headline, null, '기준 SEE 0.000을 내 값으로 내지 않는다');
+assert.equal(zeroModel.gap, null);
+assert.equal(zeroModel.defaultColumn.available, true, '대신 제품 CN의 EU 기본값 기둥은 선다');
+close(zeroModel.defaultColumn.value, 3.8214, '제품 CN만으로 선 기본값');
+// (b) 철강 가공품이 연료만 넣었는데(전구물질이 SEE의 대부분) 「기본값보다 98% 낮다 · 실측 비율 100%」를 냈다.
+const reason = '구매한 강재(전구물질)를 아직 넣지 않았습니다.';
+const partial = bar([makeProcess()], [], { partialReason: reason, products: [product] });
+assert.equal(partial.model.partialNote, reason, '아직 안 들어온 큰 입력이 있으면 그 사실을 말한다');
+assert.equal(partial.model.gap, null, '그때는 기본값과의 차이를 내지 않는다');
+assert.equal(partial.model.measuredShare, null, '실측 비율도 내지 않는다(전구물질 없는 100%는 의미가 없다)');
+close(partial.model.headline, partial.binding.seeCbamBasis, '대형 수치는 그래도 엔진 값');
+assert.ok(base.model.gap !== null && base.model.partialNote === undefined, '사유가 없으면 종전처럼 차이를 낸다');
+
 // ── 5) 배선·문안 ─────────────────────────────────────────────────────
 const component = readFileSync('src/components/guided/CumulativeBar.tsx', 'utf8');
 assert.match(component, /describeSeeFlowIndirect\(binding\.indirectRelevance, binding\.basisExcludesUndetermined\)/, '간접배출 문안은 상태에서 파생한다');
 assert.ok(!/\bcalculateLocalResults\b|\bbuildSeeFlowBinding\b/.test(component), '컴포넌트는 계산하지 않는다');
 assert.match(component, /motion-reduce:transition-none/, '모션 축소 설정을 존중한다');
 const workspace = readFileSync('src/components/guided/GuidedWorkspace.tsx', 'utf8');
-assert.match(workspace, /<CumulativeBar binding=\{binding\} results=\{scopedResults\} precursors=\{viewData\.precursors\} products=\{reportingProducts\} \/>/, '지도 아래에 붙는다(제품 CN만으로도 기본값 기둥이 서도록 제품을 넘긴다)');
+assert.match(workspace, /<CumulativeBar binding=\{binding\} results=\{scopedResults\} precursors=\{viewData\.precursors\} products=\{reportingProducts\} partialReason=\{precursorsPendingReason\} \/>/, '지도 아래에 붙는다(제품 CN만으로도 기본값 기둥이 서도록 제품을, 전구물질이 아직 없으면 그 사유를 넘긴다)');
+assert.match(workspace, /precursorsStatus === 'todo' \|\| precursorsStatus === 'current'/, '구매 강재가 있어야 하는데 아직 없을 때만 사유를 낸다(없어도 되는 공정은 비교를 막지 않는다)');
 
 console.log('Cumulative bar verified (엔진 기준 SEE와 일치 · EU 기본값 기둥 · 실측 비율 · 전력은 보고용 · 숫자 안 지어냄).');

@@ -252,6 +252,12 @@ function GuidedWorkspaceInner() {
         exportWarningCount: data.exportWarningCount,
     }, binding), [data, viewData, reportingProducts, binding]);
 
+    // 구매 강재가 있어야 할 것으로 보이는데(철강 가공품) 아직 없고 「없음」 확인도 없으면, 지금 값은 SEE의 일부일 뿐이다 — 막대가 기본값과 견주지 않게 알린다.
+    // 「지금 여기(current)」로 승격된 단계도 할 일이다 — 필수가 아닌(optional) 전구물질은 current가 되지 않는다.
+    const precursorsStatus = steps.find((step) => step.id === 'precursors')?.status;
+    const precursorsPendingReason = precursorsStatus === 'todo' || precursorsStatus === 'current'
+        ? '구매한 강재(전구물질)를 아직 넣지 않았습니다. 철강 가공품은 SEE의 대부분이 여기서 나오므로 지금 값은 일부일 뿐입니다 — 6단계에서 넣거나 「없음」을 확인하세요.'
+        : undefined;
     const mapFlow = useMemo(
         () => buildMapFlow({ binding, steps, results: scopedResults, precursors: viewData.precursors }),
         [binding, steps, scopedResults, viewData.precursors]
@@ -413,7 +419,7 @@ function GuidedWorkspaceInner() {
                         outputLabel={binding.isExample ? '생산량 미입력' : `${fmtT(binding.outputMassT)} t`}
                         flow={mapFlow}
                     />
-                    <CumulativeBar binding={binding} results={scopedResults} precursors={viewData.precursors} products={reportingProducts} />
+                    <CumulativeBar binding={binding} results={scopedResults} precursors={viewData.precursors} products={reportingProducts} partialReason={precursorsPendingReason} />
                 </section>
                 <div ref={panelRef} className="min-w-0 xl:sticky xl:top-20 xl:self-start">
                     <GuidedStepPanel
