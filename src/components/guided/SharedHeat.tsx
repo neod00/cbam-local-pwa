@@ -4,9 +4,11 @@ import { Button } from '@/components/ui';
 import { reconcileSourceStreams, sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
 import {
     HEAT_QUANTITY_BASIS_LABEL,
+    HEAT_REFERENCE_EFFICIENCY,
     HEAT_UNIT_TO_TJ,
     SHARED_HEAT_RULE,
     buildSharedHeatRelease,
+    buildProvisionalHeatQuantities,
     buildSharedHeatUpdates,
     resolveSharedHeatSystems,
     validateSharedHeatDraft,
@@ -14,7 +16,7 @@ import {
     type SharedHeatSystem,
 } from '@/lib/measurable-heat';
 import { updateLocalItem, type HeatConsumption, type HeatQuantityBasis, type ProductionProcess, type SourceStream } from '@/lib/local-db';
-import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
+import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from '@/lib/source-stream-calculation';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -135,6 +137,27 @@ export function SharedHeat({
     const consumerOf = (processId: string) => consumers[processId] ?? emptyConsumer();
     const patchConsumer = (processId: string, patch: Partial<ConsumerForm>) =>
         setConsumers((current) => ({ ...current, [processId]: { ...(current[processId] ?? emptyConsumer()), ...patch } }));
+
+    /** 「열 사용량을 모르겠어요」 — 연료 투입 에너지 × 기준효율 70%를 생산량 비율로 나눠 임시로 채운다. [임시] 표시가 남아 계속 확인을 요구한다. */
+    const fillProvisional = () => {
+        const pickedStreams = fuelStreams.filter((stream) => picked[stream.id]);
+        const rows = processes.filter((process) => consumerOf(process.id).on).map((process) => ({ processId: process.id, weight: process.output_mass_t }));
+        if (pickedStreams.length === 0 || rows.length === 0) {
+            setMessage('열을 만드는 연료와 열을 받는 공정을 먼저 고르세요.');
+            return;
+        }
+        const fuelEnergyTj = pickedStreams.reduce((sum, stream) => sum + calculateSourceStreamEnergyBreakdown(stream).total, 0);
+        const filled = buildProvisionalHeatQuantities({ fuelEnergyTj, rows });
+        if (filled.length === 0) {
+            setMessage('임시로 채우려면 공정의 생산량(3단계)과 연료 사용량이 필요합니다.');
+            return;
+        }
+        setConsumers((current) => ({
+            ...current,
+            ...Object.fromEntries(filled.map((item) => [item.processId, { on: true, quantity: String(item.quantityTj), unit: 'TJ' as const, basis: 'EFFICIENCY_PROXY' as const, note: item.note }])),
+        }));
+        setMessage('');
+    };
 
     const draft: SharedHeatDraft = {
         name,
@@ -293,6 +316,16 @@ export function SharedHeat({
                         <legend className="text-sm font-semibold text-slate-800">열을 받는 공정과 열 사용량</legend>
                         <p className="mt-0.5 text-xs leading-5 text-slate-500">
                             열량계 값이 있으면 그 값을, 없으면 보일러 연료투입 × 효율을 공정별로 나눈 값이나 설비 정격 × 가동시간으로 추정한 값을 넣으세요. 단위는 공정마다 달라도 됩니다.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={fillProvisional}
+                            className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100"
+                        >
+                            열 사용량을 모르겠어요 — 임시로 채우기
+                        </button>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                            연료 투입 에너지 × 기준효율 {HEAT_REFERENCE_EFFICIENCY * 100}%(부속서 II C.1.2.3)를 생산량 비율로 나눠 넣습니다. 계산은 되지만 규정이 정한 열량 기준 귀속이 아니라서 「임시」 표시가 남고 계속 확인을 요구합니다.
                         </p>
                         <div className="mt-2 space-y-3">
                             {processes.map((process) => {

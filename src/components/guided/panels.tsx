@@ -76,6 +76,7 @@ import { describeSeeFlowIndirect, type SeeFlowBinding } from '@/lib/see-flow';
 import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
 import { ALLOCATION_RULES, DIRECT_EMISSIONS_INPUT_MODE_LABEL, ELECTRICITY_SPLIT_BASIS_LABEL, sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
 import { ElectricitySplit } from '@/components/guided/ElectricitySplit';
+import { EnergySplitHub } from '@/components/guided/EnergySplitHub';
 import { FuelSplit } from '@/components/guided/FuelSplit';
 import { SharedHeat } from '@/components/guided/SharedHeat';
 import {
@@ -1333,6 +1334,9 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
 
     return (
         <>
+            {/* 전력·연료·보일러 나누기를 한곳에서 안내한다 — 어느 버튼을 눌러야 하는지가 첫 장벽이다. */}
+            <EnergySplitHub step="fuel" processes={data.processes} sourceStreams={data.sourceStreams} onSelectStep={onSelectStep} />
+
             {/* 한 고지서의 연료를 여러 공정이 같이 쓰면 앱이 공정별 몫으로 나눈다(CBAM-ALLOC-RECF-01·02·03). */}
             <FuelSplit processes={data.processes} sourceStreams={data.sourceStreams} results={data.results} onApplied={onSaved} />
 
@@ -1625,6 +1629,8 @@ function ElectricityPanel({ data, steps, selectedProcessId, onSaved, onSelectSte
 
     return (
         <>
+            <EnergySplitHub step="electricity" processes={data.processes} sourceStreams={data.sourceStreams} onSelectStep={onSelectStep} />
+
             {/* 계량기 하나를 여러 공정이 같이 쓰는 사업장: 고지서 전체 값을 앱이 나눈다(CBAM-ALLOC-ELEC-01). */}
             {data.processes.length > 1 && (
                 <ElectricitySplit
