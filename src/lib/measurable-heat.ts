@@ -231,6 +231,38 @@ export interface SharedHeatSystem {
     problem?: string;
 }
 
+/** 열 사용량을 모를 때 임시로 채운 값의 표시. 엔진·EU 문서 준비도가 이 표시를 보고 확인을 요구한다(조용히 넘어가지 않게). */
+export const PROVISIONAL_HEAT_NOTE_PREFIX = '[임시]';
+export const isProvisionalHeatNote = (note: string | undefined) => (note ?? '').trim().startsWith(PROVISIONAL_HEAT_NOTE_PREFIX);
+
+/** 2025/2547 부속서 II C.1.2.3 방법 3 — 열 생산·전달 효율을 모를 때 쓰는 기준효율 70%(Ref,H = 0,7). */
+export const HEAT_REFERENCE_EFFICIENCY = 0.7;
+
+export interface ProvisionalHeatQuantity {
+    processId: string;
+    quantityTj: number;
+    note: string;
+}
+
+/**
+ * 공정별 열 사용 자료가 없을 때 임시로 채울 값. 전체 열량은 연료 투입 에너지 × 기준효율 70%(부속서 II C.1.2.3 방법 3)로 어림하고,
+ * 공정에는 가중치(생산량)에 비례해 나눈다. 열을 쓴 양이 아니라 생산량으로 나눈 것이므로 규정이 정한 귀속이 아니다 —
+ * 그래서 근거 문구에 [임시]를 붙이고, 엔진과 EU 문서 준비도가 계속 확인을 요구한다. 숫자는 종전(생산량 비율)과 같다.
+ */
+export function buildProvisionalHeatQuantities(input: {
+    fuelEnergyTj: number;
+    rows: Array<{ processId: string; weight: number }>;
+}): ProvisionalHeatQuantity[] {
+    const weightSum = input.rows.reduce((sum, row) => sum + positive(row.weight), 0);
+    const totalTj = positive(input.fuelEnergyTj) * HEAT_REFERENCE_EFFICIENCY;
+    if (!(weightSum > 0) || !(totalTj > 0)) return [];
+    return input.rows.map((row) => ({
+        processId: row.processId,
+        quantityTj: Math.round(totalTj * (positive(row.weight) / weightSum) * 1e6) / 1e6,
+        note: `${PROVISIONAL_HEAT_NOTE_PREFIX} 공정별 열 사용 자료 없음 — 연료 투입 에너지 × 기준효율 70%(부속서 II C.1.2.3)를 생산량 비율로 나눈 임시 값. 열량계나 설비 자료로 바꾸세요.`,
+    }));
+}
+
 const heatUnitToTj = (quantity: number | undefined, unit: HeatConsumption['unit'] | undefined) => positive(quantity) * HEAT_UNIT_TO_TJ[unit ?? 'Gcal'];
 
 export function heatSystemKey(periodId: string | undefined, name: string): string {
@@ -366,6 +398,9 @@ export function resolveProcessSharedHeat(
             out.formulas.push(
                 `「${name}」: 열 사용 ${formatHeatNumber(consumer.tj, 6)} TJ ÷ 전체 ${formatHeatNumber(system.totalTj, 6)} TJ = ${(consumer.share * 100).toFixed(2)}% × 연료 배출 ${formatHeatNumber(system.fuelEmissionsTco2e)} tCO₂e = ${formatHeatNumber(consumer.emissionsTco2e)} tCO₂e`
             );
+            if (isProvisionalHeatNote(consumer.note)) {
+                out.notes.push(`「${name}」 열 사용량이 임시 값입니다 — 공정별 열 사용 자료 없이 생산량 비율로 채웠으므로 규정이 정한 열량 기준 귀속이 아닙니다. 열량계 값이나 설비 자료(정격 × 가동시간)로 바꾸세요.`);
+            }
             if (consumer.basis === 'INDIRECT_ESTIMATE' && !consumer.note?.trim()) {
                 out.notes.push(`「${name}」 열 사용량을 추정(간접결정)으로 정했는데 근거가 비어 있습니다 — 직접 계량이 불가능하거나 비용이 과다한 사유와 추정 근거를 남겨야 합니다(ANNEX II A.3(2)·(7)·(8)).`);
             }

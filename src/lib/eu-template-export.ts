@@ -9,7 +9,7 @@ import { APP_SCOPE_EXCLUSION_TEXT, getAppScopeExclusion, getIndirectEmissionsApp
 import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';
 import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, reconcileSourceStreams } from './allocation-rules';
 import { CN_MASTER } from './cn-master.generated';
-import { IMPORTED_HEAT_RULE, SHARED_HEAT_RULE, resolveImportedHeat, resolveProcessSharedHeat, resolveSharedHeatSystems } from './measurable-heat';
+import { IMPORTED_HEAT_RULE, SHARED_HEAT_RULE, isProvisionalHeatNote, resolveImportedHeat, resolveProcessSharedHeat, resolveSharedHeatSystems } from './measurable-heat';
 
 export const REQUIRED_EU_TEMPLATE_SHEETS = [
     '0_Versions',
@@ -1122,6 +1122,14 @@ export function evaluateEuExportReadiness(
                 });
             }
             for (const consumer of system.consumers) {
+                if (isProvisionalHeatNote(consumer.note)) {
+                    issues.push({
+                        severity: 'warning',
+                        area: '생산공정',
+                        message: `${consumer.processName}: 열 공급원 「${system.name}」의 열 사용량이 임시 값입니다 — 공정별 열 사용 자료 없이 생산량 비율로 채웠습니다. 열량계 값이나 설비 자료로 바꾸세요(${SHARED_HEAT_RULE.anchor}).`,
+                        target: { type: 'process', id: consumer.processId },
+                    });
+                }
                 if (consumer.basis === 'INDIRECT_ESTIMATE' && !consumer.note?.trim()) {
                     issues.push({
                         severity: 'warning',
