@@ -1,6 +1,7 @@
 'use client';
 
 import type { GuidedStepId, GuidedStepStatus, GuidedStepState } from '@/lib/guided-map';
+import type { GuidedMapFlow, MapEdge, NodeProvenance } from '@/lib/guided-map-flow';
 import { useEffect, useRef, type ReactNode } from 'react';
 
 // 단계 상태별 지도 색상. 완료=에메랄드, 지금 여기=블루, 대기=점선, 잠김=흐림.
@@ -13,6 +14,10 @@ const STATUS_STYLE = {
 } as const;
 
 const ARROW = '#94a3b8';
+
+// flow가 없을 때(종전 호출부) 쓰는 가는 실선 — 지도가 종전과 똑같이 그려진다.
+const NEUTRAL_EDGE: MapEdge = { width: 1.5, reportOnly: false, flowing: false, description: '' };
+const NEUTRAL_EDGES: GuidedMapFlow['edges'] = { fuel: NEUTRAL_EDGE, electricity: NEUTRAL_EDGE, precursors: NEUTRAL_EDGE };
 
 interface NodeGeometry {
     x: number;
@@ -32,21 +37,34 @@ const NODE_GEOMETRY: Record<GuidedStepId, NodeGeometry> = {
     export: { x: 190, y: 448, w: 300, h: 58 },
 };
 
+// 값 출처 표시(막대의 범례와 같은 규칙): EU 기본값 = 빗금 + 점선 테두리, 그 밖은 실색.
+const PROVENANCE_TAG_COLOR: Record<NodeProvenance['kind'], { fill: string; stroke: string; text: string }> = {
+    OWN: { fill: '#f0fdfa', stroke: '#0f766e', text: '#115e59' },
+    ACTUAL: { fill: '#fffbeb', stroke: '#d97706', text: '#92400e' },
+    MIXED: { fill: '#fffbeb', stroke: '#f59e0b', text: '#92400e' },
+    DEFAULT: { fill: '#f1f5f9', stroke: '#64748b', text: '#334155' },
+};
+
 function GuidedNode({
     step,
     selected,
     onSelect,
+    provenance,
     children,
 }: {
     step: GuidedStepState;
     selected: boolean;
     onSelect: (id: GuidedStepId) => void;
+    provenance?: NodeProvenance;
     children?: ReactNode;
 }) {
     const geo = NODE_GEOMETRY[step.id];
     const style = STATUS_STYLE[step.status];
     const cx = geo.x + geo.w / 2;
-    const label = `${step.order}단계 ${step.title} — ${step.summary}`;
+    const label = `${step.order}단계 ${step.title} — ${step.summary}${provenance ? ` · 값 출처: ${provenance.label}` : ''}`;
+    const hatched = provenance?.kind === 'DEFAULT';
+    const tagColor = provenance ? PROVENANCE_TAG_COLOR[provenance.kind] : undefined;
+    const tagWidth = provenance ? provenance.label.length * 9 + 14 : 0;
 
     return (
         <g
@@ -88,8 +106,9 @@ function GuidedNode({
                 fill={style.fill}
                 stroke={style.stroke}
                 strokeWidth={style.width}
-                strokeDasharray={style.dash}
+                strokeDasharray={hatched ? '4 3' : style.dash}
             />
+            {hatched && <rect x={geo.x} y={geo.y} width={geo.w} height={geo.h} rx={8} fill="url(#guided-hatch)" pointerEvents="none" />}
             <text x={cx} y={geo.y + 23} textAnchor="middle" fontSize="14" fontWeight="600" fill={style.title}>
                 {step.status === 'done' ? '✓ ' : ''}
                 {step.order} {step.title}
@@ -104,7 +123,35 @@ function GuidedNode({
                     <rect x="1.5" y="5" width="9" height="7" rx="1.5" fill="#cbd5e1" />
                 </g>
             )}
+            {provenance && tagColor && (
+                <g aria-hidden="true" data-provenance={provenance.kind}>
+                    <rect x={geo.x + geo.w - tagWidth - 8} y={geo.y - 9} width={tagWidth} height={17} rx={8.5} fill={tagColor.fill} stroke={tagColor.stroke} strokeWidth={1} strokeDasharray={hatched ? '3 2' : undefined} />
+                    <text x={geo.x + geo.w - 8 - tagWidth / 2} y={geo.y + 3} textAnchor="middle" fontSize="10.5" fontWeight="600" fill={tagColor.text}>
+                        {provenance.label}
+                    </text>
+                </g>
+            )}
             {children}
+        </g>
+    );
+}
+
+// 입력 상자 → 「÷ 생산량」으로 가는 선. 굵기는 인증서 기준 부분의 비중(지도 흐름 lib이 정함), 점선은 보고용 흐름, 흐르는 점은 값이 들어온 선만.
+function FlowEdge({ edge, x1, y1, x2, y2 }: { edge: MapEdge; x1: number; y1: number; x2: number; y2: number }) {
+    return (
+        <g data-edge-width={edge.width.toFixed(2)} data-edge-report-only={edge.reportOnly}>
+            <title>{edge.description}</title>
+            <line
+                className={edge.flowing ? 'guided-edge guided-edge--flow' : 'guided-edge'}
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                stroke={ARROW}
+                strokeWidth={edge.width}
+                strokeDasharray={edge.reportOnly ? '3 4' : edge.flowing ? '7 5' : undefined}
+                markerEnd="url(#guided-arrow)"
+            />
         </g>
     );
 }
@@ -115,11 +162,14 @@ export function GuidedMap({
     selected,
     onSelect,
     outputLabel,
+    flow,
 }: {
     steps: GuidedStepState[];
     selected: GuidedStepId | null;
     onSelect: (id: GuidedStepId) => void;
     outputLabel: string;
+    /** 선 굵기·흐름·값 출처 표시. 없으면 종전 지도 그대로 그린다. */
+    flow?: GuidedMapFlow;
 }) {
     const svgRef = useRef<SVGSVGElement>(null);
     const prevStatuses = useRef<Map<GuidedStepId, GuidedStepStatus>>(new Map());
@@ -144,13 +194,14 @@ export function GuidedMap({
         };
     }, [steps]);
 
+    const edges = flow?.edges ?? NEUTRAL_EDGES;
     const byId = new Map(steps.map((step) => [step.id, step]));
     const node = (id: GuidedStepId) => {
         const step = byId.get(id);
         if (!step) {
             return null;
         }
-        return <GuidedNode step={step} selected={selected === id} onSelect={onSelect} />;
+        return <GuidedNode step={step} selected={selected === id} onSelect={onSelect} provenance={flow?.provenance[id]} />;
     };
 
     return (
@@ -175,17 +226,23 @@ export function GuidedMap({
                 .guided-node--locked:hover .guided-rect, .guided-node--locked:focus .guided-rect { stroke-width: 1; }
                 .guided-node--current .guided-rect { animation: guided-pulse 2.4s ease-in-out infinite; }
                 .guided-node--pop { transform-box: fill-box; transform-origin: center; animation: guided-pop 0.7s ease-out; }
+                .guided-edge--flow { animation: guided-flow 1.1s linear infinite; }
+                @keyframes guided-flow { to { stroke-dashoffset: -12; } }
                 @keyframes guided-pulse { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.4; } }
                 @keyframes guided-pop { 0% { transform: scale(1); } 35% { transform: scale(1.06); } 100% { transform: scale(1); } }
                 @media (prefers-reduced-motion: reduce) {
                     .guided-node .guided-rect { transition: none; }
                     .guided-node--current .guided-rect, .guided-node--pop { animation: none; }
+                    .guided-edge--flow { animation: none; }
                 }
             `}</style>
             <defs>
-                <marker id="guided-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <marker id="guided-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
                     <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </marker>
+                <pattern id="guided-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                    <line x1="0" y1="0" x2="0" y2="8" stroke="#94a3b8" strokeWidth="1.6" strokeOpacity="0.35" />
+                </pattern>
             </defs>
 
             <line x1="225" y1="82" x2="298" y2="108" stroke={ARROW} strokeWidth="1.5" markerEnd="url(#guided-arrow)" />
@@ -193,9 +250,9 @@ export function GuidedMap({
             <line x1="340" y1="166" x2="135" y2="200" stroke={ARROW} strokeWidth="1.5" markerEnd="url(#guided-arrow)" />
             <line x1="340" y1="166" x2="340" y2="200" stroke={ARROW} strokeWidth="1.5" markerEnd="url(#guided-arrow)" />
             <line x1="340" y1="166" x2="545" y2="200" stroke={ARROW} strokeWidth="1.5" markerEnd="url(#guided-arrow)" />
-            <line x1="132" y1="262" x2="300" y2="290" stroke={ARROW} strokeWidth="1.5" markerEnd="url(#guided-arrow)" />
-            <line x1="340" y1="262" x2="340" y2="290" stroke={ARROW} strokeWidth="1.5" markerEnd="url(#guided-arrow)" />
-            <line x1="547" y1="262" x2="380" y2="290" stroke={ARROW} strokeWidth="1.5" markerEnd="url(#guided-arrow)" />
+            <FlowEdge edge={edges.fuel} x1={132} y1={262} x2={300} y2={290} />
+            <FlowEdge edge={edges.electricity} x1={340} y1={262} x2={340} y2={290} />
+            <FlowEdge edge={edges.precursors} x1={547} y1={262} x2={380} y2={290} />
 
             {node('setup')}
             {node('products')}
