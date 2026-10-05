@@ -754,12 +754,12 @@ export default function SourceStreamsPage() {
                             {errors.source && <p className="mt-1 text-xs font-medium text-red-600">{errors.source}</p>}
                         </div>
                         {/* 공용 계량기: 여러 공정이 한 계량기의 연료를 나눠 쓰는 경우. 보조계량기면 식 41·42 정합계수,
-                            배분키면 합계=총량만 검사한다(2025/2547 ANNEX III A.1·A.2). 같은 그룹 이름으로 묶는다. */}
+                            그 외에는 합계=총량만 검사한다(2025/2547 ANNEX III A.1·A.2, ANNEX II A.3(2)). 같은 그룹 이름으로 묶는다. */}
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
                             <p className="text-sm font-semibold text-slate-800">공용 계량기 (선택)</p>
                             <p className="mt-1 text-xs leading-5 text-slate-600">
                                 보일러·집진설비처럼 여러 공정이 한 계량기의 연료를 나눠 쓰면, 공정별 행마다 같은 그룹 이름과 사업장 전체 계량값을 적으세요.
-                                공정별 보조계량기 값이면 정합계수(RecF = 전체 계량값 ÷ 행 합계)를 적용하고, 운전시간·정격용량·생산량으로 나눈 값이면 합계가 전체와 맞는지만 검사합니다.
+                                공정별 보조계량기 값이면 정합계수(RecF = 전체 계량값 ÷ 행 합계)를 적용합니다. 공정별 계량기가 없으면 규정은 생산량(기능단위)으로 나누라고 합니다 — 이때는 합계가 전체와 맞는지만 검사합니다. 운전시간·정격용량 비율은 규정에 없는 방법이라, 설비 정격 × 가동시간으로 공정별 사용량을 추정한 값일 때만 쓰고 비고에 근거를 적으세요(확인 필요).
                             </p>
                             <div className="mt-3 grid gap-3 md:grid-cols-2">
                                 <div>
@@ -812,7 +812,7 @@ export default function SourceStreamsPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label htmlFor="source-stream-shared-note" className="text-xs font-semibold text-slate-600">비고 (배분키 산출 근거)</label>
+                                    <label htmlFor="source-stream-shared-note" className="text-xs font-semibold text-slate-600">비고 (나눈 방법의 산출 근거 — 생산량 외 기준은 필수)</label>
                                     <input
                                         id="source-stream-shared-note"
                                         className={fieldClass}

@@ -44,9 +44,15 @@ export const ALLOCATION_RULES = {
     },
     KEY_SPLIT: {
         id: 'CBAM-ALLOC-RECF-02',
+        kind: '규정 필수',
+        anchor: 'ANNEX III, point A.1 last sentence · point A.2 second paragraph (공정별 측정값이 없을 때)',
+        text: 'Where data for a specific data set are not available for each production process, inputs, outputs, and corresponding emissions shall be attributed based on the rules set in point A.2 — With the exception of the rules specified in points A.2.1, A.2.2 and A.2.3 of this Annex, inputs, outputs, and corresponding emissions shall be attributed based on the functional unit of individual goods produced. — 공정별 자료가 없으면 열(A.2.2)·폐가스(A.2.3)·화학물질(A.2.1) 외에는 기능단위(생산량) 로 나눈다. 운전시간·정격용량을 비율로만 쓰는 배분키는 2025/2547에 열거되어 있지 않다. 이렇게 나눈 행에는 정합계수를 적용하지 않는다(정의상 합계=총량).',
+    },
+    INDIRECT_ESTIMATE: {
+        id: 'CBAM-ALLOC-RECF-03',
         kind: '규정상 허용',
-        anchor: 'ANNEX III, point A.1 last sentence · point A.2 (공정별 측정값이 없을 때)',
-        text: 'Where data for a specific data set are not available for each production process, inputs, outputs, and corresponding emissions shall be attributed based on the rules set in point A.2 — attribution will be based on a relevant underlying physical relationship. 배분키(운전시간·정격용량·생산량 등)로 나눈 행에는 정합계수를 적용하지 않는다(정의상 합계=총량).',
+        anchor: 'ANNEX II, point A.3(2) · A.3(7)–(8) · A.2(2)',
+        text: 'Indirect determination methods: Where no direct determination method is available for a required data set, … an indirect determination method may be used, such as: (b) calculation based on the installation\'s design data such as the energy efficiencies of technical units or calculated energy consumption per unit of product; (c) correlations based on empirical tests … — 설비 정격용량 × 가동시간 등으로 공정별 사용량 자체를 추정하면 간접결정방법이다. 직접 계량이 기술적으로 불가능하거나 비용이 과다하다는 사유를 모니터링 계획에 적고(A.3(7)·(8)), 상관식은 연 1회 타당성을 평가하며, 해마다 같은 방법을 쓴다(A.2(2)).',
     },
     MANUAL_SCOPE: {
         id: 'CBAM-ALLOC-MANUAL-01',
@@ -172,12 +178,22 @@ export function hasManualAllocationReason(
 // ── 공용 계량기 정합계수 ──────────────────────────────────────────────
 
 export const SHARED_METER_BASIS_LABEL: Record<NonNullable<SourceStream['shared_meter']>['basis'], string> = {
-    SUB_METER: '공정별 보조계량기',
-    OPERATING_HOURS: '운전시간 배분',
-    RATED_CAPACITY: '정격용량 배분',
-    OUTPUT_MASS: '생산량 배분',
-    OTHER: '기타 물리적 배분키',
+    SUB_METER: '공정별 보조계량기 값 (식 41·42)',
+    OUTPUT_MASS: '생산량 비율 (기능단위 — 규정이 정한 방법)',
+    OPERATING_HOURS: '운전시간 비율 (규정에 없음 — 근거 필요)',
+    RATED_CAPACITY: '정격용량 비율 (규정에 없음 — 근거 필요)',
+    OTHER: '기타 (규정에 없음 — 근거 필요)',
 };
+
+/**
+ * 규정에 열거된 방법이 아니어서 사유·근거를 남겨야 하는 근거.
+ * 2025/2547은 공정별 자료가 없을 때 기능단위(생산량)로 나누라고 한다(부속서 III A.2). 운전시간·정격용량을
+ * 비율로만 쓰는 배분키는 원문에 없고, 설비 정격 × 가동시간으로 공정별 사용량을 추정한 것이어야
+ * 간접결정방법(부속서 II A.3(2))으로 쓸 수 있다 — CBAM-ALLOC-RECF-03.
+ */
+export function sharedMeterBasisNeedsReview(basis: NonNullable<SourceStream['shared_meter']>['basis'] | undefined): boolean {
+    return basis === 'OPERATING_HOURS' || basis === 'RATED_CAPACITY' || basis === 'OTHER';
+}
 
 export type ReconciliationMode = 'SUB_METER' | 'KEY_SPLIT' | 'MIXED';
 
@@ -185,7 +201,7 @@ export interface ReconciliationGroup {
     group: string;
     period_id?: string;
     unit: string;
-    /** SUB_METER = 식 41·42 정합계수 적용, KEY_SPLIT = A.2 배분키(합계=총량 검사만), MIXED = 두 종류가 섞임(보정 불가). */
+    /** SUB_METER = 식 41·42 정합계수 적용, KEY_SPLIT = 공정별 측정값 없이 나눈 행(합계=총량 검사만), MIXED = 두 종류가 섞임(보정 불가). */
     mode: ReconciliationMode;
     installation_total: number;
     sub_total: number;
@@ -212,7 +228,7 @@ export const KEY_SPLIT_SUM_TOLERANCE = 0.005;
  * 공용 계량기 그룹 처리. 같은 보고기간·같은 group 이름의 행을 묶는다(기간을 섞으면 두 해가 한 계수로 묶인다).
  * - 보조계량기(SUB_METER): 식 41·42 — RecF = 사업장 계량값 / Σ행, 각 행 활동량 × RecF. 행이 1개여도
  *   「보조계량기 1개 vs 사업장 계량기」이므로 적용한다(규정 조건은 계기 수이지 공정 수가 아니다).
- * - 배분키(그 외): A.2 물리적 관계 배분 — 정의상 Σ행 = 총량이어야 하므로 계수를 만들지 않고 합계만 검사한다.
+ * - 그 외(생산량·추정): 공정별 측정값이 없는 행 — 정의상 Σ행 = 총량이어야 하므로 계수를 만들지 않고 합계만 검사한다.
  *   계수를 적용하면 「정합계수 1.000」 흔적이 측정 데이터가 있는 것처럼 오도한다.
  * 보정하지 못하는 경우는 원본을 두고 reason에 남긴다 — 조용히 절반만 보정하면 보고서가 거짓을 말한다.
  */

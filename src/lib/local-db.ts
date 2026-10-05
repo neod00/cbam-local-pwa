@@ -188,8 +188,11 @@ export interface SourceStreamSharedMeter {
   installation_total_activity_data: number;
   /**
    * 행 활동량을 정한 근거. SUB_METER = 공정별 보조계량기(측정값) → A.1 식 41·42 정합계수 적용.
-   * 나머지 = 공정별 측정값이 없어 A.2 물리적 관계로 나눈 배분키 → 정합계수 없음(정의상 합계=총량).
-   * 행 합계가 총량과 다르면 배분키 계산이 틀린 것이므로 보정하지 않고 확인을 요구한다.
+   * OUTPUT_MASS = 공정별 측정값이 없어 생산량(기능단위)으로 나눈 값 — 규정이 정한 방법(부속서 III A.2). 정합계수 없음(정의상 합계=총량).
+   * OPERATING_HOURS·RATED_CAPACITY·OTHER = 규정에 열거된 방법이 아니다. 설비 정격 × 가동시간으로 공정별 사용량을
+   *   **추정**한 값이라면 간접결정방법(부속서 II A.3(2))으로 쓸 수 있으나 사유·근거를 남겨야 한다(CBAM-ALLOC-RECF-03).
+   *   저장값(enum)은 하위호환을 위해 그대로 둔다.
+   * 행 합계가 총량과 다르면 나눈 계산이 틀린 것이므로 보정하지 않고 확인을 요구한다.
    */
   basis: "SUB_METER" | "OPERATING_HOURS" | "RATED_CAPACITY" | "OUTPUT_MASS" | "OTHER";
   note?: string;
