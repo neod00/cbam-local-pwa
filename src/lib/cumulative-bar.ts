@@ -1,5 +1,6 @@
 import type { LocalCalculationResult } from './calculation-engine';
-import type { PurchasedPrecursor } from './local-db';
+import { getIndirectEmissionsApplicability } from './cbam-product-rules';
+import type { Product, PurchasedPrecursor } from './local-db';
 import { findDefaultValueReference, resolveDefaultSeeForYear, type ImportedDefaultValueReference } from './reference-workbooks';
 import type { SeeFlowBinding } from './see-flow';
 
@@ -53,6 +54,40 @@ const YEAR_LABEL: Record<'2026' | '2027' | '2028_ONWARDS', string> = {
 
 const SUM_TOLERANCE = 1e-6;
 const relativelyEqual = (a: number, b: number) => Math.abs(a - b) <= Math.max(SUM_TOLERANCE, Math.abs(b) * 1e-4);
+
+/**
+ * 제품 CN만 알 때(공정·생산량 입력 전)의 EU 기본값 기둥 — 「첫 답에 막대가 선다」(v4 §11).
+ * 생산량 가중치가 없으므로 **CN이 한 종류일 때만** 숫자를 낸다(여러 종류를 평균 내면 지어낸 숫자다).
+ */
+export function buildProductsOnlyDefaultColumn(input: {
+    products: Array<Pick<Product, 'name' | 'cn_code' | 'hs_code'>>;
+    defaultValues?: ImportedDefaultValueReference;
+    originCountry: string;
+    year: '2026' | '2027' | '2028_ONWARDS';
+}): DefaultColumn {
+    const withCn = input.products.filter((product) => (product.cn_code ?? '').replace(/\D/g, '').length >= 6);
+    if (withCn.length === 0) {
+        return { available: false, reason: '제품 CN 코드를 입력하면 EU 기본값 기둥이 먼저 섭니다.' };
+    }
+    if (!input.defaultValues) {
+        return { available: false, reason: 'EU 기본값 자료를 아직 불러오지 못했습니다. 앱을 다시 열거나 자료 업로드에서 가져오세요.' };
+    }
+    const cnList = Array.from(new Set(withCn.map((product) => (product.cn_code ?? '').replace(/\D/g, ''))));
+    if (cnList.length > 1) {
+        return { available: false, reason: `제품 CN이 ${cnList.length}종입니다 — 제품별 생산량을 넣으면 가중평균으로 EU 기본값 기둥이 섭니다.` };
+    }
+    const product = withCn[0];
+    const relevance = getIndirectEmissionsApplicability(product).relevance;
+    if (relevance === 'UNDETERMINED') {
+        return { available: false, reason: `「${product.name}」의 간접배출 관련성을 판정하지 못해 비교할 기준 범위가 정해지지 않았습니다 — 확인 필요.` };
+    }
+    const row = findDefaultValueReference(input.defaultValues, input.originCountry, cnList[0], input.year);
+    if (!row) {
+        return { available: false, reason: `${input.originCountry} · CN ${cnList[0]}의 EU 기본값을 찾지 못했습니다. 원산국과 CN을 확인하세요.` };
+    }
+    const resolved = resolveDefaultSeeForYear(row, input.year);
+    return { available: true, value: relevance === 'INCLUDED' ? resolved.total : resolved.direct, yearLabel: YEAR_LABEL[input.year], country: input.originCountry, productCount: 1 };
+}
 
 /** 이 보고기간의 신고 대상 결과에서, 그 CN의 EU 기본값을 생산량 가중평균한다. 하나라도 못 구하면 숫자를 내지 않는다. */
 export function buildDefaultColumn(input: {
@@ -131,16 +166,22 @@ export function buildCumulativeBar(input: {
     /** 지금 보는 범위(공정 탭)의 결과 */
     results: LocalCalculationResult[];
     precursors: PurchasedPrecursor[];
+    /** 신고 대상 제품 — 결과가 아직 없을 때 CN만으로 EU 기본값 기둥을 세우는 데 쓴다. */
+    products?: Array<Pick<Product, 'name' | 'cn_code' | 'hs_code'>>;
     defaultValues?: ImportedDefaultValueReference;
     originCountry: string;
     year: '2026' | '2027' | '2028_ONWARDS';
 }): CumulativeBarModel {
     const { binding } = input;
-    const defaultColumn = buildDefaultColumn(input);
 
     if (binding.isExample) {
-        return { empty: true, defaultColumn, blocks: [], headline: null, reportOnly: 0, measuredShare: null, gap: null };
+        // 결과가 없다 = 내 값 기둥은 없다. 제품 CN이 있으면 EU 기본값 기둥만 먼저 세운다.
+        const productsOnly = input.products
+            ? buildProductsOnlyDefaultColumn({ products: input.products, defaultValues: input.defaultValues, originCountry: input.originCountry, year: input.year })
+            : buildDefaultColumn(input);
+        return { empty: true, defaultColumn: productsOnly, blocks: [], headline: null, reportOnly: 0, measuredShare: null, gap: null };
     }
+    const defaultColumn = buildDefaultColumn(input);
 
     const headline = binding.seeCbamBasis;
     const out = binding.outputMassT;
