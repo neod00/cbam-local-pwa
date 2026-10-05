@@ -9,7 +9,7 @@ import { APP_SCOPE_EXCLUSION_TEXT, getAppScopeExclusion, getIndirectEmissionsApp
 import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';
 import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, reconcileSourceStreams } from './allocation-rules';
 import { CN_MASTER } from './cn-master.generated';
-import { IMPORTED_HEAT_RULE, resolveImportedHeat } from './measurable-heat';
+import { IMPORTED_HEAT_RULE, SHARED_HEAT_RULE, resolveImportedHeat, resolveProcessSharedHeat, resolveSharedHeatSystems } from './measurable-heat';
 
 export const REQUIRED_EU_TEMPLATE_SHEETS = [
     '0_Versions',
@@ -192,13 +192,24 @@ function createReportableExportScope(data: EuTemplateExportData): ReportableExpo
 
     // 공용 계량기 정합계수(식 41·42)는 범위를 거르기 **전** 전체 행에 적용한다 — 비CBAM 공정 행을 먼저
     // 빼면 그룹 합계가 달라져 계수가 틀린다. 이후 B_EmInst 활동자료·준비도 대조가 모두 보정값을 쓴다.
+    // 사내 공용 열 공급원(보일러·스팀 헤더)의 연료는 공정에 매이지 않는다(process_id 없음). 그 열을 받는 공정이 이 문서에
+    // 나갈 때만 B_EmInst에 싣는다 — 소비처가 하나도 없는 공급원의 연료는 CBAM 재화와 무관하다.
+    const consumedHeatSystems = new Set(
+        data.processes
+            .filter((process) => processIds.has(process.id))
+            .flatMap((process) => (process.heat_consumption ?? []).map((entry) => `${process.period_id ?? ''}|${entry.system.trim()}`))
+    );
+    const isScopedHeatStream = (sourceStream: SourceStream) => {
+        const name = sourceStream.heat_system?.name?.trim();
+        return Boolean(name && consumedHeatSystems.has(`${sourceStream.period_id ?? ''}|${name}`));
+    };
     const scopedSourceStreams = reconcileSourceStreams(data.sourceStreams ?? []).streams.filter((sourceStream) =>
-        Boolean(sourceStream.process_id && processIds.has(sourceStream.process_id))
+        Boolean(sourceStream.process_id && processIds.has(sourceStream.process_id)) || isScopedHeatStream(sourceStream)
     );
     // 배출원·전구물질은 자기 period_id와 **소속 공정**이 둘 다 이 기간이어야 한다.
     // 공정이 빠졌는데 그 자식만 남으면 EU 시트에서 갈 곳 없는 행이 된다.
     const sourceStreams = scopedSourceStreams.filter(
-        (sourceStream) => inPeriod(sourceStream) && inPeriodProcessIds.has(sourceStream.process_id ?? '')
+        (sourceStream) => inPeriod(sourceStream) && (isScopedHeatStream(sourceStream) || inPeriodProcessIds.has(sourceStream.process_id ?? ''))
     );
 
     const isReportablePrecursor = (precursor: PurchasedPrecursor) => {
@@ -496,7 +507,8 @@ function validateSourceStreamForEuExport(sourceStream: SourceStream): EuExportRe
     const issues: EuExportReadinessIssue[] = [];
     const target: EuExportIssueTarget = { type: 'sourceStream', id: sourceStream.id };
 
-    if (!sourceStream.process_id) {
+    // 열 공급원의 연료는 공정에 매이지 않는 것이 맞다 — 공정이 쓴 열량으로 귀속한다(CBAM-ALLOC-HEAT-02).
+    if (!sourceStream.process_id && !sourceStream.heat_system?.name?.trim()) {
         issues.push({
             severity: 'error',
             area: '생산공정',
@@ -1090,6 +1102,61 @@ export function evaluateEuExportReadiness(
 
     for (const sourceStream of exportScope.sourceStreams) {
         issues.push(...validateSourceStreamForEuExport(sourceStream));
+    }
+
+    // 사내 공용 열 공급원(보일러·스팀 헤더) — 연료 배출이 공정의 직접배출에서 빠져 열량 비율로 귀속된다(CBAM-ALLOC-HEAT-02).
+    // 귀속하지 못하면 그 연료 배출이 **통째로 사라지므로** 막는다. 소비처가 없는 공급원도 마찬가지다(연료가 어디에도 안 붙는다).
+    {
+        const reconciledForHeat = reconcileSourceStreams(data.sourceStreams ?? []).streams;
+        const heatSystems = resolveSharedHeatSystems({ processes: data.processes, sourceStreams: reconciledForHeat, emissionsOf: calculateSourceStreamEmissions });
+        const heatPeriodMatches = (periodId: string | undefined) => !exportScope.period || (periodId ?? '') === exportScope.period.id || (!periodId && (allPeriods?.length ?? 0) <= 1);
+        for (const system of heatSystems.filter((item) => heatPeriodMatches(item.periodId))) {
+            const consumerProcess = system.consumers[0];
+            const firstStream = system.streamIds[0];
+            if (system.problem) {
+                issues.push({
+                    severity: 'error',
+                    area: '생산공정',
+                    message: `열 공급원 「${system.name}」: ${system.problem} 이대로면 그 연료 배출(${system.fuelEmissionsTco2e.toFixed(4)} tCO2e)이 어느 공정에도 귀속되지 않아 빠집니다(${SHARED_HEAT_RULE.anchor}). 지도 4단계에서 채우세요.`,
+                    target: consumerProcess ? { type: 'process', id: consumerProcess.processId } : { type: 'sourceStream', id: firstStream },
+                });
+            }
+            for (const consumer of system.consumers) {
+                if (consumer.basis === 'INDIRECT_ESTIMATE' && !consumer.note?.trim()) {
+                    issues.push({
+                        severity: 'warning',
+                        area: '생산공정',
+                        message: `${consumer.processName}: 열 공급원 「${system.name}」의 열 사용량을 추정(간접결정)으로 정했는데 근거가 비어 있습니다 — 직접 계량이 불가능하거나 비용이 과다한 사유와 추정 근거를 남겨야 합니다(ANNEX II A.3(2)·(7)·(8)).`,
+                        target: { type: 'process', id: consumer.processId },
+                    });
+                }
+            }
+        }
+        // 어느 공정에도, 어느 열 공급원에도 속하지 않은 배출원은 계산과 EU 문서 **어디에도 들어가지 않는다**(공정별 합계는 process_id로
+        // 모으고, 내보내기 범위도 process_id로 거른다). 그래서 위의 배출원별 검사도 이 행에는 돌지 않았다 — 조용히 배출이 사라진다.
+        // 열 공급원을 해제하거나 공정 연결을 지우면 생기므로 여기서 막는다.
+        for (const stream of data.sourceStreams ?? []) {
+            if (stream.process_id || stream.heat_system?.name?.trim() || !heatPeriodMatches(stream.period_id)) continue;
+            issues.push({
+                severity: 'error',
+                area: '생산공정',
+                message: `${stream.name}: 어느 생산공정에도, 어느 열 공급원에도 연결되지 않은 배출원입니다. 이대로면 ${calculateSourceStreamEmissions(stream).toFixed(4)} tCO2e가 계산과 EU 문서에서 빠집니다. 공정에 연결하거나, 보일러·스팀의 연료라면 열 공급원으로 묶으세요(지도 4단계).`,
+                target: { type: 'sourceStream', id: stream.id },
+            });
+        }
+        for (const process of exportScope.processes) {
+            for (const entry of process.heat_consumption ?? []) {
+                const name = entry.system.trim();
+                if (!heatSystems.some((system) => system.name === name && (system.periodId ?? '') === (process.period_id ?? ''))) {
+                    issues.push({
+                        severity: 'error',
+                        area: '생산공정',
+                        message: `${process.name}: 열 공급원 「${name}」에서 열을 받는다고 했는데 그 공급원의 연료 배출원이 없습니다. 이대로면 이 공정은 그 열의 배출을 0으로 계산합니다. 지도 4단계에서 연료를 연결하세요.`,
+                        target: { type: 'process', id: process.id },
+                    });
+                }
+            }
+        }
     }
 
     // 폐가스가 있고 공정이 둘 이상이면 공정 간 폐가스 이전에 식 55의 WGcorr 보정이 필요할 수 있는데,
@@ -1798,9 +1865,13 @@ export function internalConsumptionSlot(senderNumber: number, receiverNumber: nu
 
 function createProcessCellWrites(
     processes: ProductionProcess[],
-    internalTransfers: InternalTransfer[] = []
+    internalTransfers: InternalTransfer[] = [],
+    heatScope: { processes: ProductionProcess[]; sourceStreams: SourceStream[] } = { processes: [], sourceStreams: [] }
 ): EuTemplateExportCellWrite[] {
     const writes: EuTemplateExportCellWrite[] = [];
+    // 사내 공용 열 공급원 — **전체 공정**의 열 사용량으로 나눈다. EU 문서에 나가는 공정만 보면 수출하지 않는 공정이 쓴 열이
+    // 분모에서 빠져 나가는 공정의 몫이 부풀려진다. 엔진과 같은 함수·같은 입력이다(정합계수 적용 후 연료 행).
+    const sharedHeatSystems = resolveSharedHeatSystems({ processes: heatScope.processes, sourceStreams: heatScope.sourceStreams, emissionsOf: calculateSourceStreamEmissions });
     const exported = processes.slice(0, 10);
     const numberById = new Map(exported.map((process, index) => [process.id, index + 1]));
 
@@ -1830,11 +1901,17 @@ function createProcessCellWrites(
         // (h) 측정가능열 수입 — i. 순 열량(TJ) L+46 · ii. 배출계수(tCO2/TJ) L+47. 템플릿 T열 수식이
         // L×L − M×M을 직접 내재배출에 더한다(식 52·55). L+43의 DirEm*에는 넣지 않는다 — 넣으면 두 번 센다.
         // 수출(M열)은 앱이 묻지 않으므로 비워 둔다(템플릿이 빈칸을 표시한다).
+        // 사내 공용 열 공급원에서 받은 몫도 같은 칸이다(「…heat received from a technical unit … that supplies heat to more than one
+        // production process」). 밖에서 산 열이 함께 있으면 합쳐 한 줄로 쓴다: Q = Q밖 + Q안, EF = (E밖 + E안) ÷ Q — 템플릿이 곱해 같은 값이 된다.
         const importedHeat = resolveImportedHeat(process);
-        if (importedHeat.applicable && !importedHeat.problem && importedHeat.emissionsTco2e > 0) {
+        const sharedHeat = resolveProcessSharedHeat(process, sharedHeatSystems);
+        const importedHeatUsable = importedHeat.applicable && !importedHeat.problem && importedHeat.emissionsTco2e > 0;
+        const heatTj = (importedHeatUsable ? importedHeat.tj : 0) + sharedHeat.tj;
+        const heatEmissions = (importedHeatUsable ? importedHeat.emissionsTco2e : 0) + sharedHeat.emissionsTco2e;
+        if (heatTj > 0 && heatEmissions > 0) {
             writes.push(
-                { sheetName: 'D_Processes', cell: `L${startRow + 46}`, label: '측정가능열 수입량(TJ)', value: importedHeat.tj, sourceId: process.id },
-                { sheetName: 'D_Processes', cell: `L${startRow + 47}`, label: '측정가능열 수입 배출계수', value: importedHeat.efTco2PerTj, sourceId: process.id },
+                { sheetName: 'D_Processes', cell: `L${startRow + 46}`, label: '측정가능열 수입량(TJ)', value: heatTj, sourceId: process.id },
+                { sheetName: 'D_Processes', cell: `L${startRow + 47}`, label: '측정가능열 수입 배출계수', value: heatEmissions / heatTj, sourceId: process.id },
             );
         }
 
@@ -2531,7 +2608,10 @@ export function createEuTemplateExportCellWrites(
         ...createAggregatedGoodsAndBoundaryCellWrites(exportData, cnCodeMap, countryMaps),
         ...createSourceStreamCellWrites(exportScope.sourceStreams),
         ...createEmissionsEnergyCellWrites(exportScope.processes, exportScope.products),
-        ...createProcessCellWrites(exportScope.processes, scopeInternalTransfers(data, exportScope)),
+        ...createProcessCellWrites(exportScope.processes, scopeInternalTransfers(data, exportScope), {
+            processes: data.processes,
+            sourceStreams: reconcileSourceStreams(data.sourceStreams ?? []).streams.filter((sourceStream) => Boolean(sourceStream.heat_system?.name?.trim())),
+        }),
         ...createPrecursorCellWrites(exportScope.precursors, exportScope.processes),
         ...createSummaryProductCellWrites(exportData),
     ];

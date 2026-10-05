@@ -68,6 +68,37 @@ export interface ReportingPeriod extends LocalEntity {
 }
 
 /**
+ * 사내 공용 열 — 보일러·스팀 헤더처럼 한 열 공급원이 둘 이상의 생산공정(또는 공정 밖 용도)에 열을 보낼 때,
+ * 공정이 그 열을 얼마 썼는지. 2025/2547 부속서 III A.3: 측정가능열을 만드는 연료가 둘 이상의 공정에 쓰이면 그 연료
+ * 배출은 공정의 직접배출(DirEm*)에 넣지 않고 EmH,imp(쓴 열량 기준)로 귀속한다(CBAM-ALLOC-HEAT-02).
+ * 한 공정이 열 공급원 둘에서 받을 수 있어 배열이다.
+ */
+export type HeatQuantityBasis = "METERED" | "EFFICIENCY_PROXY" | "INDIRECT_ESTIMATE";
+
+export interface HeatConsumption {
+  /** 열 공급원 이름 — 연료 배출원의 heat_system.name과 같아야 한다(보고기간도 같아야 한다). */
+  system: string;
+  quantity: number;
+  unit: "Gcal" | "GJ" | "MWh" | "TJ";
+  /**
+   * 이 공정의 열 사용량을 어떻게 정했는가.
+   * METERED = 열량계 계측(부속서 II C.1.2.1 방법 1) · EFFICIENCY_PROXY = 연료 투입 × 측정 효율(방법 2) ·
+   * INDIRECT_ESTIMATE = 설계자료·가동시간 등으로 추정(부속서 II A.3(2), 근거 필수).
+   */
+  basis: HeatQuantityBasis;
+  note?: string;
+}
+
+/** 열 공급원의 연료 배출원에 붙는 표시. 행마다 같은 공정 밖 사용량을 적는다(별도 store가 없어 .cbam 하위호환 유지). */
+export interface SourceStreamHeatSystem {
+  name: string;
+  /** CBAM 생산공정이 아닌 곳(사무동 난방·비대상 용도·앱에 없는 공정)에서 쓴 열. 전체 열량에 넣어 그 몫의 배출을 뺀다. */
+  outside_quantity?: number;
+  outside_unit?: "Gcal" | "GJ" | "MWh" | "TJ";
+  outside_note?: string;
+}
+
+/**
  * 공용 전력 계량기 — 여러 공정이 한 계량기(한전 고지서)의 전력을 나눠 쓸 때 이 공정 몫을 어떻게 정했는지.
  * 연료의 SourceStreamSharedMeter처럼 행마다 같은 총량을 적는다(별도 store가 없어 .cbam 하위호환이 유지된다).
  * 연료와 다른 점: **나눈 결과를 저장할 때 electricity_mwh에 써 둔다.** 그래서 이 필드를 모르는 옛 버전 앱도
@@ -114,6 +145,12 @@ export interface ProductionProcess extends LocalEntity {
    * electricity_mwh에 이미 들어 있다 — 엔진은 이 필드로 산술을 하지 않고 합계만 검사한다.
    */
   electricity_shared_meter?: ElectricitySharedMeter;
+  /**
+   * 사내 공용 열 공급원(보일러·스팀 헤더)에서 이 공정이 받아 쓴 열(CBAM-ALLOC-HEAT-02). 있으면 엔진이 그 공급원의
+   * 연료 배출을 쓴 열량 비율로 귀속해 직접배출에 더한다 — 이 필드를 모르는 옛 앱이 열면 그 배출이 사라지므로
+   * 백업 format_version 4로 막는다.
+   */
+  heat_consumption?: HeatConsumption[];
   /**
    * 「이 공정은 구매한 CBAM 강재(전구물질)를 쓰지 않는다」고 **사람이 확인**했는가.
    * 강재를 사다 가공하는 공정은 SEE의 대부분이 전구물질인데, 종전에는 전구물질을 하나도 넣지 않아도
@@ -219,6 +256,11 @@ export interface SourceStream extends LocalEntity {
   source: string;
   /** 공용 계량기 그룹(선택). 없으면 이 행은 단독 계량으로 본다. */
   shared_meter?: SourceStreamSharedMeter;
+  /**
+   * 이 연료가 둘 이상의 공정이 같이 쓰는 열 공급원(보일러·스팀 헤더)의 연료인가(CBAM-ALLOC-HEAT-02).
+   * 있으면 어느 공정의 직접배출에도 들어가지 않고(process_id를 비워 둔다) 열 공급원으로 모여, 공정이 쓴 열량 비율로 귀속된다.
+   */
+  heat_system?: SourceStreamHeatSystem;
 }
 
 // 산정보고서(Word)에만 쓰이는 사용자 입력. 앱이 산정 데이터로는 알 수 없는 것들
@@ -434,8 +476,10 @@ export interface CbamBackupManifest {
    * 2 = 사내 이송(internal_transfers)이 들어 있다. 이송을 모르는 옛 앱이 이 백업을 열면 이송을 조용히 버려
    * 받는 제품의 SEE가 낮아진다 — 그래서 옛 앱이 거부하도록 버전을 올린다. 이송이 없으면 1로 써서 옛 앱도 읽는다.
    * 3 = 공정이 사업장 밖에서 산 측정가능열을 쓴다(measurable_heat_import). 같은 이유로 옛 앱이 거부해야 한다.
+   * 4 = 사내 공용 열 공급원(heat_system)과 공정별 열 사용량(heat_consumption)이 있다. 옛 앱이 열면 그 연료 배출이
+   *     어느 공정에도 귀속되지 않아 사라진다 — 그래서 옛 앱이 거부한다.
    */
-  format_version: 1 | 2 | 3;
+  format_version: 1 | 2 | 3 | 4;
   app_name: typeof CBAM_LOCAL_APP_NAME;
   app_version: string;
   exported_at: string;
@@ -649,10 +693,13 @@ export function createLocalBackup(data: BackupData, exportedAt = nowIso()): Cbam
     manifest: {
       format: "cbam-local-backup",
       // 옛 앱이 새 자료를 조용히 버리고 더 작은 SEE를 내지 않도록, 그 자료가 있을 때만 판본을 올린다.
-      // 3 = 공정이 산 측정가능열(EmH,imp)을 쓴다 · 2 = 사내 이송이 있다 · 1 = 둘 다 없다.
-      format_version: data.processes.some((process) => process.measurable_heat_import === "YES")
-        ? 3
-        : (data.internal_transfers ?? []).length > 0 ? 2 : 1,
+      // 4 = 사내 공용 열 공급원 · 3 = 공정이 산 측정가능열(EmH,imp)을 쓴다 · 2 = 사내 이송이 있다 · 1 = 모두 없다.
+      format_version: data.source_streams.some((stream) => Boolean(stream.heat_system?.name?.trim()))
+        || data.processes.some((process) => (process.heat_consumption ?? []).length > 0)
+        ? 4
+        : data.processes.some((process) => process.measurable_heat_import === "YES")
+          ? 3
+          : (data.internal_transfers ?? []).length > 0 ? 2 : 1,
       app_name: CBAM_LOCAL_APP_NAME,
       app_version: CBAM_LOCAL_APP_VERSION,
       exported_at: exportedAt,
@@ -735,7 +782,7 @@ export function parseBackupFile(content: string): CbamBackupFile {
 
   if (
     parsed.manifest?.format !== "cbam-local-backup" ||
-    ![1, 2, 3].includes(parsed.manifest.format_version as number) ||
+    ![1, 2, 3, 4].includes(parsed.manifest.format_version as number) ||
     !parsed.data
   ) {
     throw new Error("유효하지 않거나 지원하지 않는 .cbam 백업 파일입니다.");

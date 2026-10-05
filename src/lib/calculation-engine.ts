@@ -2,7 +2,7 @@ import type { DirectEmissionsInputMode, Product, ProductOutputLine, ProductRepor
 import { calculateSourceStreamEmissions, calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';
 import { APP_SCOPE_EXCLUSION_TEXT, getAppScopeExclusion, getIndirectEmissionsApplicability } from './cbam-product-rules';
 import type { IndirectEmissionsRelevance } from './cbam-product-rules';
-import { IMPORTED_HEAT_RULE, resolveImportedHeat } from './measurable-heat';
+import { IMPORTED_HEAT_RULE, SHARED_HEAT_RULE, resolveImportedHeat, resolveProcessSharedHeat, resolveSharedHeatSystems } from './measurable-heat';
 import { isUnverifiedActualPrecursor, unverifiedActualPrecursorMessage } from './precursor-verification';
 import { getProductReportingScope, getProductReportingScopeLabel, isCbamReportingScope } from './reporting-scope';
 import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, RECONCILIATION_REVIEW_DEVIATION, checkElectricitySharedMeters, getDirectEmissionsInputMode, hasManualAllocationReason, isElectricitySplitStale, reconcileSourceStreams, resolveActivityLevelRole, sharedMeterBasisNeedsReview, SHARED_METER_BASIS_LABEL } from './allocation-rules';
@@ -96,8 +96,12 @@ export interface LocalCalculationResult {
     output_mass_t: number;
     /** 귀속 직접배출 AttrEmDir = DirEm* + EmH,imp (부속서 III 식 55). 배출원 대조(source_stream_delta)는 DirEm*만 본다. */
     direct_emissions_tco2e: number;
-    /** 그중 사업장 밖에서 산 측정가능열의 배출 EmH,imp — 이 결과(라인)에 배분된 몫. 없으면 0. */
+    /** 그중 측정가능열의 배출 EmH,imp(사업장 밖에서 산 열 + 사내 공용 열 공급원에서 받은 몫) — 이 결과(라인)에 배분된 몫. 없으면 0. */
     imported_heat_emissions_tco2e?: number;
+    /** EmH,imp 중 사내 공용 열 공급원(보일러·스팀 헤더)에서 받은 몫 — 이 결과(라인)에 배분된 몫. 산식은 shared_heat_formulas. */
+    shared_heat_emissions_tco2e?: number;
+    /** 사내 공용 열 귀속 산식 한 줄씩(공정 단위). 보고서가 그대로 싣는다. */
+    shared_heat_formulas?: string[];
     /**
      * 간접배출 관련성 — 3상태. 판정 불가면 see_cbam_basis가 null이다.
      *
@@ -534,8 +538,17 @@ function calculateOwnResults(input: {
         precursorsByProcess.set(precursor.process_id, group);
     }
 
+    // 사내 공용 열(보일러·스팀 헤더) — 연료 배출은 어느 공정의 DirEm*에도 넣지 않고 모아 두었다가 쓴 열량 비율로
+    // 귀속한다(2025/2547 부속서 III A.3, CBAM-ALLOC-HEAT-02). 그래서 공정별 배출원 합계에서 뺀다.
+    // 정합계수(공용 계량기)를 먼저 적용한 행으로 모은다.
+    const sharedHeatSystems = resolveSharedHeatSystems({
+        processes: input.processes,
+        sourceStreams: reconciliation.streams,
+        emissionsOf: calculateSourceStreamEmissions,
+    });
+
     for (const sourceStream of reconciliation.streams) {
-        if (!sourceStream.process_id) {
+        if (!sourceStream.process_id || sourceStream.heat_system?.name?.trim()) {
             continue;
         }
 
@@ -638,8 +651,17 @@ function calculateOwnResults(input: {
         // 식 55: AttrEmDir = DirEm* + EmH,imp (− 열 수출·폐가스·자가발전 보정은 미지원). 산 열은 사업장 안에
         // 연료가 없어 배출원(DirEm*)에 잡히지 않는다 — 따로 더하지 않으면 직접배출이 적게 나온다.
         const importedHeat = resolveImportedHeat(process);
-        const importedHeatEmissions = importedHeat.emissionsTco2e;
+        // 사내 공용 열 공급원에서 받은 몫도 같은 EmH,imp다(「…heat received from a technical unit … that supplies heat to more
+        // than one production process」). 하나로 합쳐 직접배출에 더한다 — 결과의 imported_heat_emissions_tco2e는 EmH,imp 합계다.
+        const sharedHeat = resolveProcessSharedHeat(process, sharedHeatSystems);
+        const importedHeatEmissions = importedHeat.emissionsTco2e + sharedHeat.emissionsTco2e;
         const attributedDirectEmissions = directEmissions + importedHeatEmissions;
+        for (const problem of sharedHeat.problems) {
+            addWarning(`확인 필요(자료): ${process.name}: ${problem} (${SHARED_HEAT_RULE.anchor})`, { type: 'process', id: process.id });
+        }
+        for (const note of sharedHeat.notes) {
+            addWarning(`확인 필요(규정): ${process.name}: ${note}`, { type: 'process', id: process.id });
+        }
         if (importedHeat.problem) {
             addWarning(
                 `확인 필요(자료): ${process.name}이 밖에서 산 열(스팀·온수)을 쓴다고 했는데 ${importedHeat.problem} 그 배출을 0으로 계산했습니다 — 직접배출이 적게 나옵니다(${IMPORTED_HEAT_RULE.anchor}).`,
@@ -920,6 +942,8 @@ function calculateOwnResults(input: {
                 output_mass_t: process.output_mass_t,
                 direct_emissions_tco2e: attributedDirectEmissions,
                 imported_heat_emissions_tco2e: importedHeatEmissions,
+                shared_heat_emissions_tco2e: sharedHeat.emissionsTco2e,
+                shared_heat_formulas: sharedHeat.formulas,
                 indirect_emissions_relevance: processIndirectApplicability.relevance,
                 indirect_emissions_rule: processIndirectApplicability.rule_code,
                 indirect_emissions_excluded_tco2e: indirectEmissionsExcluded,
@@ -983,6 +1007,8 @@ function calculateOwnResults(input: {
                     is_cbam_reportable: false,
                     direct_emissions_tco2e: 0,
                     imported_heat_emissions_tco2e: 0,
+                    shared_heat_emissions_tco2e: 0,
+                    shared_heat_formulas: sharedHeat.formulas,
                     indirect_emissions_excluded_tco2e: 0,
                     indirect_emissions_gross_tco2e: 0,
                     source_stream_emissions_tco2e: 0,
@@ -1055,6 +1081,8 @@ function calculateOwnResults(input: {
                 is_cbam_reportable: lineIsCbamReportable,
                 direct_emissions_tco2e: allocatedDirectEmissions,
                 imported_heat_emissions_tco2e: importedHeatEmissions * allocationShare,
+                shared_heat_emissions_tco2e: sharedHeat.emissionsTco2e * allocationShare,
+                shared_heat_formulas: sharedHeat.formulas,
                 indirect_emissions_excluded_tco2e: allocatedExcludedIndirectEmissions,
                 indirect_emissions_gross_tco2e: lineGrossIndirectEmissions,
                 source_stream_emissions_tco2e: sourceStreamEmissions * allocationShare,
