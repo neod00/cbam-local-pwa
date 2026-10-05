@@ -8,6 +8,7 @@ import { deriveGuidedSteps, getGuidedProgress, type GuidedStepId } from '@/lib/g
 import { CBAM_LAST_BACKUP_AT_KEY, describeNewProjectEffects, EXPORT_PERIOD_SETTING_KEY, exportLocalBackup, getLocalSetting, listLocalItems, setLocalSetting, startNewProject } from '@/lib/local-db';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { buildSeeFlowBinding } from '@/lib/see-flow';
+import { CumulativeBar } from './CumulativeBar';
 import { BarChart3, CircleHelp, FilePlus, Map as MapIcon, ShieldCheck, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -375,6 +376,7 @@ export function GuidedWorkspace() {
                         // 「수출 제품을 등록하세요」 같은 안내인데 이 노드만 숫자여서 자기 값으로 읽힌다.
                         outputLabel={binding.isExample ? '생산량 미입력' : `${fmtT(binding.outputMassT)} t`}
                     />
+                    <CumulativeBar binding={binding} results={scopedResults} precursors={viewData.precursors} />
                 </section>
                 <div ref={panelRef} className="min-w-0 xl:sticky xl:top-20 xl:self-start">
                     <GuidedStepPanel
