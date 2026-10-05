@@ -72,6 +72,12 @@ export const ALLOCATION_RULES = {
         anchor: 'Article 4(6) · Article 4(2)',
         text: 'Where goods to which the same functional unit applies are produced using different production routes within an installation, a single production process shall be used encompassing all production routes.',
     },
+    ELECTRICITY_SHARED_METER: {
+        id: 'CBAM-ALLOC-ELEC-01',
+        kind: '앱 내부 통제',
+        anchor: 'ANNEX III, point A.1 (Equations 41–42) · point A.2 second paragraph · ANNEX II, point A.2(1)(e), point A.3(2)',
+        text: '한 계량기의 전력을 여러 공정이 나눠 쓰면 공정별 전력 합계가 사업장 계량값과 같아야 한다(「neither double counting nor data gaps」). 나누는 기준은 셋뿐이다 — 공정별 계량기 값(식 41·42로 사업장 값에 맞춤), 공정별 자료가 없으면 기능단위(생산량), 또는 간접결정방법(설비용량 × 가동시간 등)으로 추정한 사용량. 나눈 값·기준·근거를 공정에 남긴다.',
+    },
     HEAT_IMPORT: {
         id: 'CBAM-ALLOC-HEAT-01',
         kind: '규정 필수',
@@ -298,4 +304,105 @@ export function sumReconciledSourceStreamEmissions(processId: string, streams: S
         .reduce((sum, stream) => sum + calculateSourceStreamEmissions(stream), 0);
     // run13 P2: trim binary noise (1049.9665725000002). 9 decimals of a tonne is a milligram.
     return Math.round(total * 1e9) / 1e9;
+}
+
+// ── 공용 전력 계량기 ──────────────────────────────────────────────────
+
+export type ElectricitySplitBasis = NonNullable<ProductionProcess['electricity_shared_meter']>['basis'];
+
+export const ELECTRICITY_SPLIT_BASIS_LABEL: Record<ElectricitySplitBasis, string> = {
+    SUB_METER: '공정별 계량기 값',
+    OUTPUT_MASS: '생산량 비율',
+    INDIRECT_ESTIMATE: '설비용량 × 가동시간 추정',
+};
+
+/** 기준마다 근거 조문이 다르다. 화면·배분 근거 문장이 이 표를 인용한다. */
+export const ELECTRICITY_SPLIT_BASIS_ANCHOR: Record<ElectricitySplitBasis, string> = {
+    SUB_METER: '2025/2547 부속서 III A.1 식 41·42',
+    OUTPUT_MASS: '2025/2547 부속서 III A.2 — 기능단위 기준',
+    INDIRECT_ESTIMATE: '2025/2547 부속서 II A.3(2) 간접결정방법 · 부속서 III A.1',
+};
+
+export interface ElectricityMeterGroup {
+    group: string;
+    period_id?: string;
+    /** 그룹 안 공정들의 기준이 다르면 MIXED — 한 계량기를 두 가지 방법으로 나눌 수는 없다. */
+    basis: ElectricitySplitBasis | 'MIXED';
+    installation_total_mwh: number;
+    /** 공정별 electricity_mwh 합계 */
+    sum_mwh: number;
+    process_ids: string[];
+    /** 확인이 필요한 이유(문제 없으면 빈 문자열). */
+    reason: string;
+}
+
+/** 공정별 전력 합계와 사업장 계량값의 허용 차이(비율). 나눌 때 0.0001 MWh로 반올림하므로 넉넉하다. */
+export const ELECTRICITY_SPLIT_SUM_TOLERANCE = 0.0005;
+/** 생산량 비율로 나눈 뒤 생산량이 이 비율 이상 바뀌면 다시 나누라고 알린다. */
+export const ELECTRICITY_SPLIT_STALE_TOLERANCE = 0.005;
+
+/**
+ * 공용 전력 계량기 그룹 검사. 같은 보고기간·같은 group 이름의 공정을 묶는다.
+ * 산술은 하지 않는다 — 나눈 값은 저장할 때 electricity_mwh에 들어갔다. 여기서는 그 뒤에 누가 한 공정의
+ * 전력만 손으로 고쳤거나 공정을 지워서 합계가 고지서와 어긋났는지를 본다.
+ */
+export function checkElectricitySharedMeters(
+    processes: Array<Pick<ProductionProcess, 'id' | 'period_id' | 'electricity_mwh' | 'electricity_shared_meter'>>
+): ElectricityMeterGroup[] {
+    const byGroup = new Map<string, typeof processes>();
+
+    for (const process of processes) {
+        const group = process.electricity_shared_meter?.group?.trim();
+        if (!group) continue;
+        const key = (process.period_id ?? '') + '|' + group;
+        const members = byGroup.get(key) ?? [];
+        members.push(process);
+        byGroup.set(key, members);
+    }
+
+    const groups: ElectricityMeterGroup[] = [];
+
+    for (const members of byGroup.values()) {
+        const first = members[0];
+        const meter = first.electricity_shared_meter;
+        const bases = new Set(members.map((process) => process.electricity_shared_meter?.basis));
+        const totals = new Set(members.map((process) => process.electricity_shared_meter?.installation_total_mwh));
+        const installationTotal = meter?.installation_total_mwh ?? 0;
+        const sum = members.reduce((total, process) => total + process.electricity_mwh, 0);
+
+        let reason = '';
+        if (bases.size > 1) {
+            reason = '공정마다 나누는 기준이 다릅니다 — 한 계량기는 한 가지 기준으로 나눠야 합니다. 다시 나누세요.';
+        } else if (totals.size > 1) {
+            reason = '공정마다 적힌 사업장 전체 계량값이 서로 다릅니다 — 다시 나누세요.';
+        } else if (!(installationTotal > 0)) {
+            reason = '사업장 전체 계량값이 비어 있거나 0입니다.';
+        } else if (members.length < 2) {
+            reason = '이 계량기를 같이 쓰는 공정이 하나만 남았습니다 — 나누기를 해제하거나 다시 나누세요.';
+        } else if (Math.abs(sum - installationTotal) > Math.max(0.001, installationTotal * ELECTRICITY_SPLIT_SUM_TOLERANCE)) {
+            reason = '공정별 전력 합계 ' + (Math.round(sum * 1e4) / 1e4) + ' MWh가 사업장 계량값 ' + installationTotal + ' MWh와 다릅니다 — 나눈 뒤에 한 공정의 전력을 따로 고쳤다면 다시 나누세요.';
+        }
+
+        groups.push({
+            group: meter?.group?.trim() ?? '',
+            period_id: first.period_id,
+            basis: bases.size > 1 || !meter ? 'MIXED' : meter.basis,
+            installation_total_mwh: installationTotal,
+            sum_mwh: sum,
+            process_ids: members.map((process) => process.id),
+            reason,
+        });
+    }
+
+    return groups.sort((a, b) => ((a.period_id ?? '') + '|' + a.group).localeCompare((b.period_id ?? '') + '|' + b.group));
+}
+
+/** 생산량 비율로 나눴는데 그 뒤 이 공정의 활동수준이 바뀌었는가. 다른 기준은 생산량과 무관하다. */
+export function isElectricitySplitStale(
+    process: Pick<ProductionProcess, 'electricity_shared_meter'>,
+    activityLevel: number
+): boolean {
+    const meter = process.electricity_shared_meter;
+    if (!meter || meter.basis !== 'OUTPUT_MASS' || !(meter.basis_value > 0)) return false;
+    return Math.abs(activityLevel - meter.basis_value) > meter.basis_value * ELECTRICITY_SPLIT_STALE_TOLERANCE;
 }

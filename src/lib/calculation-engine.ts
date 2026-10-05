@@ -5,8 +5,8 @@ import type { IndirectEmissionsRelevance } from './cbam-product-rules';
 import { IMPORTED_HEAT_RULE, resolveImportedHeat } from './measurable-heat';
 import { isUnverifiedActualPrecursor, unverifiedActualPrecursorMessage } from './precursor-verification';
 import { getProductReportingScope, getProductReportingScopeLabel, isCbamReportingScope } from './reporting-scope';
-import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, RECONCILIATION_REVIEW_DEVIATION, getDirectEmissionsInputMode, hasManualAllocationReason, reconcileSourceStreams, resolveActivityLevelRole } from './allocation-rules';
-import type { ReconciliationGroup } from './allocation-rules';
+import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, RECONCILIATION_REVIEW_DEVIATION, checkElectricitySharedMeters, getDirectEmissionsInputMode, hasManualAllocationReason, isElectricitySplitStale, reconcileSourceStreams, resolveActivityLevelRole } from './allocation-rules';
+import type { ElectricityMeterGroup, ReconciliationGroup } from './allocation-rules';
 
 export type ActivityData = Record<string, number>;
 
@@ -515,6 +515,15 @@ function calculateOwnResults(input: {
         }
     }
 
+    // 공용 전력 계량기는 **검사만** 한다(CBAM-ALLOC-ELEC-01). 나눈 값은 저장할 때 electricity_mwh에 들어갔으므로
+    // 여기서 산술을 바꾸지 않는다 — 합계가 고지서와 어긋났는지, 나눈 뒤 생산량이 바뀌었는지만 알린다.
+    const electricityGroupByProcessId = new Map<string, ElectricityMeterGroup>();
+    for (const group of checkElectricitySharedMeters(input.processes)) {
+        for (const processId of group.process_ids) {
+            electricityGroupByProcessId.set(processId, group);
+        }
+    }
+
     for (const precursor of input.precursors) {
         if (!precursor.process_id) {
             continue;
@@ -771,6 +780,19 @@ function calculateOwnResults(input: {
         const manualLines = eligibleOutputLines.filter((line) => line.allocation_basis === 'MANUAL');
         const manualTotal = manualLines.reduce((sum, line) => sum + line.manual_allocation_percent, 0);
         const activityLevel = validOutputLines.length > 0 ? massTotal : output;
+
+        const electricityGroup = electricityGroupByProcessId.get(process.id);
+        if (electricityGroup?.reason) {
+            addWarning(
+                `확인 필요(자료): 전력 공용 계량기 '${electricityGroup.group}' — ${electricityGroup.reason} (${ALLOCATION_RULES.ELECTRICITY_SHARED_METER.anchor})`,
+                { type: 'process', id: process.id }
+            );
+        } else if (electricityGroup && isElectricitySplitStale(process, activityLevel)) {
+            addWarning(
+                `확인 필요(자료): 전력 공용 계량기 '${electricityGroup.group}'를 생산량 비율로 나눈 뒤 ${process.name}의 생산량이 바뀌었습니다(나눌 때 ${process.electricity_shared_meter?.basis_value} t → 지금 ${activityLevel} t). 5단계에서 다시 나누세요.`,
+                { type: 'process', id: process.id }
+            );
+        }
 
         for (const context of lineContexts) {
             if (!context.role.needsConfirmation) continue;

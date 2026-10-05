@@ -67,6 +67,29 @@ export interface ReportingPeriod extends LocalEntity {
   status: "DRAFT" | "READY" | "CALCULATED";
 }
 
+/**
+ * 공용 전력 계량기 — 여러 공정이 한 계량기(한전 고지서)의 전력을 나눠 쓸 때 이 공정 몫을 어떻게 정했는지.
+ * 연료의 SourceStreamSharedMeter처럼 행마다 같은 총량을 적는다(별도 store가 없어 .cbam 하위호환이 유지된다).
+ * 연료와 다른 점: **나눈 결과를 저장할 때 electricity_mwh에 써 둔다.** 그래서 이 필드를 모르는 옛 버전 앱도
+ * 같은 숫자를 낸다 — 백업 format_version을 올릴 필요가 없다.
+ */
+export interface ElectricitySharedMeter {
+  group: string;
+  /** 사업장(전체) 계량값 (MWh) */
+  installation_total_mwh: number;
+  /**
+   * SUB_METER = 공정별 계량기 검침값 → 합계를 사업장 계량값에 맞춘다(2025/2547 ANNEX III A.1 식 41·42).
+   * OUTPUT_MASS = 공정별 자료가 없어 생산량(기능단위)으로 나눈다(ANNEX III A.2 둘째 단락).
+   * INDIRECT_ESTIMATE = 설비용량 × 가동시간 등으로 공정별 사용량을 추정한다(ANNEX II A.3(2) 간접결정방법)
+   *   → 추정 합계를 사업장 계량값에 맞춘다. 운전시간·정격용량을 「비율」로만 쓰는 배분키는 2025/2547에 없다.
+   */
+  basis: "SUB_METER" | "OUTPUT_MASS" | "INDIRECT_ESTIMATE";
+  /** 이 공정의 기준값 — SUB_METER·INDIRECT_ESTIMATE는 MWh, OUTPUT_MASS는 나눌 때의 활동수준(t). */
+  basis_value: number;
+  /** 계량값이 없는 이유·추정 근거. INDIRECT_ESTIMATE는 필수. */
+  note?: string;
+}
+
 export interface ProductionProcess extends LocalEntity {
   period_id?: string;
   product_id?: string;
@@ -86,6 +109,11 @@ export interface ProductionProcess extends LocalEntity {
    * 있지만 전력에는 근거를 남길 자리가 없었다(씨밤이 run11 P1-10). 선택 입력.
    */
   electricity_allocation_note?: string;
+  /**
+   * 공용 전력 계량기에서 이 공정 몫을 **앱이 나눠 준** 기록(CBAM-ALLOC-ELEC-01). 나눈 결과는
+   * electricity_mwh에 이미 들어 있다 — 엔진은 이 필드로 산술을 하지 않고 합계만 검사한다.
+   */
+  electricity_shared_meter?: ElectricitySharedMeter;
   /**
    * 「이 공정은 구매한 CBAM 강재(전구물질)를 쓰지 않는다」고 **사람이 확인**했는가.
    * 강재를 사다 가공하는 공정은 SEE의 대부분이 전구물질인데, 종전에는 전구물질을 하나도 넣지 않아도

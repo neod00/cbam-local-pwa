@@ -74,7 +74,8 @@ import {
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { describeSeeFlowIndirect, type SeeFlowBinding } from '@/lib/see-flow';
 import { calculateSourceStreamEmissions } from '@/lib/source-stream-calculation';
-import { DIRECT_EMISSIONS_INPUT_MODE_LABEL, sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
+import { DIRECT_EMISSIONS_INPUT_MODE_LABEL, ELECTRICITY_SPLIT_BASIS_LABEL, sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
+import { ElectricitySplit } from '@/components/guided/ElectricitySplit';
 import {
     createSourceStreamValidationErrors,
     FACTOR_SOURCE_TYPE_OPTIONS,
@@ -85,7 +86,7 @@ import {
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ExternalLink, Lock, Pencil, Plus, Sparkles, Trash2, Upload } from 'lucide-react';
 import { CURRENT_CBAM_PERIOD } from '@/lib/cbam-period';
 import Link from 'next/link';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 export interface GuidedData {
     loaded: boolean;
@@ -1588,6 +1589,9 @@ function ElectricityPanel({ data, steps, selectedProcessId, onSaved, onSelectSte
     const initial = pickProcess(data, selectedProcessId);
     const [processId, setProcessId] = useState(initial?.id ?? '');
     const process = data.processes.find((item) => item.id === processId) ?? initial;
+    // 「전력 나누기」를 적용하면 공정별 전력량이 한꺼번에 바뀐다. 아래 폼은 저장값을 useState 초깃값으로
+    // 읽으므로 다시 만들어야 한다 — 안 그러면 옛 값이 입력칸에 남고, 그대로 저장하면 나눈 값을 덮어쓴다.
+    const [splitRevision, setSplitRevision] = useState(0);
 
     if (!process) {
         return (
@@ -1602,6 +1606,17 @@ function ElectricityPanel({ data, steps, selectedProcessId, onSaved, onSelectSte
 
     return (
         <>
+            {/* 계량기 하나를 여러 공정이 같이 쓰는 사업장: 고지서 전체 값을 앱이 나눈다(CBAM-ALLOC-ELEC-01). */}
+            {data.processes.length > 1 && (
+                <ElectricitySplit
+                    processes={data.processes}
+                    results={data.results}
+                    onApplied={async () => {
+                        await onSaved();
+                        setSplitRevision((revision) => revision + 1);
+                    }}
+                />
+            )}
             <ProcessSelect data={data} value={process.id} onChange={setProcessId} />
             {/*
              * key로 공정을 묶는다 — 공정을 바꾸면 폼이 그 공정의 저장값으로 다시 만들어진다.
@@ -1610,7 +1625,9 @@ function ElectricityPanel({ data, steps, selectedProcessId, onSaved, onSelectSte
              * 입력칸은 그대로였고, 그 상태로 저장하면 A공정의 전력이 B공정에 기록됐다.
              * 화면에는 아무 이상이 없어 보이므로 사용자가 알아챌 방법이 없었다.
              */}
-            <ElectricityForm key={process.id} process={process} steps={steps} onSaved={onSaved} onSelectStep={onSelectStep} />
+            <Fragment key={splitRevision}>
+                <ElectricityForm key={process.id} process={process} steps={steps} onSaved={onSaved} onSelectStep={onSelectStep} />
+            </Fragment>
         </>
     );
 }
@@ -1656,6 +1673,15 @@ function ElectricityForm({
                 </p>
             )}
 
+            {/* 나눈 값을 여기서 따로 고치면 합계가 고지서와 어긋난다 — 고칠 곳이 위쪽임을 말해 준다. */}
+            {process.electricity_shared_meter && (
+                <p className="rounded-xl border border-teal-200 bg-teal-50/60 px-4 py-2.5 text-xs leading-5 text-teal-900">
+                    이 사용량은 공용 계량기 <span className="font-semibold">「{process.electricity_shared_meter.group}」</span>{' '}
+                    {fmt(process.electricity_shared_meter.installation_total_mwh, 4)} MWh를 나눈 몫입니다({ELECTRICITY_SPLIT_BASIS_LABEL[process.electricity_shared_meter.basis]}).
+                    사용량을 여기서 직접 고치면 공정별 합계가 고지서와 맞지 않게 됩니다 — 위의 「다시 나누기」를 쓰세요.
+                </p>
+            )}
+
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <Field label="연간 전력 사용량 (MWh)" hint="전기요금 고지서의 12개월 사용량(kWh) 합계 ÷ 1,000">
                     <input className={fieldClass} inputMode="decimal" value={mwh} onChange={(event) => setMwh(event.target.value)} placeholder="500" />
@@ -1676,7 +1702,7 @@ function ElectricityForm({
                 </Field>
                 <Field
                     label="공용 계량기에서 나눈 값이면 — 배분 근거 (선택)"
-                    hint="계량기 하나를 여러 공정이 같이 쓰면 이 공정 몫을 직접 계산해 위에 적고, 어떻게 나눴는지 남기세요. 검증인이 묻습니다. 근거 없는 추정치보다 생산량 비율이 설명하기 쉽습니다."
+                    hint="계량기 하나를 여러 공정이 같이 쓰면 위의 「전력 나누기」로 나누세요 — 몫과 근거가 자동으로 적힙니다. 직접 계산해 넣었다면 어떻게 나눴는지 여기에 남기세요. 검증인이 묻습니다."
                 >
                     <input className={fieldClass} value={allocationNote} onChange={(event) => setAllocationNote(event.target.value)} placeholder="예: 한전 계량기 5,412 MWh를 생산량 비율 3,240:1,860으로 배분" />
                 </Field>
