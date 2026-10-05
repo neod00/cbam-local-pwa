@@ -2,16 +2,19 @@
 
 import { CumulativeBar } from '@/components/guided/CumulativeBar';
 import { Button } from '@/components/ui';
+import { calculateLocalResults } from '@/lib/calculation-engine';
+import { fillEuDefault, type DefaultFill } from '@/lib/conversation-precursor';
 import { defaultProcessName } from '@/lib/conversation-process';
-import { listLocalItems, type Installation, type Product, type ProductionProcess, type ReportingPeriod } from '@/lib/local-db';
+import { getLocalSetting, listLocalItems, type Installation, type Product, type ProductionProcess, type PurchasedPrecursor, type ReportingPeriod } from '@/lib/local-db';
+import type { ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { buildSeeFlowBinding } from '@/lib/see-flow';
-import { PRODUCT_FAMILY_PRESETS, findDetailPreset, findFamilyPreset } from '@/lib/product-family-presets';
-import { deriveTalkState, describeCnInput, yearlyPeriodDraft, type TalkQuestionId } from '@/lib/talk-flow';
+import { PRODUCT_FAMILY_PRESETS, findDetailPreset, findDetailPresetForProduct, findFamilyPreset, getCalculationSetupForDetail } from '@/lib/product-family-presets';
+import { deriveTalkState, describeCnInput, describeTalkBarPartial, yearlyPeriodDraft, type TalkQuestionId } from '@/lib/talk-flow';
 import { AlertTriangle, ArrowRight, CheckCircle2, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { saveCompany, saveOutput, savePeriod, saveProduct } from './talk-writes';
+import { confirmNoPrecursors, saveCompany, saveOutput, savePeriod, savePrecursor, saveProduct } from './talk-writes';
 
 const fieldClass =
     'mt-1 block h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100';
@@ -22,25 +25,45 @@ interface TalkData {
     periods: ReportingPeriod[];
     products: Product[];
     processes: ProductionProcess[];
+    precursors: PurchasedPrecursor[];
+    /** 막대용 — 지도 화면과 같은 엔진으로 계산한 결과(첫 보고기간 것만) */
+    results: ReturnType<typeof calculateLocalResults>;
+    hasFuelOrElectricity: boolean;
 }
 
 const EDIT_EXISTING = 'edit-existing';
-const EMPTY: TalkData = { loaded: false, installations: [], periods: [], products: [], processes: [] };
-// 이번 단계에는 계산 결과가 없다 — 막대는 제품 CN만으로 서는 EU 기본값 기둥만 낸다(내 값 기둥은 입력이 생기는 다음 단계부터).
-const NO_RESULTS_BINDING = buildSeeFlowBinding([]);
+const EMPTY: TalkData = { loaded: false, installations: [], periods: [], products: [], processes: [], precursors: [], results: [], hasFuelOrElectricity: false };
 
 async function loadTalkData(): Promise<TalkData> {
-    const [installations, periods, products, processes] = await Promise.all([
+    const [installations, periods, allProducts, processes, productOutputLines, sourceStreams, precursors, internalTransfers] = await Promise.all([
         listLocalItems('installations'),
         listLocalItems('periods'),
         listLocalItems('products'),
         listLocalItems('processes'),
+        listLocalItems('product_output_lines'),
+        listLocalItems('source_streams'),
+        listLocalItems('precursors'),
+        listLocalItems('internal_transfers'),
     ]);
-    return { loaded: true, installations, periods, processes, products: products.filter((product) => isCbamReportingScope(getProductReportingScope(product))) };
+    // 막대는 지도 화면과 같은 엔진·같은 집계로 그린다(자체 산술 없음). 이 화면은 첫 보고기간만 다룬다.
+    const results = calculateLocalResults({ internalTransfers, products: allProducts, periods, processes, productOutputLines, sourceStreams, precursors })
+        .filter((result) => periods.length <= 1 || result.period_id === periods[0]?.id);
+    const hasFuelOrElectricity = sourceStreams.length > 0
+        || processes.some((process) => process.electricity_mwh > 0 || process.direct_attributable_emissions_tco2e > 0);
+    return {
+        loaded: true,
+        installations,
+        periods,
+        processes,
+        precursors,
+        results,
+        hasFuelOrElectricity,
+        products: allProducts.filter((product) => isCbamReportingScope(getProductReportingScope(product))),
+    };
 }
 
 /**
- * 질문으로 입력 — S1·S2: 사업장 → 보고기간 → 무엇을 만드시나요(제품군 → CN) → 생산량.
+ * 질문으로 입력 — S1~S3: 사업장 → 보고기간 → 무엇을 만드시나요(제품군 → CN) → 생산량 → 구매한 강재.
  * 한 번에 질문 하나. 답은 칩으로 남고, 칩의 「고치기」로 그 질문만 다시 연다. 저장은 talk-writes.ts 하나를 거친다.
  */
 export function TalkWorkspace() {
@@ -63,6 +86,21 @@ export function TalkWorkspace() {
     const [scrap, setScrap] = useState('');
     const [processName, setProcessName] = useState('');
     const [skippedOutput, setSkippedOutput] = useState(false);
+    // 구매 강재(S3)
+    const [reference, setReference] = useState<ImportedDefaultValueReference>();
+    const [skippedPrecursor, setSkippedPrecursor] = useState(false);
+    const [addingPrecursor, setAddingPrecursor] = useState(false);
+    const [hasPrecursors, setHasPrecursors] = useState<boolean | null>(null);
+    const [pName, setPName] = useState('');
+    const [pCn, setPCn] = useState('');
+    const [pConsumed, setPConsumed] = useState('');
+    const [pPurchased, setPPurchased] = useState('');
+    const [pCountry, setPCountry] = useState('');
+    const [pMode, setPMode] = useState<'' | 'ACTUAL' | 'DEFAULT'>('');
+    const [pDirect, setPDirect] = useState('');
+    const [pIndirect, setPIndirect] = useState('');
+    const [pSource, setPSource] = useState('');
+    const [pFill, setPFill] = useState<DefaultFill | null>(null);
 
     const reload = useCallback(async () => {
         setData(await loadTalkData());
@@ -88,17 +126,77 @@ export function TalkWorkspace() {
         };
     }, []);
 
-    const state = useMemo(() => deriveTalkState(data), [data]);
-    // 「나중에 입력」으로 넘긴 생산량 질문은 이번 화면에서만 건너뛴다(저장하지 않는다 — 다시 열면 다시 묻는다).
-    const current = state.current === 'output' && skippedOutput ? undefined : state.current;
-    const question: TalkQuestionId | undefined = editing ?? current;
+    useEffect(() => {
+        let active = true;
+        getLocalSetting<ImportedDefaultValueReference>('reference:default-values').then((value) => {
+            if (active) setReference(value);
+        });
+        return () => {
+            active = false;
+        };
+    }, []);
+
     const firstProduct = data.products[0];
+    const state = useMemo(() => deriveTalkState(data), [data]);
+    const binding = useMemo(() => buildSeeFlowBinding(data.results), [data.results]);
+    // 「나중에 입력」으로 넘긴 생산량 질문은 이번 화면에서만 건너뛴다(저장하지 않는다 — 다시 열면 다시 묻는다).
+    const current = (state.current === 'output' && skippedOutput) || (state.current === 'precursor' && skippedPrecursor) ? undefined : state.current;
+    const question: TalkQuestionId | undefined = editing ?? (addingPrecursor ? 'precursor' : current);
+    const firstProcess = data.processes.find((process) => process.period_id === data.periods[0]?.id);
+    const precursorsPending = Boolean(firstProcess) && state.precursorCount === 0 && !firstProcess?.no_purchased_precursors;
+    const barPartial = firstProcess ? describeTalkBarPartial({ hasFuelOrElectricity: data.hasFuelOrElectricity, precursorsPending }) : undefined;
+    const countries = useMemo(() => Array.from(new Set((reference?.rows ?? []).map((row) => row.country))).filter((name) => !name.startsWith('_')).sort((a, b) => a.localeCompare(b)), [reference]);
+    const precursorSetup = getCalculationSetupForDetail(firstProduct ? findDetailPresetForProduct(firstProduct) : undefined);
     const massNumber = Number(mass.replace(/,/g, ''));
     const scrapNumber = scrap.trim() === '' ? 0 : Number(scrap.replace(/,/g, ''));
     const family = findFamilyPreset(familyId);
     const detail = findDetailPreset(familyId, detailId);
     const cnDigits = cn.replace(/\D/g, '');
     const cnHint = describeCnInput(cnDigits, detail?.cnCandidates.map((candidate) => candidate.code) ?? []);
+
+    function resetPrecursorForm() {
+        setPName('');
+        setPCn('');
+        setPConsumed('');
+        setPPurchased('');
+        setPCountry('');
+        setPMode('');
+        setPDirect('');
+        setPIndirect('');
+        setPSource('');
+        setPFill(null);
+        setHasPrecursors(null);
+        setAddingPrecursor(false);
+    }
+
+    function submitPrecursor() {
+        if (!firstProcess) return;
+        if (pMode === '') {
+            setMessage('SEE 값을 어떻게 하시겠어요? 「공급사가 준 값이 있어요」나 「모르겠어요」를 고르세요.');
+            return;
+        }
+        if (pMode === 'DEFAULT' && !pFill?.ok) {
+            setMessage('먼저 「EU 기본값 채우기」를 누르세요.');
+            return;
+        }
+        const fill = pFill?.ok ? pFill : null;
+        void submit(async () => {
+            const error = await savePrecursor(firstProcess, {
+                name: pName,
+                cn: pCn,
+                consumed: pConsumed,
+                purchased: pPurchased,
+                country: pCountry,
+                mode: pMode,
+                directSee: pMode === 'DEFAULT' && fill ? String(fill.direct) : pDirect,
+                indirectSee: pMode === 'DEFAULT' && fill ? String(fill.indirect) : pIndirect,
+                source: pMode === 'DEFAULT' && fill ? fill.source : pSource,
+                justification: pMode === 'DEFAULT' && fill ? fill.justification : '',
+            });
+            if (!error) resetPrecursorForm();
+            return error;
+        });
+    }
 
     function openEditor(id: TalkQuestionId) {
         setMessage('');
@@ -146,11 +244,11 @@ export function TalkWorkspace() {
             <header className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <h1 className="text-lg font-bold tracking-tight text-slate-950">질문에 답만 하면 됩니다</h1>
-                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900">시험 버전 · 사업장·기간·제품·생산량까지</span>
+                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900">시험 버전 · 사업장·기간·제품·생산량·구매 강재까지</span>
                 </div>
                 <p className="mt-1 text-sm leading-6 text-slate-600">
                     한 번에 질문 하나씩 묻습니다. 답은 지도 화면과 <span className="font-semibold">같은 곳</span>에 저장되어서, 언제든 지도 화면으로 넘어가도 입력한 내용은 그대로입니다.
-                    구매 강재·연료·전력은 아직 지도 화면에서 이어서 입력하세요.
+                    연료·전력은 아직 지도 화면에서 이어서 입력하세요.
                 </p>
             </header>
 
@@ -158,17 +256,17 @@ export function TalkWorkspace() {
 
             {data.loaded && state.chips.length > 0 && (
                 <ul className="flex flex-wrap gap-2" aria-label="지금까지의 답">
-                    {state.chips.map((chip) => chip.id === 'output' ? (
+                    {state.chips.map((chip) => chip.id === 'output' || chip.id === 'precursor' ? (
                         <li key={chip.id}>
                             <Link
                                 href="/"
                                 className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 transition hover:border-emerald-400"
-                                aria-label="생산량은 지도 3단계에서 고칩니다"
-                                title="생산량 고치기는 지도 화면 3단계에서 합니다"
+                                aria-label={`${chip.title}은(는) 지도 화면에서 고칩니다`}
+                                title={chip.id === 'output' ? '생산량 고치기는 지도 화면 3단계에서 합니다' : '구매 강재 고치기는 지도 화면 6단계에서 합니다'}
                             >
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                                 <span className="text-emerald-700">{chip.title}</span> {chip.answer}
-                                <span className="text-[10px] font-bold text-emerald-600">고치기: 지도 3단계</span>
+                                <span className="text-[10px] font-bold text-emerald-600">고치기: 지도 {chip.id === 'output' ? '3' : '6'}단계</span>
                             </Link>
                         </li>
                     ) : (
@@ -386,13 +484,115 @@ export function TalkWorkspace() {
                 </section>
             )}
 
+            {data.loaded && question === 'precursor' && firstProcess && (
+                <section className="rounded-2xl border border-teal-200 bg-white p-5 shadow-sm" aria-label="질문 구매 강재">
+                    <p className="text-xs font-bold text-teal-800">질문 5</p>
+                    <h2 className="mt-1 text-base font-bold text-slate-950">
+                        {addingPrecursor ? '구매한 강재를 하나 더 넣어 주세요.' : `「${firstProduct?.name ?? '제품'}」을 만들려고 구매한 강재(선재·코일 등)가 있나요?`}
+                    </h2>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">철강 가공업체는 SEE의 대부분이 구매한 강재가 지니고 온 배출에서 나옵니다. 공급사의 실제 값을 모르면 EU 기본값으로 먼저 계산을 끝내고 나중에 바꾸면 됩니다.</p>
+
+                    {hasPrecursors === null && !addingPrecursor && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            <Button type="button" onClick={() => setHasPrecursors(true)}>네, 구매한 강재가 있어요</Button>
+                            <Button type="button" variant="secondary" disabled={busy} onClick={() => void submit(() => confirmNoPrecursors(firstProcess))}>아니요, 강재를 사다 쓰지 않아요</Button>
+                            <button type="button" onClick={() => setSkippedPrecursor(true)} className="text-xs font-semibold text-slate-500 hover:underline">지금은 모릅니다 — 나중에 입력</button>
+                        </div>
+                    )}
+                    {hasPrecursors === null && !addingPrecursor && message && <p className="mt-3 text-sm text-amber-700" role="alert">{message}</p>}
+
+                    {(hasPrecursors === true || addingPrecursor) && (
+                        <div className="mt-3 space-y-3">
+                            {precursorSetup.precursorCandidates.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="text-xs text-slate-500">자주 쓰는 원료:</span>
+                                    {precursorSetup.precursorCandidates.map((candidate) => (
+                                        <button
+                                            key={`${candidate.name}-${candidate.precursorCnCode}`}
+                                            type="button"
+                                            onClick={() => { setPName(candidate.name); setPCn(candidate.precursorCnCode); setPFill(null); }}
+                                            className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-teal-400"
+                                        >
+                                            {candidate.name} · {candidate.precursorCnCode}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            <label className="block text-sm font-semibold text-slate-700">원료 이름<input className={fieldClass} value={pName} onChange={(event) => setPName(event.target.value)} placeholder="선재(와이어로드)" /></label>
+                            <label className="block text-sm font-semibold text-slate-700">
+                                원료 CN 코드 (4자리 이상, 보통 8자리)
+                                <input className={fieldClass} value={pCn} onChange={(event) => { setPCn(event.target.value); setPFill(null); }} placeholder="72131000" inputMode="numeric" />
+                            </label>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <label className="block text-sm font-semibold text-slate-700">소비량 (t)<span className="block text-xs font-normal text-slate-500">이 공정에 투입한 양 — 만든 양이 아닙니다</span><input className={fieldClass} value={pConsumed} onChange={(event) => setPConsumed(event.target.value)} placeholder="1050" inputMode="decimal" /></label>
+                                <label className="block text-sm font-semibold text-slate-700">구매량 (t, 선택)<span className="block text-xs font-normal text-slate-500">기간 중 사 온 양</span><input className={fieldClass} value={pPurchased} onChange={(event) => setPPurchased(event.target.value)} placeholder="1100" inputMode="decimal" /></label>
+                            </div>
+                            <label className="block text-sm font-semibold text-slate-700">
+                                공급국가 — 이 원료를 만든 나라
+                                {countries.length > 0 ? (
+                                    <select className={fieldClass} value={pCountry} onChange={(event) => { setPCountry(event.target.value); setPFill(null); }}>
+                                        <option value="">— 고르세요 —</option>
+                                        {countries.map((country) => <option key={country} value={country}>{country}</option>)}
+                                    </select>
+                                ) : (
+                                    <input className={fieldClass} value={pCountry} onChange={(event) => { setPCountry(event.target.value); setPFill(null); }} placeholder="영문 국가명 (예: South Korea, Taiwan)" />
+                                )}
+                                <span className="block text-xs font-normal text-slate-500">앱이 대신 고르지 않습니다 — EU 기본값은 나라마다 다릅니다(같은 STS 와이어가 한국 4.015 · 대만 11).</span>
+                            </label>
+
+                            <div>
+                                <p className="text-sm font-semibold text-slate-700">이 원료의 SEE(제품 1톤당 배출량)는 어떻게 하시겠어요?</p>
+                                <div className="mt-1.5 flex flex-wrap gap-2">
+                                    <button type="button" onClick={() => setPMode('ACTUAL')} aria-pressed={pMode === 'ACTUAL'} className={`rounded-full border px-4 py-2 text-sm font-semibold ${pMode === 'ACTUAL' ? 'border-teal-600 bg-teal-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-400'}`}>공급사가 준 값이 있어요</button>
+                                    <button type="button" onClick={() => setPMode('DEFAULT')} aria-pressed={pMode === 'DEFAULT'} className={`rounded-full border px-4 py-2 text-sm font-semibold ${pMode === 'DEFAULT' ? 'border-teal-600 bg-teal-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-400'}`}>모르겠어요 (EU 기본값으로 채웁니다)</button>
+                                </div>
+                            </div>
+
+                            {pMode === 'ACTUAL' && (
+                                <div className="space-y-3 rounded-xl bg-slate-50 p-3">
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <label className="block text-sm font-semibold text-slate-700">SEE 직접분 (tCO₂e/t)<input className={fieldClass} value={pDirect} onChange={(event) => setPDirect(event.target.value)} placeholder="1.80" inputMode="decimal" /></label>
+                                        <label className="block text-sm font-semibold text-slate-700">SEE 간접분 (tCO₂e/t)<input className={fieldClass} value={pIndirect} onChange={(event) => setPIndirect(event.target.value)} placeholder="0.30" inputMode="decimal" /></label>
+                                    </div>
+                                    <label className="block text-sm font-semibold text-slate-700">값의 출처<input className={fieldClass} value={pSource} onChange={(event) => setPSource(event.target.value)} placeholder="공급사 회신 메일 2026-05-02" /></label>
+                                    <p className="text-xs leading-5 text-slate-500">제3자 검증보고서가 없는 공급사 값은 신고에 쓰려면 검증이 필요합니다 — 앱이 결과 화면에서 확인 필요로 알려 줍니다.</p>
+                                </div>
+                            )}
+
+                            {pMode === 'DEFAULT' && (
+                                <div className="space-y-2 rounded-xl bg-slate-50 p-3">
+                                    <Button type="button" variant="secondary" onClick={() => setPFill(fillEuDefault({ reference, country: pCountry, cnDigits: pCn.replace(/\D/g, '') }))}>EU 기본값 채우기</Button>
+                                    {pFill?.ok === false && <p className="text-sm text-amber-700" role="alert">{pFill.reason}</p>}
+                                    {pFill?.ok && (
+                                        <p className="text-sm leading-6 text-emerald-900" data-testid="talk-default-fill">
+                                            직접 <span className="font-semibold">{pFill.direct}</span> · 간접 <span className="font-semibold">{pFill.indirect}</span> tCO₂e/t — {pFill.message}
+                                            <span className="block text-xs text-slate-500">출처: {pFill.source}</span>
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Button type="button" onClick={submitPrecursor} disabled={busy}>{busy ? '저장 중…' : '답하기'}</Button>
+                                <button type="button" onClick={resetPrecursorForm} className="text-sm font-semibold text-slate-500 hover:underline">취소</button>
+                            </div>
+                            {message && <p className="text-sm text-amber-700" role="alert">{message}</p>}
+                        </div>
+                    )}
+                </section>
+            )}
+
             {data.loaded && !question && (
                 <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5" aria-label="이번 단계 완료">
                     <p className="flex items-center gap-2 text-sm font-bold text-emerald-900"><CheckCircle2 className="h-4 w-4" />여기까지가 이번 시험 버전의 질문입니다.</p>
                     <p className="mt-1 text-sm leading-6 text-emerald-900">
-                        다음 질문(구매한 강재)은 아직 준비 중입니다. 지도 화면에서 이어서 입력하면 지금까지의 답이 그대로 보입니다.
+                        다음 질문(연료·전력)은 아직 준비 중입니다. 지도 화면 4·5단계에서 이어서 입력하면 지금까지의 답이 그대로 보입니다.
                         {skippedOutput && ' 생산량은 지도 3단계에서 입력할 수 있습니다.'}
+                        {skippedPrecursor && ' 구매 강재는 지도 6단계에서 입력할 수 있습니다.'}
                     </p>
+                    {firstProcess && state.precursorCount > 0 && (
+                        <button type="button" onClick={() => { setMessage(''); setAddingPrecursor(true); }} className="mt-3 mr-3 text-sm font-semibold text-teal-700 hover:underline">구매 강재 하나 더 넣기</button>
+                    )}
                     <Link href="/" className="mt-3 inline-flex">
                         <Button type="button">지도 화면에서 이어서 입력하기<ArrowRight className="ml-2 h-4 w-4" /></Button>
                     </Link>
@@ -400,7 +600,7 @@ export function TalkWorkspace() {
             )}
 
             {data.loaded && (
-                <CumulativeBar binding={NO_RESULTS_BINDING} results={[]} precursors={[]} products={data.products} />
+                <CumulativeBar binding={binding} results={data.results} precursors={data.precursors} products={data.products} partialReason={barPartial} />
             )}
         </div>
     );
