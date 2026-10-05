@@ -35,10 +35,11 @@ Useful official links:
 ## Annex I and Annex II
 
 - Annex I is the CBAM goods scope list. A good must be in Annex I to be in scope, subject to exclusions and later amendments.
-- Annex II is not an out-of-scope list. It is the list of goods for which only direct emissions are to be taken into account under Article 7(1).
-- For Annex II goods, the final good's own electricity-related indirect emissions should not be treated as part of the CBAM certificate-basis embedded emissions.
-- Annex II treatment does not mean indirect emissions data is useless. It can still be useful for evidence, supplier review, LCA-style operational review, and workbook communication fields.
-- Annex II treatment also does not mean all precursor indirect emissions are ignored. Definitive-period system-boundary rules require precursor embedded emissions to be evaluated according to the precursor's own classification and the complex-good rules.
+- Annex II is not an out-of-scope list. Per the regulation text, it covers goods for which only direct emissions are to be taken into account under Article 7(1).
+- **Wording rule:** the app does not assert that a given CN code is "listed in Annex II". The only verified fact is that the EU official Communication Template (20241213) classifies definitive-period indirect relevance per goods category (`GOODS_INDIRECT_RELEVANCE` in `src/lib/cn-master.generated.ts`); legal equivalence with Annex II is not yet cross-checked against EUR-Lex (`CN_MASTER_LEGAL_BASIS_VERIFIED = false`). Use "EU 공식 CN 목록상 간접배출 비관련", not "Annex II direct-only".
+- For goods classified indirect-not-relevant, the final good's own electricity-related indirect emissions should not be treated as part of the CBAM certificate-basis embedded emissions.
+- Indirect-not-relevant classification does not mean indirect emissions data is useless. It can still be useful for evidence, supplier review, LCA-style operational review, and workbook communication fields.
+- Indirect-not-relevant classification also does not mean all precursor indirect emissions are ignored. Definitive-period system-boundary rules require precursor embedded emissions to be evaluated according to the precursor's own classification and the complex-good rules.
 
 ## Steel Interpretation
 
@@ -48,14 +49,14 @@ Required approach:
 
 - Use a CN-code master/reference table.
 - Store Annex I status.
-- Store Annex II direct-only status.
+- Store definitive-period indirect relevance as classified by the EU official CN list (not an asserted Annex II listing).
 - Store excluded goods status where applicable.
 - Store sector, aggregated goods category, production route, functional unit, GHG scope, and legal-source version.
 - Treat Chapter 72 and specific Chapter 73 headings as directed by the official Annex tables and the current imported reference workbooks, not by prefix heuristics alone.
 
-Safe UI wording for Annex II steel:
+Safe UI wording for indirect-not-relevant steel:
 
-- "Annex II direct-only: 인증서 산정 기준은 직접배출 중심"
+- "EU 공식 CN 목록상 간접배출 비관련: 인증서 산정 기준은 직접배출 중심"
 - "간접배출: 인증서 산정 제외, 보고/검토용 별도 관리"
 - "CBAM 산정 기준 SEE"
 - "참고용 총 SEE"
@@ -63,7 +64,8 @@ Safe UI wording for Annex II steel:
 Avoid:
 
 - "간접배출 없음"
-- "철강은 간접 제외" without saying "certificate-basis" or "Annex II direct-only"
+- "철강은 간접 제외" without saying "certificate-basis" or "EU 공식 CN 목록상 간접배출 비관련"
+- "Annex II direct-only" (blocked by `scripts/verify-ui-claims.mjs`; Annex II listing is unverified)
 - "HS 73 전체 CBAM 대상"
 
 ## SEE Values To Separate
@@ -78,21 +80,21 @@ The calculation result should separate:
 - `see_cbam_basis`: SEE basis for CBAM certificate scenario calculations.
 - `see_informational_total`: operational/review total SEE.
 
-For an Annex II final good:
+For an indirect-not-relevant final good (EU official CN list):
 
 ```text
 see_informational_total = see_direct + see_own_indirect + see_precursor_contribution
 see_cbam_basis = see_direct + eligible_precursor_contribution
 ```
 
-For a non-Annex II final good:
+For an indirect-relevant final good:
 
 ```text
 see_informational_total = see_direct + see_own_indirect + see_precursor_contribution
 see_cbam_basis = see_direct + see_own_indirect + eligible_precursor_contribution
 ```
 
-For complex goods, precursor contribution must be computed per precursor, using each precursor's own CN classification, origin, actual/default mode, and direct/indirect applicability. A final Annex II product does not automatically zero out the indirect portion embedded in every precursor.
+For complex goods, precursor contribution must be computed per precursor, using each precursor's own CN classification, origin, actual/default mode, and direct/indirect applicability. A final indirect-not-relevant product does not automatically zero out the indirect portion embedded in every precursor.
 
 ## SEFA and Certificate Scenario Relationship
 
@@ -136,8 +138,8 @@ P0 changes:
 - Split transitional-period assumptions from definitive-period logic.
 - Replace broad HS prefix indirect-emissions classification with CN master-driven classification.
 - Split `total_see` into `see_cbam_basis` and `see_informational_total`.
-- Keep own indirect emissions for Annex II goods as report/review data, but exclude them from certificate-basis SEE.
-- Model precursor contribution separately and preserve the possibility that non-Annex II precursor indirect emissions flow into an Annex II final good.
+- Keep own indirect emissions for indirect-not-relevant goods as report/review data, but exclude them from certificate-basis SEE.
+- Model precursor contribution separately and preserve the possibility that indirect-relevant precursor emissions flow into an indirect-not-relevant final good.
 - Keep `Summary_Products` formula cells read-only and strengthen the Export comparison report.
 
 P1 changes:
@@ -149,6 +151,6 @@ P1 changes:
 
 P2 changes:
 
-- Improve UI copy around Annex II, direct-only, certificate-basis SEE, and informational SEE.
+- Improve UI copy around indirect relevance (EU official CN list), certificate-basis SEE, and informational SEE.
 - Add template version-lock and mapping review metadata.
 - Add de minimis/threshold checks only after the current legal amendment source is confirmed and scoped.

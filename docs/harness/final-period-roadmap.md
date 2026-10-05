@@ -61,7 +61,7 @@ This is not only a UI improvement. It is the core model expansion needed to hand
 
 - `see_informational_total` is the operational review total.
 - `see_cbam_basis` is the value used for CBAM certificate scenario calculations.
-- Annex II direct-only treatment excludes the final good's own indirect emissions from `see_cbam_basis`, while keeping those emissions visible for reporting/review.
+- Indirect-not-relevant classification (EU official CN list) excludes the final good's own indirect emissions from `see_cbam_basis`, while keeping those emissions visible for reporting/review.
 - Precursor contribution must remain separate because precursor indirect emissions can still matter depending on the precursor's own classification.
 
 ## Allocation Model
