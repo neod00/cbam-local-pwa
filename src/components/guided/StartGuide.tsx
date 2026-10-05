@@ -1,7 +1,8 @@
 'use client';
 
 import { EXPLAIN_LEVEL_LABEL, type ExplainLevel } from '@/lib/step-explainers';
-import { BookOpen, FileSpreadsheet, Gauge, X } from 'lucide-react';
+import { BookOpen, FileSpreadsheet, Gauge, MessageCircleQuestion, X } from 'lucide-react';
+import Link from 'next/link';
 import { useExplainLevel } from './ExplainLevel';
 
 export const START_GUIDE_DISMISSED_KEY = 'cbam-local-start-guide-dismissed';
@@ -66,6 +67,18 @@ export function StartGuide({ onDone }: { onDone: () => void }) {
                     </div>
                 </div>
             </div>
+
+            <Link
+                href="/talk"
+                className="mt-4 flex items-start gap-3 rounded-xl border border-teal-200 bg-teal-50/50 p-3 transition hover:border-teal-400"
+                data-talk-card
+            >
+                <MessageCircleQuestion className="mt-0.5 h-5 w-5 flex-none text-teal-700" />
+                <span>
+                    <span className="block text-sm font-bold text-slate-900">질문에 답만 하면 됩니다 <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-900">시험 버전</span></span>
+                    <span className="mt-0.5 block text-xs leading-5 text-slate-600">한 번에 질문 하나씩 묻습니다. 지금은 사업장·기간·무엇을 만드는지까지이고, 그 뒤는 지도 화면에서 이어서 입력합니다. 답은 같은 곳에 저장됩니다.</span>
+                </span>
+            </Link>
 
             <p className="mt-4 text-xs leading-5 text-slate-500">언제든 오른쪽 위 「설명」 토글로 바꿀 수 있고, 입력한 내용은 그대로 유지됩니다.</p>
         </section>
