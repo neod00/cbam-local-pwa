@@ -306,7 +306,7 @@ export function TalkWorkspace() {
                 </div>
                 <p className="mt-1 text-sm leading-6 text-slate-600">
                     한 번에 질문 하나씩 묻습니다. 답은 지도 화면과 <span className="font-semibold">같은 곳</span>에 저장되어서, 언제든 지도 화면으로 넘어가도 입력한 내용은 그대로입니다.
-                    여러 공정이 같이 쓰는 에너지 나누기와 결과 확인은 아직 지도 화면에서 이어서 하세요.
+                    질문이 끝나면 아래에 지금까지의 결과가 나오고, 공정이 둘 이상이면 같이 쓴 에너지 나누기도 여기서 할 수 있습니다. EU 문서는 지도 화면 8단계에서 만듭니다.
                 </p>
             </header>
 
@@ -760,7 +760,7 @@ export function TalkWorkspace() {
                 <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5" aria-label="이번 단계 완료">
                     <p className="flex items-center gap-2 text-sm font-bold text-emerald-900"><CheckCircle2 className="h-4 w-4" />여기까지가 이번 시험 버전의 질문입니다.</p>
                     <p className="mt-1 text-sm leading-6 text-emerald-900">
-                        다음 질문(같이 쓴 에너지 나누기·결과 확인)은 아직 준비 중입니다. 지도 화면에서 이어서 입력하면 지금까지의 답이 그대로 보입니다 — 7단계에서 결과를, 8단계에서 EU 문서를 만들 수 있습니다.
+                        지금까지의 결과는 아래에 있습니다. 더 입력하거나 고치려면 지도 화면으로 이어가세요 — 입력한 답이 그대로 보입니다. 7단계에서 결과를, 8단계에서 EU 문서를 만들 수 있습니다.
                         {skipped.includes('output') && ' 생산량은 지도 3단계에서 입력할 수 있습니다.'}
                         {skipped.includes('precursor') && ' 구매 강재는 지도 6단계에서 입력할 수 있습니다.'}
                         {skipped.includes('fuel') && ' 연료는 지도 4단계에서 입력할 수 있습니다.'}

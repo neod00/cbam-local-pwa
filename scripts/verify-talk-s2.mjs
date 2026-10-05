@@ -119,6 +119,7 @@ assert.match(ui, /지금은 모릅니다 — 나중에 입력 \(생산량은 추
 assert.match(ui, /skip\('output'\)/);
 assert.ok(!/saveOutput\([^)]*localStorage/.test(ui) && !/localStorage/.test(ui), '건너뛰기는 저장하지 않는다');
 assert.match(ui, /chip\.id === 'output'/, '생산량 칩은 지도 3단계로 안내한다(고치기는 지도에서)');
-assert.match(ui, /다음 질문\(같이 쓴 에너지 나누기·결과 확인\)은 아직 준비 중입니다/);
+assert.doesNotMatch(ui, /아직 준비 중입니다/); // run20: 요약·나누기가 이미 있으니 「준비 중」이라 말하지 않는다
+assert.match(ui, /지금까지의 결과는 아래에 있습니다/);
 
 console.log('Talk S2 verified (공정 빌더 = 지도 패널 신규 경로와 필드·고정값 일치 · 차례 · 생산량은 추정하지 않음 · 쓰기 순서).');
