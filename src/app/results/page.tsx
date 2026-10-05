@@ -64,7 +64,7 @@ function describeAllocationBasis(result: LocalCalculationResult) {
         parts.push(
             group.applied
                 ? `공용 계량기 '${group.group}' RecF ${group.factor.toFixed(4)} (${formatNumber(group.installation_total)} / ${formatNumber(group.sub_total)} ${group.unit})`
-                : `공용 계량기 '${group.group}' ${group.mode === 'KEY_SPLIT' ? '배분키(정합계수 없음)' : '정합 미적용'}`
+                : `공용 계량기 '${group.group}' ${group.mode === 'KEY_SPLIT' ? '공정별 측정값 없이 배분(정합계수 없음)' : '정합 미적용'}`
         );
     }
     if (result.allocation_basis === 'MANUAL') {

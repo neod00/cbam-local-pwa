@@ -5,7 +5,7 @@ import type { IndirectEmissionsRelevance } from './cbam-product-rules';
 import { IMPORTED_HEAT_RULE, resolveImportedHeat } from './measurable-heat';
 import { isUnverifiedActualPrecursor, unverifiedActualPrecursorMessage } from './precursor-verification';
 import { getProductReportingScope, getProductReportingScopeLabel, isCbamReportingScope } from './reporting-scope';
-import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, RECONCILIATION_REVIEW_DEVIATION, checkElectricitySharedMeters, getDirectEmissionsInputMode, hasManualAllocationReason, isElectricitySplitStale, reconcileSourceStreams, resolveActivityLevelRole } from './allocation-rules';
+import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, RECONCILIATION_REVIEW_DEVIATION, checkElectricitySharedMeters, getDirectEmissionsInputMode, hasManualAllocationReason, isElectricitySplitStale, reconcileSourceStreams, resolveActivityLevelRole, sharedMeterBasisNeedsReview, SHARED_METER_BASIS_LABEL } from './allocation-rules';
 import type { ElectricityMeterGroup, ReconciliationGroup } from './allocation-rules';
 
 export type ActivityData = Record<string, number>;
@@ -689,6 +689,25 @@ function calculateOwnResults(input: {
                     { type: 'process', id: process.id }
                 );
             }
+        }
+
+        // 운전시간·정격용량 비율은 2025/2547에 열거된 방법이 아니다(CBAM-ALLOC-RECF-02·03). 계산은 바꾸지 않고
+        // 「확인 필요(규정)」로 알린다 — 설비 정격 × 가동시간으로 공정별 사용량을 추정한 값이라면 간접결정방법으로 쓸 수 있다.
+        for (const group of processReconciliation) {
+            const reviewRows = processSourceStreams.filter((stream) =>
+                reconciliationGroupByStreamId.get(stream.id) === group && sharedMeterBasisNeedsReview(stream.shared_meter?.basis)
+            );
+            if (reviewRows.length === 0) continue;
+            const basisNames = [...new Set(reviewRows.map((stream) => SHARED_METER_BASIS_LABEL[stream.shared_meter!.basis]))].join(' · ');
+            const missingNote = reviewRows.some((stream) => !stream.shared_meter?.note?.trim());
+            addWarning(
+                `확인 필요(규정): 공용 계량기 그룹 '${group.group}'를 「${basisNames}」로 나눴습니다. `
+                + `${ALLOCATION_RULES.KEY_SPLIT.anchor}: 공정별 측정값이 없으면 기능단위(생산량)로 나누는 것이 규정이 정한 방법이고, 운전시간·정격용량 비율은 원문에 없습니다. `
+                + `설비 정격 × 가동시간으로 공정별 사용량을 추정한 값이라면 간접결정방법으로 쓸 수 있습니다(${ALLOCATION_RULES.INDIRECT_ESTIMATE.anchor}) — `
+                + `계량이 불가능하거나 비용이 과다한 사유를 모니터링 계획에 적고 비고에 근거를 남기세요.`
+                + (missingNote ? ' 지금 비고(산출 근거)가 비어 있습니다.' : ''),
+                { type: 'process', id: process.id }
+            );
         }
 
         for (const precursor of processPrecursors) {

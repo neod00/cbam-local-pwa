@@ -677,6 +677,35 @@ assert.match(warningsOf(keySplitResults[0]), /확인 필요\(자료\): 공용 �
 assert.match(warningsOf(keySplitResults[0]), /point A\.2/);
 assert.equal(keySplitResults[0].direct_emissions_tco2e, 11400, '배분키 행은 보정하지 않는다 → 5,700 × 2');
 assert.equal(keySplitResults[0].reconciliation[0].mode, 'KEY_SPLIT');
+// 운전시간·정격용량 비율은 2025/2547에 열거된 방법이 아니다(2026-10-05 원문 대조) — 계산은 그대로, 「확인 필요(규정)」로 알린다.
+assert.match(warningsOf(keySplitResults[0]), /확인 필요\(규정\): 공용 계량기 그룹 '공용 보일러'를 「운전시간 비율 \(규정에 없음 — 근거 필요\)」로 나눴습니다/);
+assert.match(warningsOf(keySplitResults[0]), /기능단위\(생산량\)로 나누는 것이 규정이 정한 방법/);
+assert.match(warningsOf(keySplitResults[0]), /간접결정방법/);
+assert.match(warningsOf(keySplitResults[0]), /ANNEX II, point A\.3\(2\)/);
+assert.match(warningsOf(keySplitResults[0]), /비고\(산출 근거\)가 비어 있습니다/, '근거를 안 적으면 그 사실도 알린다');
+const keyWithNote = { ...keyMeter, note: '명판 정격 × 2025 가동일지 시간으로 공정별 사용량을 추정' };
+const keyNoteResults = calculateLocalResults({
+  processes: [{ ...process, id: 'proc-meter-a', product_id: 'product-1', direct_emissions_input_mode: 'SOURCE_STREAM_SUM' }, { ...process, id: 'proc-meter-b', product_id: 'product-2', direct_emissions_input_mode: 'SOURCE_STREAM_SUM' }],
+  precursors: [], products: meterProducts, periods: [period],
+  sourceStreams: [{ ...meterA, activity_data: 6000, shared_meter: keyWithNote }, { ...meterB, activity_data: 4000, shared_meter: keyWithNote }],
+});
+assert.match(warningsOf(keyNoteResults[0]), /확인 필요\(규정\): 공용 계량기 그룹 '공용 보일러'를 「운전시간 비율/, '근거를 적어도 규정에 없는 방법이라는 알림은 남는다');
+assert.doesNotMatch(warningsOf(keyNoteResults[0]), /비고\(산출 근거\)가 비어 있습니다/);
+// 생산량 비율과 보조계량기는 규정이 정한 방법이다 — 알림이 없다.
+const massMeter = { ...sharedMeter, basis: 'OUTPUT_MASS' };
+const massKeyResults = calculateLocalResults({
+  processes: [{ ...process, id: 'proc-meter-a', product_id: 'product-1', direct_emissions_input_mode: 'SOURCE_STREAM_SUM' }, { ...process, id: 'proc-meter-b', product_id: 'product-2', direct_emissions_input_mode: 'SOURCE_STREAM_SUM' }],
+  precursors: [], products: meterProducts, periods: [period],
+  sourceStreams: [{ ...meterA, activity_data: 6000, shared_meter: massMeter }, { ...meterB, activity_data: 4000, shared_meter: massMeter }],
+});
+assert.doesNotMatch(warningsOf(massKeyResults[0]), /규정에 없/, '생산량 비율은 규정이 정한 방법이다');
+assert.doesNotMatch(warningsOf(meterResultA), /규정에 없/, '보조계량기는 식 41·42다');
+assert.equal(keySplitResults[0].direct_emissions_tco2e, 11400, '알림만 추가했다 — 계산은 그대로');
+assert.equal(ALLOCATION_RULES.KEY_SPLIT.kind, '규정 필수', '공정별 자료가 없을 때 기능단위로 나누는 것은 허용이 아니라 규정이 정한 방법');
+assert.equal(ALLOCATION_RULES.INDIRECT_ESTIMATE.kind, '규정상 허용');
+assert.equal(ALLOCATION_RULES.INDIRECT_ESTIMATE.id, 'CBAM-ALLOC-RECF-03');
+assert.match(ALLOCATION_RULES.KEY_SPLIT.text, /functional unit of individual goods produced/);
+assert.doesNotMatch(ALLOCATION_RULES.KEY_SPLIT.text, /배분키\(운전시간·정격용량·생산량 등\)로 나눈 행/, '운전시간·정격용량을 규정상 배분키로 소개하지 않는다');
 // 정합계수가 1에서 20% 넘게 벗어나면 권고 경고(규정 한도 아님 — 단위·계량 오류 의심).
 const bigTotal = { ...sharedMeter, installation_total_activity_data: 20000 };
 const bigResults = calculateLocalResults({
