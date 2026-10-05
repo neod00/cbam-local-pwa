@@ -37,7 +37,7 @@ assert.equal(deriveTalkState({ installations: [inst], periods: [period], product
 const asked = deriveTalkState({ installations: [inst], periods: [period], products: [product] });
 assert.equal(asked.current, 'output', '제품까지 답하면 다음은 생산량(S2)');
 assert.deepEqual(plain(asked.chips.map((chip) => chip.id)), ['company', 'period', 'product']);
-const done = deriveTalkState({ installations: [inst], periods: [period], products: [product], processes: [{ id: 'pr', name: '공정', period_id: 'p', output_mass_t: 10, no_purchased_precursors: true }] });
+const done = deriveTalkState({ installations: [inst], periods: [period], products: [product], processes: [{ id: 'pr', name: '공정', period_id: 'p', output_mass_t: 10, no_purchased_precursors: true, electricity_mwh: 5, measurable_heat_import: 'NO' }], sourceStreams: [{ id: 's', name: '연료', process_id: 'pr' }] });
 assert.equal(done.current, undefined, '모든 질문에 답했으면 차례가 없다');
 assert.equal(done.chips[0].answer, '대일기업 · KR', '이름은 한글 표기가 있으면 그것');
 assert.equal(done.chips[2].answer, 'STS 나사 · CN 73181552');

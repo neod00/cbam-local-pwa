@@ -1,5 +1,5 @@
 import { getAppScopeExclusion, APP_SCOPE_EXCLUSION_TEXT, getCbamCoverage } from './cbam-product-rules';
-import type { Installation, Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod } from './local-db';
+import type { Installation, Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 
 /**
  * 질문으로 입력(대화형 모드 S1) — 어느 질문이 지금 차례인지와 답을 칩으로 보여 주는 순수 규칙.
@@ -8,7 +8,7 @@ import type { Installation, Product, ProductionProcess, PurchasedPrecursor, Repo
  * 값의 원본은 지도 화면과 같은 IndexedDB 하나라서, 질문으로 넣은 값을 지도 화면에서 고치고 돌아와도 칩이 따라간다 — 상태를 따로 두지 않는다.
  */
 
-export type TalkQuestionId = 'company' | 'period' | 'product' | 'output' | 'precursor';
+export type TalkQuestionId = 'company' | 'period' | 'product' | 'output' | 'precursor' | 'fuel' | 'electricity' | 'heat';
 
 export interface TalkChip {
     id: TalkQuestionId;
@@ -19,8 +19,13 @@ export interface TalkChip {
 }
 
 export interface TalkState {
-    /** 지금 물을 질문. 이번 단계(S1)의 모든 질문에 답했으면 undefined */
+    /** 지금 물을 질문(= pending의 첫째). 모든 질문에 답했으면 undefined */
     current?: TalkQuestionId;
+    /**
+     * 아직 답하지 않은 질문을 차례대로. 공정이 생기기 전에는 앞 질문 하나만(사업장이 없으면 제품을 저장할 곳이 없다),
+     * 공정이 생긴 뒤에는 구매 강재·연료·전력·열 중 남은 것 전부 — 화면이 「나중에 입력」으로 건너뛴 질문을 빼고 다음을 고를 수 있게.
+     */
+    pending: TalkQuestionId[];
     chips: TalkChip[];
     /** 첫 번째 말고 더 있는 것들 — 질문 화면은 첫 번째만 다루므로 나머지는 지도 화면으로 안내한다 */
     more: { installations: number; periods: number; products: number; processes: number };
@@ -37,6 +42,8 @@ export function deriveTalkState(input: {
     processes?: ProductionProcess[];
     /** 모든 전구물질 — 첫 공정의 것만 센다 */
     precursors?: PurchasedPrecursor[];
+    /** 모든 배출원 — 첫 공정의 것만 센다 */
+    sourceStreams?: SourceStream[];
 }): TalkState {
     const [installation] = input.installations;
     const [period] = input.periods;
@@ -75,21 +82,42 @@ export function deriveTalkState(input: {
         chips.push({ id: 'precursor', title: '구매 강재', answer: '없음 (확인함)' });
     }
 
-    // 앞 질문에 답이 있어야 다음 질문이 뜬다 — 사업장이 없으면 제품을 저장할 곳이 없다.
-    const current: TalkQuestionId | undefined = !installation
-        ? 'company'
-        : !period
-            ? 'period'
-            : !product
-                ? 'product'
-                : periodProcesses.length === 0
-                    ? 'output'
-                    : processPrecursors.length === 0 && !noPrecursorsConfirmed
-                        ? 'precursor'
-                        : undefined;
+    // 연료: 첫 공정에 배출원이 있으면 답한 것이다(연료를 안 쓰는 공정은 저장할 값이 없어 「나중에」로 건너뛴다 — 지도도 같다).
+    const processStreams = firstProcess ? (input.sourceStreams ?? []).filter((stream) => stream.process_id === firstProcess.id) : [];
+    if (processStreams.length > 0) {
+        chips.push({ id: 'fuel', title: '연료', answer: `${processStreams.length}건 · ${processStreams.map((stream) => stream.name).join(', ')}` });
+    }
+    // 전력: 사용량이 있으면 답한 것이다.
+    const electricityAnswered = Boolean(firstProcess && firstProcess.electricity_mwh > 0);
+    if (firstProcess && electricityAnswered) {
+        chips.push({ id: 'electricity', title: '전력', answer: `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 3 }).format(firstProcess.electricity_mwh)} MWh × ${firstProcess.electricity_ef_tco2e_per_mwh}` });
+    }
+    // 밖에서 산 스팀·온수: 답(NO/YES)이 있으면 답한 것이다. 「예」는 지도 4단계의 열 폼에서 입력한다.
+    const heatAnswer = firstProcess?.measurable_heat_import;
+    if (heatAnswer) {
+        chips.push({ id: 'heat', title: '산 스팀·온수', answer: heatAnswer === 'NO' ? '없음' : '있음 (지도 4단계에서 입력)' });
+    }
+
+    const pending: TalkQuestionId[] = [];
+    if (!installation) {
+        pending.push('company');
+    } else if (!period) {
+        pending.push('period');
+    } else if (!product) {
+        pending.push('product');
+    } else if (periodProcesses.length === 0) {
+        pending.push('output');
+    } else {
+        if (processPrecursors.length === 0 && !noPrecursorsConfirmed) pending.push('precursor');
+        if (processStreams.length === 0) pending.push('fuel');
+        if (!electricityAnswered) pending.push('electricity');
+        if (!heatAnswer) pending.push('heat');
+    }
+    const current: TalkQuestionId | undefined = pending[0];
 
     return {
         current,
+        pending,
         chips,
         more: {
             installations: Math.max(0, input.installations.length - 1),

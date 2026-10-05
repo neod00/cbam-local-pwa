@@ -4,8 +4,10 @@ import {
     buildPeriodPayload,
     buildPeriodUpdate,
     buildProductPayload,
+    buildElectricityUpdate,
     buildPrecursorCreate,
     buildProductUpdate,
+    validateElectricityDraft,
     validateInstallationDraft,
     validatePrecursorDraft,
     validatePeriodDraft,
@@ -15,8 +17,12 @@ import {
     type ProductDraft,
 } from '@/lib/guided-edit';
 import { buildProcessCreation, validateProcessAnswer, type ProcessAnswerDraft } from '@/lib/conversation-process';
+import { sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
+import { buildFuelStreamDraft, noImportedHeatDraft, type FuelAnswer } from '@/lib/conversation-energy';
 import { buildPrecursorDraft, type PrecursorAnswer } from '@/lib/conversation-precursor';
-import { createLocalItem, updateLocalItem, type Installation, type Product, type ProductionProcess, type ReportingPeriod } from '@/lib/local-db';
+import { buildImportedHeatUpdate, validateImportedHeatDraft } from '@/lib/measurable-heat';
+import { createLocalItem, updateLocalItem, type Installation, type Product, type ProductionProcess, type ReportingPeriod, type SourceStream } from '@/lib/local-db';
+import { createSourceStreamValidationErrors, firstSourceStreamError } from '@/lib/source-stream-input';
 
 /**
  * 질문으로 입력(대화형 모드)의 **유일한 쓰기 자리**. 이 폴더의 다른 파일은 저장소를 직접 부르지 않는다(scripts/verify-talk-s1.mjs가 잠근다).
@@ -104,5 +110,48 @@ export async function savePrecursor(process: ProductionProcess, answer: Precurso
 /** 「구매한 강재를 쓰지 않습니다」 확인 — 지도 6단계의 체크 칸과 같은 값(true)을 같은 방식으로 저장한다. */
 export async function confirmNoPrecursors(process: ProductionProcess): Promise<string | null> {
     await updateLocalItem('processes', { ...process, no_purchased_precursors: true });
+    return null;
+}
+
+/**
+ * 「연료」 답 — 첫 공정에 배출원을 하나 만들고 공정의 직접배출 합계를 맞춘다. 지도 4단계의 신규 경로와 같은 순서·같은 검증이다:
+ * 검증(상세 화면과 같은 함수) → 배출원 생성 → 공정 직접배출을 「배출원 합계」(공용 계량기 정합계수 보정 후)로 다시 맞춤.
+ */
+export async function saveFuel(process: ProductionProcess, existingStreams: SourceStream[], answer: FuelAnswer): Promise<string | null> {
+    const draft = buildFuelStreamDraft(answer, process);
+    // 상세 화면의 검증은 사용량 0을 통과시키지만(음수만 막는다), 질문에 답하면서 0t짜리 배출원이 저장되면 「연료를 입력했다」로 보인다 —
+    // 사용량을 적지 않았다고 알린다. 저장되는 레코드의 모양은 지도 4단계와 같다(더 엄격할 뿐이다).
+    if (!(draft.activity_data > 0)) {
+        return '연간 사용량을 입력하세요. 연료를 쓰지 않는 공정이면 「쓰지 않아요」를 누르세요.';
+    }
+    const error = firstSourceStreamError(createSourceStreamValidationErrors(draft));
+    if (error) {
+        return error;
+    }
+    const created = await createLocalItem('source_streams', draft);
+    const total = sumReconciledSourceStreamEmissions(process.id, [...existingStreams, created]);
+    await updateLocalItem('processes', { ...process, direct_attributable_emissions_tco2e: total, direct_emissions_input_mode: 'SOURCE_STREAM_SUM' });
+    return null;
+}
+
+/** 「전력」 답 — 지도 5단계와 같은 검증·같은 갱신 빌더(guided-edit.ts). */
+export async function saveElectricity(process: ProductionProcess, draft: { mwh: number; ef: number; efSource: string }): Promise<string | null> {
+    const full = { ...draft, allocationNote: '' };
+    const error = validateElectricityDraft(full);
+    if (error) {
+        return error;
+    }
+    await updateLocalItem('processes', buildElectricityUpdate(process, full));
+    return null;
+}
+
+/** 「밖에서 산 스팀·온수 없음」 — 지도 4단계 열 폼의 「아니요」 저장과 같은 검증·같은 빌더(measurable-heat.ts). 「예」는 여기서 받지 않는다. */
+export async function confirmNoImportedHeat(process: ProductionProcess): Promise<string | null> {
+    const draft = noImportedHeatDraft(process);
+    const error = validateImportedHeatDraft(draft);
+    if (error) {
+        return error;
+    }
+    await updateLocalItem('processes', buildImportedHeatUpdate(process, draft));
     return null;
 }

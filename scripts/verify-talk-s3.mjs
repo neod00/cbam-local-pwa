@@ -119,11 +119,11 @@ assert.equal(app.deriveTalkState({ ...base, processes: [proc()], precursors: [] 
 assert.equal(app.deriveTalkState({ ...base, processes: [proc()] }).current, 'precursor', 'precursors를 안 넘겨도(S2 호출부) 같다');
 assert.equal(app.deriveTalkState({ ...base, processes: [proc()], precursors: [pre({ process_id: 'other' })] }).current, 'precursor', '다른 공정의 전구물질은 이 공정의 답이 아니다');
 const withPre = app.deriveTalkState({ ...base, processes: [proc()], precursors: [pre(), pre({ id: 'pre2', name: '국산 선재' })] });
-assert.equal(withPre.current, undefined);
+assert.ok(!withPre.pending.includes('precursor'), '전구물질이 있으면 구매 강재는 답한 것(다음은 S4의 연료)');
 assert.deepEqual(plain(withPre.chips.at(-1)), { id: 'precursor', title: '구매 강재', answer: '2건 · 대만산 선재, 국산 선재' });
 assert.equal(withPre.precursorCount, 2);
 const none = app.deriveTalkState({ ...base, processes: [proc({ no_purchased_precursors: true })], precursors: [] });
-assert.equal(none.current, undefined, '「구매 강재 없음」을 확인했으면 더 묻지 않는다');
+assert.ok(!none.pending.includes('precursor'), '「구매 강재 없음」을 확인했으면 구매 강재는 더 묻지 않는다');
 assert.equal(none.chips.at(-1).answer, '없음 (확인함)');
 assert.equal(app.deriveTalkState({ ...base, processes: [], precursors: [pre()] }).current, 'output', '공정이 없으면 전구물질이 있어도 생산량부터');
 

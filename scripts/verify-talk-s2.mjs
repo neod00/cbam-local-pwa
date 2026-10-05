@@ -116,9 +116,9 @@ assert.match(saveOutput, /validateProcessAnswer\(draft\)/);
 assert.ok(!/updateLocalItem|deleteLocalItem/.test(saveOutput), 'S2는 새로 만들기만 한다(고치기·지우기는 지도 화면)');
 const ui = readFileSync('src/components/talk/TalkWorkspace.tsx', 'utf8');
 assert.match(ui, /지금은 모릅니다 — 나중에 입력 \(생산량은 추정할 수 없어서 비워 둡니다\)/, '생산량은 추정하지 않는다');
-assert.match(ui, /setSkippedOutput\(true\)/);
+assert.match(ui, /skip\('output'\)/);
 assert.ok(!/saveOutput\([^)]*localStorage/.test(ui) && !/localStorage/.test(ui), '건너뛰기는 저장하지 않는다');
 assert.match(ui, /chip\.id === 'output'/, '생산량 칩은 지도 3단계로 안내한다(고치기는 지도에서)');
-assert.match(ui, /다음 질문\(연료·전력\)은 아직 준비 중입니다/);
+assert.match(ui, /다음 질문\(같이 쓴 에너지 나누기·결과 확인\)은 아직 준비 중입니다/);
 
 console.log('Talk S2 verified (공정 빌더 = 지도 패널 신규 경로와 필드·고정값 일치 · 차례 · 생산량은 추정하지 않음 · 쓰기 순서).');
