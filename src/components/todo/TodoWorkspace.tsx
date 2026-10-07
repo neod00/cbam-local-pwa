@@ -234,6 +234,7 @@ export function TodoWorkspace() {
                     <h1 className="text-2xl font-bold tracking-tight text-slate-950" data-testid="todo-title">할 일 {result.counts.total}</h1>
                     <p className="mt-1 text-sm leading-6 text-slate-600" data-testid="todo-subtitle">{subtitle}</p>
                 </div>
+                <Link href="/submit" className="inline-flex items-center gap-1 text-sm font-bold text-teal-700 hover:underline">제출 화면으로<ArrowRight className="h-3.5 w-3.5" /></Link>
                 <div className="flex gap-2 text-xs font-semibold" role="group" aria-label="보기 방식">
                     <button type="button" aria-pressed={view === 'owner'} onClick={() => setView('owner')} className={`rounded-full border px-3 py-1.5 ${view === 'owner' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700'}`}>누가 할 일인지로 보기</button>
                     <button type="button" aria-pressed={view === 'area'} onClick={() => setView('area')} className={`rounded-full border px-3 py-1.5 ${view === 'area' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700'}`}>화면별로 보기</button>
