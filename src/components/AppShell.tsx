@@ -64,6 +64,7 @@ const pageTitles: Record<string, string> = {
     '/privacy': '개인정보 안내',
     '/talk': '질문으로 입력',
     '/todo': '할 일',
+    '/trace': 'SEE 추적',
 };
 
 const modernNavigation = [

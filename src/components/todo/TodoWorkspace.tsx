@@ -304,6 +304,7 @@ export function TodoWorkspace() {
                             </li>
                         ))}
                     </ul>
+                    <Link href="/trace" className="inline-flex items-center gap-1 text-sm font-bold text-teal-700 hover:underline">최종 SEE가 어디서 왔는지 거슬러 보기 (SEE 추적)<ArrowRight className="h-3.5 w-3.5" /></Link>
                     {data.attribution.notApplicable.length > 0 && (
                         <p className="text-xs leading-5 text-slate-500" data-testid="attribution-na">이 프로젝트에 해당하지 않는 점검 {data.attribution.notApplicable.length}건: {data.attribution.notApplicable.join(' · ')}</p>
                     )}

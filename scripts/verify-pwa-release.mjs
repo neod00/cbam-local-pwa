@@ -48,6 +48,7 @@ const expectedShellRoutes = [
   '/source-streams',
   '/talk',
   '/todo',
+  '/trace',
   '/terms',
   '/announcement',
   '/upload',
@@ -60,7 +61,7 @@ for (const route of expectedShellRoutes) {
 
 assert.equal(serviceWorker.includes('"/admin"'), false, 'protected admin route should not be cached by the service worker');
 assert.equal(serviceWorker.includes('"/admin/login"'), false, 'admin login should not be cached by the service worker');
-assert.ok(serviceWorker.includes('cbam-local-v9'), 'service worker cache version should be current');
+assert.ok(serviceWorker.includes('cbam-local-v10'), 'service worker cache version should be current');
 assert.ok(serviceWorker.includes('/reference/cbam-default-values.json') && serviceWorker.includes('/reference/cbam-benchmarks.json'), 'service worker should precache the bundled EU reference data');
 assert.ok(
   serviceWorker.includes('/templates/CBAM_Communication_template_for_installations_en_20241213.xlsx'),
