@@ -1,7 +1,7 @@
 import { calculateLocalResults, getLocalCalculationWarningHref } from '@/lib/calculation-engine';
 import { computeDefaultSubstitutionImpact } from '@/lib/default-substitution';
 import { evaluateEuExportReadiness, getEuExportIssueEditHref } from '@/lib/eu-template-export';
-import { EXPORT_PERIOD_SETTING_KEY, getLocalSetting, listLocalItems, type ProductionProcess } from '@/lib/local-db';
+import { EXPORT_PERIOD_SETTING_KEY, getLocalSetting, listLocalItems, type Installation, type ProductionProcess, type PurchasedPrecursor, type SourceStream } from '@/lib/local-db';
 import type { ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { buildTodoItems, type TodoEngineWarning, type TodoReadinessIssue, type TodoResult } from '@/lib/todo-items';
@@ -14,6 +14,10 @@ import { buildTodoItems, type TodoEngineWarning, type TodoReadinessIssue, type T
 export interface TodoData {
     result: TodoResult;
     processes: ProductionProcess[];
+    /** 입력칸이 고칠 레코드(저장 때 기존 값을 펼쳐 칸 없는 값을 지킨다) */
+    installations: Installation[];
+    sourceStreams: SourceStream[];
+    precursors: PurchasedPrecursor[];
 }
 
 /** 저장소는 만든 순서가 아니라 id 순으로 돌려준다 — 「첫 제품」을 만든 순서로 고정한다(질문 화면과 같은 규칙). */
@@ -48,6 +52,8 @@ export async function loadTodoData(): Promise<TodoData> {
         message: issue.message,
         href: getEuExportIssueEditHref(issue),
         precursorId: issue.target?.type === 'precursor' ? issue.target.id : undefined,
+        targetId: issue.target?.id,
+        fix: issue.fix,
     }));
 
     // 엔진 경고는 출력 라인마다 같은 문장이 되풀이될 수 있어 (대상, 문장)으로 한 번만 센다.
@@ -74,5 +80,5 @@ export async function loadTodoData(): Promise<TodoData> {
         engineWarnings,
         impactOf: (precursorId) => computeDefaultSubstitutionImpact({ engine, periodId, precursorId, defaultValues }),
     });
-    return { result, processes };
+    return { result, processes, installations, sourceStreams, precursors };
 }

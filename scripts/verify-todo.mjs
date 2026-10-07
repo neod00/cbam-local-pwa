@@ -5,7 +5,7 @@
 //     우리 회사 / 공급사 / 규정 세 칸으로 나눈다. 같은 일이 두 번 나오지 않는다(질문과 같은 준비도 문장은 질문 쪽만).
 //  2) 자체 산술이 없다 — 영향 상자의 숫자는 「EU 기본값 채우기」와 같은 함수 + 엔진 재계산이고(손계산과 같다), 저장하지 않는다.
 //  3) 어조: 오류가 없으면 「막는 것은 없습니다 — 지금도 파일을 만들 수 있습니다」, 오류만 「먼저 해결」이라 말한다.
-//  4) 구조: 이 화면에는 저장 코드가 없다(밖에서 산 열 「안 씁니다」는 질문 화면과 같은 쓰기 함수를 부른다). 지도 머리글의 「할 일 N」·서비스 워커·경로 검사에 올라 있다.
+//  4) 구조: 저장 코드는 todo-writes.ts 한 곳뿐이다(밖에서 산 열 「안 씁니다」와 구매 강재 칸은 질문 화면과 같은 쓰기 함수를 부른다). 지도 머리글의 「할 일 N」·서비스 워커·경로 검사에 올라 있다.
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -27,6 +27,8 @@ const source = [
   strip('src/lib/reporting-scope.ts', false),
   strip('src/lib/allocation-rules.ts'),
   strip('src/lib/measurable-heat.ts'),
+  strip('src/lib/fuel-allocation.ts'),
+  strip('src/lib/source-stream-input.ts'),
   strip('src/lib/precursor-verification.ts'),
   strip('src/lib/calculation-engine.ts'),
   referenceSource,
@@ -37,8 +39,9 @@ const source = [
   strip('src/lib/talk-flow.ts'),
   strip('src/lib/supplier-request.ts'),
   strip('src/lib/default-substitution.ts'),
+  strip('src/lib/todo-edits.ts'),
   strip('src/lib/todo-items.ts'),
-  'globalThis.app = { calculateLocalResults, expandBundledDefaultValues, computeDefaultSubstitutionImpact, buildTodoItems, splitTodoMessage, TODO_DUPLICATE_OF_QUESTION_FRAGMENTS, TODO_SUPPLIER_SPLIT_FRAGMENT, buildSeeFlowBinding };',
+  'globalThis.app = { normalizeUnlocode, validateInstallationFieldAnswers, buildInstallationFieldUpdate, buildStreamFactorSourceUpdate, validateStreamFactorSource, FACTOR_SOURCE_CHOICES, INSTALLATION_FIELD_SPECS, calculateLocalResults, expandBundledDefaultValues, computeDefaultSubstitutionImpact, buildTodoItems, splitTodoMessage, TODO_DUPLICATE_OF_QUESTION_FRAGMENTS, TODO_SUPPLIER_SPLIT_FRAGMENT, buildSeeFlowBinding };',
 ].join('\n');
 const context = vm.createContext({ Intl, fflate, console, Date, Map, Number, Set, Uint8Array, navigator: undefined });
 vm.runInContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.None, target: ts.ScriptTarget.ES2022 } }).outputText, context);
@@ -197,7 +200,8 @@ assert.ok(readFileSync('src/lib/precursor-verification.ts', 'utf8').includes('�
 const todoDir = 'src/components/todo';
 for (const name of readdirSync(todoDir).filter((file) => /\.(ts|tsx)$/.test(file))) {
   const text = readFileSync(`${todoDir}/${name}`, 'utf8');
-  assert.ok(!/createLocalItem|updateLocalItem|deleteLocalItem|setLocalSetting|indexedDB|localStorage/.test(text), `${name}: 이 화면에는 저장 코드가 없다`);
+  const writes = /createLocalItem|updateLocalItem|deleteLocalItem|setLocalSetting|indexedDB|localStorage/.test(text);
+  assert.equal(writes, name === 'todo-writes.ts', `${name}: 저장소 쓰기는 todo-writes.ts에만 있다`);
 }
 const ui = readFileSync(`${todoDir}/TodoWorkspace.tsx`, 'utf8');
 assert.match(ui, /import \{ confirmNoImportedHeat \} from '@\/components\/talk\/talk-writes'/, '밖에서 산 열 「안 씁니다」는 질문 화면과 같은 쓰기 함수');
@@ -223,4 +227,80 @@ assert.ok(shell.slice(shell.indexOf('function GuidedShell')).includes('<TodoNavL
 assert.ok(readFileSync('public/sw.js', 'utf8').includes('"/todo"'), '서비스 워커가 /todo를 미리 담는다');
 assert.ok(readFileSync('scripts/verify-production-routes.mjs', 'utf8').includes("'/todo'"));
 
-console.log('Todo verified (세 칸 가르기 · 질문과 중복 없음 · 영향 상자 = 기본값 채우기+엔진(손계산 0.3 → 1.2) · 저장 코드 없음 · 머리글·서비스 워커·경로 배선).');
+// ── 5) 입력칸(칸 하나 채우기) ──────────────────────────────────────────
+// 5-1) 점검이 경고와 함께 「무엇을 채우면 되는지」를 낸다 — 문장을 해석하지 않는다. 원문에 그 조각이 있어야 한다.
+for (const fragment of ["fix: { kind: 'installation-fields', fields: missingOperatorFields }", "fix: { kind: 'installation-fields', fields: ['unlocode'] }", "fix: { kind: 'stream-factor-source' }", "fix: { kind: 'precursor-source' }", "fix: { kind: 'precursor-justification' }"]) {
+  assert.ok(readiness.includes(fragment), `점검 원문에 ${fragment}`);
+}
+assert.ok(readiness.includes("!installationForCheck.operator_name?.trim() ? 'operator_name' as const"), '조건은 점검 한 곳에만 있다(메시지와 같은 식에서 칸 목록을 만든다)');
+// 5-2) 순수 규칙
+assert.equal(app.normalizeUnlocode(' kr pus '), 'KRPUS');
+assert.equal(app.validateInstallationFieldAnswers(['unlocode'], {}), '채울 칸에 값을 적어 주세요.');
+assert.match(app.validateInstallationFieldAnswers(['unlocode'], { unlocode: '부산' }), /KRPUS/);
+assert.match(app.validateInstallationFieldAnswers(['unlocode'], { unlocode: 'KRPU' }), /3자리/);
+assert.equal(app.validateInstallationFieldAnswers(['unlocode'], { unlocode: 'kr pus' }), null, '띄어 쓴 것도 받아 KRPUS로 맞춘다');
+assert.equal(app.validateInstallationFieldAnswers(['operator_name', 'operator_reg_number'], { operator_name: ' (주)대일 ' }), null, '채운 칸만 본다 — 하나만 채워도 저장된다');
+const stored = { id: 'i', ...stamp, name: 'Daeil', country: 'KR', street: '기존 주소', email: 'a@b.kr', operator_name: '기존 법인', boundary_json: { x: 1 } };
+const updatedInst = app.buildInstallationFieldUpdate(stored, ['operator_name', 'operator_reg_number', 'unlocode'], { operator_name: '  ', operator_reg_number: ' 110111-1234567 ', unlocode: 'kr pus' });
+assert.equal(updatedInst.operator_reg_number, '110111-1234567', '앞뒤 공백을 자른다');
+assert.equal(updatedInst.unlocode, 'KRPUS');
+assert.equal(updatedInst.operator_name, '기존 법인', '비워 둔 칸은 저장된 값을 지우지 않는다');
+for (const key of ['street', 'email', 'country', 'name', 'id', 'created_at']) assert.equal(updatedInst[key], stored[key], `사업장 ${key} 보존`);
+assert.deepEqual(plain(updatedInst.boundary_json), { x: 1 });
+// 배출원: 근거 유형
+const gasKind = { stream_type: 'FUEL', method: 'Combustion', activity_unit: 'Nm3', ncv_gj_per_unit: 0.037, emission_factor_tco2e_per_unit: 56.1, emission_factor_basis: 'PER_TJ', oxidation_factor: 1, conversion_factor: 1, fossil_fraction: 1, biomass_fraction: 0 };
+const stream = { id: 's1', ...stamp, ...gasKind, period_id: 'per', process_id: 'pr', name: '도시가스', activity_data: 128400, source: '고지서', factor_source_type: 'UNCLASSIFIED', note: '메모' };
+assert.match(app.validateStreamFactorSource(app.buildStreamFactorSourceUpdate(stream, 'UNCLASSIFIED')), /근거 유형을 하나 고르세요/, '「분류 전」으로는 저장하지 않는다');
+const classified = app.buildStreamFactorSourceUpdate(stream, 'NATIONAL_INVENTORY');
+assert.equal(app.validateStreamFactorSource(classified), null);
+assert.equal(classified.factor_source_type, 'NATIONAL_INVENTORY');
+assert.equal(classified.note, '메모', '다른 필드는 그대로');
+assert.equal(classified.activity_data, 128400);
+assert.match(app.validateStreamFactorSource(app.buildStreamFactorSourceUpdate({ ...stream, source: '' }, 'NATIONAL_INVENTORY')), /./, '그 밖의 검증은 지도 4단계와 같은 함수(출처가 비면 막는다)');
+assert.deepEqual(plain(app.FACTOR_SOURCE_CHOICES.map((option) => option.value)), ['EU_OR_IPCC_DEFAULT', 'NATIONAL_INVENTORY', 'SUPPLIER_OR_LAB'], '고르는 칸에는 「분류 전」이 없다');
+// 5-3) 경고 → 입력칸 연결
+const withFix = app.buildTodoItems({
+  ...base, processes: [{ ...process, electricity_mwh: 10, measurable_heat_import: 'NO', no_purchased_precursors: true }], sourceStreams: [{ id: 's', process_id: 'pr', name: '가스' }],
+  precursors: [{ ...precursor, id: 'pa', data_mode: 'ACTUAL' }, { ...precursor, id: 'pm', data_mode: 'SEMI_ACTUAL' }],
+  readinessIssues: [
+    issue('warning', '사업장', '대일: 비어 있는 「법정 필수」 항목 — 운영자(법인)명 · 운영자 주소. 검증인이 확인합니다.', { targetId: 'i', fix: { kind: 'installation-fields', fields: ['operator_name', 'operator_address'] } }),
+    issue('warning', '사업장', '대일: UN/LOCODE가 비어 있습니다. EU 문서에 빈 채로 나갑니다.', { targetId: 'i', fix: { kind: 'installation-fields', fields: ['unlocode'] } }),
+    issue('warning', '생산공정', '가스: 배출계수 출처 유형이 분류되지 않았습니다. 근거를 정리하세요.', { targetId: 's1', fix: { kind: 'stream-factor-source' } }),
+    issue('warning', '구매 전구물질', 'STS 와이어: SEE 출처가 비어 있습니다.', { targetId: 'pa', precursorId: 'pa', fix: { kind: 'precursor-source' } }),
+    issue('warning', '구매 전구물질', 'STS 와이어: 기본값을 사용하는 사유가 비어 있습니다. 근거를 남기세요.', { targetId: 'pa', precursorId: 'pa', fix: { kind: 'precursor-justification' } }),
+    issue('warning', '구매 전구물질', '혼합 원료: SEE 출처가 비어 있습니다.', { targetId: 'pm', precursorId: 'pm', fix: { kind: 'precursor-source' } }),
+    issue('warning', '생산공정', '다른 경고입니다. 입력칸이 없습니다.', { targetId: 'pr' }),
+  ],
+});
+const inputsOf = (id) => plain(byId(withFix, id).inputs);
+assert.deepEqual(inputsOf('r:0'), { kind: 'installation', installationId: 'i', fields: ['operator_name', 'operator_address'] });
+assert.deepEqual(inputsOf('r:1'), { kind: 'installation', installationId: 'i', fields: ['unlocode'] });
+assert.deepEqual(inputsOf('r:2'), { kind: 'stream-factor-source', streamId: 's1' });
+// 같은 원료의 출처·사유 경고(r:3, r:4)는 칸 둘의 한 카드로 합쳐진다 — 기본값 모드는 둘이 다 있어야 저장되므로 따로 두면 막다른 길이 된다.
+assert.deepEqual(inputsOf('r:3'), { kind: 'precursor-text', precursorId: 'pa', fields: ['source', 'justification'] });
+assert.equal(byId(withFix, 'r:4'), undefined, '합쳐진 카드 하나만 남는다');
+assert.match(byId(withFix, 'r:3').title, /STS 와이어: SEE 출처와 기본값 사용 사유가 비어 있습니다/);
+// 하나만 비어 있으면 칸도 하나
+const onlySource = app.buildTodoItems({ ...base, processes: [{ ...process, electricity_mwh: 10, measurable_heat_import: 'NO', no_purchased_precursors: true }], sourceStreams: [{ id: 's', process_id: 'pr', name: '가스' }], precursors: [{ ...precursor, id: 'pa' }], readinessIssues: [issue('warning', '구매 전구물질', 'STS 와이어: SEE 출처가 비어 있습니다.', { targetId: 'pa', precursorId: 'pa', fix: { kind: 'precursor-source' } })] });
+assert.deepEqual(plain(byId(onlySource, 'r:0').inputs), { kind: 'precursor-text', precursorId: 'pa', fields: ['source'] });
+assert.equal(byId(withFix, 'r:5').inputs, undefined, '혼합(일부 실측) 원료는 질문 화면 고치기가 받지 않으므로 링크만');
+assert.equal(byId(withFix, 'r:6').inputs, undefined, 'fix가 없는 경고에는 칸이 없다');
+assert.equal(byId(withFix, 'r:0').owner, 'company');
+
+// 5-4) 구조: 입력칸 저장은 todo-writes.ts 한 곳, 규칙은 todo-edits.ts, 구매 강재는 질문 화면 고치기
+const writesSource = readFileSync(`${todoDir}/todo-writes.ts`, 'utf8');
+assert.ok(writesSource.includes('return savePrecursorEdit(precursor, { ...answer, ...(source ? { source } : {}), ...(justification ? { justification } : {}) });'), '구매 강재 칸은 질문 화면 고치기(S7)와 같은 경로 — 적은 칸만 덮는다');
+assert.ok(writesSource.includes('describePrecursorEditBlock(precursor)'));
+assert.ok(writesSource.includes("updateLocalItem('installations', buildInstallationFieldUpdate(installation, fields, answers))"));
+assert.ok(writesSource.includes("updateLocalItem('source_streams', updated)"));
+const installationsPage = readFileSync('src/app/installations/page.tsx', 'utf8');
+assert.match(installationsPage, /\.\.\.existingInstallation,\s*\.\.\.normalizedItem,/, '사업장 상세 화면도 기존을 펼친 위에 덮는다 — 같은 모양');
+const ui2 = readFileSync(`${todoDir}/TodoWorkspace.tsx`, 'utf8');
+assert.match(ui2, /data-testid="todo-inputs"/);
+assert.ok(ui2.includes('saveInstallationFields(installation, inputs.fields, draft)'));
+assert.ok(ui2.includes('saveStreamFactorSource(stream,'));
+assert.ok(ui2.includes('savePrecursorTexts(precursor, draft)'));
+assert.ok(ui2.includes('FACTOR_SOURCE_CHOICES.map'), '「분류 전」은 고르는 칸에 없다');
+assert.ok(ui2.includes('INSTALLATION_FIELD_SPECS[field].hint'), '무엇을 적는지 칸마다 설명한다');
+
+console.log('Todo verified (세 칸 가르기 · 질문과 중복 없음 · 영향 상자 = 기본값 채우기+엔진(손계산 0.3 → 1.2) · 입력칸 = 점검이 낸 fix + 기존 레코드를 펼쳐 칸만 덮음 · 저장 코드는 todo-writes.ts 한 곳 · 머리글·서비스 워커·경로 배선).');
