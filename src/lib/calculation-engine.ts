@@ -135,12 +135,29 @@ export interface LocalCalculationResult {
     warningDetails: LocalCalculationWarning[];
 }
 
+/**
+ * 귀속·할당 점검 종류 — 경고를 만든 자리에서 붙인다(귀속 점검 화면이 문장을 해석하지 않고 모으게). 계산에는 쓰이지 않는다.
+ *  SHARED_METER 공용 계량기 합계·정합계수 · HEAT 열 귀속 · DUP_FUNCTIONAL_UNIT 같은 재화의 공정 분리(복수 경로 포함) · MULTIFUNCTIONAL 다기능 공정 ·
+ *  ACTIVITY_LEVEL 활동수준 제외 · ALLOCATION_SUM 배분 합계 100% · MANUAL_ALLOCATION 사용자 지정 배분(예외) · PRECURSOR_COMPLETENESS 전구물질 귀속 누락
+ */
+export type AttributionCheckId =
+    | 'SHARED_METER'
+    | 'HEAT'
+    | 'DUP_FUNCTIONAL_UNIT'
+    | 'MULTIFUNCTIONAL'
+    | 'ACTIVITY_LEVEL'
+    | 'ALLOCATION_SUM'
+    | 'MANUAL_ALLOCATION'
+    | 'PRECURSOR_COMPLETENESS';
+
 export type LocalCalculationWarning = {
     message: string;
     target: {
         type: 'process' | 'precursor';
         id: string;
     };
+    /** 귀속·할당 점검에 속하는 경고일 때만 있다 */
+    check?: AttributionCheckId;
 };
 
 export function getLocalCalculationWarningHref(warning: LocalCalculationWarning) {
@@ -618,9 +635,9 @@ function calculateOwnResults(input: {
         const period = process.period_id ? periodById.get(process.period_id) : undefined;
         const processPrecursors = precursorsByProcess.get(process.id) ?? [];
         const processSourceStreams = sourceStreamsByProcess.get(process.id) ?? [];
-        const addWarning = (message: string, target: LocalCalculationWarning['target']) => {
+        const addWarning = (message: string, target: LocalCalculationWarning['target'], check?: AttributionCheckId) => {
             warnings.push(message);
-            warningDetails.push({ message, target });
+            warningDetails.push(check ? { message, target, check } : { message, target });
         };
 
         if (processScopeExclusion && product) {
@@ -646,7 +663,7 @@ function calculateOwnResults(input: {
             addWarning(
                 `확인 필요(규정): 같은 재화(CN ${unit})를 같은 보고기간에 생산공정 ${count}개로 나누어 산정하고 있습니다. `
                 + `${ALLOCATION_RULES.SINGLE_PROCESS.anchor}: 생산경로가 달라도 단일 생산공정으로 산정합니다(전 경로 가중평균). 하나로 합치거나 사유를 확인하세요.`,
-                { type: 'process', id: process.id }
+                { type: 'process', id: process.id }, 'DUP_FUNCTIONAL_UNIT'
             );
             break;
         }
@@ -665,7 +682,7 @@ function calculateOwnResults(input: {
                     `확인 필요(규정): ${process.name}과(와) ${partners.map((other) => other.name).join(' · ')}은(는) 둘 다 철강제품이고 같은 종류의 구매 원료(CN ${sharedCns.join('·')})를 씁니다. `
                     + `${ALLOCATION_RULES.SINGLE_MULTIFUNCTIONAL.anchor}: 크기·형상만 다른 재화를 종류·양·비율이 같은 전구물질로 만든다면 CN이 달라도 단일 다기능 생산공정으로 정의하고 질량(기능단위)으로 귀속해야 합니다 — `
                     + '공정을 하나로 합치고 제품을 생산라인으로 넣으세요. 원료 재질이나 비율이 다르면 해당하지 않으니 사유를 보고서에 남기세요.',
-                    { type: 'process', id: process.id }
+                    { type: 'process', id: process.id }, 'MULTIFUNCTIONAL'
                 );
             }
         }
@@ -695,15 +712,15 @@ function calculateOwnResults(input: {
         const importedHeatEmissions = importedHeat.emissionsTco2e + sharedHeat.emissionsTco2e;
         const attributedDirectEmissions = directEmissions + importedHeatEmissions;
         for (const problem of sharedHeat.problems) {
-            addWarning(`확인 필요(자료): ${process.name}: ${problem} (${SHARED_HEAT_RULE.anchor})`, { type: 'process', id: process.id });
+            addWarning(`확인 필요(자료): ${process.name}: ${problem} (${SHARED_HEAT_RULE.anchor})`, { type: 'process', id: process.id }, 'HEAT');
         }
         for (const note of sharedHeat.notes) {
-            addWarning(`확인 필요(규정): ${process.name}: ${note}`, { type: 'process', id: process.id });
+            addWarning(`확인 필요(규정): ${process.name}: ${note}`, { type: 'process', id: process.id }, 'HEAT');
         }
         if (importedHeat.problem) {
             addWarning(
                 `확인 필요(자료): ${process.name}이 밖에서 산 열(스팀·온수)을 쓴다고 했는데 ${importedHeat.problem} 그 배출을 0으로 계산했습니다 — 직접배출이 적게 나옵니다(${IMPORTED_HEAT_RULE.anchor}).`,
-                { type: 'process', id: process.id }
+                { type: 'process', id: process.id }, 'HEAT'
             );
         }
         const grossIndirectEmissions = process.electricity_mwh * process.electricity_ef_tco2e_per_mwh;
@@ -741,12 +758,12 @@ function calculateOwnResults(input: {
             if (group.reason) {
                 addWarning(
                     `확인 필요(자료): 공용 계량기 그룹 '${group.group}' — ${group.reason} (${group.mode === 'KEY_SPLIT' ? ALLOCATION_RULES.KEY_SPLIT.anchor : ALLOCATION_RULES.RECONCILIATION.anchor})`,
-                    { type: 'process', id: process.id }
+                    { type: 'process', id: process.id }, 'SHARED_METER'
                 );
             } else if (group.applied && Math.abs(group.factor - 1) > RECONCILIATION_REVIEW_DEVIATION) {
                 addWarning(
                     `권고: 공용 계량기 그룹 '${group.group}'의 정합계수 RecF = ${group.factor.toFixed(4)} (사업장 ${group.installation_total} / 공정 합계 ${group.sub_total} ${group.unit}). 1에서 ${(RECONCILIATION_REVIEW_DEVIATION * 100).toFixed(0)}% 이상 벗어나 단위·계량 오류일 수 있습니다.`,
-                    { type: 'process', id: process.id }
+                    { type: 'process', id: process.id }, 'SHARED_METER'
                 );
             }
         }
@@ -766,7 +783,7 @@ function calculateOwnResults(input: {
                 + `설비 정격 × 가동시간으로 공정별 사용량을 추정한 값이라면 간접결정방법으로 쓸 수 있습니다(${ALLOCATION_RULES.INDIRECT_ESTIMATE.anchor}) — `
                 + `계량이 불가능하거나 비용이 과다한 사유를 모니터링 계획에 적고 비고에 근거를 남기세요.`
                 + (missingNote ? ' 지금 비고(산출 근거)가 비어 있습니다.' : ''),
-                { type: 'process', id: process.id }
+                { type: 'process', id: process.id }, 'SHARED_METER'
             );
         }
 
@@ -796,7 +813,7 @@ function calculateOwnResults(input: {
                 if (Math.abs(allocatedMass - precursor.consumed_mass_t) > allocationTolerance) {
                     addWarning(
                         `${precursor.name}의 산출물 귀속량 ${allocatedMass.toFixed(4)} t와 총 소비량 ${precursor.consumed_mass_t.toFixed(4)} t가 일치하지 않습니다.`,
-                        { type: 'precursor', id: precursor.id }
+                        { type: 'precursor', id: precursor.id }, 'ALLOCATION_SUM'
                     );
                 }
             }
@@ -864,12 +881,12 @@ function calculateOwnResults(input: {
         if (electricityGroup?.reason) {
             addWarning(
                 `확인 필요(자료): 전력 공용 계량기 '${electricityGroup.group}' — ${electricityGroup.reason} (${ALLOCATION_RULES.ELECTRICITY_SHARED_METER.anchor})`,
-                { type: 'process', id: process.id }
+                { type: 'process', id: process.id }, 'SHARED_METER'
             );
         } else if (electricityGroup && isElectricitySplitStale(process, activityLevel)) {
             addWarning(
                 `확인 필요(자료): 전력 공용 계량기 '${electricityGroup.group}'를 생산량 비율로 나눈 뒤 ${process.name}의 생산량이 바뀌었습니다(나눌 때 ${process.electricity_shared_meter?.basis_value} t → 지금 ${activityLevel} t). 5단계에서 다시 나누세요.`,
-                { type: 'process', id: process.id }
+                { type: 'process', id: process.id }, 'SHARED_METER'
             );
         }
 
@@ -878,7 +895,7 @@ function calculateOwnResults(input: {
             addWarning(
                 `확인 필요(규정): '${context.line.name}' 라인(${getProductReportingScopeLabel(context.lineScope)})이 활동수준에 포함되어 있습니다. `
                 + `불량·부산물·폐기물·스크랩이면 「활동수준 제외」로 표시하세요 — ${ALLOCATION_RULES.ACTIVITY_LEVEL.anchor}.`,
-                { type: 'process', id: process.id }
+                { type: 'process', id: process.id }, 'ACTIVITY_LEVEL'
             );
         }
 
@@ -887,7 +904,7 @@ function calculateOwnResults(input: {
         }
 
         if (outputLineSummary.needsAllocationReview && manualTotal <= 0) {
-            addWarning('사용자 지정 배분을 선택했지만 유효한 배분율 합계가 0입니다.', { type: 'process', id: process.id });
+            addWarning('사용자 지정 배분을 선택했지만 유효한 배분율 합계가 0입니다.', { type: 'process', id: process.id }, 'ALLOCATION_SUM');
         }
 
         // 배분율 합계≠100%를 조용히 정규화하면 누락·이중계상이 숨는다. 산정은 종전대로 정규화하되
@@ -895,7 +912,7 @@ function calculateOwnResults(input: {
         if (manualLines.length > 0 && manualTotal > 0 && Math.abs(manualTotal - 100) > MANUAL_ALLOCATION_SUM_TOLERANCE) {
             addWarning(
                 `차단: 사용자 지정 배분율 합계가 ${manualTotal.toFixed(2)}%입니다 — 100%여야 합니다(미만은 배출 누락, 초과는 이중계상). 산정은 합계 기준으로 정규화했습니다.`,
-                { type: 'process', id: process.id }
+                { type: 'process', id: process.id }, 'ALLOCATION_SUM'
             );
         }
 
@@ -904,7 +921,7 @@ function calculateOwnResults(input: {
         if (manualLines.length > 0) {
             addWarning(
                 `확인 필요(규정): 이 공정은 사용자 지정 배분을 씁니다. ${ALLOCATION_RULES.MANUAL_SCOPE.anchor}: 한 공정 안 재화 간 귀속은 기능단위(CN별 톤 = 질량)가 원칙이며, 열(A.2.2)·폐가스(A.2.3)·화학물질 몰비(A.2.1) 외의 임의 비율은 규정에 근거가 없습니다. 예외에 해당하는지 검증인과 확인하세요.`,
-                { type: 'process', id: process.id }
+                { type: 'process', id: process.id }, 'MANUAL_ALLOCATION'
             );
         }
 
@@ -912,7 +929,7 @@ function calculateOwnResults(input: {
             if (hasManualAllocationReason(line)) continue;
             addWarning(
                 `확인 필요(자료): '${line.name}' 사용자 지정 배분의 사유·증빙이 비어 있습니다 — ${ALLOCATION_RULES.MANUAL_REASON.anchor}: 어떤 물리적 관계(예외 사유)와 증빙에 근거했는지 남겨야 합니다.`,
-                { type: 'process', id: process.id }
+                { type: 'process', id: process.id }, 'MANUAL_ALLOCATION'
             );
         }
 
@@ -935,14 +952,14 @@ function calculateOwnResults(input: {
                 const orphanMass = orphaned.reduce((sum, allocation) => sum + resolvePrecursorAllocationMass(precursor, allocation), 0);
                 addWarning(
                     `확인 필요(자료): ${precursor.name}의 제품별 배분 ${orphanMass.toFixed(4)} t가 지워진 생산라인을 가리켜 배출에서 빠졌습니다. 전구물질 화면에서 이 전구물질을 열어 배분을 다시 지정하세요.`,
-                    { type: 'precursor', id: precursor.id }
+                    { type: 'precursor', id: precursor.id }, 'PRECURSOR_COMPLETENESS'
                 );
             }
             if (misdirected.length === 0) continue;
             const lostMass = misdirected.reduce((sum, allocation) => sum + resolvePrecursorAllocationMass(precursor, allocation), 0);
             addWarning(
                 `확인 필요(자료): ${precursor.name}의 귀속 ${lostMass.toFixed(4)} t가 활동수준 제외 라인을 가리켜 배출에서 빠집니다. 전구물질 소비량(Mi)은 부산물·스크랩으로 나간 몫까지 정규 제품에 귀속해야 합니다(2025/2547 ANNEX III, point B).`,
-                { type: 'precursor', id: precursor.id }
+                { type: 'precursor', id: precursor.id }, 'PRECURSOR_COMPLETENESS'
             );
         }
 

@@ -3,6 +3,7 @@
 import { confirmNoImportedHeat } from '@/components/talk/talk-writes';
 import { Button } from '@/components/ui';
 import { FACTOR_SOURCE_CHOICES, INSTALLATION_FIELD_SPECS, type FactorSourceType } from '@/lib/todo-edits';
+import type { AttributionStatus } from '@/lib/attribution-status';
 import type { TodoItem, TodoOwner } from '@/lib/todo-items';
 import { AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
@@ -27,6 +28,13 @@ const PRECURSOR_TEXT_SPEC = {
     source: { label: '값의 출처', placeholder: '예: 공급사 회신 메일 2025-03-10, EU 기본값 파일' },
     justification: { label: '기본값을 쓰는 사유', placeholder: '예: 공급사 실측자료 미입수 — EU 기본값(2026) 적용' },
 } as const;
+
+const STATUS_LABEL: Record<Exclude<AttributionStatus, 'na'>, string> = { ok: '✓ 규정 충족', review: '⚠ 확인 필요', fix: '✕ 수정 필요' };
+const STATUS_CLASS: Record<Exclude<AttributionStatus, 'na'>, string> = {
+    ok: 'bg-emerald-50 text-emerald-900',
+    review: 'bg-amber-50 text-amber-900',
+    fix: 'bg-red-50 text-red-900',
+};
 
 const fmt = (value: number) => new Intl.NumberFormat('ko-KR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(value);
 
@@ -273,6 +281,33 @@ export function TodoWorkspace() {
                         </section>
                     ))}
                 </div>
+            )}
+            {data.attribution.rows.length > 0 && (
+                <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="귀속·할당 점검" data-testid="attribution-status">
+                    <div>
+                        <h2 className="text-base font-bold text-slate-950">귀속·할당 점검</h2>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                            공장 전체의 배출·에너지가 공정과 상품까지 빠짐없이, 겹치지 않게 연결됐는지 봅니다. 새로 계산하지 않고 위 항목들과 같은 점검 결과를 한 표로 모은 것이며, 통과한 것도 보여 줍니다.
+                            ✓ {data.attribution.counts.ok} · ⚠ {data.attribution.counts.review} · ✕ {data.attribution.counts.fix}
+                        </p>
+                    </div>
+                    <ul className="divide-y divide-slate-100">
+                        {data.attribution.rows.map((row) => (
+                            <li key={row.id} className="flex flex-wrap items-start gap-3 py-3" data-testid="attribution-row" data-status={row.status}>
+                                <span className={`inline-flex min-w-28 justify-center rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_CLASS[row.status as Exclude<AttributionStatus, 'na'>]}`}>{STATUS_LABEL[row.status as Exclude<AttributionStatus, 'na'>]}</span>
+                                <div className="min-w-0 flex-1 space-y-1">
+                                    <p className="text-sm font-semibold text-slate-900"><span className="mr-1.5 text-xs font-bold text-slate-400">{row.code}</span>{row.title}</p>
+                                    <p className="text-xs leading-5 text-slate-600">{row.detail}</p>
+                                    {row.items.length > 0 && <ul className="list-disc space-y-0.5 pl-4 text-xs leading-5 text-slate-600">{row.items.map((item) => <li key={item}>{item}</li>)}</ul>}
+                                </div>
+                                {row.href && row.status !== 'ok' && <Link href={row.href} className="inline-flex items-center gap-1 text-sm font-bold text-teal-700 hover:underline">고치러 가기<ArrowRight className="h-3.5 w-3.5" /></Link>}
+                            </li>
+                        ))}
+                    </ul>
+                    {data.attribution.notApplicable.length > 0 && (
+                        <p className="text-xs leading-5 text-slate-500" data-testid="attribution-na">이 프로젝트에 해당하지 않는 점검 {data.attribution.notApplicable.length}건: {data.attribution.notApplicable.join(' · ')}</p>
+                    )}
+                </section>
             )}
         </div>
     );

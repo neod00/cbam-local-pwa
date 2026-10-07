@@ -1,4 +1,5 @@
 import { calculateLocalResults, getLocalCalculationWarningHref } from '@/lib/calculation-engine';
+import { buildAttributionStatus, type AttributionStatusResult } from '@/lib/attribution-status';
 import { computeDefaultSubstitutionImpact } from '@/lib/default-substitution';
 import { evaluateEuExportReadiness, getEuExportIssueEditHref } from '@/lib/eu-template-export';
 import { EXPORT_PERIOD_SETTING_KEY, getLocalSetting, listLocalItems, type Installation, type ProductionProcess, type PurchasedPrecursor, type SourceStream } from '@/lib/local-db';
@@ -18,6 +19,8 @@ export interface TodoData {
     installations: Installation[];
     sourceStreams: SourceStream[];
     precursors: PurchasedPrecursor[];
+    /** 귀속·할당 점검(지금 보는 보고기간) */
+    attribution: AttributionStatusResult;
 }
 
 /** 저장소는 만든 순서가 아니라 id 순으로 돌려준다 — 「첫 제품」을 만든 순서로 고정한다(질문 화면과 같은 규칙). */
@@ -80,5 +83,17 @@ export async function loadTodoData(): Promise<TodoData> {
         engineWarnings,
         impactOf: (precursorId) => computeDefaultSubstitutionImpact({ engine, periodId, precursorId, defaultValues }),
     });
-    return { result, processes, installations, sourceStreams, precursors };
+    // 귀속·할당 점검: 지도·막대와 같은 기간의 공정·배출원·결과만 본다.
+    const periodProcesses = processes.filter((process) => !periodId || process.period_id === periodId);
+    const periodProcessIds = new Set(periodProcesses.map((process) => process.id));
+    const attribution = buildAttributionStatus({
+        processes: periodProcesses,
+        productOutputLines,
+        sourceStreams: sourceStreams.filter((stream) => !stream.process_id || periodProcessIds.has(stream.process_id) || !periodId || stream.period_id === periodId),
+        precursorCount: precursors.filter((precursor) => precursor.process_id && periodProcessIds.has(precursor.process_id)).length,
+        results,
+        installation: installations[0],
+        hrefOf: getLocalCalculationWarningHref,
+    });
+    return { result, processes, installations, sourceStreams, precursors, attribution };
 }
