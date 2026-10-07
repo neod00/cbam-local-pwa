@@ -28,6 +28,7 @@ const routes = [
   '/settings',
   '/terms',
   '/todo',
+  '/trace',
 ];
 
 function sleep(ms) {

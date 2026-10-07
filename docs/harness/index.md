@@ -15,7 +15,7 @@ This folder is the project knowledge base for agent-assisted development. It kee
 - `eu-template-export-map.md`: current official workbook export targets and known gaps.
 - `ux-concept-v4.md`: UX concept (mode selection, live result bar, guided map), checked against the code; includes the 2025/2547 attribution review (§8-1), implementation rules and work order.
 - `conversation-mode-design.md`: draft design for the conversational mode (v4 work order item 6) — question flow mapped to existing pure builders, equivalence checks, slices, and the four decisions still open.
-- `attribution-gap-analysis.md`: gap analysis of the attribution/allocation improvement brief (A–G) — what already exists (RecF, shared electricity/fuel/heat, manual-allocation guards, Art. 4(6)/A.4 checks), what is adopted (consolidated check table, Emission Trace) and what is not (new decision store, molar-ratio/waste-gas methods, new 5-step screen).
+- `attribution-gap-analysis.md` (Emission Trace `/trace` done 2026-10-07): gap analysis of the attribution/allocation improvement brief (A–G) — what already exists (RecF, shared electricity/fuel/heat, manual-allocation guards, Art. 4(6)/A.4 checks), what is adopted (consolidated check table, Emission Trace) and what is not (new decision store, molar-ratio/waste-gas methods, new 5-step screen).
 - `quality-gates.md`: checks required before finishing changes.
 - `execution-plans.md`: current roadmap and completed milestones.
 
