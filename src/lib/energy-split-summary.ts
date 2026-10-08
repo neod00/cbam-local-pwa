@@ -40,9 +40,50 @@ export interface EnergySplitSummary {
 const fmt = (value: number, digits = 4) => new Intl.NumberFormat('ko-KR', { maximumFractionDigits: digits }).format(Number.isFinite(value) ? value : 0);
 const HEAT_NAME = /보일러|스팀|온수|증기|열매|boiler|steam/i;
 
+/** 같은 연료인가: 단위·순발열량·배출계수가 같다(이름은 사용자가 바꿀 수 있어 보지 않는다). */
+function isSameFuel(a: SourceStream, b: SourceStream): boolean {
+    const near = (x: number, y: number) => Math.abs(x - y) <= Math.max(1e-9, Math.abs(y) * 1e-6);
+    return a.stream_type === 'FUEL' && b.stream_type === 'FUEL'
+        && (a.activity_unit ?? '').trim().toLowerCase() === (b.activity_unit ?? '').trim().toLowerCase()
+        && near(a.ncv_gj_per_unit, b.ncv_gj_per_unit)
+        && near(a.emission_factor_tco2e_per_unit, b.emission_factor_tco2e_per_unit);
+}
+
+/**
+ * 공용 계량기로 나눈 연료와 **같은 연료**가, 그 계량기를 같이 쓰는 공정에 나누지 않은 행으로 또 들어 있는가(run30).
+ * 제품 하나를 먼저 넣으며 공장 전체 고지서를 그 공정에 적고, 나중에 제품을 더해 「연료 나누기」를 하면 옛 행이 남아 두 번 계산된다.
+ *  · duplicate: 그 행의 양이 계량기의 공장 전체 값과 같다(0.5% 이내) — 나누기 전의 값이 남은 것이 확실하다.
+ *  · sameFuel: 양은 다르지만 같은 연료가 따로 있다 — 다른 계량기일 수 있어 알리기만 한다.
+ * 지우지 않는다 — 알릴 뿐이다.
+ */
+function findUnsplitTwin(group: { period_id?: string; stream_ids: string[]; installation_total: number }, streams: SourceStream[]): { duplicate?: SourceStream; sameFuel?: SourceStream } {
+    const members = streams.filter((stream) => group.stream_ids.includes(stream.id));
+    const processIds = new Set(members.map((stream) => stream.process_id).filter(Boolean));
+    const sample = members[0];
+    if (!sample) return {};
+    const twins = streams.filter((stream) =>
+        !stream.shared_meter?.group?.trim() && !stream.heat_system?.name?.trim()
+        && stream.process_id && processIds.has(stream.process_id)
+        && (stream.period_id ?? '') === (group.period_id ?? '')
+        && isSameFuel(stream, sample));
+    const duplicate = twins.find((stream) => Math.abs(stream.activity_data - group.installation_total) <= group.installation_total * 0.005);
+    return { duplicate, sameFuel: duplicate ? undefined : twins[0] };
+}
+
+/**
+ * 한 계량기(= 한 공급)인데 공정마다 전력 배출계수가 다르고, 그중 계수 출처가 비어 있는 공정이 있는가(run30).
+ * 「전력 나누기」는 사용량만 나누므로, 나중에 더한 공정에는 임시 자리값(0.47)이 출처 없이 남는다 — 간접배출이 틀리게 보고된다.
+ */
+function describeMeterFactorGap(members: Array<Pick<ProductionProcess, 'name'> & Partial<Pick<ProductionProcess, 'electricity_ef_tco2e_per_mwh' | 'electricity_ef_source'>>>): string | undefined {
+    const factors = new Set(members.map((process) => process.electricity_ef_tco2e_per_mwh).filter((value): value is number => typeof value === 'number'));
+    const unsourced = members.filter((process) => !process.electricity_ef_source?.trim());
+    if (factors.size <= 1 || unsourced.length === 0) return undefined;
+    return `같은 계량기인데 공정마다 전력 배출계수가 다릅니다(${[...factors].join(' / ')}). ${unsourced.map((process) => `「${process.name}」`).join(', ')}은(는) 계수 출처가 비어 있어 임시 자리값일 수 있습니다 — 5단계에서 같은 계수와 출처를 넣으세요.`;
+}
+
 export function summarizeEnergySplits(input: {
     /** 지금 보고 있는 보고기간의 공정 */
-    processes: Array<Pick<ProductionProcess, 'id' | 'name' | 'period_id' | 'electricity_mwh' | 'electricity_shared_meter' | 'heat_consumption'>>;
+    processes: Array<Pick<ProductionProcess, 'id' | 'name' | 'period_id' | 'electricity_mwh' | 'electricity_shared_meter' | 'heat_consumption'> & Partial<Pick<ProductionProcess, 'electricity_ef_tco2e_per_mwh' | 'electricity_ef_source'>>>;
     sourceStreams: SourceStream[];
 }): EnergySplitSummary {
     const items: EnergySplitItem[] = [];
@@ -55,19 +96,28 @@ export function summarizeEnergySplits(input: {
             key: `E|${group.period_id ?? ''}|${group.group}`,
             title: `전력 「${group.group}」`,
             detail: `${fmt(group.installation_total_mwh)} MWh · 공정 ${group.process_ids.length}개`,
-            problem: group.reason || undefined,
+            problem: group.reason || describeMeterFactorGap(input.processes.filter((process) => group.process_ids.includes(process.id))),
         });
     }
 
     const meterRows = input.sourceStreams.filter((stream) => stream.shared_meter?.group?.trim() && !stream.heat_system?.name?.trim());
     for (const group of reconcileSourceStreams(meterRows).groups) {
+        const leftover = findUnsplitTwin(group, input.sourceStreams);
         items.push({
             kind: 'FUEL',
             key: `F|${group.period_id ?? ''}|${group.group}`,
             title: `연료 「${group.group}」`,
             detail: `${fmt(group.installation_total)} ${group.unit} · 행 ${group.stream_ids.length}개`,
-            problem: group.reason || undefined,
+            problem: group.reason || (leftover.duplicate
+                ? `「${leftover.duplicate.name}」(${fmt(leftover.duplicate.activity_data)} ${leftover.duplicate.activity_unit})가 나누기 전의 공장 전체 값으로 한 공정에 그대로 남아 있습니다 — 같은 연료가 두 번 계산되고 있습니다. 4단계에서 그 행을 지우세요(나눈 행은 그대로 두세요).`
+                : undefined),
         });
+        if (!leftover.duplicate && leftover.sameFuel) {
+            hints.push({
+                kind: 'FUEL',
+                text: `「${group.group}」로 나눈 연료와 같은 종류의 연료 「${leftover.sameFuel.name}」(${fmt(leftover.sameFuel.activity_data)} ${leftover.sameFuel.activity_unit})가 한 공정에 따로 들어 있습니다. 다른 계량기·전표의 것이 맞는지 확인하세요 — 같은 고지서라면 두 번 계산됩니다.`,
+            });
+        }
     }
 
     const heatSystems = resolveSharedHeatSystems({ processes: input.processes, sourceStreams: input.sourceStreams, emissionsOf: calculateSourceStreamEmissions });

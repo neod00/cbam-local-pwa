@@ -104,6 +104,31 @@ assert.equal(fuelOk.items[0].problem, undefined);
 const fuelBad = summarizeEnergySplits({ processes: [processA, processB], sourceStreams: [fuelRow('f1', 'A', 6, '공용 경유'), fuelRow('f2', 'B', 3, '공용 경유')] });
 assert.match(fuelBad.items[0].problem, /합계/);
 
+// run30: 제품 하나를 먼저 넣으며 공장 전체 고지서를 그 공정에 적고, 나중에 「연료 나누기」를 하면 옛 행이 남아 같은 연료가 두 번 계산된다.
+// 공식 예제(Steel 3 Screws and nuts)를 질문 화면으로 넣다가 나온 결함 — 탄소강 제품의 SEE가 2.007 → 2.298(+14.5%)로 부풀었는데 아무 점검도 잡지 못했다.
+const plain = (id, processId, amount, name, extra = {}) => ({ ...fuel({ id, activity_data: amount, name, heat_system: undefined }), process_id: processId, shared_meter: undefined, ...extra });
+const twin = summarizeEnergySplits({ processes: [processA, processB], sourceStreams: [fuelRow('f1', 'A', 6, '공용 경유'), fuelRow('f2', 'B', 4, '공용 경유'), plain('old', 'A', 10, '경유(공장 전체)')] });
+assert.match(twin.items[0].problem, /「경유\(공장 전체\)」\(10 [^)]*\)가 나누기 전의 공장 전체 값으로 한 공정에 그대로 남아 있습니다 — 같은 연료가 두 번 계산되고 있습니다/, '나누기 전의 전체 값이 남으면 문제로 올린다');
+assert.equal(twin.attentionCount, 1);
+assert.equal(twin.hints.filter((hint) => hint.kind === 'FUEL').length, 0, '확실한 중복은 힌트가 아니라 문제 한 번');
+// 양이 다른 같은 연료는 다른 계량기일 수 있다 — 알리기만 한다.
+const sameFuel = summarizeEnergySplits({ processes: [processA, processB], sourceStreams: [fuelRow('f1', 'A', 6, '공용 경유'), fuelRow('f2', 'B', 4, '공용 경유'), plain('other', 'A', 2.5, '경유 비상발전기')] });
+assert.equal(sameFuel.items[0].problem, undefined);
+assert.match(sameFuel.hints.find((hint) => hint.kind === 'FUEL').text, /「경유 비상발전기」\(2\.5 [^)]*\)가 한 공정에 따로 들어 있습니다\. 다른 계량기·전표의 것이 맞는지 확인하세요/);
+// 다른 연료(계수가 다르다), 그 계량기를 안 쓰는 공정의 연료, 열 공급원 연료는 해당하지 않는다.
+const otherFactor = summarizeEnergySplits({ processes: [processA, processB], sourceStreams: [fuelRow('f1', 'A', 6, '공용 경유'), fuelRow('f2', 'B', 4, '공용 경유'), plain('gas', 'A', 10, '도시가스', { emission_factor_tco2e_per_unit: 1.2345 })] });
+assert.equal(otherFactor.items[0].problem, undefined, '계수가 다르면 다른 연료다');
+assert.equal(otherFactor.hints.filter((hint) => hint.kind === 'FUEL').length, 0);
+const outsider = summarizeEnergySplits({ processes: [processA, processB], sourceStreams: [fuelRow('f1', 'A', 10, '공용 경유'), plain('x', 'B', 10, '경유')] });
+assert.ok(!(outsider.items[0].problem ?? '').includes('두 번') && outsider.hints.filter((hint) => hint.kind === 'FUEL').length === 0, '계량기를 같이 쓰지 않는 공정의 연료는 중복으로 보지 않는다');
+// 전력: 같은 계량기인데 계수가 다르고 출처가 빈 공정이 있으면 문제(나누기는 사용량만 나눈다 — 나중에 더한 공정에 0.47 자리값이 남는다).
+const meterGap = summarizeEnergySplits({ processes: [{ ...elec('A', 150, '한전'), electricity_ef_tco2e_per_mwh: 0.833, electricity_ef_source: 'COUNTRY_GRID_DEFAULT' }, { ...elec('B', 150, '한전'), electricity_ef_tco2e_per_mwh: 0.47, electricity_ef_source: undefined }], sourceStreams: [] });
+assert.match(meterGap.items[0].problem, /같은 계량기인데 공정마다 전력 배출계수가 다릅니다\(0\.833 \/ 0\.47\)\. 「공정 B」은\(는\) 계수 출처가 비어 있어 임시 자리값일 수 있습니다/);
+const meterSame = summarizeEnergySplits({ processes: [{ ...elec('A', 150, '한전'), electricity_ef_tco2e_per_mwh: 0.47 }, { ...elec('B', 150, '한전'), electricity_ef_tco2e_per_mwh: 0.47 }], sourceStreams: [] });
+assert.equal(meterSame.items[0].problem, undefined, '계수가 같으면(둘 다 자리값이라도) 이 점검은 말하지 않는다 — 출처 미분류는 다른 점검의 몫');
+const meterBothSourced = summarizeEnergySplits({ processes: [{ ...elec('A', 150, '한전'), electricity_ef_tco2e_per_mwh: 0.833, electricity_ef_source: 'PPA' }, { ...elec('B', 150, '한전'), electricity_ef_tco2e_per_mwh: 0.47, electricity_ef_source: 'COUNTRY_GRID_DEFAULT' }], sourceStreams: [] });
+assert.equal(meterBothSourced.items[0].problem, undefined, '둘 다 출처를 밝혔으면 사용자의 판단이다');
+
 const heatItems = summarizeEnergySplits({
   processes: [{ ...processA, heat_consumption: consumption(filled[0]) }, { ...processB, heat_consumption: consumption(filled[1]) }],
   sourceStreams: [heatFuel],

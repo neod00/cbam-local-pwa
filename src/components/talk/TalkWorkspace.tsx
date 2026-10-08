@@ -440,7 +440,7 @@ export function TalkWorkspace() {
                 </div>
                 <p className="mt-1 text-sm leading-6 text-slate-600">
                     한 번에 질문 하나씩 묻습니다. 답은 지도 화면과 <span className="font-semibold">같은 곳</span>에 저장되어서, 언제든 지도 화면으로 넘어가도 입력한 내용은 그대로입니다.
-                    질문이 끝나면 아래에 지금까지의 결과가 나오고, 공정이 둘 이상이면 같이 쓴 에너지 나누기도 여기서 할 수 있습니다. EU 문서는 지도 화면 8단계에서 만듭니다.
+                    질문이 끝나면 아래에 지금까지의 결과가 나오고, 공정이 둘 이상이면 같이 쓴 에너지 나누기도 여기서 할 수 있습니다. 남은 일은 「할 일」에서, 파일은 「제출」에서 받습니다.
                 </p>
             </header>
 
@@ -976,7 +976,7 @@ export function TalkWorkspace() {
                 <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5" aria-label="이번 단계 완료">
                     <p className="flex items-center gap-2 text-sm font-bold text-emerald-900"><CheckCircle2 className="h-4 w-4" />여기까지가 이번 시험 버전의 질문입니다.</p>
                     <p className="mt-1 text-sm leading-6 text-emerald-900">
-                        지금까지의 결과는 아래에 있습니다. 더 입력하거나 고치려면 지도 화면으로 이어가세요 — 입력한 답이 그대로 보입니다. 7단계에서 결과를, 8단계에서 EU 문서를 만들 수 있습니다.
+                        지금까지의 결과는 아래에 있습니다. 남은 일은 「할 일」에서 정리하고, EU 문서는 「제출」에서 받으세요. 더 자세히 입력하거나 고치려면 지도 화면으로 이어가면 됩니다 — 입력한 답이 그대로 보입니다.
                         {data.products.map((item) => {
                             const notes = overview.products.find((entry) => entry.id === item.id)?.pending.filter((id) => skipped.includes(talkSkipKey(item.id, id))) ?? [];
                             return notes.length > 0 ? ` 「${item.name}」: ${notes.map((id) => SKIPPED_NOTE[id]).join(' · ')}.` : '';
@@ -989,8 +989,14 @@ export function TalkWorkspace() {
                     {focusProcess && state.precursorCount > 0 && (
                         <button type="button" onClick={() => { setMessage(''); setAddingPrecursor(true); }} className="mt-3 mr-3 text-sm font-semibold text-teal-700 hover:underline">구매 강재 하나 더 넣기</button>
                     )}
+                    <Link href="/todo" className="mt-3 mr-2 inline-flex" data-testid="talk-to-todo">
+                        <Button type="button">할 일 보기<ArrowRight className="ml-2 h-4 w-4" /></Button>
+                    </Link>
+                    <Link href="/submit" className="mt-3 mr-2 inline-flex" data-testid="talk-to-submit">
+                        <Button type="button" variant="secondary">제출 화면으로</Button>
+                    </Link>
                     <Link href="/" className="mt-3 inline-flex">
-                        <Button type="button">지도 화면에서 이어서 입력하기<ArrowRight className="ml-2 h-4 w-4" /></Button>
+                        <Button type="button" variant="secondary">지도 화면에서 이어서 입력하기<ArrowRight className="ml-2 h-4 w-4" /></Button>
                     </Link>
                 </section>
             )}
