@@ -71,6 +71,21 @@ function findUnsplitTwin(group: { period_id?: string; stream_ids: string[]; inst
 }
 
 /**
+ * 공용 계량기로 나눈 연료마다, 나누기 전의 공장 전체 값이 한 공정에 그대로 남은 행(= 확실한 이중계상, run30).
+ * 양이 계량기의 공장 전체 값과 같은 것만 센다(findUnsplitTwin의 duplicate). 내보내기 준비도가 이것을 오류로 올려 파일 만들기를 막는다.
+ */
+export function findDuplicateUnsplitFuel(streams: SourceStream[]): Array<{ group: string; stream: SourceStream; unit: string; total: number }> {
+    const meterRows = streams.filter((stream) => stream.shared_meter?.group?.trim() && !stream.heat_system?.name?.trim());
+    const found: Array<{ group: string; stream: SourceStream; unit: string; total: number }> = [];
+    for (const group of reconcileSourceStreams(meterRows).groups) {
+        if (group.reason) continue;
+        const { duplicate } = findUnsplitTwin(group, streams);
+        if (duplicate) found.push({ group: group.group, stream: duplicate, unit: group.unit, total: group.installation_total });
+    }
+    return found;
+}
+
+/**
  * 한 계량기(= 한 공급)인데 공정마다 전력 배출계수가 다르고, 그중 계수 출처가 비어 있는 공정이 있는가(run30).
  * 「전력 나누기」는 사용량만 나누므로, 나중에 더한 공정에는 임시 자리값(0.47)이 출처 없이 남는다 — 간접배출이 틀리게 보고된다.
  */

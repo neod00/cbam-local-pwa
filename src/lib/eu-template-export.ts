@@ -9,6 +9,7 @@ import { APP_SCOPE_EXCLUSION_TEXT, getAppScopeExclusion, getIndirectEmissionsApp
 import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';
 import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, reconcileSourceStreams } from './allocation-rules';
 import { CN_MASTER } from './cn-master.generated';
+import { findDuplicateUnsplitFuel } from './energy-split-summary';
 import { IMPORTED_HEAT_RULE, SHARED_HEAT_RULE, isProvisionalHeatNote, resolveImportedHeat, resolveProcessSharedHeat, resolveSharedHeatSystems } from './measurable-heat';
 
 export const REQUIRED_EU_TEMPLATE_SHEETS = [
@@ -1298,6 +1299,18 @@ export function evaluateEuExportReadiness(
                 message: `${installationForCheck.name}: UN/LOCODE가 비어 있습니다. EU 문서 A_InstData의 UNLOCODE 칸이 빈 채로 나갑니다. UN/LOCODE는 UNECE가 도시·항만에 붙인 5자리 코드입니다(예: 부산 KRPUS, 인천 KRINC) — 가까운 도시 코드를 UNECE 목록에서 찾거나, 없으면 좌표(위도·경도)를 채우세요.`,
             });
         }
+    }
+
+    // ── 나눈 연료가 두 번 계산됨(run30) ─────────────────────────────────
+    // 공장 전체 고지서를 한 공정에 먼저 적고 나중에 「연료 나누기」를 하면 처음 행이 남아 같은 연료가 두 번 들어간다(EU 공식 예제 재현에서 SEE +14.5%).
+    // 양이 공장 전체 값과 같은 행만 — 확실한 이중계상이라 문서를 막는다(2025/2547 부속서 III A.1: 이중계상·누락 금지). 양이 다르면 이 검사는 말하지 않는다.
+    for (const duplicate of findDuplicateUnsplitFuel(exportScope.sourceStreams)) {
+        issues.push({
+            severity: 'error',
+            area: '생산공정',
+            message: `${duplicate.stream.name}: 공용 계량기 「${duplicate.group}」로 이미 나눈 같은 연료의 나누기 전 값(${duplicate.stream.activity_data} ${duplicate.unit})이 한 공정에 그대로 남아 있어 같은 연료가 두 번 계산됩니다. 지도 4단계에서 이 행을 지우세요(나눈 행은 그대로 두세요).`,
+            target: { type: 'sourceStream', id: duplicate.stream.id },
+        });
     }
 
     // ── 제품·역할이 둘 다 비어 있는 생산라인 ──────────────────────────

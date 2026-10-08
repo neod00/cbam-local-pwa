@@ -101,8 +101,12 @@ function loadEuExportModule() {
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
   // export·엔진이 import 한다 — 산 열(EmH,imp)과 전구물질 검증 규칙(2025/2547). 의존이 없는 작은 모듈이다.
-  const helperSources = ['src/lib/measurable-heat.ts', 'src/lib/precursor-verification.ts']
-    .map((path) => readFileSync(path, 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, ''))
+  // energy-split-summary is imported by export too (duplicate-fuel check); rename its `fmt` so the concatenated harness has no clash.
+  const helperSources = ['src/lib/measurable-heat.ts', 'src/lib/precursor-verification.ts', 'src/lib/energy-split-summary.ts']
+    .map((path) => {
+      const text = readFileSync(path, 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, '');
+      return path.endsWith('energy-split-summary.ts') ? text.split('fmt').join('fmtEnergySplit') : text;
+    })
     .join('\n');
   const source = readFileSync('src/lib/eu-template-export.ts', 'utf8')
     .replace(

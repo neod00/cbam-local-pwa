@@ -4,6 +4,7 @@ import {
     createEuTemplateExportCellWrites,
     createExportChecklist,
     evaluateEuExportReadiness,
+    getEuExportIssueEditHref,
     loadDefaultEuTemplateFile,
     scopeRecordsToExportPeriod,
     validateEuTemplateFile,
@@ -123,6 +124,7 @@ export async function loadSubmitData(): Promise<SubmitData> {
         precursors: docScope.precursors,
         fuelOrElectricityEntered: docScope.sourceStreams.length > 0 || docScope.processes.some((process) => process.electricity_mwh > 0 || process.direct_attributable_emissions_tco2e > 0),
         readiness,
+        blockingIssues: readiness.issues.filter((issue) => issue.severity === 'error').map((issue) => ({ message: issue.message, href: getEuExportIssueEditHref(issue) })),
         todoItems: todo.result.items,
         attribution: todo.attribution,
     });

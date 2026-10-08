@@ -119,6 +119,16 @@ export function SubmitWorkspace() {
                     {blocked ? <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-red-700" /> : <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-teal-700" />}
                     <span><b>{summary.verdict.headline}</b> {summary.verdict.detail}</span>
                 </p>
+                {summary.verdict.blockers.length > 0 && (
+                    <ul className="mt-2 space-y-1.5 pl-6" data-testid="submit-blockers">
+                        {summary.verdict.blockers.map((blocker, index) => (
+                            <li key={index} className="flex flex-wrap items-start gap-x-3 text-sm leading-6 text-red-900" data-testid="submit-blocker">
+                                <span className="min-w-0 flex-1">{blocker.message}</span>
+                                {blocker.href && <Link href={blocker.href} className="inline-flex flex-none items-center gap-1 font-bold text-teal-700 hover:underline">고치러 가기<ArrowRight className="h-3.5 w-3.5" /></Link>}
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">

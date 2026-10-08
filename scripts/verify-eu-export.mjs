@@ -88,8 +88,12 @@ function loadEuExportModule() {
     .replace(/^import .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
   // export·엔진이 import 한다 — 산 열(EmH,imp)과 전구물질 검증 규칙(2025/2547). 의존이 없는 작은 모듈이다.
-  const helperSources = ['src/lib/measurable-heat.ts', 'src/lib/precursor-verification.ts']
-    .map((path) => readFileSync(path, 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, ''))
+  // energy-split-summary도 export가 import한다(나눈 연료의 이중계상 검사) — 합쳐 붙이는 틀에서 같은 이름(fmt)이 겹치지 않게 이름을 바꾼다.
+  const helperSources = ['src/lib/measurable-heat.ts', 'src/lib/precursor-verification.ts', 'src/lib/energy-split-summary.ts']
+    .map((path) => {
+      const text = readFileSync(path, 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, '');
+      return path.endsWith('energy-split-summary.ts') ? text.split('fmt').join('fmtEnergySplit') : text;
+    })
     .join('\n');
   const source = readFileSync('src/lib/eu-template-export.ts', 'utf8')
     .replace(
@@ -861,6 +865,23 @@ assertEqual(
   'mixed allocation basis warning'
 );
 assertEqual(String(euExport.createEuTemplateExportCellWrites(data, validation.cnCodeMap).length), '47', 'planned cell writes');
+
+// ── run30: 나눈 연료가 두 번 계산되면 문서를 막는다(확실한 경우만) ──
+{
+  const meter = (group, total) => ({ group, installation_total_activity_data: total, basis: 'OUTPUT_MASS' });
+  const row = (id, processId, amount, extra = {}) => ({ ...sourceStream, id, process_id: processId, activity_data: amount, ...extra });
+  const second = { ...data.processes[0], id: 'process-2', name: 'Second process' };
+  const split = [row('split-1', data.processes[0].id, 60, { shared_meter: meter('공용 가스', 100) }), row('split-2', second.id, 40, { shared_meter: meter('공용 가스', 100) })];
+  const check = (streams) => euExport.evaluateEuExportReadiness({ ...data, processes: [data.processes[0], second], sourceStreams: streams }, validation.cnCodeMap).issues
+    .filter((issue) => issue.severity === 'error' && /두 번 계산됩니다/.test(issue.message));
+  assertEqual(String(check(split).length), '0', '정상으로 나눈 연료는 막지 않는다');
+  const duplicated = check([...split, row('old-total', data.processes[0].id, 100, { name: 'Natural gas (plant total)' })]);
+  assertEqual(String(duplicated.length), '1', '나누기 전 공장 전체 값이 남으면 문서를 막는다');
+  assertEqual(String(duplicated[0].target?.id), 'old-total', '남은 행을 가리킨다');
+  assertEqual(String(duplicated[0].message.includes('Natural gas (plant total)') && duplicated[0].message.includes('「공용 가스」')), 'true', '행 이름과 계량기 이름을 말한다');
+  assertEqual(String(check([...split, row('other', data.processes[0].id, 12.5)]).length), '0', '양이 다른 같은 연료는 막지 않는다(다른 계량기일 수 있다 — 나누기 현황이 안내만 한다)');
+  assertEqual(String(check([...split, row('other-fuel', data.processes[0].id, 100, { emission_factor_tco2e_per_unit: 56.1 })]).length), '0', '다른 연료(계수가 다르다)는 막지 않는다');
+}
 
 // ── app scope: steel only, no integrated (BF/BOF) steelmaking yet ──
 {
