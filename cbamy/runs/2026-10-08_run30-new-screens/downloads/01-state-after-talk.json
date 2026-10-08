@@ -1,0 +1,257 @@
+{
+ "installations": [
+  {
+   "name": "Example Screw Production Plant",
+   "country": "US",
+   "id": "installation_d21140df-018b-4fa5-84f9-fef827f476db",
+   "created_at": "2026-10-08T14:43:11.126Z",
+   "updated_at": "2026-10-08T14:43:11.126Z"
+  }
+ ],
+ "periods": [
+  {
+   "name": "2025년 연간",
+   "start_date": "2025-01-01",
+   "end_date": "2025-12-31",
+   "status": "DRAFT",
+   "id": "period_e3a6902d-d6eb-42cf-9f7d-c0750167ccc7",
+   "created_at": "2026-10-08T14:43:12.934Z",
+   "updated_at": "2026-10-08T14:43:12.934Z"
+  }
+ ],
+ "products": [
+  {
+   "installation_id": "installation_d21140df-018b-4fa5-84f9-fef827f476db",
+   "name": "Carbon steel screws and nuts",
+   "hs_code": "7318",
+   "cn_code": "73181542",
+   "hs_group": "73",
+   "product_type_enum": "HS73_OTHER",
+   "unit": "tonne",
+   "reporting_scope": "CBAM_GOOD",
+   "id": "product_29ba0299-c9ab-4d74-b40e-b8dbe59dac42",
+   "created_at": "2026-10-08T14:43:15.556Z",
+   "updated_at": "2026-10-08T14:43:15.556Z"
+  },
+  {
+   "installation_id": "installation_d21140df-018b-4fa5-84f9-fef827f476db",
+   "name": "High alloy steel screws and nuts",
+   "hs_code": "7318",
+   "cn_code": "73181535",
+   "hs_group": "73",
+   "product_type_enum": "HS73_OTHER",
+   "unit": "tonne",
+   "reporting_scope": "CBAM_GOOD",
+   "id": "product_c3698e50-040d-4bd2-80b1-d443a417784c",
+   "created_at": "2026-10-08T14:44:13.046Z",
+   "updated_at": "2026-10-08T14:44:13.046Z"
+  }
+ ],
+ "processes": [
+  {
+   "period_id": "period_e3a6902d-d6eb-42cf-9f7d-c0750167ccc7",
+   "product_id": "product_c3698e50-040d-4bd2-80b1-d443a417784c",
+   "name": "High alloy steel screws and nuts 공정",
+   "production_route": "가공(압연·신선·열처리)",
+   "output_mass_t": 8200,
+   "internal_consumption_mass_t": 0,
+   "market_output_mass_t": 8200,
+   "direct_attributable_emissions_tco2e": 1610.070000898,
+   "electricity_mwh": 1640,
+   "electricity_ef_tco2e_per_mwh": 0.47,
+   "id": "processe_37e22963-0ff0-4d98-90cf-cfc0ad15c64c",
+   "created_at": "2026-10-08T14:44:15.055Z",
+   "updated_at": "2026-10-08T14:45:08.528Z",
+   "measurable_heat_import": "NO",
+   "electricity_shared_meter": {
+    "group": "한전 계량기",
+    "installation_total_mwh": 5040,
+    "basis": "OUTPUT_MASS",
+    "basis_value": 8200
+   },
+   "electricity_allocation_note": "공용 계량기 「한전 계량기」 5,040 MWh를 공정별 생산량(활동수준) 비율로 배분 — Carbon steel screws and nuts 공정 17,000 t : High alloy steel screws and nuts 공정 8,200 t. 공정별 계량값이 없어 기능단위 기준을 적용(2025/2547 부속서 III A.2 — 기능단위 기준). 이 공정 몫 1,640 MWh (32.54%).",
+   "direct_emissions_input_mode": "SOURCE_STREAM_SUM"
+  },
+  {
+   "period_id": "period_e3a6902d-d6eb-42cf-9f7d-c0750167ccc7",
+   "product_id": "product_29ba0299-c9ab-4d74-b40e-b8dbe59dac42",
+   "name": "Carbon steel screws and nuts 공정",
+   "production_route": "가공(압연·신선·열처리)",
+   "output_mass_t": 17000,
+   "internal_consumption_mass_t": 0,
+   "market_output_mass_t": 17000,
+   "direct_attributable_emissions_tco2e": 8285.969999102,
+   "electricity_mwh": 3400,
+   "electricity_ef_tco2e_per_mwh": 0.833,
+   "electricity_ef_source": "COUNTRY_GRID_DEFAULT",
+   "id": "processe_c4db1330-d628-4766-9273-9c48455a4285",
+   "created_at": "2026-10-08T14:43:17.060Z",
+   "updated_at": "2026-10-08T14:45:08.527Z",
+   "direct_emissions_input_mode": "SOURCE_STREAM_SUM",
+   "electricity_allocation_note": "공용 계량기 「한전 계량기」 5,040 MWh를 공정별 생산량(활동수준) 비율로 배분 — Carbon steel screws and nuts 공정 17,000 t : High alloy steel screws and nuts 공정 8,200 t. 공정별 계량값이 없어 기능단위 기준을 적용(2025/2547 부속서 III A.2 — 기능단위 기준). 이 공정 몫 3,400 MWh (67.46%).",
+   "measurable_heat_import": "NO",
+   "electricity_shared_meter": {
+    "group": "한전 계량기",
+    "installation_total_mwh": 5040,
+    "basis": "OUTPUT_MASS",
+    "basis_value": 17000
+   }
+  }
+ ],
+ "product_output_lines": [
+  {
+   "process_id": "processe_37e22963-0ff0-4d98-90cf-cfc0ad15c64c",
+   "product_id": "product_c3698e50-040d-4bd2-80b1-d443a417784c",
+   "name": "High alloy steel screws and nuts",
+   "output_mass_t": 8200,
+   "allocation_basis": "MASS",
+   "manual_allocation_percent": 100,
+   "note": "",
+   "reporting_scope": "CBAM_GOOD",
+   "id": "product_output_line_23eaca74-ed9b-41b9-ad31-8a3e8b470cbe",
+   "created_at": "2026-10-08T14:44:15.056Z",
+   "updated_at": "2026-10-08T14:44:15.056Z"
+  },
+  {
+   "process_id": "processe_c4db1330-d628-4766-9273-9c48455a4285",
+   "product_id": "product_29ba0299-c9ab-4d74-b40e-b8dbe59dac42",
+   "name": "Carbon steel screws and nuts",
+   "output_mass_t": 17000,
+   "allocation_basis": "MASS",
+   "manual_allocation_percent": 100,
+   "note": "",
+   "reporting_scope": "CBAM_GOOD",
+   "id": "product_output_line_cc116ef6-6486-4197-bbf3-8dc38154a7c9",
+   "created_at": "2026-10-08T14:43:17.063Z",
+   "updated_at": "2026-10-08T14:43:17.063Z"
+  }
+ ],
+ "source_streams": [
+  {
+   "stream_type": "FUEL",
+   "method": "Combustion",
+   "activity_unit": "t",
+   "ncv_gj_per_unit": 48,
+   "emission_factor_tco2e_per_unit": 56.1,
+   "emission_factor_basis": "PER_TJ",
+   "oxidation_factor": 1,
+   "conversion_factor": 1,
+   "fossil_fraction": 1,
+   "biomass_fraction": 0,
+   "factor_source_type": "EU_OR_IPCC_DEFAULT",
+   "period_id": "period_e3a6902d-d6eb-42cf-9f7d-c0750167ccc7",
+   "process_id": "processe_c4db1330-d628-4766-9273-9c48455a4285",
+   "name": "유류·기타 · Natural gas plant meter · Carbon steel screws and nuts 공정",
+   "activity_data": 1239.583333,
+   "source": "Gas invoices 2025 (plant total) · 공용 계량기 「Natural gas plant meter」 몫",
+   "shared_meter": {
+    "group": "Natural gas plant meter",
+    "installation_total_activity_data": 1837.5,
+    "basis": "OUTPUT_MASS",
+    "note": "공용 계량기 「Natural gas plant meter」 1,837.5 t를 공정별 생산량(활동수준) 비율로 배분 — Carbon steel screws and nuts 공정 17,000 t : High alloy steel screws and nuts 공정 8,200 t. 공정별 계량값이 없어 기능단위 기준을 적용(2025/2547 부속서 III A.2 — 기능단위 기준). 이 공정 몫 1,239.583333 t (67.46%)."
+   },
+   "id": "source_stream_4c13b1e1-db75-45aa-b583-8db2ee5baadb",
+   "created_at": "2026-10-08T14:45:08.522Z",
+   "updated_at": "2026-10-08T14:45:08.522Z"
+  },
+  {
+   "stream_type": "FUEL",
+   "method": "Combustion",
+   "activity_unit": "t",
+   "ncv_gj_per_unit": 48,
+   "emission_factor_tco2e_per_unit": 56.1,
+   "emission_factor_basis": "PER_TJ",
+   "oxidation_factor": 1,
+   "conversion_factor": 1,
+   "fossil_fraction": 1,
+   "biomass_fraction": 0,
+   "factor_source_type": "EU_OR_IPCC_DEFAULT",
+   "period_id": "period_e3a6902d-d6eb-42cf-9f7d-c0750167ccc7",
+   "process_id": "processe_37e22963-0ff0-4d98-90cf-cfc0ad15c64c",
+   "name": "유류·기타 · Natural gas plant meter · High alloy steel screws and nuts 공정",
+   "activity_data": 597.916667,
+   "source": "Gas invoices 2025 (plant total) · 공용 계량기 「Natural gas plant meter」 몫",
+   "shared_meter": {
+    "group": "Natural gas plant meter",
+    "installation_total_activity_data": 1837.5,
+    "basis": "OUTPUT_MASS",
+    "note": "공용 계량기 「Natural gas plant meter」 1,837.5 t를 공정별 생산량(활동수준) 비율로 배분 — Carbon steel screws and nuts 공정 17,000 t : High alloy steel screws and nuts 공정 8,200 t. 공정별 계량값이 없어 기능단위 기준을 적용(2025/2547 부속서 III A.2 — 기능단위 기준). 이 공정 몫 597.916667 t (32.54%)."
+   },
+   "id": "source_stream_8666ab67-5b8b-4b7e-8e88-d70c0b610351",
+   "created_at": "2026-10-08T14:45:08.526Z",
+   "updated_at": "2026-10-08T14:45:08.526Z"
+  },
+  {
+   "stream_type": "FUEL",
+   "method": "Combustion",
+   "activity_unit": "t",
+   "ncv_gj_per_unit": 48,
+   "emission_factor_tco2e_per_unit": 56.1,
+   "emission_factor_basis": "PER_TJ",
+   "oxidation_factor": 1,
+   "conversion_factor": 1,
+   "fossil_fraction": 1,
+   "biomass_fraction": 0,
+   "factor_source_type": "EU_OR_IPCC_DEFAULT",
+   "period_id": "period_e3a6902d-d6eb-42cf-9f7d-c0750167ccc7",
+   "process_id": "processe_c4db1330-d628-4766-9273-9c48455a4285",
+   "name": "Natural gas",
+   "activity_data": 1837.5,
+   "source": "Gas invoices 2025 (plant total)",
+   "id": "source_stream_ff2c9c0d-b13d-4e74-a689-240c5d6a7557",
+   "created_at": "2026-10-08T14:43:55.158Z",
+   "updated_at": "2026-10-08T14:43:55.158Z"
+  }
+ ],
+ "precursors": [
+  {
+   "period_id": "period_e3a6902d-d6eb-42cf-9f7d-c0750167ccc7",
+   "process_id": "processe_37e22963-0ff0-4d98-90cf-cfc0ad15c64c",
+   "product_id": "product_c3698e50-040d-4bd2-80b1-d443a417784c",
+   "name": "High alloy steel",
+   "precursor_cn_code": "72210010",
+   "production_route": "",
+   "supplier_installation": "",
+   "supplier_country": "United States",
+   "data_mode": "ACTUAL",
+   "purchased_mass_t": 10000,
+   "consumed_mass_t": 10000,
+   "direct_see_tco2e_per_t": 1.44,
+   "indirect_see_tco2e_per_t": 1.732,
+   "source": "Supplier communication template (official example)",
+   "default_value_justification": "",
+   "aggregated_goods_category": "Iron or steel products",
+   "verification_status": "UNVERIFIED",
+   "default_value_year": "2026",
+   "consumed_for_non_cbam_mass_t": 0,
+   "id": "precursor_7107ad54-3da6-4d00-b38d-7ef4af5c0d42",
+   "created_at": "2026-10-08T14:44:18.213Z",
+   "updated_at": "2026-10-08T14:44:18.213Z"
+  },
+  {
+   "period_id": "period_e3a6902d-d6eb-42cf-9f7d-c0750167ccc7",
+   "process_id": "processe_c4db1330-d628-4766-9273-9c48455a4285",
+   "product_id": "product_29ba0299-c9ab-4d74-b40e-b8dbe59dac42",
+   "name": "Carbon steel",
+   "precursor_cn_code": "72139110",
+   "production_route": "",
+   "supplier_installation": "",
+   "supplier_country": "China",
+   "data_mode": "ACTUAL",
+   "purchased_mass_t": 20000,
+   "consumed_mass_t": 20000,
+   "direct_see_tco2e_per_t": 1.539,
+   "indirect_see_tco2e_per_t": 0.204,
+   "source": "Supplier communication template (official example)",
+   "default_value_justification": "",
+   "aggregated_goods_category": "Iron or steel products",
+   "verification_status": "UNVERIFIED",
+   "default_value_year": "2026",
+   "consumed_for_non_cbam_mass_t": 0,
+   "id": "precursor_da44bef7-728f-4da4-b6db-a8ada96b08d6",
+   "created_at": "2026-10-08T14:43:30.760Z",
+   "updated_at": "2026-10-08T14:43:30.760Z"
+  }
+ ],
+ "internal_transfers": []
+}

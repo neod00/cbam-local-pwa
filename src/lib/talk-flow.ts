@@ -278,7 +278,7 @@ export function describeTalkBarPartial(input: { hasFuelOrElectricity: boolean; p
     }
     return input.hasFuelOrElectricity
         ? undefined
-        : '연료·전기는 아직 넣지 않았습니다 — 지도 화면 4·5단계에서 넣으면 기본값과의 비교를 보여 드립니다. 지금 값은 일부일 뿐입니다.';
+        : '연료·전기는 아직 넣지 않았습니다 — 위 질문에 답하거나(여러 공정이 같이 쓰는 고지서는 아래 나누기 도구로) 넣으면 기본값과의 비교를 보여 드립니다. 지금 값은 일부일 뿐입니다.';
 }
 
 /**
