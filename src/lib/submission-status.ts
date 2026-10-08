@@ -23,12 +23,19 @@ export interface SubmissionRow {
     hrefLabel?: string;
 }
 
+export interface SubmissionBlocker {
+    message: string;
+    href?: string;
+}
+
 export interface SubmissionVerdict {
     kind: 'blocked' | 'notice' | 'ready' | 'empty';
     headline: string;
     detail: string;
     /** 주의로 남은 줄 수 */
     noticeCount: number;
+    /** 파일을 막는 오류(준비도 검사) — 무엇이 막는지 화면이 그대로 말한다. 최대 5건 */
+    blockers: SubmissionBlocker[];
 }
 
 export interface SubmissionSummary {
@@ -49,6 +56,8 @@ export function buildSubmissionSummary(input: {
     precursors: Array<Pick<PurchasedPrecursor, 'data_mode' | 'verification_status'>>;
     fuelOrElectricityEntered: boolean;
     readiness: Pick<EuExportReadinessResult, 'errorCount' | 'warningCount'>;
+    /** 막는 오류의 문장과 고칠 곳(준비도 검사의 오류, 호출부가 링크까지 붙여 넘긴다) */
+    blockingIssues?: SubmissionBlocker[];
     todoItems: TodoItem[];
     attribution: AttributionStatusResult;
 }): SubmissionSummary {
@@ -115,13 +124,14 @@ export function buildSubmissionSummary(input: {
     const noticeRows = rows.filter((row) => row.status === 'notice');
     let verdict: SubmissionVerdict;
     if (!hasData) {
-        verdict = { kind: 'empty', headline: '아직 보낼 자료가 없습니다.', detail: '제품과 생산량, 연료·전력, 구매 강재를 입력하면 여기서 제출 파일을 만들 수 있습니다.', noticeCount: 0 };
+        verdict = { kind: 'empty', headline: '아직 보낼 자료가 없습니다.', detail: '제품과 생산량, 연료·전력, 구매 강재를 입력하면 여기서 제출 파일을 만들 수 있습니다.', noticeCount: 0, blockers: [] };
     } else if (input.readiness.errorCount > 0 || blockedByRows > 0) {
         verdict = {
             kind: 'blocked',
             headline: '아직 파일을 만들 수 없습니다.',
             detail: `EU 문서를 만들기 전에 해결할 것이 ${Math.max(input.readiness.errorCount, blockedByRows)}건 있습니다. 아래 표와 할 일에서 먼저 해결하세요.`,
             noticeCount: noticeRows.length,
+            blockers: (input.blockingIssues ?? []).slice(0, 5),
         };
     } else if (noticeRows.length > 0) {
         verdict = {
@@ -129,9 +139,10 @@ export function buildSubmissionSummary(input: {
             headline: '보낼 수 있습니다.',
             detail: `다만 아래 ${noticeRows.length}가지는 파일에 「기본값」 또는 「잠정」으로 적히거나 비어 있습니다. 수입업자가 물어볼 수 있으니 할 일에서 먼저 정리하면 좋습니다.`,
             noticeCount: noticeRows.length,
+            blockers: [],
         };
     } else {
-        verdict = { kind: 'ready', headline: '보낼 수 있습니다.', detail: '막는 항목도, 남은 확인도 없습니다. 엑셀에서 한 번 열어 공식 수식이 다시 계산됐는지만 확인하세요.', noticeCount: 0 };
+        verdict = { kind: 'ready', headline: '보낼 수 있습니다.', detail: '막는 항목도, 남은 확인도 없습니다. 엑셀에서 한 번 열어 공식 수식이 다시 계산됐는지만 확인하세요.', noticeCount: 0, blockers: [] };
     }
     return { rows, verdict };
 }

@@ -43,6 +43,12 @@ assert.equal(row(empty, 'products').status, 'blocked');
 const blockedByReadiness = buildSubmissionSummary({ ...base, readiness: { errorCount: 2, warningCount: 0 } });
 assert.equal(blockedByReadiness.verdict.kind, 'blocked');
 assert.match(blockedByReadiness.verdict.detail, /해결할 것이 2건/);
+assert.deepEqual(plain(blockedByReadiness.verdict.blockers), [], '문장을 안 넘기면 막는 목록은 비어 있다');
+const withBlockers = buildSubmissionSummary({ ...base, readiness: { errorCount: 7, warningCount: 0 }, blockingIssues: Array.from({ length: 7 }, (_, i) => ({ message: '막는 오류 ' + i, href: i === 0 ? '/map' : undefined })) });
+assert.equal(withBlockers.verdict.blockers.length, 5, '막는 목록은 최대 5건');
+assert.equal(withBlockers.verdict.blockers[0].href, '/map');
+assert.equal(ready.verdict.blockers.length, 0);
+assert.equal(empty.verdict.blockers.length, 0);
 const periodUnchosen = buildSubmissionSummary({ ...base, periodCount: 2, exportPeriod: undefined });
 assert.equal(periodUnchosen.verdict.kind, 'blocked');
 assert.equal(row(periodUnchosen, 'period').status, 'blocked');
@@ -149,6 +155,7 @@ assert.deepEqual(plain(actions.match(/localStorage\.setItem\(([A-Z_]+)/g)), ['lo
 
 // ── 4) 화면·배선 ────────────────────────────────────────────────────
 const ui = file(`${dir}/SubmitWorkspace.tsx`);
+assert.ok(ui.includes('data-testid="submit-blockers"') && ui.includes('summary.verdict.blockers'), '막는 목록을 판정 아래에 그린다');
 assert.ok(ui.includes('data-testid="submit-verdict"') && ui.includes('data-testid="submit-checklist"'));
 assert.ok(ui.includes("disabled={Boolean(disabledReason) || busy !== ''}"), '막힌 동안은 파일 버튼이 꺼진다');
 assert.ok(ui.includes("'먼저 막힌 항목을 해결하세요.'"));
