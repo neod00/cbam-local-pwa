@@ -32,7 +32,8 @@ if (mode === 'make') {
   await write('sample.xlsx', W.ACTIVITY_WORKBOOK_SAMPLE);
   // 엑셀에 사람이 치듯 넣을 값: [시트, 셀, 값]. 사업장은 B열, 표는 5번째 줄부터.
   const cells = [];
-  const sample = W.ACTIVITY_WORKBOOK_SAMPLE;
+  // 셋째 인자로 채울 값(JSON)을 주면 작성 예시 대신 그 값을 엑셀에 칠 값으로 쓴다(예: EU 공식 예제).
+  const sample = process.argv[4] ? JSON.parse(readFileSync(process.argv[4], 'utf8')) : W.ACTIVITY_WORKBOOK_SAMPLE;
   let row = 2;
   for (const item of W.INSTALLATION_FORM) {
     row += 1;

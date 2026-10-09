@@ -1,0 +1,23 @@
+{
+  "installation": {
+    "name": "Example Screw Production Plant", "country": "US",
+    "period_start": "2025-01-01", "period_end": "2025-12-31",
+    "electricity_total_mwh": 5040, "electricity_ef": 0.833, "electricity_ef_source": "국가 전력망 평균",
+    "imported_heat": "아니오", "waste_gases": "아니오"
+  },
+  "products": [
+    { "name": "Carbon steel screws and nuts", "cn": "73181542", "exported": "예" },
+    { "name": "High alloy steel screws and nuts", "cn": "73181535", "exported": "예" }
+  ],
+  "processes": [
+    { "name": "Carbon steel screws line", "product": "Carbon steel screws and nuts", "mass": 17000 },
+    { "name": "High alloy steel screws line", "product": "High alloy steel screws and nuts", "mass": 8200 }
+  ],
+  "fuels": [
+    { "name": "Natural gas plant meter", "kind": "천연가스·LNG (t)", "amount": 1837.5, "where": "공장 전체(공용)", "evidence": "EU official example Steel 3 — B_EmInst" }
+  ],
+  "precursors": [
+    { "name": "Carbon steel", "cn": "72139110", "consumed": 20000, "purchased": 20000, "country": "China", "where": "Carbon steel screws line", "hasValue": "있음 (공급사가 준 값)", "direct": 1.539, "indirect": 0.204, "evidence": "Supplier communication template (official example)" },
+    { "name": "High alloy steel", "cn": "72210010", "consumed": 10000, "purchased": 10000, "country": "United States", "where": "High alloy steel screws line", "hasValue": "있음 (공급사가 준 값)", "direct": 1.44, "indirect": 1.732, "evidence": "Supplier communication template (official example)" }
+  ]
+}
