@@ -57,6 +57,34 @@ const YEAR_LABEL: Record<'2026' | '2027' | '2028_ONWARDS', string> = {
 const SUM_TOLERANCE = 1e-6;
 const relativelyEqual = (a: number, b: number) => Math.abs(a - b) <= Math.max(SUM_TOLERANCE, Math.abs(b) * 1e-4);
 
+/** 사업장 국가(ISO 2자리 코드로 저장) → 공식 기본값표의 국가 이름. 표에 있는 국가만 담는다(EU 회원국은 CBAM 대상 수입이 아니라 기본값표에 없다). */
+const REFERENCE_COUNTRY_BY_ISO: Record<string, string> = {
+    AL: 'Albania', DZ: 'Algeria', AO: 'Angola', AR: 'Argentina', AM: 'Armenia', AU: 'Australia', AZ: 'Azerbaijan', BD: 'Bangladesh', BH: 'Bahrain',
+    BY: 'Belarus', BJ: 'Benin', BO: 'Bolivia', BA: 'Bosnia and Herzegovina', BR: 'Brazil', BN: 'Brunei', KH: 'Cambodia', CM: 'Cameroon', CA: 'Canada',
+    CL: 'Chile', CN: 'China', CO: 'Colombia', CG: 'Congo', CR: 'Costa Rica', CI: "Côte d'Ivoire", CU: 'Cuba', CD: 'Democratic Republic of the Cong',
+    DO: 'Dominican Republic', EC: 'Ecuador', EG: 'Egypt', SV: 'El Salvador', ER: 'Eritrea', SZ: 'Eswatini', ET: 'Ethiopia', GA: 'Gabon', GE: 'Georgia',
+    GH: 'Ghana', GT: 'Guatemala', HT: 'Haiti', HN: 'Honduras', HK: 'Hong Kong', IN: 'India', ID: 'Indonesia', IR: 'Iran', IQ: 'Iraq', IL: 'Israel',
+    JM: 'Jamaica', JP: 'Japan', JO: 'Jordan', KZ: 'Kazakhstan', KE: 'Kenya', KW: 'Kuwait', KG: 'Kyrgyzstan', LB: 'Lebanon', LY: 'Libya',
+    MG: 'Madagascar', MY: 'Malaysia', ML: 'Mali', MU: 'Mauritius', MR: 'Mauritania', MX: 'Mexico', MD: 'Moldova', MN: 'Mongolia', ME: 'Montenegro',
+    MA: 'Morocco', MZ: 'Mozambique', MM: 'Myanmar_Burma', NA: 'Namibia', NP: 'Nepal', NZ: 'New Zealand', NI: 'Nicaragua', NE: 'Niger', NG: 'Nigeria',
+    KP: 'North Korea', MK: 'North Macedonia', OM: 'Oman', PK: 'Pakistan', PA: 'Panama', PY: 'Paraguay', PE: 'Peru', PH: 'Philippines', QA: 'Qatar',
+    RU: 'Russia', RW: 'Rwanda', SA: 'Saudi Arabia', SN: 'Senegal', RS: 'Serbia', SG: 'Singapore', ZA: 'South Africa', KR: 'South Korea', LK: 'Sri Lanka',
+    SD: 'Sudan', SR: 'Suriname', SY: 'Syria', TW: 'Taiwan', TJ: 'Tajikistan', TZ: 'Tanzania', TH: 'Thailand', TG: 'Togo', TT: 'Trinidad and Tobago',
+    TN: 'Tunisia', TR: 'Türkiye', TM: 'Turkmenistan', UG: 'Uganda', UA: 'Ukraine', AE: 'United Arab Emirates', GB: 'United Kingdom', US: 'United States',
+    UY: 'Uruguay', UZ: 'Uzbekistan', VE: 'Venezuela', VN: 'Vietnam', YE: 'Yemen', ZM: 'Zambia', ZW: 'Zimbabwe',
+};
+
+/**
+ * 막대의 「EU 기본값」 기둥이 비교할 국가 — **사업장이 있는 나라**다(기본값은 수출국별 값이고, 이 제품은 그 사업장에서 나온다).
+ * 코드(US)는 기본값표의 이름으로 바꾸고, 이름으로 적혀 있으면 그대로 두며(조회가 표기를 맞춘다), 비어 있으면 시나리오 원산지로 되돌아간다.
+ * 시나리오 화면의 원산지/공급국가는 모의 계산용이라 따로 둔다.
+ */
+export function resolveBarCountry(installationCountry: string | undefined, scenarioCountry: string): string {
+    const raw = (installationCountry ?? '').trim();
+    if (!raw) return scenarioCountry;
+    return /^[A-Za-z]{2}$/.test(raw) ? REFERENCE_COUNTRY_BY_ISO[raw.toUpperCase()] ?? raw.toUpperCase() : raw;
+}
+
 /**
  * 제품 CN만 알 때(공정·생산량 입력 전)의 EU 기본값 기둥 — 「첫 답에 막대가 선다」(v4 §11).
  * 생산량 가중치가 없으므로 **CN이 한 종류일 때만** 숫자를 낸다(여러 종류를 평균 내면 지어낸 숫자다).

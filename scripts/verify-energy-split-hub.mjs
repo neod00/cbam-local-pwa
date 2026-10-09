@@ -110,6 +110,7 @@ const plain = (id, processId, amount, name, extra = {}) => ({ ...fuel({ id, acti
 const twin = summarizeEnergySplits({ processes: [processA, processB], sourceStreams: [fuelRow('f1', 'A', 6, '공용 경유'), fuelRow('f2', 'B', 4, '공용 경유'), plain('old', 'A', 10, '경유(공장 전체)')] });
 assert.match(twin.items[0].problem, /「경유\(공장 전체\)」\(10 [^)]*\)가 나누기 전의 공장 전체 값으로 한 공정에 그대로 남아 있습니다 — 같은 연료가 두 번 계산되고 있습니다/, '나누기 전의 전체 값이 남으면 문제로 올린다');
 assert.equal(twin.attentionCount, 1);
+assert.equal(twin.items[0].href, '/source-streams?edit=old', '남은 옛 행을 고치는 화면으로 바로 간다');
 assert.equal(twin.hints.filter((hint) => hint.kind === 'FUEL').length, 0, '확실한 중복은 힌트가 아니라 문제 한 번');
 // 양이 다른 같은 연료는 다른 계량기일 수 있다 — 알리기만 한다.
 const sameFuel = summarizeEnergySplits({ processes: [processA, processB], sourceStreams: [fuelRow('f1', 'A', 6, '공용 경유'), fuelRow('f2', 'B', 4, '공용 경유'), plain('other', 'A', 2.5, '경유 비상발전기')] });
@@ -124,6 +125,7 @@ assert.ok(!(outsider.items[0].problem ?? '').includes('두 번') && outsider.hin
 // 전력: 같은 계량기인데 계수가 다르고 출처가 빈 공정이 있으면 문제(나누기는 사용량만 나눈다 — 나중에 더한 공정에 0.47 자리값이 남는다).
 const meterGap = summarizeEnergySplits({ processes: [{ ...elec('A', 150, '한전'), electricity_ef_tco2e_per_mwh: 0.833, electricity_ef_source: 'COUNTRY_GRID_DEFAULT' }, { ...elec('B', 150, '한전'), electricity_ef_tco2e_per_mwh: 0.47, electricity_ef_source: undefined }], sourceStreams: [] });
 assert.match(meterGap.items[0].problem, /같은 계량기인데 공정마다 전력 배출계수가 다릅니다\(0\.833 \/ 0\.47\)\. 「공정 B」은\(는\) 계수 출처가 비어 있어 임시 자리값일 수 있습니다/);
+assert.equal(meterGap.items[0].href, '/processes?edit=B', '출처가 빈 공정의 수정 화면으로 바로 간다');
 const meterSame = summarizeEnergySplits({ processes: [{ ...elec('A', 150, '한전'), electricity_ef_tco2e_per_mwh: 0.47 }, { ...elec('B', 150, '한전'), electricity_ef_tco2e_per_mwh: 0.47 }], sourceStreams: [] });
 assert.equal(meterSame.items[0].problem, undefined, '계수가 같으면(둘 다 자리값이라도) 이 점검은 말하지 않는다 — 출처 미분류는 다른 점검의 몫');
 const meterBothSourced = summarizeEnergySplits({ processes: [{ ...elec('A', 150, '한전'), electricity_ef_tco2e_per_mwh: 0.833, electricity_ef_source: 'PPA' }, { ...elec('B', 150, '한전'), electricity_ef_tco2e_per_mwh: 0.47, electricity_ef_source: 'COUNTRY_GRID_DEFAULT' }], sourceStreams: [] });
