@@ -178,6 +178,22 @@ const dieselEmissions = M.calculateSourceStreamEmissions({ ...dieselKind.default
 assert.ok(Math.abs(dieselEmissions - 32.99) < 0.01, `경유 12,400 L 배출이 32.99가 아니다: ${dieselEmissions}`);
 // 저장된 t 연료를 다시 열면 리터 유형이 아니라 「유류·기타 (t)」로 되짚어야 한다(리터 칸에 t 값이 뜨면 안 된다).
 assert.equal(M.matchGuidedStreamKind({ stream_type: 'FUEL', method: 'Combustion', activity_unit: 't', activity_data: 10.354 }).key, 'fuel-mass');
+// ── [run30 P2-05] 천연가스(t): 계수가 유류 자리값(73)이 아니라 IPCC 천연가스(56.1·48)로 채워진다 ──
+const lngKind = [...M.GUIDED_STREAM_KINDS].find((k) => k.key === 'fuel-natural-gas-t');
+assert.ok(lngKind && !lngKind.litres, '천연가스·LNG (t) 유형이 없다');
+assert.deepEqual(host([lngKind.defaults.activity_unit, lngKind.defaults.ncv_gj_per_unit, lngKind.defaults.emission_factor_tco2e_per_unit, lngKind.defaults.emission_factor_basis]), ['t', 48, 56.1, 'PER_TJ']);
+// 공식 예제(Steel 3 Screws and nuts)의 가스: 1,837.5 t × 48 GJ/t × 56.1 / 1000 = 4,948.1 tCO2e
+const lngEmissions = M.calculateSourceStreamEmissions({ ...lngKind.defaults, activity_data: 1837.5 });
+assert.ok(Math.abs(lngEmissions - 1837.5 * 48 * 56.1 / 1000) < 1e-6, `천연가스 1,837.5 t 배출이 틀리다: ${lngEmissions}`);
+// 되짚기: 기본값 쌍을 그대로 쓴 t 행은 천연가스, 다른 값이면 예전처럼 유류·기타, 단위가 Nm³이면 도시가스.
+const tonFuel = { stream_type: 'FUEL', method: 'Combustion', activity_unit: 't', activity_data: 100 };
+assert.equal(M.matchGuidedStreamKind({ ...tonFuel, ncv_gj_per_unit: 48, emission_factor_tco2e_per_unit: 56.1 }).key, 'fuel-natural-gas-t');
+assert.equal(M.matchGuidedStreamKind({ ...tonFuel, ncv_gj_per_unit: 48, emission_factor_tco2e_per_unit: 73 }).key, 'fuel-mass');
+assert.equal(M.matchGuidedStreamKind({ ...tonFuel, ncv_gj_per_unit: 43, emission_factor_tco2e_per_unit: 74.1 }).key, 'fuel-mass');
+assert.equal(M.matchGuidedStreamKind({ ...tonFuel, activity_unit: 'Nm3' }).key, 'fuel-gas');
+// 「유류·기타」 안내는 더 이상 LNG를 자기 몫으로 말하지 않는다.
+const massKind = [...M.GUIDED_STREAM_KINDS].find((k) => k.key === 'fuel-mass');
+assert.ok(!/LNG 56\.1/.test(massKind.factorHint) && /천연가스·LNG \(t\)/.test(massKind.factorHint) && /천연가스·LNG \(t\)/.test(massKind.ncvHint));
 // ── [run11 P1-08] 도시가스는 총발열량 경고 기준을 갖는다 ──
 assert.ok(gasKind.ncvGrossThreshold > gasKind.defaults.ncv_gj_per_unit && gasKind.ncvGrossThreshold < 0.0425, '총발열량(≈0.043) 경고 기준이 없다');
 

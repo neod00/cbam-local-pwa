@@ -12,8 +12,8 @@ import { GUIDED_STREAM_KINDS, type GuidedStreamKind, type SourceStreamDraft } fr
  * 「밖에서 산 열 없음」도 마찬가지로 measurable-heat.ts의 `buildImportedHeatUpdate`를 그대로 쓴다.
  */
 
-/** 이 화면이 받는 연료 연소 유형(도시가스·유류·경유 L·등유 L). 공정배출·물질수지는 지도 4단계에서 입력한다. */
-export const TALK_FUEL_KIND_KEYS = ['fuel-gas', 'fuel-mass', 'fuel-diesel-l', 'fuel-kerosene-l'] as const;
+/** 이 화면이 받는 연료 연소 유형(도시가스·유류·천연가스 t·경유 L·등유 L). 공정배출·물질수지는 지도 4단계에서 입력한다. */
+export const TALK_FUEL_KIND_KEYS = ['fuel-gas', 'fuel-mass', 'fuel-natural-gas-t', 'fuel-diesel-l', 'fuel-kerosene-l'] as const;
 
 export const TALK_FUEL_KINDS: GuidedStreamKind[] = GUIDED_STREAM_KINDS.filter((kind) => (TALK_FUEL_KIND_KEYS as readonly string[]).includes(kind.key));
 
