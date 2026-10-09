@@ -10,7 +10,7 @@ type SheetDefinition = {
     rows: Array<Array<string | number>>;
 };
 
-type SheetInfo = {
+export type SheetInfo = {
     name: string;
     path: string;
 };
@@ -201,7 +201,7 @@ const templateSheets: SheetDefinition[] = [
     },
 ];
 
-function escapeXml(value: string) {
+export function escapeXml(value: string) {
     return value
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
@@ -219,7 +219,7 @@ function unescapeXml(value: string) {
         .replaceAll('&amp;', '&');
 }
 
-function columnName(index: number) {
+export function columnName(index: number) {
     let n = index + 1;
     let name = '';
 
@@ -283,7 +283,7 @@ export function createActivityDataTemplateWorkbook() {
     });
 }
 
-function parseAttributes(rawAttributes: string) {
+export function parseAttributes(rawAttributes: string) {
     const attributes = new Map<string, string>();
 
     for (const match of rawAttributes.matchAll(/([A-Za-z_:][\w:.-]*)="([^"]*)"/g)) {
@@ -297,12 +297,12 @@ function stripXmlTags(value: string) {
     return unescapeXml(value.replace(/<[^>]+>/g, ''));
 }
 
-function getColumnName(cellReference: string) {
+export function getColumnName(cellReference: string) {
     const match = cellReference.match(/[A-Z]+/);
     return match?.[0] ?? '';
 }
 
-function parseWorkbookSheets(zip: Record<string, Uint8Array>): SheetInfo[] {
+export function parseWorkbookSheets(zip: Record<string, Uint8Array>): SheetInfo[] {
     const workbookBytes = zip['xl/workbook.xml'];
     const relsBytes = zip['xl/_rels/workbook.xml.rels'];
 
@@ -338,7 +338,7 @@ function parseWorkbookSheets(zip: Record<string, Uint8Array>): SheetInfo[] {
     return sheets;
 }
 
-function parseSharedStrings(zip: Record<string, Uint8Array>) {
+export function parseSharedStrings(zip: Record<string, Uint8Array>) {
     const sharedStringsXml = zip['xl/sharedStrings.xml'];
 
     if (!sharedStringsXml) {
@@ -350,7 +350,7 @@ function parseSharedStrings(zip: Record<string, Uint8Array>) {
     );
 }
 
-function readCellValue(cellXml: string, sharedStrings: string[]) {
+export function readCellValue(cellXml: string, sharedStrings: string[]) {
     const attributes = parseAttributes(cellXml.match(/^<c\b([^>]*)/)?.[1] ?? '');
     const type = attributes.get('t');
 
