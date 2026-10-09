@@ -121,6 +121,7 @@ assert.equal(rowOf(messyStatus, 'ACTIVITY_LEVEL')?.status ?? 'ok', rowOf(messySt
 assert.ok(messyStatus.counts.fix >= 4);
 assert.equal(messyStatus.counts.ok + messyStatus.counts.review + messyStatus.counts.fix, messyStatus.rows.length);
 assert.ok(rowOf(messyStatus, 'PRECURSOR_COMPLETENESS').href.startsWith('/precursors?edit='), '고칠 화면으로 가는 링크');
+assert.ok(/^\/(source-streams|processes)\?edit=/.test(rowOf(messyStatus, 'SHARED_METER').href), '공용 계량기 점검도 지도 첫 화면이 아니라 고칠 행으로 바로 간다');
 assert.ok(rowOf(messyStatus, 'ALLOCATION_SUM').items.length <= 3, '걸린 항목은 3줄까지');
 // 폐가스
 const wasteStatus = build(messy, { installation: { waste_gases: 'YES' } });

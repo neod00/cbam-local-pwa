@@ -1,8 +1,8 @@
 'use client';
 
-import { buildCumulativeBar, type BarBlockKind } from '@/lib/cumulative-bar';
+import { buildCumulativeBar, resolveBarCountry, type BarBlockKind } from '@/lib/cumulative-bar';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
-import { getLocalSetting, type Product, type PurchasedPrecursor } from '@/lib/local-db';
+import { getLocalSetting, listLocalItems, type Product, type PurchasedPrecursor } from '@/lib/local-db';
 import type { ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import { DEFAULT_SCENARIO_ASSUMPTIONS, normalizeScenarioAssumptions, SCENARIO_ASSUMPTIONS_SETTING_KEY, type ScenarioAssumptions } from '@/lib/scenario-calculation';
 import { describeSeeFlowIndirect, type SeeFlowBinding } from '@/lib/see-flow';
@@ -39,16 +39,19 @@ export function CumulativeBar({
 }) {
     const [defaultValues, setDefaultValues] = useState<ImportedDefaultValueReference>();
     const [assumptions, setAssumptions] = useState<ScenarioAssumptions>(DEFAULT_SCENARIO_ASSUMPTIONS);
+    const [installationCountry, setInstallationCountry] = useState<string>();
 
     useEffect(() => {
         let active = true;
         Promise.all([
             getLocalSetting<ImportedDefaultValueReference>('reference:default-values'),
             getLocalSetting<Partial<ScenarioAssumptions>>(SCENARIO_ASSUMPTIONS_SETTING_KEY),
-        ]).then(([reference, saved]) => {
+            listLocalItems('installations'),
+        ]).then(([reference, saved, installations]) => {
             if (!active) return;
             setDefaultValues(reference);
             setAssumptions(normalizeScenarioAssumptions(saved));
+            setInstallationCountry(installations[0]?.country);
         });
         return () => {
             active = false;
@@ -56,8 +59,8 @@ export function CumulativeBar({
     }, []);
 
     const model = useMemo(
-        () => buildCumulativeBar({ binding, results, precursors, products, partialReason, defaultValues, originCountry: assumptions.origin_country, year: assumptions.default_value_year }),
-        [binding, results, precursors, products, partialReason, defaultValues, assumptions]
+        () => buildCumulativeBar({ binding, results, precursors, products, partialReason, defaultValues, originCountry: resolveBarCountry(installationCountry, assumptions.origin_country), year: assumptions.default_value_year }),
+        [binding, results, precursors, products, partialReason, defaultValues, assumptions, installationCountry]
     );
     const labels = describeSeeFlowIndirect(binding.indirectRelevance, binding.basisExcludesUndetermined);
 

@@ -23,6 +23,8 @@ export interface EnergySplitItem {
     problem?: string;
     /** 열 사용량이 임시 값이다 — 계산은 했지만 근거가 없다. */
     provisional?: boolean;
+    /** 고칠 곳으로 바로 가는 링크 — 문제가 가리키는 공정·배출원 행이 있을 때만 있다(없으면 호출부가 지도로 보낸다). */
+    href?: string;
 }
 
 export interface EnergySplitHint {
@@ -106,12 +108,15 @@ export function summarizeEnergySplits(input: {
 
     const electricityGroups = checkElectricitySharedMeters(input.processes);
     for (const group of electricityGroups) {
+        const members = input.processes.filter((process) => group.process_ids.includes(process.id));
+        const fixTarget = members.find((process) => !process.electricity_ef_source?.trim()) ?? members[0];
         items.push({
             kind: 'ELECTRICITY',
             key: `E|${group.period_id ?? ''}|${group.group}`,
             title: `전력 「${group.group}」`,
             detail: `${fmt(group.installation_total_mwh)} MWh · 공정 ${group.process_ids.length}개`,
-            problem: group.reason || describeMeterFactorGap(input.processes.filter((process) => group.process_ids.includes(process.id))),
+            problem: group.reason || describeMeterFactorGap(members),
+            href: fixTarget ? `/processes?edit=${encodeURIComponent(fixTarget.id)}` : undefined,
         });
     }
 
@@ -126,6 +131,7 @@ export function summarizeEnergySplits(input: {
             problem: group.reason || (leftover.duplicate
                 ? `「${leftover.duplicate.name}」(${fmt(leftover.duplicate.activity_data)} ${leftover.duplicate.activity_unit})가 나누기 전의 공장 전체 값으로 한 공정에 그대로 남아 있습니다 — 같은 연료가 두 번 계산되고 있습니다. 4단계에서 그 행을 지우세요(나눈 행은 그대로 두세요).`
                 : undefined),
+            href: leftover.duplicate ? `/source-streams?edit=${encodeURIComponent(leftover.duplicate.id)}` : group.stream_ids[0] ? `/source-streams?edit=${encodeURIComponent(group.stream_ids[0])}` : undefined,
         });
         if (!leftover.duplicate && leftover.sameFuel) {
             hints.push({

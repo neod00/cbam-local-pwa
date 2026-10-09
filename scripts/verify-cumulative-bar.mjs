@@ -32,11 +32,11 @@ const source = [
   strip('src/lib/see-flow.ts'),
   strip('src/lib/cumulative-bar.ts'),
   strip('src/lib/bundled-references.ts'),
-  'globalThis.app = { calculateLocalResults, buildSeeFlowBinding, buildCumulativeBar, expandBundledDefaultValues };',
+  'globalThis.app = { calculateLocalResults, buildSeeFlowBinding, buildCumulativeBar, expandBundledDefaultValues, resolveBarCountry };',
 ].join('\n');
 const context = vm.createContext({ Intl, fflate, console, Date, Map, Number, Set, Uint8Array, navigator: undefined });
 vm.runInContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.None, target: ts.ScriptTarget.ES2022 } }).outputText, context);
-const { calculateLocalResults, buildSeeFlowBinding, buildCumulativeBar, expandBundledDefaultValues } = context.app;
+const { calculateLocalResults, buildSeeFlowBinding, buildCumulativeBar, expandBundledDefaultValues, resolveBarCountry } = context.app;
 
 const dv = expandBundledDefaultValues(JSON.parse(readFileSync('public/reference/cbam-default-values.json', 'utf8')), '2026-10-05T00:00:00.000Z');
 const stamp = { created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' };
@@ -141,10 +141,29 @@ assert.equal(partial.model.measuredShare, null, '실측 비율도 내지 않는�
 close(partial.model.headline, partial.binding.seeCbamBasis, '대형 수치는 그래도 엔진 값');
 assert.ok(base.model.gap !== null && base.model.partialNote === undefined, '사유가 없으면 종전처럼 차이를 낸다');
 
+// ── 4-1) 비교 국가는 사업장이 있는 나라 ───────────────────────────────
+assert.equal(resolveBarCountry('KR', 'Japan'), 'South Korea');
+assert.equal(resolveBarCountry(' us ', 'South Korea'), 'United States', '코드는 기본값표의 이름으로 바꾼다(앞뒤 공백·소문자 무시)');
+assert.equal(resolveBarCountry('', 'South Korea'), 'South Korea', '사업장 국가가 비면 시나리오 원산지로 돌아간다');
+assert.equal(resolveBarCountry(undefined, 'Japan'), 'Japan');
+assert.equal(resolveBarCountry('Vietnam', 'South Korea'), 'Vietnam', '이름으로 적혀 있으면 그대로');
+assert.equal(resolveBarCountry('DE', 'South Korea'), 'DE', '기본값표에 없는 나라(EU 회원국 등)는 코드를 그대로 두어 「찾지 못했습니다」로 말하게 한다');
+{
+  const tableCountries = JSON.parse(readFileSync('public/reference/cbam-default-values.json', 'utf8')).countries.filter((name) => !name.startsWith('_'));
+  const tableBlock = readFileSync('src/lib/cumulative-bar.ts', 'utf8').split('REFERENCE_COUNTRY_BY_ISO: Record<string, string> = {')[1].split('};')[0];
+  const iso = [...tableBlock.matchAll(/\b([A-Z]{2}): (?:'([^']+)'|"([^"]+)")/g)].map((match) => [match[1], match[2] ?? match[3]]);
+  assert.equal(iso.length, tableCountries.length, '기본값표의 모든 국가에 코드가 하나씩 있다');
+  for (const name of tableCountries) assert.ok(iso.some(([, value]) => value === name), name + ' 코드 누락');
+  for (const [code, name] of iso) assert.equal(resolveBarCountry(code, 'x'), name);
+}
+const usBar = bar([makeProcess()], [precursor('p1')], { originCountry: resolveBarCountry('US', 'South Korea') });
+assert.equal(usBar.model.defaultColumn.available && usBar.model.defaultColumn.country, 'United States', '미국 사업장이면 막대는 미국 기본값과 비교한다');
+
 // ── 5) 배선·문안 ─────────────────────────────────────────────────────
 const component = readFileSync('src/components/guided/CumulativeBar.tsx', 'utf8');
 assert.match(component, /describeSeeFlowIndirect\(binding\.indirectRelevance, binding\.basisExcludesUndetermined\)/, '간접배출 문안은 상태에서 파생한다');
 assert.ok(!/\bcalculateLocalResults\b|\bbuildSeeFlowBinding\b/.test(component), '컴포넌트는 계산하지 않는다');
+assert.match(component, /originCountry: resolveBarCountry\(installationCountry, assumptions\.origin_country\)/, '비교 국가는 사업장 국가에서 온다(시나리오 원산지는 사업장 국가가 없을 때만)');
 assert.match(component, /motion-reduce:transition-none/, '모션 축소 설정을 존중한다');
 const workspace = readFileSync('src/components/guided/GuidedWorkspace.tsx', 'utf8');
 assert.match(workspace, /<CumulativeBar binding=\{binding\} results=\{scopedResults\} precursors=\{viewData\.precursors\} products=\{reportingProducts\} partialReason=\{precursorsPendingReason\} \/>/, '지도 아래에 붙는다(제품 CN만으로도 기본값 기둥이 서도록 제품을, 전구물질이 아직 없으면 그 사유를 넘긴다)');

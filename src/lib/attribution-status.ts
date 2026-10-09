@@ -137,7 +137,7 @@ export function buildAttributionStatus(input: {
             status,
             detail: status === 'ok' ? spec.okText : `${statuses.length}건 — ${status === 'fix' ? '값이 빠지거나 어긋났습니다. 고쳐야 합니다.' : '규정상 확인이 필요합니다.'}`,
             items,
-            href: warnings[0] ? input.hrefOf(warnings[0]) : energyItems.length > 0 ? '/' : undefined,
+            href: warnings[0] ? input.hrefOf(warnings[0]) : energyItems.length > 0 ? energyItems.find((item) => item.problem && item.href)?.href ?? '/' : undefined,
         });
     }
 
