@@ -5,7 +5,9 @@ import {
     createLocalItem,
     getLocalSetting,
     listLocalItems,
+    REPORT_INPUTS_SETTING_KEY,
     setLocalSetting,
+    type ReportInputs,
     updateLocalItem,
     type Product,
     type ProductionProcess,
@@ -493,6 +495,11 @@ export default function UploadPage() {
                 const result = await importActivityWorkbook(parseActivityWorkbook(bytes), {
                     store: { list: listLocalItems, create: createLocalItem, update: updateLocalItem },
                     defaultValues: await loadDefaultValues(),
+                    // 서식의 보고서 항목(부문특정 파라미터·전력 계수 근거·역할책임·증빙·탄소가격·서명)은 「보고서 입력」과 같은 자리에 저장한다.
+                    reportInputs: {
+                        get: () => getLocalSetting<ReportInputs>(REPORT_INPUTS_SETTING_KEY),
+                        set: async (value) => { await setLocalSetting(REPORT_INPUTS_SETTING_KEY, value); },
+                    },
                 });
                 const { created } = result;
                 setActivitySummary({ products: created.products, processes: created.processes, sourceStreams: created.fuels, precursors: created.precursors, skipped: 0 });
@@ -609,7 +616,7 @@ export default function UploadPage() {
                                     <StatusBadge tone="success">사용 가능</StatusBadge>
                                 </div>
                                 <p className="mt-1 text-sm leading-6 text-slate-600">
-                                    사업장·보고기간, 제품, 공정, 연료, 구매 강재 시트가 있습니다. 칸마다 무엇을 어디서 보고 적는지 설명과 예시가 있고,
+                                    사업장·보고기간, 제품, 공정, 연료, 구매 강재, 역할·책임, 증빙 목록 시트가 있습니다. 칸마다 무엇을 어디서 보고 적는지 설명과 예시가 있고,
                                     연료 종류·공정 이름 등은 목록에서 고릅니다. 한 고지서를 여러 공정이 같이 쓰면 공장 전체 값만 적으면 됩니다 — 앱이 나눕니다.
                                 </p>
                                 <div className="mt-4 flex flex-wrap gap-2">
@@ -743,7 +750,7 @@ export default function UploadPage() {
                                         </ul>
                                     )}
                                     <p className="mt-3 text-sm text-slate-600">
-                                        넣은 자료는 <Link href="/" className="font-bold text-teal-700 hover:underline">지도</Link>에서 확인하고, 남은 일은 <Link href="/todo" className="font-bold text-teal-700 hover:underline">할 일</Link>과 <Link href="/submit" className="font-bold text-teal-700 hover:underline">제출</Link> 화면에서 이어 가세요.
+                                        넣은 자료는 <Link href="/" className="font-bold text-teal-700 hover:underline">지도</Link>에서 확인하고, 남은 일은 <Link href="/todo" className="font-bold text-teal-700 hover:underline">할 일</Link>과 <Link href="/submit" className="font-bold text-teal-700 hover:underline">제출</Link> 화면에서 이어 가세요. 서식의 보고서 항목은 <Link href="/report-inputs" className="font-bold text-teal-700 hover:underline">보고서 입력</Link>에 들어갑니다.
                                     </p>
                                 </div>
                             )}

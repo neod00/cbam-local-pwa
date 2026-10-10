@@ -50,18 +50,18 @@ const bytesOf = async (blob) => new Uint8Array(await blob.arrayBuffer());
 const blankBytes = await bytesOf(W.createActivityWorkbook({ countries }));
 const blankZip = fflate.unzipSync(blankBytes);
 const names = W.readActivityWorkbookSheetNames(blankBytes);
-assert.deepEqual(plain(names), ['안내', '1_사업장', '2_제품', '3_공정', '4_연료', '5_구매강재', '선택목록']);
+assert.deepEqual(plain(names), ['안내', '1_사업장', '2_제품', '3_공정', '4_연료', '5_구매강재', '6_역할책임', '7_증빙목록', '선택목록']);
 assert.ok(W.isActivityWorkbookV2(names) && !W.isActivityWorkbookV2(['README', 'Products', 'Processes']), '시트 이름으로 새 서식과 종전 서식을 가린다');
 assert.ok(blankZip['xl/styles.xml'], '머리글 색·입력 칸을 꾸미는 styles.xml이 있다');
 const sheetText = (index) => fflate.strFromU8(blankZip[`xl/worksheets/sheet${index}.xml`]).replaceAll('&apos;', "'").replaceAll('&quot;', '"');
-const lists = sheetText(7);
-for (const [index, columns] of [[3, W.PRODUCT_COLUMNS], [4, W.PROCESS_COLUMNS], [5, W.FUEL_COLUMNS], [6, W.PRECURSOR_COLUMNS]]) {
+const lists = sheetText(9);
+for (const [index, columns] of [[3, W.PRODUCT_COLUMNS], [4, W.PROCESS_COLUMNS], [5, W.FUEL_COLUMNS], [6, W.PRECURSOR_COLUMNS], [7, W.RNR_COLUMNS], [8, W.EVIDENCE_COLUMNS]]) {
   const xml = sheetText(index);
   const labels = columns.map((field) => field.label);
   assert.equal(new Set(labels).size, labels.length, '머리글은 겹치지 않는다(머리글 글자로 칸을 찾는다)');
   for (const field of columns) {
     assert.ok(xml.includes(`>${field.required ? `${field.label} *` : field.label}<`.replace(/&/g, '&amp;')), `${field.label} 머리글`);
-    assert.ok(field.hint.length > 8, `${field.label}: 무엇을 어디서 보고 적는지 설명이 있다`);
+    assert.ok(field.hint.length > 8 || field.key === 'custodian', `${field.label}: 무엇을 어디서 보고 적는지 설명이 있다`);
   }
   assert.ok(columns[0].example.startsWith(W.EXAMPLE_PREFIX), '예시 줄은 표시로 시작한다(가져올 때 건너뛴다)');
   assert.ok(xml.includes('state="frozen"'), '머리글·설명 줄을 고정한다');
@@ -88,7 +88,7 @@ assert.deepEqual(plain(W.ELECTRICITY_SOURCE_CHOICES.map((item) => item.value)), 
 
 // ── 2) 읽기 ──────────────────────────────────────────────────────────
 const blank = W.parseActivityWorkbook(blankBytes);
-assert.deepEqual(plain([blank.products.length, blank.processes.length, blank.fuels.length, blank.precursors.length, Object.keys(blank.installation).length, blank.notes.length]), [0, 0, 0, 0, 0, 0], '빈 서식은 자료 0건 — 설명 줄·예시 줄을 자료로 읽지 않는다');
+assert.deepEqual(plain([blank.products.length, blank.processes.length, blank.fuels.length, blank.precursors.length, blank.rnr.length, blank.evidence.length, Object.keys(blank.installation).length, blank.notes.length]), [0, 0, 0, 0, 0, 0, 0, 0], '빈 서식은 자료 0건 — 설명 줄·예시 줄을 자료로 읽지 않는다');
 
 const sampleBytes = await bytesOf(W.createActivityWorkbook({ countries, fill: W.ACTIVITY_WORKBOOK_SAMPLE }));
 const sample = W.parseActivityWorkbook(sampleBytes);
@@ -104,12 +104,14 @@ function memoryStore() {
   let counter = 0;
   return {
     data,
+    report: undefined,
     list: async (store) => [...data[store]],
     create: async (store, item) => { const entity = { ...item, id: `${store}_${counter += 1}`, created_at: 't', updated_at: 't' }; data[store].push(entity); return entity; },
     update: async (store, item) => { data[store] = data[store].map((row) => (row.id === item.id ? item : row)); return item; },
   };
 }
-const importOf = async (data, store = memoryStore()) => ({ store, result: await I.importActivityWorkbook(data, { store, defaultValues }) });
+const reportOf = (store) => ({ get: async () => store.report, set: async (value) => { store.report = value; } });
+const importOf = async (data, store = memoryStore()) => ({ store, result: await I.importActivityWorkbook({ rnr: [], evidence: [], ...data }, { store, defaultValues, reportInputs: reportOf(store) }) });
 const resultsOf = (store) => engine.calculateLocalResults({
   internalTransfers: [], products: store.data.products, periods: store.data.periods, processes: store.data.processes,
   productOutputLines: store.data.product_output_lines, sourceStreams: store.data.source_streams, precursors: store.data.precursors,
@@ -166,7 +168,7 @@ const splits = split.summarizeEnergySplits({ processes: store.data.processes, so
 assert.deepEqual(plain(splits.items.map((item) => [item.kind, item.problem ?? null])), [['ELECTRICITY', null], ['FUEL', null], ['FUEL', null]]);
 
 // 같은 파일을 한 번 더 올려도 두 번 들어가지 않는다.
-const again = await I.importActivityWorkbook(sample, { store, defaultValues });
+const again = await I.importActivityWorkbook(sample, { store, defaultValues, reportInputs: reportOf(store) });
 assert.deepEqual(plain(again.created), { installation: 0, period: 0, products: 0, processes: 0, fuels: 0, precursors: 0 });
 assert.equal(store.data.source_streams.length, 5);
 assert.ok(again.issues.some((issue) => issue.level === 'warning' && /이미 공정이 2개/.test(issue.message)));
@@ -191,7 +193,7 @@ assert.equal(merged.store.data.processes[0].electricity_shared_meter, undefined)
 // 가상 사례에서 「한 공정에 전부」로 적으면 강종이 섞여 휠너트가 −52%, STS 볼트가 +33%로 나왔는데 아무 경고가 없었다.
 const multi = (processes, fuels, precursors) => ({
   installation: { name: 'Multi Plant', country: 'KR', operator_name: 'Multi Co.', operator_reg_number: '000', operator_address: 'Seoul', latitude: '37', longitude: '127', period_start: '2025-01-01', period_end: '2025-12-31', electricity_total_mwh: '1000', electricity_ef: '0.4747', electricity_ef_source: '국가 전력망 평균', imported_heat: '아니오' },
-  products: [['합금강 볼트', '73181582'], ['탄소강 너트', '73181699'], ['휠너트', '73181692'], ['알루미늄 캡', '76169990']].map(([name, cn], index) => ({ row: 5 + index, values: { name, cn } })),
+  products: [['합금강 볼트', '73181582'], ['탄소강 너트', '73181699'], ['휠너트', '73181692'], ['알루미늄 캡', '76169990']].map(([name, cn], index) => ({ row: 5 + index, values: { name, cn, alloy_mn_cr_ni: '1', reducing_agent: '모름', scrap_per_t: '0', preconsumer_scrap_pct: '0', non_al_pct: '0' } })),
   processes: processes.map((values, index) => ({ row: 5 + index, values })),
   fuels: fuels.map((values, index) => ({ row: 5 + index, values: { kind: '도시가스 (Nm³)', evidence: '고지서', ...values } })),
   precursors: precursors.map((values, index) => ({ row: 5 + index, values: { country: 'South Korea', hasValue: '있음', indirect: '0', evidence: '공급사', ...values } })),
@@ -274,6 +276,61 @@ assert.notEqual(attributionOf(await importOf(aluminiumPartner)).rows.find((row) 
 assert.ok(W.PRECURSOR_COLUMNS.some((field) => field.key === 'products' && field.list === 'product' && !field.required));
 assert.ok(W.FUEL_COLUMNS.find((field) => field.key === 'where').hint.includes('; 로 이어'));
 for (const phrase of ['CN 코드별로 묶어', '같은 원료로 만드는 제품끼리', '일부 제품만 거치는 설비의 연료', '마무리 설비 전용 연료는 적지 않습니다']) assert.ok(guide.includes(phrase), `안내 시트: ${phrase}`);
+
+// ── 3-2) 손입력 0을 향해: 화면에서만 받던 것을 서식이 받는다(입력 대조표 ①②) ──
+// 사업장: Registry 식별자·폐가스 서술 / 제품: 부문특정 파라미터 / 연료: 바이오매스·산화계수·측정 방식 / 구매 강재: 기준 기간·전력 분해·생산경로·비CBAM 사용량
+// 보고서 입력: 전력 계수 근거·모니터링 계획·서명·탄소가격·역할책임·증빙 — 「보고서 입력」 화면과 같은 자리에 저장된다.
+const sectorKeys = load('src/lib/sector-parameters.ts').getSectorParameters('Iron or steel products').map((item) => item.key);
+assert.deepEqual(plain(sectorKeys.filter((item) => W.PRODUCT_COLUMNS.some((field) => field.key === item))), plain(sectorKeys), '철강 제품의 부문특정 파라미터 네 가지가 모두 제품 시트의 칸이다(같은 키)');
+const savedReport = store.report;
+assert.deepEqual(plain(savedReport.sector_parameters.map((item) => [item.param_key, item.value])), [['reducing_agent', '모름 — 공급사 문의 중'], ['alloy_mn_cr_ni', '28.5'], ['scrap_per_t', '0'], ['preconsumer_scrap_pct', '0']]);
+assert.ok(savedReport.sector_parameters.every((item) => item.product_id === store.data.products.find((product) => product.cn_code === '73181552').id), '수출하지 않는 제품은 받지 않아도 묻지 않는다');
+assert.deepEqual(plain(savedReport.electricity_ef_meta.map((item) => [item.publisher, item.vintage]).sort()), [['온실가스종합정보센터', '2023'], ['온실가스종합정보센터', '2023']], '전력 계수의 출처는 공정마다 붙는다');
+assert.deepEqual(plain(savedReport.carbon_price), [{ target: 'Daeil Industrial Co., Ltd. Ansan Plant', applicable: 'NO', note: '배출권거래제 할당대상 아님(연 배출량 기준 미만)', evidence_status: 'pending' }]);
+assert.deepEqual(plain([savedReport.declaration, savedReport.rnr.length, savedReport.evidence.length, savedReport.rnr[0].collector, savedReport.evidence[0].status]), [{ name: 'Kim Do-hyun', position: '품질환경팀 과장' }, 2, 2, '총무팀 박OO', '확보']);
+assert.ok(savedReport.transpositions.length === 2 && savedReport.transpositions.every((item) => item.measurement_method === '주유 전표 합산' && dieselRows.some((stream) => stream.id === item.source_stream_id)), '측정 방식은 그 연료에서 나뉜 행마다 붙는다');
+assert.equal(korean.supplier_reporting_period, '2025-01-01 ~ 2025-12-31');
+assert.deepEqual(plain([store.report.rnr.length, store.report.evidence.length, store.report.carbon_price.length]), [2, 2, 1], '다시 올려도 보고서 항목이 겹쳐 쌓이지 않는다');
+// 산정보고서에 남을 빈 칸을 알린다(막지는 않는다).
+const sampleInfo = I.describeActivityImportIssues(result.issues);
+assert.match(sampleInfo, /\[참고\] 1_사업장 — 모니터링 계획 문서번호가 비어 있습니다/);
+assert.ok(!/서명자가 비어|역할·책임이 비어|탄소세를 냈나요\?」가 비어|공표한 기관·문서가 비어/.test(sampleInfo));
+// 이미 「보고서 입력」에 적어 둔 값은 서식이 덮어쓰지 않는다.
+const preset = memoryStore();
+preset.report = { declaration: { name: '기존 서명자' }, carbon_price: [{ target: 'x', applicable: 'YES', note: '', evidence_status: 'confirmed' }] };
+await importOf(sample, preset);
+assert.deepEqual(plain([preset.report.declaration, preset.report.carbon_price.length, preset.report.carbon_price[0].target]), [{ name: '기존 서명자', position: '품질환경팀 과장' }, 1, 'x']);
+// 나머지 칸들
+const extra = multi(
+  [{ name: '볼트 공정', product: '합금강 볼트', mass: '1000' }],
+  [{ name: '혼소 가스', amount: '1000', where: '볼트 공정', biomass: '20', oxidation: '0.99', ncv: '0.038', factor: '56', factorSource: '공급사·분석 성적서', factorDoc: '가스사 성적서 2025-03', method: '정산용 계량기', quality: '±1%' }],
+  [{ ...alloyWire, where: '볼트 공정', direct: '2', indirect: '', elecUse: '0.5', elecFactor: '0.4', period: '2025', route: '전기로', nonCbam: '40' }],
+);
+extra.installation.cbam_registry_id = 'KR-INST-0001';
+extra.installation.waste_gases = '예';
+extra.installation.waste_gases_note = '없음에 가까움 — 시험용';
+extra.installation.carbon_price_applicable = '예';
+extra.products[0].values = { name: '합금강 볼트', cn: '73181582' };
+const extraRun = await importOf(extra);
+const extraStream = extraRun.store.data.source_streams[0];
+assert.deepEqual(plain([extraStream.biomass_fraction, extraStream.fossil_fraction, extraStream.oxidation_factor]), [0.2, 0.8, 0.99]);
+assert.deepEqual(plain(extraRun.store.report.transpositions), [{ source_stream_id: extraStream.id, measurement_method: '정산용 계량기', data_quality: '±1%', ncv_source: '가스사 성적서 2025-03', ef_source: '가스사 성적서 2025-03' }]);
+const extraPrecursor = extraRun.store.data.precursors[0];
+assert.deepEqual(plain([extraPrecursor.indirect_see_tco2e_per_t, extraPrecursor.indirect_electricity_mwh_per_t, extraPrecursor.indirect_electricity_factor_tco2e_per_mwh, extraPrecursor.supplier_reporting_period, extraPrecursor.production_route, extraPrecursor.consumed_for_non_cbam_mass_t]), [0.2, 0.5, 0.4, '2025', '전기로', 40], '간접 SEE를 비우면 전력 사용량 × 전력 계수로 채우고, 분해값을 그대로 보존한다');
+assert.deepEqual(plain([extraRun.store.data.installations[0].cbam_registry_id, extraRun.store.data.installations[0].waste_gases, extraRun.store.data.installations[0].waste_gases_note]), ['KR-INST-0001', 'YES', '없음에 가까움 — 시험용']);
+const extraReport = I.describeActivityImportIssues(extraRun.result.issues);
+assert.match(extraReport, /\[확인 필요\] 2_제품 5번째 줄 — 합금강 볼트: 부문특정 파라미터가 비어 있습니다 — 전구물질 생산의 주 환원제 · Mn·Cr·Ni 및 기타 합금원소 합계 질량비 · 제품 1t 생산당 사용 스크랩 · pre-consumer 스크랩 비율\. EU로 수출하는 철강 제품의 법정 기재 항목/);
+assert.match(extraReport, /\[확인 필요\] 1_사업장 — 탄소가격을 냈다고 적었는데 금액이 비어 있습니다/);
+const badExtra = await importOf(multi([{ name: '볼트 공정', product: '합금강 볼트', mass: '1000' }], [{ name: '가스', amount: '10', where: '볼트 공정', biomass: '120' }], [{ ...alloyWire, where: '볼트 공정', elecUse: '0.5' }, { ...alloyWire, name: '합금강 선재 B', where: '볼트 공정', indirect: '0.5', elecUse: '0.5', elecFactor: '0.4' }]));
+const badReport = I.describeActivityImportIssues(badExtra.result.issues);
+assert.match(badReport, /바이오매스 비율 「120」을\(를\) 0~100 사이 숫자/);
+assert.match(badReport, /원료의 전력 사용량과 전력 계수는 둘 다 적어야 EU 문서에 실립니다/);
+assert.match(badReport, /간접 SEE 0\.5가 전력 사용량 × 전력 계수\(0\.2\)와 다릅니다/);
+// 이 시트들이 생기기 전의 서식(6·7 시트 없음)도 그대로 올라간다.
+const older = fflate.unzipSync(sampleBytes);
+const olderWorkbook = fflate.strFromU8(older['xl/workbook.xml']).replace(/<sheet name="6_역할책임"[^>]*\/>/, '').replace(/<sheet name="7_증빙목록"[^>]*\/>/, '');
+const olderData = W.parseActivityWorkbook(fflate.zipSync({ ...older, 'xl/workbook.xml': fflate.strToU8(olderWorkbook) }));
+assert.deepEqual(plain([olderData.rnr.length, olderData.evidence.length, olderData.notes.length, olderData.products.length]), [0, 0, 0, 2]);
 
 // ── 4) 「확인할 것」 ─────────────────────────────────────────────────
 const broken = structuredClone(plain(sample));

@@ -26,9 +26,9 @@ try {
     }
     $x.CalculateFullRebuild()
     # the process-name list on the lists sheet mirrors what was typed on the process sheet
-    $lists = $wb.Worksheets.Item(7)
-    Write-Output ('mirrored process names: {0} | {1} | {2}' -f $lists.Range('H2').Text, $lists.Range('H3').Text, $lists.Range('H4').Text)
-    Write-Output ('mirrored product names: {0} | {1}' -f $lists.Range('J2').Text, $lists.Range('J3').Text)
+    $lists = $wb.Worksheets.Item($wb.Worksheets.Count)
+    Write-Output ('mirrored process names: {0} | {1} | {2}' -f $lists.Range('I2').Text, $lists.Range('I3').Text, $lists.Range('I4').Text)
+    Write-Output ('mirrored product names: {0} | {1}' -f $lists.Range('K2').Text, $lists.Range('K3').Text)
     # a date typed as a real date into the period cell stays text because the cell is text-formatted
     $inst = $wb.Worksheets.Item(2)
     $startCell = ($items | Where-Object { $_[2] -eq '2025-01-01' })[1]

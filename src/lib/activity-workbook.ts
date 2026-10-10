@@ -21,6 +21,8 @@ export const SHEET_PRODUCTS = '2_제품';
 export const SHEET_PROCESSES = '3_공정';
 export const SHEET_FUELS = '4_연료';
 export const SHEET_PRECURSORS = '5_구매강재';
+export const SHEET_RNR = '6_역할책임';
+export const SHEET_EVIDENCE = '7_증빙목록';
 export const SHEET_LISTS = '선택목록';
 
 /** 예시 행의 표시 — 이 글자로 시작하는 행은 가져올 때 건너뛴다(지우지 않아도 된다). */
@@ -62,13 +64,20 @@ export const SUPPLIER_VALUE_CHOICES = [
     { label: '없음 (EU 기본값 사용)', value: 'DEFAULT' },
 ] as const;
 
+/** 원산국에서 탄소가격(배출권거래제·탄소세)을 냈는가 — 값은 보고서 입력(`/report-inputs`)의 해당 여부와 같다. */
+export const CARBON_PRICE_CHOICES = [
+    { label: '예 (냈다)', value: 'YES' },
+    { label: '아니오 (대상 아님)', value: 'NO' },
+    { label: '아직 모름', value: 'TO_CONFIRM' },
+] as const;
+
 export const VERIFICATION_CHOICES = [
     { label: '미검증', value: 'UNVERIFIED' },
     { label: '공급사 확인', value: 'SUPPLIER_CONFIRMED' },
     { label: '제3자 검증 완료', value: 'VERIFIED' },
 ] as const;
 
-type ListName = 'yesNo' | 'fuelKind' | 'fuelFactorSource' | 'electricitySource' | 'supplierValue' | 'verification' | 'country' | 'processOrShared' | 'process' | 'product';
+type ListName = 'yesNo' | 'fuelKind' | 'fuelFactorSource' | 'electricitySource' | 'supplierValue' | 'verification' | 'country' | 'processOrShared' | 'process' | 'product' | 'carbonPrice';
 
 export interface ActivityField {
     key: string;
@@ -89,6 +98,7 @@ export const INSTALLATION_FORM: FormRow[] = [
     { section: '■ 사업장(공장)' },
     { key: 'name', label: '사업장 영문명', required: true, hint: 'EU 문서에 이 이름이 그대로 나갑니다. 예: Daeil Industrial Co., Ltd. Ansan Plant' },
     { key: 'local_name', label: '사업장 한글명', hint: '예: 대일기업 안산공장' },
+    { key: 'cbam_registry_id', label: 'CBAM Registry 사업장 식별자', text: true, hint: 'EU CBAM 등록부(O3CI)에 사업장을 등록하고 받은 번호. 아직 없으면 비워 두세요' },
     { key: 'country', label: '국가 코드 (2자리)', required: true, text: true, hint: '공장이 있는 나라. 한국은 KR' },
     { key: 'street', label: '주소 (영문 도로명)', hint: '예: 000 Byeolmang-ro, Danwon-gu' },
     { key: 'city', label: '도시 (영문)', hint: '예: Ansan-si, Gyeonggi-do' },
@@ -113,15 +123,34 @@ export const INSTALLATION_FORM: FormRow[] = [
     { key: 'electricity_total_mwh', label: '공장 전체 전력 사용량 (MWh)', hint: '고지서 12개월 합계(kWh) ÷ 1,000. 공정별 계량기가 없으면 이 값만 적으세요 — 앱이 생산량 비율로 나눕니다' },
     { key: 'electricity_ef', label: '전력 배출계수 (tCO₂e/MWh)', hint: '모르면 비워 두세요(임시값으로 들어가고 「확인할 것」에 남습니다). 적는다면 출처·연도를 확인하세요' },
     { key: 'electricity_ef_source', label: '전력 배출계수 출처', list: 'electricitySource', hint: '칸을 눌러 목록에서 고르세요' },
+    { key: 'electricity_ef_publisher', label: '전력 계수를 공표한 기관', hint: '계수를 어디서 가져왔는지. 예: 온실가스종합정보센터, IEA' },
+    { key: 'electricity_ef_document', label: '전력 계수가 실린 문서', hint: '예: 국가 온실가스 배출·흡수계수 2024' },
+    { key: 'electricity_ef_vintage', label: '전력 계수의 기준 연도', text: true, hint: '예: 2023' },
     { section: '■ 그 밖의 확인' },
     { key: 'imported_heat', label: '밖에서 사 오는 스팀·온수가 있나요?', list: 'yesNo', hint: '다른 회사에서 스팀·온수를 사 온다면 「예」. 자체 보일러만 쓰면 「아니오」' },
     { key: 'waste_gases', label: '폐가스(고로가스 등)가 발생하나요?', list: 'yesNo', hint: '강재를 사다 가공하는 공장은 보통 「아니오」' },
+    { key: 'waste_gases_note', label: '폐가스 내용 (「예」일 때)', hint: '어떤 가스가 어디서 나와 어디에 쓰이는지, 다른 사업장과 주고받는지' },
+    { section: '■ 원산국에서 낸 탄소가격 — 수입업자가 인증서 차감에 씁니다' },
+    { key: 'carbon_price_applicable', label: '배출권거래제·탄소세를 냈나요?', list: 'carbonPrice', hint: '이 공장이 국내 배출권거래제 할당대상이거나 탄소세를 냈으면 「예」. 모르면 「아직 모름」' },
+    { key: 'carbon_price_amount', label: '낸 금액과 단위', hint: '「예」일 때. 예: 12,300,000원 (2025년 배출권 구매)' },
+    { key: 'carbon_price_note', label: '탄소가격 메모', hint: '제도 이름, 무상할당 여부 등 수입업자가 알아야 할 것' },
+    { section: '■ 보고서에 적히는 것 — 검증인이 봅니다' },
+    { key: 'monitoring_doc_no', label: '모니터링 계획 문서번호', text: true, hint: '사내 모니터링 계획(방법론 문서)이 있으면 그 번호. 없으면 비워 두세요 — 「확인할 것」에 남습니다' },
+    { key: 'monitoring_version', label: '모니터링 계획 판(버전)', text: true, hint: '예: v1.0' },
+    { key: 'monitoring_approved_at', label: '모니터링 계획 승인일', text: true, hint: 'YYYY-MM-DD' },
+    { key: 'declaration_name', label: '보고서 서명자 이름', hint: '이 산정 결과에 책임지는 사람' },
+    { key: 'declaration_position', label: '서명자 직위', hint: '예: 품질환경팀장' },
+    { key: 'declaration_date', label: '서명일', text: true, hint: 'YYYY-MM-DD' },
 ];
 
 export const PRODUCT_COLUMNS: ActivityField[] = [
     { key: 'name', label: '제품 이름', required: true, width: 36, hint: '이 공장에서 만드는 제품. EU로 안 나가는 제품도 같은 설비·연료를 쓰면 적으세요', example: `${EXAMPLE_PREFIX} STS 십자홈 나사` },
     { key: 'cn', label: 'CN 코드 (8자리)', required: true, text: true, width: 18, hint: '수출신고필증·인보이스의 HS 코드 앞 8자리', example: '73181552' },
     { key: 'exported', label: 'EU로 수출하나요?', list: 'yesNo', width: 18, hint: '비우면 「예」. 「아니오」면 신고 대상이 아니고, 같이 쓴 연료·전력의 몫만 나눠 갖습니다', example: YES },
+    { key: 'alloy_mn_cr_ni', label: '합금원소 합계 (%)', width: 20, hint: 'Mn·Cr·Ni와 그 밖의 합금원소를 합한 질량 %. 강종 성적서(밀시트)의 성분표에서. EU로 수출하는 제품은 법정 기재 항목입니다', example: 27.5 },
+    { key: 'reducing_agent', label: '원료의 주 환원제 (알면)', width: 24, hint: '원료 강재를 만들 때 쓴 환원제. 예: 코크스(고로), 전기로-스크랩. 공급사에 물어 알면 적습니다', example: '모름 — 공급사 문의 중' },
+    { key: 'scrap_per_t', label: '제품 1 t당 스크랩 사용 (t)', width: 22, hint: '이 공장에서 제품 1 t을 만들 때 넣은 고철(스크랩)의 양. 강재를 사다 가공만 하면 0', example: 0 },
+    { key: 'preconsumer_scrap_pct', label: '그중 가공 스크랩 비율 (%)', width: 24, hint: '넣은 스크랩 중 제조 공정에서 나온 것(pre-consumer)의 비율. 스크랩을 안 쓰면 0', example: 0 },
 ];
 
 export const PROCESS_COLUMNS: ActivityField[] = [
@@ -142,6 +171,11 @@ export const FUEL_COLUMNS: ActivityField[] = [
     { key: 'ncv', label: '순발열량', width: 24, hint: '비우면 기본값. 공급사 성적서 값이 있을 때만 적으세요(도시가스 GJ/Nm³, 그 밖은 GJ/t)', example: '' },
     { key: 'factor', label: '배출계수 (tCO₂e/TJ)', width: 24, hint: '비우면 기본값. 직접 적으면 옆 칸의 출처도 고르세요', example: '' },
     { key: 'factorSource', label: '계수 출처', list: 'fuelFactorSource', width: 26, hint: '순발열량·배출계수를 직접 적었을 때만', example: '' },
+    { key: 'factorDoc', label: '계수의 출처 문서', width: 30, hint: '순발열량·배출계수를 직접 적었을 때: 어느 기관·문서·표의 값인지. 예: 삼천리 성적서 2025-03', example: '' },
+    { key: 'biomass', label: '바이오매스 비율 (%)', width: 20, hint: '바이오 연료가 섞여 있을 때만. 보통은 비워 둡니다(0%)', example: '' },
+    { key: 'oxidation', label: '산화계수', width: 12, hint: '비우면 1. 성적서에 다른 값이 있을 때만', example: '' },
+    { key: 'method', label: '사용량을 잰 방법', width: 26, hint: '예: 도시가스사 정산용 계량기, 주유 전표 합산, 재고 실사', example: '주유 전표 합산' },
+    { key: 'quality', label: '자료의 품질·불확도', width: 26, hint: '아는 만큼만. 예: 검정 계량기(오차 ±1%), 추정 포함', example: '' },
 ];
 
 export const PRECURSOR_COLUMNS: ActivityField[] = [
@@ -157,7 +191,27 @@ export const PRECURSOR_COLUMNS: ActivityField[] = [
     { key: 'indirect', label: '간접 SEE (tCO₂e/t)', width: 18, hint: '공급사가 준 값. 「있음」일 때만', example: 0.94 },
     { key: 'supplier', label: '공급사·공장 이름', width: 30, hint: '원료를 만든 회사와 공장', example: '(주)대한스테인리스선재 포항공장' },
     { key: 'verification', label: '검증 여부', list: 'verification', width: 18, hint: '비우면 「미검증」', example: VERIFICATION_CHOICES[1].label },
+    { key: 'period', label: '공급사 값의 기준 기간', text: true, width: 24, hint: '공급사가 준 값이 어느 기간의 것인지. 예: 2025-01-01 ~ 2025-12-31', example: '2025-01-01 ~ 2025-12-31' },
+    { key: 'elecUse', label: '원료의 전력 사용 (MWh/t)', width: 22, hint: '공급사 자료에 간접배출의 내역이 있으면: 원료 1 t당 전력 사용량. EU 문서에 그대로 실립니다', example: '' },
+    { key: 'elecFactor', label: '원료의 전력 계수 (tCO₂e/MWh)', width: 26, hint: '공급사 자료의 전력 배출계수. 위 칸과 곱하면 간접 SEE가 됩니다', example: '' },
+    { key: 'route', label: '원료의 생산경로', width: 26, hint: '공급사가 알려 준 경우. 예: 고로-전로, 전기로', example: '' },
+    { key: 'nonCbam', label: 'CBAM 제품이 아닌 데 쓴 양 (t)', width: 26, hint: '구매한 원료 중 철강 제품이 아닌 다른 용도로 쓴 양. 보통은 비워 둡니다', example: '' },
     { key: 'evidence', label: '근거 자료', width: 34, hint: '예: 공급사 회신 메일 2026-09-05, CBAM 데이터 시트 PDF', example: '공급사 CBAM 데이터 시트 PDF, 2026-09-05 회신' },
+];
+
+export const RNR_COLUMNS: ActivityField[] = [
+    { key: 'data', label: '자료', required: true, width: 28, hint: '어떤 자료인지. 예: 도시가스 사용량, 생산량, 구매 강재 투입량', example: `${EXAMPLE_PREFIX} 도시가스 사용량` },
+    { key: 'collector', label: '모으는 사람', width: 22, hint: '원자료(고지서·일지)를 모으는 담당', example: '총무팀 박OO' },
+    { key: 'transposer', label: '옮겨 적는 사람', width: 22, hint: '원자료를 집계표·이 서식에 옮기는 담당', example: '품질환경팀 김OO' },
+    { key: 'approver', label: '확인·승인하는 사람', width: 22, hint: '옮긴 값을 검토하는 사람', example: '품질환경팀장' },
+    { key: 'system', label: '자료가 있는 곳', width: 26, hint: '예: ERP, 엑셀 집계표, 고지서 철', example: '고지서 철 + 엑셀 집계표' },
+];
+
+export const EVIDENCE_COLUMNS: ActivityField[] = [
+    { key: 'item', label: '증빙 자료', required: true, width: 34, hint: '검증인에게 보여 줄 자료. 예: 도시가스 고지서 12장, 생산일지, 공급사 CBAM 데이터 시트', example: `${EXAMPLE_PREFIX} 도시가스 고지서 2025년 12장` },
+    { key: 'proves', label: '무엇을 입증하나', width: 34, hint: '이 자료로 확인되는 값. 예: 연료 사용량', example: '4_연료의 도시가스 사용량' },
+    { key: 'custodian', label: '보관하는 사람·곳', width: 24, hint: '', example: '총무팀 문서고' },
+    { key: 'status', label: '상태', width: 16, hint: '예: 확보, 요청 중, 없음', example: '확보' },
 ];
 
 const TABLE_SHEETS = [
@@ -165,6 +219,8 @@ const TABLE_SHEETS = [
     { name: SHEET_PROCESSES, title: '3. 공정 — 제품을 만드는 생산 라인과 생산량', columns: PROCESS_COLUMNS },
     { name: SHEET_FUELS, title: '4. 연료 — 공장에서 태우는 연료(가스·경유·등유 등). 전기는 1_사업장에. 도금·절단·용접·마무리 설비 전용 연료는 적지 않습니다', columns: FUEL_COLUMNS },
     { name: SHEET_PRECURSORS, title: '5. 구매 강재 — 사 와서 가공하는 철강 원료와 그 원료의 배출량', columns: PRECURSOR_COLUMNS },
+    { name: SHEET_RNR, title: '6. 역할·책임 — 자료를 누가 모으고 옮기고 확인하는지 (산정보고서에 실립니다. 아는 만큼만)', columns: RNR_COLUMNS },
+    { name: SHEET_EVIDENCE, title: '7. 증빙 목록 — 검증인에게 보여 줄 자료와 보관하는 곳 (산정보고서에 실립니다. 아는 만큼만)', columns: EVIDENCE_COLUMNS },
 ] as const;
 
 /** 표 시트의 줄 배치: 1 제목 · 2 머리글 · 3 설명 · 4 예시 · 5~ 입력 */
@@ -192,6 +248,8 @@ export interface ActivityWorkbookFill {
     processes?: ActivityRowValues[];
     fuels?: ActivityRowValues[];
     precursors?: ActivityRowValues[];
+    rnr?: ActivityRowValues[];
+    evidence?: ActivityRowValues[];
 }
 
 /** 작성 예시 — 가상의 나사 공장(대일기업). 공용 가스·경유·전력은 공장 전체 값만 적어 앱이 나누게 한 모습이다. */
@@ -219,9 +277,16 @@ export const ACTIVITY_WORKBOOK_SAMPLE: ActivityWorkbookFill = {
         electricity_ef_source: ELECTRICITY_SOURCE_CHOICES[0].label,
         imported_heat: NO,
         waste_gases: NO,
+        electricity_ef_publisher: '온실가스종합정보센터',
+        electricity_ef_document: '국가 온실가스 배출·흡수계수(전력)',
+        electricity_ef_vintage: '2023',
+        carbon_price_applicable: CARBON_PRICE_CHOICES[1].label,
+        carbon_price_note: '배출권거래제 할당대상 아님(연 배출량 기준 미만)',
+        declaration_name: 'Kim Do-hyun',
+        declaration_position: '품질환경팀 과장',
     },
     products: [
-        { name: 'STS 십자홈 나사 (stainless 304/316)', cn: '73181552', exported: YES },
+        { name: 'STS 십자홈 나사 (stainless 304/316)', cn: '73181552', exported: YES, alloy_mn_cr_ni: 28.5, reducing_agent: '모름 — 공급사 문의 중', scrap_per_t: 0, preconsumer_scrap_pct: 0 },
         { name: '탄소강 십자홈 나사 (아연도금)', cn: '73181558', exported: NO },
     ],
     processes: [
@@ -231,10 +296,18 @@ export const ACTIVITY_WORKBOOK_SAMPLE: ActivityWorkbookFill = {
     fuels: [
         { name: '세척수 온수 보일러 도시가스', kind: FUEL_KIND_CHOICES[0].label, amount: 38500, where: SHARED_PROCESS_LABEL, evidence: '삼천리 고지서 2025 공장 전체 524,500 Nm³ − 열처리로 서브미터 486,000' },
         { name: '열처리로(QT) 도시가스', kind: FUEL_KIND_CHOICES[0].label, amount: 486000, where: '탄소강 나사 공정', evidence: '삼천리 고지서 2025 중 열처리로 서브미터 검침' },
-        { name: '지게차 경유', kind: FUEL_KIND_CHOICES[2].label, amount: 12400, where: SHARED_PROCESS_LABEL, evidence: '지게차 주유 전표 2025 합계' },
+        { name: '지게차 경유', kind: FUEL_KIND_CHOICES[2].label, amount: 12400, where: SHARED_PROCESS_LABEL, evidence: '지게차 주유 전표 2025 합계', method: '주유 전표 합산' },
+    ],
+    rnr: [
+        { data: '도시가스 사용량', collector: '총무팀 박OO', transposer: '품질환경팀 김도현', approver: '품질환경팀장', system: '고지서 철 + 엑셀 집계표' },
+        { data: '생산량·스크랩', collector: '생산관리팀', transposer: '품질환경팀 김도현', approver: '품질환경팀장', system: 'ERP 생산실적' },
+    ],
+    evidence: [
+        { item: '삼천리 도시가스 고지서 2025년 12장', proves: '4_연료의 도시가스 사용량', custodian: '총무팀 문서고', status: '확보' },
+        { item: '공급사 CBAM 데이터 시트 PDF (2026-09-05)', proves: '5_구매강재의 직접·간접 SEE', custodian: '구매팀', status: '확보' },
     ],
     precursors: [
-        { name: 'STS 304/316 냉간압조용 와이어 (국내)', cn: '72230019', consumed: 2910, purchased: 2980, country: 'South Korea', where: 'STS 나사 공정', hasValue: SUPPLIER_VALUE_CHOICES[0].label, direct: 1.86, indirect: 0.94, supplier: '(주)대한스테인리스선재 포항공장', verification: VERIFICATION_CHOICES[1].label, evidence: '공급사 CBAM 데이터 시트 PDF, 2026-09-05 회신' },
+        { name: 'STS 304/316 냉간압조용 와이어 (국내)', cn: '72230019', consumed: 2910, purchased: 2980, country: 'South Korea', where: 'STS 나사 공정', hasValue: SUPPLIER_VALUE_CHOICES[0].label, direct: 1.86, indirect: 0.94, supplier: '(주)대한스테인리스선재 포항공장', period: '2025-01-01 ~ 2025-12-31', verification: VERIFICATION_CHOICES[1].label, evidence: '공급사 CBAM 데이터 시트 PDF, 2026-09-05 회신' },
         { name: 'STS 304 CHQ 와이어 (대만, 자료 미회신)', cn: '72230019', consumed: 610, purchased: 620, country: 'Taiwan', where: 'STS 나사 공정', hasValue: SUPPLIER_VALUE_CHOICES[1].label, supplier: 'Feng-Yuan Stainless Wire Co.', evidence: '3회 요청했으나 미회신' },
     ],
 };
@@ -338,10 +411,11 @@ function buildLists(countries: string[]) {
         ['electricitySource', ELECTRICITY_SOURCE_CHOICES.map((item) => item.label)],
         ['supplierValue', SUPPLIER_VALUE_CHOICES.map((item) => item.label)],
         ['verification', VERIFICATION_CHOICES.map((item) => item.label)],
+        ['carbonPrice', CARBON_PRICE_CHOICES.map((item) => item.label)],
         ['country', countries],
     ];
     const titles: Record<ListName, string> = {
-        yesNo: '예/아니오', fuelKind: '연료 종류', fuelFactorSource: '계수 출처', electricitySource: '전력 계수 출처', supplierValue: '공급사 값', verification: '검증 여부',
+        yesNo: '예/아니오', carbonPrice: '탄소가격', fuelKind: '연료 종류', fuelFactorSource: '계수 출처', electricitySource: '전력 계수 출처', supplierValue: '공급사 값', verification: '검증 여부',
         country: '국가', processOrShared: '쓰는 공정(연료)', process: '쓰는 공정(구매 강재)', product: '제품',
     };
     const sheetRef = (name: string, cell: string) => `'${name}'!${cell}`;
@@ -382,6 +456,7 @@ function guideSheet(): SheetSpec {
         ['3_공정 — 제품을 만드는 라인과 생산량', STYLE.wrap],
         ['4_연료 — 가스·경유·등유 등 공장에서 태우는 연료', STYLE.wrap],
         ['5_구매강재 — 사 와서 가공하는 철강 원료와 공급사가 준 배출량 값', STYLE.wrap],
+        ['6_역할책임 · 7_증빙목록 — 자료를 누가 다루고 어디에 보관하는지(아는 만큼만. 산정보고서에 실립니다)', STYLE.wrap],
         ['', STYLE.plain],
         ['적는 방법', STYLE.section],
         ['· 노란 칸에만 적습니다. 머리글과 설명 줄은 고치지 마세요.', STYLE.wrap],
@@ -467,7 +542,7 @@ export function createActivityWorkbook(options: { countries: string[]; fill?: Ac
     const lists = buildLists(ordered.length > 0 ? ordered : COMMON_COUNTRIES);
     const fill = options.fill;
     const fillOf: Record<string, ActivityRowValues[] | undefined> = {
-        [SHEET_PRODUCTS]: fill?.products, [SHEET_PROCESSES]: fill?.processes, [SHEET_FUELS]: fill?.fuels, [SHEET_PRECURSORS]: fill?.precursors,
+        [SHEET_PRODUCTS]: fill?.products, [SHEET_PROCESSES]: fill?.processes, [SHEET_FUELS]: fill?.fuels, [SHEET_PRECURSORS]: fill?.precursors, [SHEET_RNR]: fill?.rnr, [SHEET_EVIDENCE]: fill?.evidence,
     };
     const sheets: SheetSpec[] = [
         guideSheet(),
@@ -504,6 +579,9 @@ export interface ActivityWorkbookData {
     processes: ActivityRow[];
     fuels: ActivityRow[];
     precursors: ActivityRow[];
+    /** 6_역할책임 · 7_증빙목록 — 없는 서식(이 시트가 생기기 전의 파일)도 그대로 읽는다 */
+    rnr: ActivityRow[];
+    evidence: ActivityRow[];
     /** 읽으면서 알게 된 문제(머리글을 못 찾은 시트 등) */
     notes: string[];
 }
@@ -577,10 +655,11 @@ export function parseActivityWorkbook(bytes: Uint8Array): ActivityWorkbookData {
     const sheets = parseWorkbookSheets(zip);
     const sharedStrings = parseSharedStrings(zip);
     const notes: string[] = [];
-    const rowsOf = (name: string) => {
+    const rowsOf = (name: string, optional = false) => {
         const sheet = sheets.find((item) => item.name === name);
         const part = sheet ? zip[sheet.path] : undefined;
         if (!part) {
+            if (optional) return [];
             notes.push(`${name} 시트가 없습니다. 시트 이름을 바꾸거나 지우지 않았는지 확인하세요.`);
             return [];
         }
@@ -602,6 +681,8 @@ export function parseActivityWorkbook(bytes: Uint8Array): ActivityWorkbookData {
         processes: readTable(rowsOf(SHEET_PROCESSES), PROCESS_COLUMNS, SHEET_PROCESSES, notes),
         fuels: readTable(rowsOf(SHEET_FUELS), FUEL_COLUMNS, SHEET_FUELS, notes),
         precursors: readTable(rowsOf(SHEET_PRECURSORS), PRECURSOR_COLUMNS, SHEET_PRECURSORS, notes),
+        rnr: sheets.some((sheet) => sheet.name === SHEET_RNR) ? readTable(rowsOf(SHEET_RNR, true), RNR_COLUMNS, SHEET_RNR, notes) : [],
+        evidence: sheets.some((sheet) => sheet.name === SHEET_EVIDENCE) ? readTable(rowsOf(SHEET_EVIDENCE, true), EVIDENCE_COLUMNS, SHEET_EVIDENCE, notes) : [],
         notes,
     };
 }
