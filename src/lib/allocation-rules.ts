@@ -428,3 +428,10 @@ export function isElectricitySplitStale(
     if (!meter || meter.basis !== 'OUTPUT_MASS' || !(meter.basis_value > 0)) return false;
     return Math.abs(activityLevel - meter.basis_value) > meter.basis_value * ELECTRICITY_SPLIT_STALE_TOLERANCE;
 }
+
+/** 생산량 1 t당 전력이 이 값을 넘으면 단위 실수(kWh를 MWh로)를 의심한다. 전기로·합금철도 1 t당 10 MWh 안팎이다. */
+export const ELECTRICITY_INTENSITY_LIMIT_MWH_PER_T = 50;
+
+export function isImplausibleElectricityIntensity(mwh: number, outputMassT: number): boolean {
+    return outputMassT > 0 && Number.isFinite(mwh) && mwh / outputMassT > ELECTRICITY_INTENSITY_LIMIT_MWH_PER_T;
+}

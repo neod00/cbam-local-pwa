@@ -5,7 +5,7 @@ import type { IndirectEmissionsRelevance } from './cbam-product-rules';
 import { IMPORTED_HEAT_RULE, SHARED_HEAT_RULE, resolveImportedHeat, resolveProcessSharedHeat, resolveSharedHeatSystems } from './measurable-heat';
 import { isUnverifiedActualPrecursor, unverifiedActualPrecursorMessage } from './precursor-verification';
 import { getProductReportingScope, getProductReportingScopeLabel, isCbamReportingScope } from './reporting-scope';
-import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, RECONCILIATION_REVIEW_DEVIATION, checkElectricitySharedMeters, getDirectEmissionsInputMode, hasManualAllocationReason, isElectricitySplitStale, reconcileSourceStreams, resolveActivityLevelRole, sharedMeterBasisNeedsReview, SHARED_METER_BASIS_LABEL } from './allocation-rules';
+import { ALLOCATION_RULES, isImplausibleElectricityIntensity, MANUAL_ALLOCATION_SUM_TOLERANCE, RECONCILIATION_REVIEW_DEVIATION, checkElectricitySharedMeters, getDirectEmissionsInputMode, hasManualAllocationReason, isElectricitySplitStale, reconcileSourceStreams, resolveActivityLevelRole, sharedMeterBasisNeedsReview, SHARED_METER_BASIS_LABEL } from './allocation-rules';
 import type { ElectricityMeterGroup, ReconciliationGroup } from './allocation-rules';
 
 export type ActivityData = Record<string, number>;
@@ -892,6 +892,13 @@ function calculateOwnResults(input: {
             addWarning(
                 `확인 필요(자료): 전력 공용 계량기 '${electricityGroup.group}'를 생산량 비율로 나눈 뒤 ${process.name}의 생산량이 바뀌었습니다(나눌 때 ${process.electricity_shared_meter?.basis_value} t → 지금 ${activityLevel} t). 5단계에서 다시 나누세요.`,
                 { type: 'process', id: process.id }, 'SHARED_METER'
+            );
+        }
+
+        if (activityLevel > 0 && isImplausibleElectricityIntensity(process.electricity_mwh, activityLevel)) {
+            addWarning(
+                `확인 필요(자료): ${process.name}의 전력 사용량 ${process.electricity_mwh.toLocaleString('en-US', { maximumFractionDigits: 1 })} MWh는 생산량 1 t당 ${(process.electricity_mwh / activityLevel).toLocaleString('en-US', { maximumFractionDigits: 1 })} MWh입니다 — 철강 공정으로는 지나치게 큽니다. kWh를 MWh 칸에 적지 않았는지 확인하세요(MWh = kWh ÷ 1,000). 이대로면 간접 SEE가 그만큼 크게 보고됩니다.`,
+                { type: 'process', id: process.id }
             );
         }
 
