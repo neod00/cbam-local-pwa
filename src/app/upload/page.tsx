@@ -6,16 +6,26 @@ import {
     getLocalSetting,
     listLocalItems,
     setLocalSetting,
+    updateLocalItem,
     type Product,
     type ProductionProcess,
 } from '@/lib/local-db';
 import {
-    ACTIVITY_TEMPLATE_FILENAME,
-    createActivityDataTemplateWorkbook,
     parseActivityDataTemplate,
     type ActivityTemplateImportPlan,
     type ActivityTemplateImportSummary,
 } from '@/lib/activity-data-template';
+import { describeActivityImportIssues, importActivityWorkbook, ISSUE_LEVEL_LABEL, type ActivityImportIssue } from '@/lib/activity-import';
+import {
+    ACTIVITY_WORKBOOK_FILENAME,
+    ACTIVITY_WORKBOOK_SAMPLE,
+    ACTIVITY_WORKBOOK_SAMPLE_FILENAME,
+    createActivityWorkbook,
+    isActivityWorkbookV2,
+    parseActivityWorkbook,
+    readActivityWorkbookSheetNames,
+} from '@/lib/activity-workbook';
+import { ensureBundledReferences } from '@/lib/bundled-references';
 import { downloadBlob } from '@/lib/eu-template-export';
 import {
     displayReferenceCountry,
@@ -35,12 +45,13 @@ import {
     FileText,
     Upload as UploadIcon,
 } from 'lucide-react';
+import Link from 'next/link';
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 
 const uploadSteps = [
     { name: '공식 기준값 업로드', status: '사용 가능', tone: 'success' as const },
-    { name: '내부 활동자료 템플릿', status: '사용 가능', tone: 'success' as const },
-    { name: '활동자료 일괄 업로드', status: '사용 가능', tone: 'success' as const },
+    { name: '활동자료 서식 (엑셀)', status: '사용 가능', tone: 'success' as const },
+    { name: '활동자료 올리기', status: '사용 가능', tone: 'success' as const },
 ];
 
 const emptyImportSummary: ActivityTemplateImportSummary = {
@@ -354,6 +365,8 @@ export default function UploadPage() {
     const [activityError, setActivityError] = useState('');
     const [activityWarnings, setActivityWarnings] = useState<string[]>([]);
     const [activitySummary, setActivitySummary] = useState<ActivityTemplateImportSummary>(emptyImportSummary);
+    const [activityIssues, setActivityIssues] = useState<ActivityImportIssue[] | null>(null);
+    const [issuesCopied, setIssuesCopied] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
     const [isActivityImporting, setIsActivityImporting] = useState(false);
 
@@ -378,10 +391,35 @@ export default function UploadPage() {
         return { importedCount, rowCount };
     }, [benchmarkSummary, defaultValueSummary]);
 
-    function handleDownloadActivityTemplate() {
-        downloadBlob(createActivityDataTemplateWorkbook(), ACTIVITY_TEMPLATE_FILENAME);
-        setActivityMessage('내부 활동자료 수집 템플릿을 생성했습니다. 파일은 브라우저에서만 만들어지며 서버로 전송되지 않습니다.');
+    /** 서식의 「원료를 만든 나라」 목록과 EU 기본값 채우기에 쓰는 기본값표. 아직 없으면 앱 내장본을 먼저 넣는다. */
+    async function loadDefaultValues() {
+        const saved = await getLocalSetting<ImportedDefaultValueReference>('reference:default-values');
+        if (saved) return saved;
+        await ensureBundledReferences().catch(() => undefined);
+        return getLocalSetting<ImportedDefaultValueReference>('reference:default-values');
+    }
+
+    async function handleDownloadActivityTemplate(sample: boolean) {
+        const reference = await loadDefaultValues();
+        const countries = Array.from(new Set((reference?.rows ?? []).map((row) => row.country)));
+        downloadBlob(
+            createActivityWorkbook({ countries, fill: sample ? ACTIVITY_WORKBOOK_SAMPLE : undefined }),
+            sample ? ACTIVITY_WORKBOOK_SAMPLE_FILENAME : ACTIVITY_WORKBOOK_FILENAME
+        );
+        setActivityMessage(sample
+            ? '작성 예시를 만들었습니다. 가상의 나사 공장 자료가 채워져 있으니 서식과 함께 보내 주세요.'
+            : '활동자료 서식을 만들었습니다. 파일은 브라우저에서만 만들어지며 서버로 전송되지 않습니다.');
         setActivityError('');
+    }
+
+    async function handleCopyIssues() {
+        if (!activityIssues) return;
+        try {
+            await navigator.clipboard.writeText(describeActivityImportIssues(activityIssues));
+            setIssuesCopied(true);
+        } catch {
+            setIssuesCopied(false);
+        }
     }
 
     async function handleBenchmarkImport(event: ChangeEvent<HTMLInputElement>) {
@@ -444,9 +482,24 @@ export default function UploadPage() {
         setActivityError('');
         setActivityWarnings([]);
         setActivitySummary(emptyImportSummary);
+        setActivityIssues(null);
+        setIssuesCopied(false);
         setIsActivityImporting(true);
 
         try {
+            // 새 서식(한글 7시트)과 종전 서식(영문 4시트)을 시트 이름으로 가린다. 종전 서식은 종전 경로 그대로다.
+            const bytes = file.name.toLowerCase().endsWith('.xlsx') ? new Uint8Array(await file.arrayBuffer()) : undefined;
+            if (bytes && isActivityWorkbookV2(readActivityWorkbookSheetNames(bytes))) {
+                const result = await importActivityWorkbook(parseActivityWorkbook(bytes), {
+                    store: { list: listLocalItems, create: createLocalItem, update: updateLocalItem },
+                    defaultValues: await loadDefaultValues(),
+                });
+                const { created } = result;
+                setActivitySummary({ products: created.products, processes: created.processes, sourceStreams: created.fuels, precursors: created.precursors, skipped: 0 });
+                setActivityIssues(result.issues);
+                setActivityMessage(`서식을 넣었습니다 — 사업장 ${created.installation} · 보고기간 ${created.period} · 제품 ${created.products} · 공정 ${created.processes} · 연료 ${created.fuels} · 구매 강재 ${created.precursors}건.`);
+                return;
+            }
             const plan = await parseActivityDataTemplate(file);
             const summary = await applyActivityImportPlan(plan);
             const total = summary.products + summary.processes + summary.sourceStreams + summary.precursors;
@@ -542,8 +595,8 @@ export default function UploadPage() {
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
                 <SectionCard
-                    title="내부 템플릿 다운로드"
-                    description="사내 담당자에게 받을 생산량, 연료, 전력, 전구물질 자료를 정리하기 위한 내부 수집용 엑셀 템플릿입니다."
+                    title="활동자료 서식 내려받기"
+                    description="업체의 한 해 자료를 한 파일에 받아 오는 엑셀 서식입니다. 채운 파일을 아래에 올리면 지도 1~6단계가 한 번에 채워집니다."
                 >
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                         <div className="flex items-start gap-3">
@@ -552,16 +605,26 @@ export default function UploadPage() {
                             </div>
                             <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <h2 className="font-semibold text-slate-950">활동자료 수집 템플릿</h2>
+                                    <h2 className="font-semibold text-slate-950">활동자료 서식 (엑셀)</h2>
                                     <StatusBadge tone="success">사용 가능</StatusBadge>
                                 </div>
                                 <p className="mt-1 text-sm leading-6 text-slate-600">
-                                    품목, 생산공정, 배출원, 전구물질 시트를 포함합니다. 다운로드 파일은 브라우저에서 생성되며 회사 자료는 서버로 전송되지 않습니다.
+                                    사업장·보고기간, 제품, 공정, 연료, 구매 강재 시트가 있습니다. 칸마다 무엇을 어디서 보고 적는지 설명과 예시가 있고,
+                                    연료 종류·공정 이름 등은 목록에서 고릅니다. 한 고지서를 여러 공정이 같이 쓰면 공장 전체 값만 적으면 됩니다 — 앱이 나눕니다.
                                 </p>
-                                <Button type="button" variant="secondary" className="mt-4" onClick={handleDownloadActivityTemplate}>
-                                    <Download className="mr-2 h-4 w-4" />
-                                    템플릿 다운로드
-                                </Button>
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                    <Button type="button" variant="secondary" onClick={() => void handleDownloadActivityTemplate(false)}>
+                                        <Download className="mr-2 h-4 w-4" />
+                                        빈 서식 내려받기
+                                    </Button>
+                                    <Button type="button" variant="secondary" onClick={() => void handleDownloadActivityTemplate(true)}>
+                                        <Download className="mr-2 h-4 w-4" />
+                                        작성 예시 내려받기
+                                    </Button>
+                                </div>
+                                <p className="mt-3 text-xs leading-5 text-slate-500">
+                                    파일은 브라우저에서 만들어지며 회사 자료는 서버로 전송되지 않습니다. 예전 서식(영문 4시트)으로 받은 파일도 그대로 올릴 수 있습니다.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -581,7 +644,7 @@ export default function UploadPage() {
 
             <SectionCard
                 title="활동자료 업로드"
-                description="템플릿에 작성한 품목, 공정, 배출원, 전구물질 자료를 브라우저에서 파싱해 로컬 DB에 추가합니다."
+                description="채운 서식을 올리면 사업장·보고기간·제품·공정·연료·구매 강재가 한 번에 들어갑니다. 한 업체의 자료를 처음 넣을 때는 지도의 「새 프로젝트」에서 시작하세요."
                 actions={
                     <label className="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-600">
                         <UploadIcon className="mr-2 h-4 w-4" />
@@ -601,16 +664,16 @@ export default function UploadPage() {
                         <UploadIcon className="h-12 w-12 text-slate-400" />
                         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                             <span className="text-sm font-semibold text-slate-800">
-                                {isActivityImporting ? '활동자료를 가져오는 중' : '내부 활동자료 일괄 업로드'}
+                                {isActivityImporting ? '활동자료를 가져오는 중' : '채운 활동자료 서식 올리기'}
                             </span>
                             <StatusBadge tone="success">로컬 파싱</StatusBadge>
                         </div>
                         <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
-                            업로드한 파일은 서버로 전송하지 않습니다. 같은 이름의 기존 품목과 공정은 재사용하고, 신규 배출원과 전구물질은 연결 가능한 품목/공정에 붙여 저장합니다.
+                            올린 파일은 서버로 전송하지 않습니다. 빠지거나 틀린 칸은 넣지 않고 아래 「확인할 것」에 시트와 줄 번호로 알려 드립니다 — 그대로 복사해 서식을 채운 분께 보낼 수 있습니다.
                         </p>
                     </div>
 
-                    {(activityMessage || activityError || activityWarnings.length > 0) && (
+                    {(activityMessage || activityError || activityWarnings.length > 0 || activityIssues) && (
                         <div className="mt-6 space-y-3">
                             {activityMessage && (
                                 <div className="flex gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -641,6 +704,49 @@ export default function UploadPage() {
                                 </div>
                             )}
                             <ImportSummaryCard summary={activitySummary} />
+                            {activityIssues && (
+                                <div className="rounded-2xl border border-slate-200 bg-white p-4 text-left" data-testid="activity-issues">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <p className="text-sm font-semibold text-slate-900">
+                                            확인할 것 {activityIssues.length}건
+                                            {activityIssues.length > 0 && (
+                                                <span className="ml-2 font-normal text-slate-500">
+                                                    넣지 못함 {activityIssues.filter((issue) => issue.level === 'error').length} · 확인 필요 {activityIssues.filter((issue) => issue.level === 'warning').length} · 참고 {activityIssues.filter((issue) => issue.level === 'info').length}
+                                                </span>
+                                            )}
+                                        </p>
+                                        {activityIssues.length > 0 && (
+                                            <Button type="button" variant="secondary" onClick={() => void handleCopyIssues()}>
+                                                {issuesCopied ? '복사했습니다' : '목록 복사 (채운 분께 보내기)'}
+                                            </Button>
+                                        )}
+                                    </div>
+                                    {activityIssues.some((issue) => issue.level === 'error') && (
+                                        <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-900" data-testid="activity-issues-alert">
+                                            넣지 못한 줄이 있습니다. 그 자료가 빠진 채로 계산되므로 결과가 실제와 다를 수 있습니다 — 아래 항목을 고쳐 다시 올리거나 지도에서 직접 입력하세요.
+                                        </p>
+                                    )}
+                                    {activityIssues.length === 0 ? (
+                                        <p className="mt-2 text-sm text-slate-600">서식에서 빠지거나 틀린 칸을 찾지 못했습니다.</p>
+                                    ) : (
+                                        <ul className="mt-3 space-y-2">
+                                            {activityIssues.map((issue, index) => (
+                                                <li key={index} className="flex items-start gap-2 text-sm leading-6 text-slate-700" data-testid="activity-issue" data-level={issue.level}>
+                                                    <span className={`mt-0.5 flex-none rounded-full px-2 py-0.5 text-xs font-bold ${issue.level === 'error' ? 'bg-red-100 text-red-800' : issue.level === 'warning' ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-600'}`}>
+                                                        {ISSUE_LEVEL_LABEL[issue.level]}
+                                                    </span>
+                                                    <span className="min-w-0">
+                                                        <b className="text-slate-900">{issue.sheet}{issue.row ? ` ${issue.row}번째 줄` : ''}</b> — {issue.message}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                    <p className="mt-3 text-sm text-slate-600">
+                                        넣은 자료는 <Link href="/" className="font-bold text-teal-700 hover:underline">지도</Link>에서 확인하고, 남은 일은 <Link href="/todo" className="font-bold text-teal-700 hover:underline">할 일</Link>과 <Link href="/submit" className="font-bold text-teal-700 hover:underline">제출</Link> 화면에서 이어 가세요.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

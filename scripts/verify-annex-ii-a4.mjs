@@ -65,7 +65,13 @@ assert.equal(a4(run([screw, bolt], [procA, procB], [precursor('p1', 'A', '721391
 assert.equal(a4(run([screw], [procA, makeProcess('B', screw.id)], [precursor('p1', 'A', '72139110'), precursor('p2', 'B', '72139110')])).length, 0, '같은 CN을 공정 둘로 나눈 것은 Art 4(6) 경고가 따로 다룬다');
 assert.equal(a4(run([screw, bolt], [procA, makeProcess('B', bolt.id, { period_id: 'other' })], [precursor('p1', 'A', '72139110'), precursor('p2', 'B', '72139110', { period_id: 'other' })])).length, 0, '보고기간이 다르면 다른 문서의 공정이다');
 const nonCbamBolt = product('bolt-non', '73181558', { reporting_scope: 'NON_CBAM_COPRODUCT' });
-assert.equal(a4(run([screw, nonCbamBolt], [procA, makeProcess('B', nonCbamBolt.id)], [precursor('p1', 'A', '72139110'), precursor('p2', 'B', '72139110')])).length, 0, 'CBAM 대상이 아닌 제품 공정은 묶을 재화가 아니다');
+// 2026-10-10 변경: 신고하지 않는(EU로 수출하지 않는) 제품이라도 CN이 철강 제품이면 공정 묶기의 대상이다 — 출발점은 「사업장이 만드는 모든 CN 코드」
+// (EU 확정기간 가이던스 No.3 4.3.1). 종전에는 세지 않아, 다품종 업체에서 같은 원료의 공정이 갈라져도 점검이 조용했다(run34).
+assert.equal(a4(run([screw, nonCbamBolt], [procA, makeProcess('B', nonCbamBolt.id)], [precursor('p1', 'A', '72139110'), precursor('p2', 'B', '72139110')])).length, 2, '수출하지 않는 철강 제품의 공정도 같은 원료면 묶기 점검에 걸린다');
+const plasticPart = product('plastic', '39269097', { reporting_scope: 'NON_CBAM_COPRODUCT' });
+assert.equal(a4(run([screw, plasticPart], [procA, makeProcess('B', plasticPart.id)], [precursor('p1', 'A', '72139110'), precursor('p2', 'B', '72139110')])).length, 0, 'CBAM 품목이 아닌 제품의 공정은 묶을 재화가 아니다');
+const scrapBolt = product('bolt-scrap', '73181558', { reporting_scope: 'WASTE_RECYCLE' });
+assert.equal(a4(run([screw, scrapBolt], [procA, makeProcess('B', scrapBolt.id)], [precursor('p1', 'A', '72139110'), precursor('p2', 'B', '72139110')])).length, 0, '폐기·재활용 범위의 산출물은 세지 않는다');
 const boltLine = { id: 'l1', process_id: 'A', product_id: bolt.id, name: '볼트', output_mass_t: 500, allocation_basis: 'MASS', manual_allocation_percent: 100, note: '', reporting_scope: 'CBAM_GOOD', ...stamp };
 assert.equal(a4(run([screw, bolt], [procA], [precursor('p1', 'A', '72139110')], { productOutputLines: [boltLine] })).length, 0, '한 공정에 제품 라인으로 넣은 것이 규정이 요구하는 모양이다 — 알리지 않는다');
 assert.equal(a4(run([screw, bolt], [procA, procB], [precursor('p1', 'A', '123'), precursor('p2', 'B', '123')])).length, 0, '너무 짧은 CN은 같은 종류의 근거가 못 된다');

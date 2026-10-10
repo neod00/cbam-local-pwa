@@ -502,7 +502,7 @@ export interface BackupStatus {
 
 type BackupData = CbamBackupFile["data"];
 
-type StoreEntityMap = {
+export type StoreEntityMap = {
   installations: Installation;
   products: Product;
   periods: ReportingPeriod;
