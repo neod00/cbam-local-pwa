@@ -238,7 +238,7 @@ assert.equal(processNamed(partial, '너트 공정').direct_attributable_emission
 assert.equal(partial.result.issues.filter((issue) => issue.level === 'warning' && issue.sheet === '4_연료').length, 0);
 const unknownProcess = await importOf(multi(three, [{ name: '열처리로 가스', amount: '40000', where: '볼트 공정; 없는 공정' }], []));
 assert.equal(unknownProcess.store.data.source_streams.length, 0);
-assert.match(I.describeActivityImportIssues(unknownProcess.result.issues), /쓰는 공정 「없는 공정」을\(를\) 3_공정 시트에서 찾지 못했습니다/);
+assert.match(I.describeActivityImportIssues(unknownProcess.result.issues), /쓰는 공정 「없는 공정」을\(를\) 찾지 못했습니다.*이 파일의 공정: 「볼트 공정」/);
 // 일부 제품만 거칠 법한 설비의 연료를 「공장 전체」로 적거나, 제품이 여럿인 한 공정에 적으면 되묻는다. 보일러처럼 모두 쓰는 연료는 묻지 않는다.
 const allShared = await importOf(multi(three, [{ name: '열처리로 가스', amount: '40000', where: W.SHARED_PROCESS_LABEL }, { name: '세척 보일러 가스', amount: '100', where: W.SHARED_PROCESS_LABEL }], []));
 const fuelWarnings = allShared.result.issues.filter((issue) => issue.level === 'warning' && issue.sheet === '4_연료');
@@ -584,5 +584,44 @@ for (const file of ['src/components/guided/panels.tsx', 'src/components/talk/Tal
   assert.ok(screen.includes('{STEEL_BOUNDARY_NOTE}') && screen.includes('looksLikeExcludedStepFuel(') && screen.includes('{STEEL_BOUNDARY_NAME_WARNING}'), `${file}: 연료를 넣는 자리에 경계 안내와 이름 되묻기가 있다`);
 }
 assert.ok(importSource.includes("from './steel-boundary'") && !/EXCLUDED_STEP_FUEL/.test(importSource), '가져오기도 같은 판단을 쓴다(따로 두지 않는다)');
+
+// ── run35) 품번 목록으로 채운 사람은 공정 이름을 모르고 재질만 안다 · 전력 칸의 kWh ──
+const aliasRun = await importOf(withParts([
+  { part: 'EB-1', cn: '73181582', grade: 'SCM435', mass: '4400' },
+  { part: 'CB-1', cn: '73181582', grade: 'SWCH35K', mass: '4000' },
+  { part: 'GB-1', cn: '73181575', grade: 'SWCH18A', mass: '3300' },
+], {
+  fuels: [
+    { row: 5, values: { name: '열처리로 도시가스', kind: '도시가스 (Nm³)', amount: '1450000', where: 'SCM435;SWCH35K' } },
+    { row: 6, values: { name: '없는 공정의 가스', kind: '도시가스 (Nm³)', amount: '10', where: 'SCM440' } },
+  ],
+  precursors: [
+    { row: 5, values: { name: 'SCM435 와이어', cn: '72299090', consumed: '4530', country: 'South Korea', where: 'SCM435', hasValue: '없음 (EU 기본값 사용)' } },
+    { row: 6, values: { name: 'SWCH18A 와이어', cn: '72171039', consumed: '3400', country: 'South Korea', where: 'SWCH18A 공정', hasValue: '없음 (EU 기본값 사용)' } },
+  ],
+}));
+assert.equal(aliasRun.result.created.precursors, 2, '「쓰는 공정」에 재질(SCM435)만 적어도 「SCM435 공정」으로 알아듣는다 — 온전한 이름도 그대로 된다');
+const aliasGas = aliasRun.store.data.source_streams.filter((stream) => stream.name.includes('열처리로'));
+const aliasProcessName = (id) => aliasRun.store.data.processes.find((process) => process.id === id)?.name;
+assert.deepEqual(plain(aliasGas.map((stream) => aliasProcessName(stream.process_id)).sort()), ['SCM435 공정', 'SWCH35K 공정'], '; 로 이은 재질 이름도 그 공정들끼리만 나눈다');
+const aliasMiss = aliasRun.result.issues.find((issue) => issue.level === 'error' && issue.message.includes('SCM440'));
+assert.ok(aliasMiss && aliasMiss.message.includes('「SCM435 공정」') && aliasMiss.message.includes('「SWCH18A 공정」') && !aliasMiss.message.includes('3_공정 시트에서'), '못 찾으면 이 파일의 공정 이름을 보여 준다(빈 3_공정 시트를 가리키지 않는다)');
+const kwhData = withParts([{ part: 'EB-1', cn: '73181582', grade: 'SCM435', mass: '12900' }]);
+const kwhRun = await importOf({ ...kwhData, installation: { ...kwhData.installation, electricity_total_mwh: '21500000' } });
+const kwhIssue = kwhRun.result.issues.find((issue) => issue.level === 'warning' && /kWh/.test(issue.message));
+assert.ok(kwhIssue && kwhIssue.message.includes('21,500') && kwhIssue.sheet === W.SHEET_INSTALLATION, '전력 칸에 kWh를 적으면(1 t당 50 MWh 초과) 올릴 때 알리고 MWh로 바꾼 값을 보여 준다');
+assert.ok(resultsOf(kwhRun.store).some((item) => item.warnings.some((warning) => warning.startsWith('확인 필요(자료):') && /kWh/.test(warning))), '엔진도 같은 기준으로 경고한다 — 손으로 넣어도 할 일·귀속 점검에 「수정 필요」로 남는다');
+const readinessOf = (store) => load('src/lib/eu-template-export.ts').evaluateEuExportReadiness({ installations: store.data.installations, internalTransfers: store.data.internal_transfers, products: store.data.products, periods: store.data.periods, processes: store.data.processes, productOutputLines: store.data.product_output_lines, sourceStreams: store.data.source_streams, precursors: store.data.precursors });
+assert.ok(readinessOf(kwhRun.store).issues.some((issue) => issue.severity === 'error' && /kWh/.test(issue.message)), 'EU 문서는 막는다 — 간접 SEE가 1,000배로 실리는 것을 내보내지 않는다');
+const okData = withParts([{ part: 'EB-1', cn: '73181582', grade: 'SCM435', mass: '12900' }]);
+const okRun = await importOf({ ...okData, installation: { ...okData.installation, electricity_total_mwh: '21500' } });
+assert.ok(!okRun.result.issues.some((issue) => /kWh/.test(issue.message)) && !resultsOf(okRun.store).some((item) => item.warnings.some((warning) => /kWh를 MWh/.test(warning))), '정상 값(1 t당 1.7 MWh)에는 말하지 않는다');
+assert.ok(!readinessOf(okRun.store).issues.some((issue) => /kWh/.test(issue.message)));
+assert.equal(load('src/lib/allocation-rules.ts').isImplausibleElectricityIntensity(10 * 100, 100), false, '전기로·합금철 수준(1 t당 10 MWh)은 걸리지 않는다');
+
+// 설명 문구를 고쳐도, 예전 문구가 적힌 서식 파일의 설명 줄을 자료로 읽지 않는다(머리글 바로 아래 줄).
+const reworded = Object.fromEntries(Object.entries(fflate.unzipSync(sampleBytes)).map(([name, bytes]) => [name, name.endsWith('.xml') ? fflate.strToU8(fflate.strFromU8(bytes).replaceAll('3_공정 시트의 공정 이름', '예전 판의 설명 문구').replaceAll('한 공정만 쓰면 그 공정 이름', '예전 판의 설명 — 한 공정만 쓰면')) : bytes]));
+const rewordedData = W.parseActivityWorkbook(fflate.zipSync(reworded));
+assert.deepEqual([rewordedData.fuels.length, rewordedData.precursors.length], [sample.fuels.length, sample.precursors.length], '설명 줄의 문구가 지금과 달라도 자료 줄 수는 같다');
 
 console.log('Activity workbook v2 verified (서식 모양·선택 목록 · 빈 서식 0건 · 작성 예시 = 기준선 3.764/5.112 · 공용 나누기·배출원 합계·생산라인 · 원료의 쓰는 제품·연료의 쓰는 공정 여럿·섞임 경고 · 「확인할 것」 · 종전 서식 유지).');

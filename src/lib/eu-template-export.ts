@@ -7,7 +7,7 @@ import { isUnverifiedActualPrecursor, unverifiedActualPrecursorMessage } from '.
 import { calculateSourceStreamEmissions, getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
 import { APP_SCOPE_EXCLUSION_TEXT, getAppScopeExclusion, getIndirectEmissionsApplicability, isIntegratedSteelRoute } from './cbam-product-rules';
 import { getProductReportingScope, isCbamReportingScope } from './reporting-scope';
-import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, reconcileSourceStreams } from './allocation-rules';
+import { ALLOCATION_RULES, MANUAL_ALLOCATION_SUM_TOLERANCE, isImplausibleElectricityIntensity, reconcileSourceStreams } from './allocation-rules';
 import { CN_MASTER } from './cn-master.generated';
 import { findDuplicateUnsplitFuel } from './energy-split-summary';
 import { IMPORTED_HEAT_RULE, SHARED_HEAT_RULE, isProvisionalHeatNote, resolveImportedHeat, resolveProcessSharedHeat, resolveSharedHeatSystems } from './measurable-heat';
@@ -1310,6 +1310,18 @@ export function evaluateEuExportReadiness(
             area: '생산공정',
             message: `${duplicate.stream.name}: 공용 계량기 「${duplicate.group}」로 이미 나눈 같은 연료의 나누기 전 값(${duplicate.stream.activity_data} ${duplicate.unit})이 한 공정에 그대로 남아 있어 같은 연료가 두 번 계산됩니다. 지도 4단계에서 이 행을 지우세요(나눈 행은 그대로 두세요).`,
             target: { type: 'sourceStream', id: duplicate.stream.id },
+        });
+    }
+
+    // ── 전력 단위 실수(run35) ───────────────────────────────────────────
+    // 고지서의 kWh를 MWh 칸에 그대로 적으면 간접 SEE가 1,000배로 문서에 실린다. 생산량 1 t당 50 MWh를 넘는 철강 공정은 없으므로 문서를 막는다.
+    for (const process of exportScope.processes) {
+        if (!isImplausibleElectricityIntensity(process.electricity_mwh, process.output_mass_t)) continue;
+        issues.push({
+            severity: 'error',
+            area: '생산공정',
+            message: `${process.name}: 전력 사용량 ${process.electricity_mwh.toLocaleString('en-US', { maximumFractionDigits: 1 })} MWh는 생산량 1 t당 ${(process.electricity_mwh / process.output_mass_t).toLocaleString('en-US', { maximumFractionDigits: 1 })} MWh입니다 — 철강 공정으로는 있을 수 없는 크기입니다. kWh를 MWh 칸에 적지 않았는지 확인하고 지도 5단계에서 고치세요(MWh = kWh ÷ 1,000).`,
+            target: { type: 'process', id: process.id },
         });
     }
 

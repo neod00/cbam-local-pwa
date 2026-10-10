@@ -165,7 +165,7 @@ export const INSTALLATION_FORM: FormRow[] = [
     { key: 'period_end', label: '보고기간 종료일', required: true, text: true, hint: '예: 2025-12-31' },
     { key: 'period_name', label: '보고기간 이름', hint: '비우면 자동으로 붙입니다(예: 2025년 연간)' },
     { section: '■ 전력 — 한전 고지서' },
-    { key: 'electricity_total_mwh', label: '공장 전체 전력 사용량 (MWh)', hint: '고지서 12개월 합계(kWh) ÷ 1,000. 공정별 계량기가 없으면 이 값만 적으세요 — 앱이 생산량 비율로 나눕니다' },
+    { key: 'electricity_total_mwh', label: '공장 전체 전력 사용량 (MWh)', hint: '단위는 MWh — 고지서 12개월 합계(kWh)를 1,000으로 나눈 값입니다(예: 2,150,000 kWh → 2150). 공정별 계량기가 없으면 이 값만 적으세요 — 앱이 생산량 비율로 나눕니다' },
     { key: 'electricity_ef', label: '전력 배출계수 (tCO₂e/MWh)', hint: '모르면 비워 두세요(임시값으로 들어가고 「확인할 것」에 남습니다). 적는다면 출처·연도를 확인하세요' },
     { key: 'electricity_ef_source', label: '전력 배출계수 출처', list: 'electricitySource', hint: '칸을 눌러 목록에서 고르세요' },
     { key: 'electricity_ef_publisher', label: '전력 계수를 공표한 기관', hint: '계수를 어디서 가져왔는지. 예: 온실가스종합정보센터, IEA' },
@@ -218,7 +218,7 @@ export const FUEL_COLUMNS: ActivityField[] = [
     { key: 'name', label: '연료 이름', required: true, width: 32, hint: '어느 설비의 연료인지 알 수 있게(예: 열처리로 도시가스). 고지서·전표 하나에 한 줄', example: `${EXAMPLE_PREFIX} 지게차 경유` },
     { key: 'kind', label: '연료 종류', required: true, list: 'fuelKind', width: 20, hint: '칸을 눌러 고르세요. 괄호 안이 사용량의 단위입니다', example: '경유 (L)' },
     { key: 'amount', label: '연간 사용량', required: true, width: 18, hint: '고른 종류의 단위로(Nm³·t·L). 보고기간 합계', example: 12400 },
-    { key: 'where', label: '쓰는 공정', required: true, list: 'processOrShared', width: 30, hint: `한 공정만 쓰면 그 공정 이름. 모든 공정이 같이 쓰면 「${SHARED_PROCESS_LABEL}」. 일부 공정만 같이 쓰면(예: 열처리로) 그 공정 이름들을 ; 로 이어 적으세요 — 앱이 생산량 비율로 나눕니다`, example: SHARED_PROCESS_LABEL },
+    { key: 'where', label: '쓰는 공정', required: true, list: 'processOrShared', width: 30, hint: `한 공정만 쓰면 그 공정 이름. 모든 공정이 같이 쓰면 「${SHARED_PROCESS_LABEL}」. 일부 공정만 같이 쓰면(예: 열처리로) 그 공정 이름들을 ; 로 이어 적으세요 — 앱이 생산량 비율로 나눕니다. 2b_품번목록으로 채웠다면 공정 이름 대신 재질(예: SCM435)을 적으면 됩니다`, example: SHARED_PROCESS_LABEL },
     { key: 'evidence', label: '근거 자료', width: 34, hint: '어디서 본 숫자인지. 예: 삼천리 고지서 2025 12장, 주유 전표 합계', example: '지게차 주유 전표 2025 합계' },
     { key: 'ncv', label: '순발열량', width: 24, hint: '비우면 기본값. 공급사 성적서 값이 있을 때만 적으세요(도시가스 GJ/Nm³, 그 밖은 GJ/t)', example: '' },
     { key: 'factor', label: '배출계수 (tCO₂e/TJ)', width: 24, hint: '비우면 기본값. 직접 적으면 옆 칸의 출처도 고르세요', example: '' },
@@ -241,7 +241,7 @@ export const PRECURSOR_COLUMNS: ActivityField[] = [
     { key: 'consumed', label: '투입량 (t)', required: true, width: 20, hint: '보고기간에 이 공정에 실제로 넣은 양(구매량이 아닙니다)', example: 2910 },
     { key: 'purchased', label: '구매량 (t)', width: 16, hint: '비우면 투입량과 같게 봅니다', example: 2980 },
     { key: 'country', label: '원료를 만든 나라', required: true, list: 'country', width: 20, hint: '파는 회사의 나라가 아니라 **만든 공장**의 나라. 목록에서 고르세요', example: 'South Korea' },
-    { key: 'where', label: '쓰는 공정', required: true, list: 'process', width: 30, hint: '3_공정 시트의 공정 이름', example: 'STS 나사 공정' },
+    { key: 'where', label: '쓰는 공정', required: true, list: 'process', width: 30, hint: '3_공정 시트의 공정 이름. 2b_품번목록으로 채웠다면 그 원료로 만드는 재질(예: SCM435)을 적으세요', example: 'STS 나사 공정' },
     { key: 'products', label: '쓰는 제품', list: 'product', width: 34, hint: '이 원료로 만드는 제품(2_제품의 이름). 비우면 그 공정의 모든 제품이 생산량 비율로 나눠 쓴 것으로 봅니다. 제품마다 강종이 다르면 꼭 적으세요 — 여러 개면 ; 로 이어 적습니다', example: '' },
     { key: 'hasValue', label: '공급사 배출량 값이 있나요?', required: true, list: 'supplierValue', width: 28, hint: '없으면 앱이 EU 기본값을 찾아 넣습니다(직접·간접 칸은 비워 두세요)', example: SUPPLIER_VALUE_CHOICES[0].label },
     { key: 'direct', label: '직접 SEE (tCO₂e/t)', width: 18, hint: '공급사가 준 값. 「있음」일 때만', example: 1.86 },
@@ -330,7 +330,7 @@ export const EVIDENCE_COLUMNS: ActivityField[] = [
 
 const TABLE_SHEETS = [
     { name: SHEET_PRODUCTS, title: '2. 제품 — 이 공장에서 만드는 제품을 한 줄에 하나씩', columns: PRODUCT_COLUMNS },
-    { name: SHEET_PARTS, title: '2b. 품번 목록(선택) — 품번이 많으면 생산실적을 붙여 넣으세요. 앱이 CN 코드·재질별로 합쳐 제품(2_제품)과 공정(3_공정)을 만듭니다. 2_제품·3_공정에 이미 적었다면 비워 두세요', columns: PART_COLUMNS },
+    { name: SHEET_PARTS, title: '2b. 품번 목록(선택) — 품번이 많으면 생산실적을 붙여 넣으세요. 앱이 CN 코드·재질별로 합쳐 제품(2_제품)과 공정(3_공정)을 만듭니다. 공정 이름은 「재질 + 공정」(예: SCM435 공정)이 되며, 4_연료·5_구매강재의 「쓰는 공정」에는 재질만 적어도 됩니다. 2_제품·3_공정에 이미 적었다면 비워 두세요', columns: PART_COLUMNS },
     { name: SHEET_PROCESSES, title: '3. 공정 — 제품을 만드는 생산 라인과 생산량', columns: PROCESS_COLUMNS },
     { name: SHEET_FUELS, title: '4. 연료 — 공장에서 태우는 연료(가스·경유·등유 등). 전기는 1_사업장에. 도금·절단·용접·마무리 설비 전용 연료는 적지 않습니다', columns: FUEL_COLUMNS },
     { name: SHEET_PRECURSORS, title: '5. 구매 강재 — 사 와서 가공하는 철강 원료와 그 원료의 배출량', columns: PRECURSOR_COLUMNS },
@@ -782,6 +782,8 @@ function readTable(rows: ReturnType<typeof readSheetRows>, columns: ActivityFiel
         if (filled.length === 0) continue;
         // 설명 줄과 예시 줄은 자료가 아니다.
         if (filled.every((value) => hints.has(value))) continue;
+        // 머리글 바로 아래 줄은 설명 줄이다 — 설명 문구를 고친 뒤에도 예전 서식 파일의 설명 줄을 자료로 읽지 않게, 하나라도 설명과 같으면 건너뛴다.
+        if (row.row === header.row + 1 && filled.some((value) => hints.has(value))) continue;
         if ((values[columns[0].key] ?? '').startsWith(EXAMPLE_PREFIX)) continue;
         result.push({ row: row.row, values });
     }

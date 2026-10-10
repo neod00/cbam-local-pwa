@@ -32,7 +32,7 @@ import {
     type ActivityRow,
     type ActivityWorkbookData,
 } from './activity-workbook';
-import { sumReconciledSourceStreamEmissions } from './allocation-rules';
+import { isImplausibleElectricityIntensity, sumReconciledSourceStreamEmissions } from './allocation-rules';
 import { buildFuelStreamDraft, noImportedHeatDraft, type FuelAnswer } from './conversation-energy';
 import { buildPrecursorDraft, fillEuDefault } from './conversation-precursor';
 import { buildProcessCreation, PROCESS_PLACEHOLDER_EF, validateProcessAnswer, type ProcessAnswerDraft } from './conversation-process';
@@ -434,6 +434,19 @@ export async function importActivityWorkbook(
             else note('error', SHEET_PROCESSES, `${name}: 공정의 전력 「${rows.map((row) => row.values.electricity).find(Boolean)}」을(를) 0보다 큰 숫자로 적어 주세요.`, rows[0].row);
         }
     }
+    // 「SCM435 공정」을 「SCM435」로만 적어도 알아듣는다 — 품번 목록으로 채우면 공정 이름을 앱이 「<재질> 공정」으로 짓는데
+    // 채우는 사람은 그 이름을 모르고 재질만 안다(run35: 구매 강재 7줄이 통째로 빠졌다). 줄인 이름이 둘 이상의 공정과 겹치면 받지 않는다.
+    const aliasOwners = new Map<string, ProductionProcess[]>();
+    for (const process of fresh.values()) {
+        const short = process.name.replace(/\s*공정$/, '').trim();
+        if (short && short !== process.name) aliasOwners.set(key(short), [...(aliasOwners.get(key(short)) ?? []), process]);
+    }
+    for (const [alias, owners] of aliasOwners) if (owners.length === 1 && !processByName.has(alias)) processByName.set(alias, owners[0]);
+    /** 공정을 못 찾았을 때 덧붙이는 말 — 이번 파일로 만든 공정 이름을 그대로 보여 준다. */
+    const processHint = () => {
+        const names = [...fresh.values()].map((process) => `「${process.name}」`);
+        return names.length > 0 ? ` 이 파일의 공정: ${names.join(', ')}.` : ' 이 파일로 만든 공정이 없습니다 — 3_공정이나 2b_품번목록을 먼저 확인하세요.';
+    };
     const freshList = () => Array.from(fresh.values());
     // 전력 계량기 이름·합계·기준은 그 공정의 줄들 중 처음 적힌 것을 쓴다.
     for (const rows of groups.values()) {
@@ -488,6 +501,17 @@ export async function importActivityWorkbook(
     // ── 6) 전력 ──────────────────────────────────────────────────────
     if (fresh.size > 0) {
         const plantTotal = numberOf(text('electricity_total_mwh'));
+        // 단위 실수(kWh를 MWh 칸에) — 생산량 1 t당 전력이 상식 밖이면 알린다. 값은 그대로 넣고, 엔진도 같은 기준으로 경고를 남긴다.
+        const plantOutput = freshList().reduce((sum, process) => sum + process.output_mass_t, 0);
+        if (plantTotal !== undefined && plantOutput > 0 && isImplausibleElectricityIntensity(plantTotal, plantOutput)) {
+            note('warning', SHEET_INSTALLATION, `공장 전체 전력 ${fmt(plantTotal)} MWh는 생산량 1 t당 ${fmt(plantTotal / plantOutput)} MWh입니다 — 철강 가공 공장으로는 지나치게 큽니다. 고지서의 kWh를 그대로 적지 않았나요? MWh는 kWh ÷ 1,000입니다(${fmt(plantTotal / 1000)} MWh). 고쳐서 다시 올리거나 지도 5단계에서 바꾸세요.`);
+        }
+        for (const [processId, mwh] of meteredMwh) {
+            const process = fresh.get(processId);
+            if (process && process.output_mass_t > 0 && isImplausibleElectricityIntensity(mwh, process.output_mass_t)) {
+                note('warning', SHEET_PROCESSES, `${process.name}: 공정의 전력 ${fmt(mwh)} MWh는 생산량 1 t당 ${fmt(mwh / process.output_mass_t)} MWh입니다 — 지나치게 큽니다. kWh를 그대로 적지 않았나요? MWh는 kWh ÷ 1,000입니다.`);
+            }
+        }
         const factor = numberOf(text('electricity_ef'));
         const source = labelValue(ELECTRICITY_SOURCE_CHOICES, text('electricity_ef_source'));
         const factorOk = factor !== undefined && factor > 0;
@@ -634,12 +658,12 @@ export async function importActivityWorkbook(
         const several = !isHeat && !shared && whereNames.length >= 2;
         if (several) {
             const unknown = whereNames.filter((item) => { const found = processByName.get(key(item)); return !found || !fresh.has(found.id); });
-            if (unknown.length > 0) { tell('error', `쓰는 공정 ${unknown.map((item) => `「${item}」`).join(', ')}을(를) ${SHEET_PROCESSES} 시트에서 찾지 못했습니다. 이름을 똑같이 적고 ${LIST_SEPARATOR} 로 구분해 주세요.`); continue; }
+            if (unknown.length > 0) { tell('error', `쓰는 공정 ${unknown.map((item) => `「${item}」`).join(', ')}을(를) 찾지 못했습니다. 이름을 똑같이 적고 ${LIST_SEPARATOR} 로 구분해 주세요.${processHint()}`); continue; }
         }
         const process = shared || several || isHeat ? undefined : processByName.get(key(where));
         if (!shared && !where && !isHeat) { tell('error', `「쓰는 공정」이 비어 있습니다. 공정 이름을 적거나, 여러 공정이 같이 쓰면 「${SHARED_PROCESS_LABEL}」을 골라 주세요.`); continue; }
         if (!shared && !several && !isHeat && (!process || !fresh.has(process.id))) {
-            tell('error', process ? `「${where}」은(는) 이미 있던 공정이라 연료를 새로 넣지 않았습니다.` : `쓰는 공정 「${where}」을(를) ${SHEET_PROCESSES} 시트에서 찾지 못했습니다(그 공정이 위에서 만들어지지 못했을 수도 있습니다).`);
+            tell('error', process ? `「${where}」은(는) 이미 있던 공정이라 연료를 새로 넣지 않았습니다.` : `쓰는 공정 「${where}」을(를) 찾지 못했습니다(그 공정이 위에서 만들어지지 못했을 수도 있습니다).${processHint()}`);
             continue;
         }
         const biomass = numberOf(row.values.biomass);
@@ -882,7 +906,7 @@ export async function importActivityWorkbook(
         const tell = (level: ActivityImportIssue['level'], message: string) => note(level, SHEET_PRECURSORS, `${name || '(이름 없음)'}: ${message}`, row.row);
         const process = processByName.get(key(row.values.where));
         if (!process || !fresh.has(process.id)) {
-            tell('error', process ? `「${row.values.where}」은(는) 이미 있던 공정이라 구매 강재를 새로 넣지 않았습니다.` : `쓰는 공정 「${row.values.where ?? '빈 칸'}」을(를) ${SHEET_PROCESSES} 시트에서 찾지 못했습니다.`);
+            tell('error', process ? `「${row.values.where}」은(는) 이미 있던 공정이라 구매 강재를 새로 넣지 않았습니다.` : `쓰는 공정 「${row.values.where ?? '빈 칸'}」을(를) 찾지 못했습니다.${processHint()}`);
             continue;
         }
         if (existingPrecursors.some((item) => item.process_id === process.id && key(item.name) === key(name))) { tell('info', '같은 이름의 구매 강재가 이 공정에 이미 있어 건너뛰었습니다.'); continue; }
