@@ -616,7 +616,7 @@ export default function UploadPage() {
                                     <StatusBadge tone="success">사용 가능</StatusBadge>
                                 </div>
                                 <p className="mt-1 text-sm leading-6 text-slate-600">
-                                    사업장·보고기간, 제품, 공정, 연료, 구매 강재, 역할·책임, 증빙 목록 시트가 있습니다. 칸마다 무엇을 어디서 보고 적는지 설명과 예시가 있고,
+                                    사업장·보고기간, 제품, 공정, 연료, 구매 강재, 역할·책임, 증빙 목록 시트가 있습니다. 품번이 많으면 품번 목록 시트에 생산실적을 붙여 넣고, 해당하는 업체는 사 온 열·보일러 열·공정배출·사내 이송 시트도 적습니다. 칸마다 무엇을 어디서 보고 적는지 설명과 예시가 있고,
                                     연료 종류·공정 이름 등은 목록에서 고릅니다. 한 고지서를 여러 공정이 같이 쓰면 공장 전체 값만 적으면 됩니다 — 앱이 나눕니다.
                                 </p>
                                 <div className="mt-4 flex flex-wrap gap-2">

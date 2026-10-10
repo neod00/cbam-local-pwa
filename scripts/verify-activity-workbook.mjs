@@ -50,13 +50,14 @@ const bytesOf = async (blob) => new Uint8Array(await blob.arrayBuffer());
 const blankBytes = await bytesOf(W.createActivityWorkbook({ countries }));
 const blankZip = fflate.unzipSync(blankBytes);
 const names = W.readActivityWorkbookSheetNames(blankBytes);
-assert.deepEqual(plain(names), ['안내', '1_사업장', '2_제품', '3_공정', '4_연료', '5_구매강재', '6_역할책임', '7_증빙목록', '선택목록']);
+assert.deepEqual(plain(names), ['안내', '1_사업장', '2_제품', '2b_품번목록', '3_공정', '4_연료', '5_구매강재', '6_역할책임', '7_증빙목록', '8_사온열', '9_보일러열', '10_공정배출', '11_사내이송', '선택목록']);
 assert.ok(W.isActivityWorkbookV2(names) && !W.isActivityWorkbookV2(['README', 'Products', 'Processes']), '시트 이름으로 새 서식과 종전 서식을 가린다');
 assert.ok(blankZip['xl/styles.xml'], '머리글 색·입력 칸을 꾸미는 styles.xml이 있다');
 const sheetText = (index) => fflate.strFromU8(blankZip[`xl/worksheets/sheet${index}.xml`]).replaceAll('&apos;', "'").replaceAll('&quot;', '"');
-const lists = sheetText(9);
-for (const [index, columns] of [[3, W.PRODUCT_COLUMNS], [4, W.PROCESS_COLUMNS], [5, W.FUEL_COLUMNS], [6, W.PRECURSOR_COLUMNS], [7, W.RNR_COLUMNS], [8, W.EVIDENCE_COLUMNS]]) {
-  const xml = sheetText(index);
+const lists = sheetText(names.length);
+const sheetIndex = (name) => names.indexOf(name) + 1;
+for (const [sheetName, columns] of [['2_제품', W.PRODUCT_COLUMNS], ['2b_품번목록', W.PART_COLUMNS], ['3_공정', W.PROCESS_COLUMNS], ['4_연료', W.FUEL_COLUMNS], ['5_구매강재', W.PRECURSOR_COLUMNS], ['6_역할책임', W.RNR_COLUMNS], ['7_증빙목록', W.EVIDENCE_COLUMNS], ['8_사온열', W.IMPORTED_HEAT_COLUMNS], ['9_보일러열', W.BOILER_HEAT_COLUMNS], ['10_공정배출', W.PROCESS_EMISSION_COLUMNS], ['11_사내이송', W.TRANSFER_COLUMNS]]) {
+  const xml = sheetText(sheetIndex(sheetName));
   const labels = columns.map((field) => field.label);
   assert.equal(new Set(labels).size, labels.length, '머리글은 겹치지 않는다(머리글 글자로 칸을 찾는다)');
   for (const field of columns) {
@@ -88,7 +89,7 @@ assert.deepEqual(plain(W.ELECTRICITY_SOURCE_CHOICES.map((item) => item.value)), 
 
 // ── 2) 읽기 ──────────────────────────────────────────────────────────
 const blank = W.parseActivityWorkbook(blankBytes);
-assert.deepEqual(plain([blank.products.length, blank.processes.length, blank.fuels.length, blank.precursors.length, blank.rnr.length, blank.evidence.length, Object.keys(blank.installation).length, blank.notes.length]), [0, 0, 0, 0, 0, 0, 0, 0], '빈 서식은 자료 0건 — 설명 줄·예시 줄을 자료로 읽지 않는다');
+assert.deepEqual(plain([blank.products.length, blank.processes.length, blank.fuels.length, blank.precursors.length, blank.rnr.length, blank.evidence.length, blank.parts.length, blank.importedHeat.length, blank.boilerHeat.length, blank.processEmissions.length, blank.transfers.length, Object.keys(blank.installation).length, blank.notes.length]), [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], '빈 서식은 자료 0건 — 설명 줄·예시 줄을 자료로 읽지 않는다');
 
 const sampleBytes = await bytesOf(W.createActivityWorkbook({ countries, fill: W.ACTIVITY_WORKBOOK_SAMPLE }));
 const sample = W.parseActivityWorkbook(sampleBytes);
@@ -118,7 +119,7 @@ const resultsOf = (store) => engine.calculateLocalResults({
 });
 
 const { store, result } = await importOf(sample);
-assert.deepEqual(plain(result.created), { installation: 1, period: 1, products: 2, processes: 2, fuels: 3, precursors: 2 });
+assert.deepEqual(plain(result.created), { installation: 1, period: 1, products: 2, processes: 2, fuels: 3, precursors: 2, transfers: 0 });
 assert.equal(result.issues.filter((issue) => issue.level === 'error').length, 0, `작성 예시는 넣지 못한 것이 없다: ${I.describeActivityImportIssues(result.issues)}`);
 assert.equal(store.data.periods[0].name, '2025년 연간', '1월 1일~12월 31일이면 이름을 「연간」으로 붙인다');
 assert.ok(store.data.processes.every((process) => process.period_id === store.data.periods[0].id), '공정이 보고기간에 연결된다(종전 서식은 연결하지 않았다)');
@@ -169,7 +170,7 @@ assert.deepEqual(plain(splits.items.map((item) => [item.kind, item.problem ?? nu
 
 // 같은 파일을 한 번 더 올려도 두 번 들어가지 않는다.
 const again = await I.importActivityWorkbook(sample, { store, defaultValues, reportInputs: reportOf(store) });
-assert.deepEqual(plain(again.created), { installation: 0, period: 0, products: 0, processes: 0, fuels: 0, precursors: 0 });
+assert.deepEqual(plain(again.created), { installation: 0, period: 0, products: 0, processes: 0, fuels: 0, precursors: 0, transfers: 0 });
 assert.equal(store.data.source_streams.length, 5);
 assert.ok(again.issues.some((issue) => issue.level === 'warning' && /이미 공정이 2개/.test(issue.message)));
 
@@ -331,6 +332,162 @@ const older = fflate.unzipSync(sampleBytes);
 const olderWorkbook = fflate.strFromU8(older['xl/workbook.xml']).replace(/<sheet name="6_역할책임"[^>]*\/>/, '').replace(/<sheet name="7_증빙목록"[^>]*\/>/, '');
 const olderData = W.parseActivityWorkbook(fflate.zipSync({ ...older, 'xl/workbook.xml': fflate.strToU8(olderWorkbook) }));
 assert.deepEqual(plain([olderData.rnr.length, olderData.evidence.length, olderData.notes.length, olderData.products.length]), [0, 0, 0, 2]);
+
+// ── 3-3) 품번 목록 · ③ 연료의 나누는 기준·용도 · ④ 열·공정배출·사내 이송 · ⑤ 사용자 지정 배분·전력 계량기 여럿 ──
+const base = multi([], [], []);
+const withParts = (parts, extra = {}) => ({ ...base, products: [], processes: [], fuels: [], precursors: [], parts: parts.map((values, index) => ({ row: 5 + index, values })), ...extra });
+const partsRun = await importOf(withParts([
+  { part: 'HB-1', cn: '73181582', grade: 'SCM435', mass: '120' },
+  { part: 'HB-2', cn: '73181582', grade: 'SCM435', mass: '80', scrap: '5' },
+  { part: 'NT-1', cn: '73181699', grade: 'SWCH', qty: '1,000,000', unitWeight: '20' },
+  { part: 'NT-2', cn: '73181699', grade: 'SWCH', mass: '10', process: '열처리 공정', alloy_mn_cr_ni: '1.2' },
+  { part: 'WS-1', cn: '73181558', grade: 'SWCH', mass: '4', exported: '아니오' },
+  { part: 'BAD-1', cn: '7318', mass: '1' },
+]));
+const partProducts = partsRun.store.data.products;
+assert.deepEqual(plain(partProducts.map((product) => [product.name, product.cn_code, product.reporting_scope])), [
+  ['SCM435 · CN 73181582', '73181582', 'CBAM_GOOD'], ['SWCH · CN 73181699', '73181699', 'CBAM_GOOD'], ['SWCH · CN 73181558 (비수출)', '73181558', 'NON_CBAM_COPRODUCT'],
+], '품번 여섯 줄(하나는 틀림) → CN·재질·수출 여부가 같은 것끼리 제품 셋');
+const partProcesses = Object.fromEntries(partsRun.store.data.processes.map((process) => [process.name, [process.output_mass_t, process.market_output_mass_t]]));
+assert.deepEqual(plain(partProcesses), { 'SCM435 공정': [200, 200], 'SWCH 공정': [24, 24], '열처리 공정': [10, 10] }, '공정은 재질별(원료가 같은 제품끼리), 「거치는 공정」을 적으면 그 이름. 수량 × 단중(1,000,000개 × 20 g = 20 t) 환산 포함');
+assert.equal(partsRun.store.data.product_output_lines.filter((line) => line.activity_level_role === 'EXCLUDED').reduce((sum, line) => sum + line.output_mass_t, 0), 5, '불량·스크랩은 합산된다');
+assert.equal(partsRun.store.data.product_output_lines.filter((line) => line.process_id === partsRun.store.data.processes.find((process) => process.name === 'SWCH 공정').id && line.activity_level_role !== 'EXCLUDED').length, 2, '한 공정에 제품 라인 둘(수출 · 비수출)');
+const partsReport = I.describeActivityImportIssues(partsRun.result.issues);
+assert.match(partsReport, /\[참고\] 2b_품번목록 — 품번 5개를 CN 코드·재질별로 합쳐 제품 3개, 공정 3개로 만들었습니다/);
+assert.match(partsReport, /\[넣지 못함\] 2b_품번목록 10번째 줄 — 품번 BAD-1: CN 코드는 8자리 숫자입니다/);
+assert.match(partsReport, /\[확인 필요\] 2b_품번목록 5번째 줄 — SCM435 · CN 73181582: 부문특정 파라미터가 비어 있습니다/, '제품 줄의 문제는 품번 목록의 처음 줄로 되돌린다');
+assert.deepEqual(plain(partsRun.store.report.sector_parameters.map((item) => [item.param_key, item.value])), [['alloy_mn_cr_ni', '1.2']], '재질별 첫 값이 제품의 부문특정 파라미터로 간다');
+// 합산한 값으로 계산이 돈다 — 원료를 쓰는 공정 이름은 「<재질> 공정」(예측 가능)이다.
+const partsWithSteel = await importOf(withParts([{ part: 'A', cn: '73181582', grade: 'SCM435', mass: '120' }, { part: 'B', cn: '73181699', grade: 'SCM435', mass: '80' }], { precursors: [{ row: 5, values: { name: '합금강 선재', cn: '72279050', consumed: '200', country: 'South Korea', where: 'SCM435 공정', hasValue: '있음', direct: '2', indirect: '0', evidence: '공급사' } }] }));
+assert.deepEqual(plain(resultsOf(partsWithSteel.store).filter((item) => item.output_mass_t > 0).map((item) => Math.round(item.see_direct_incl_precursor * 1e6) / 1e6)), [2, 2], '같은 원료의 두 CN이 한 공정에서 같은 값(400 ÷ 200)');
+
+// ⑤ 사용자 지정 배분
+const manualLines = (a, b, extra = {}) => [
+  { name: '라인', product: '합금강 볼트', mass: '1000', manualPct: a, manualReason: '가열 시간 비율 실측', manualEvidence: '운전일지', ...extra },
+  { name: '라인', product: '탄소강 너트', mass: '2000', manualPct: b, manualReason: '가열 시간 비율 실측', manualEvidence: '운전일지', ...extra },
+];
+const manualRun = await importOf(multi(manualLines('30', '70'), [], []));
+assert.deepEqual(plain(manualRun.store.data.product_output_lines.map((line) => [line.allocation_basis, line.manual_allocation_percent, line.manual_allocation_reason, line.manual_allocation_evidence])), [['MANUAL', 30, '가열 시간 비율 실측', '운전일지'], ['MANUAL', 70, '가열 시간 비율 실측', '운전일지']]);
+assert.match(I.describeActivityImportIssues((await importOf(multi(manualLines('30', '60'), [], []))).result.issues), /제품 배분 %의 합이 90입니다\. 100이어야 합니다/);
+assert.match(I.describeActivityImportIssues((await importOf(multi(manualLines('30', ''), [], []))).result.issues), /모든 제품 줄에 0 이상의 숫자로 적어야 합니다/);
+const noReason = await importOf(multi(manualLines('30', '70', { manualReason: '', manualEvidence: '' }), [], []));
+assert.match(I.describeActivityImportIssues(noReason.result.issues), /\[확인 필요\] 3_공정 5번째 줄 — 공정 「라인」: 제품 배분을 직접 지정했는데 사유나 증빙이 비어 있습니다/);
+assert.equal((await importOf(multi(manualLines('', ''), [], []))).store.data.product_output_lines[0].allocation_basis, 'MASS', '적지 않으면 생산량 비율');
+
+// ⑤ 전력 계량기가 둘 이상
+const meterRun = await importOf(multi([
+  { name: 'A공정', product: '합금강 볼트', mass: '1000', meter: '1호 계량기', meterTotal: '100' },
+  { name: 'B공정', product: '탄소강 너트', mass: '3000', meter: '1호 계량기' },
+  { name: 'C공정', product: '휠너트', mass: '2000', meter: '2호 계량기', meterTotal: '50', elecBasis: '공정별 계량기 값', electricity: '20' },
+  { name: 'D공정', product: '알루미늄 캡', mass: '3000', meter: '2호 계량기', electricity: '25' },
+], [], []));
+const electricityOf = (run, name) => run.store.data.processes.find((process) => process.name === name);
+assert.deepEqual(plain(['A공정', 'B공정', 'C공정', 'D공정'].map((name) => Math.round(electricityOf(meterRun, name).electricity_mwh * 1e4) / 1e4)), [25, 75, 22.2222, 27.7778], '1호: 생산량 비율 100 → 25 : 75, 2호: 계량값 20 : 25를 고지서 합계 50에 맞춤');
+assert.deepEqual(plain(['A공정', 'C공정'].map((name) => [electricityOf(meterRun, name).electricity_shared_meter.group, electricityOf(meterRun, name).electricity_shared_meter.basis, electricityOf(meterRun, name).electricity_shared_meter.installation_total_mwh])), [['1호 계량기', 'OUTPUT_MASS', 100], ['2호 계량기', 'SUB_METER', 50]]);
+const estimateNoNote = await importOf(multi([
+  { name: 'A공정', product: '합금강 볼트', mass: '1000', meter: '3호', meterTotal: '10', elecBasis: '설비용량·가동시간 추정', electricity: '4' },
+  { name: 'B공정', product: '탄소강 너트', mass: '3000', meter: '3호', electricity: '4' },
+], [], []));
+assert.match(I.describeActivityImportIssues(estimateNoNote.result.issues), /전력을 나누지 못했습니다\(전력 계량기 「3호」\): 추정으로 나눌 때는 계량기가 없는 이유와 추정 근거/);
+
+// ③ 공용 연료를 공정별 계량기 값으로 — 같은 연료 이름으로 공정마다 한 줄, 공장 전체는 한 번만
+const twoProcess = [{ name: '볼트 공정', product: '합금강 볼트', mass: '1000' }, { name: '너트 공정', product: '탄소강 너트', mass: '2000' }];
+const meterFuel = await importOf(multi(twoProcess, [
+  { name: '공용 가스', amount: '6000', where: '볼트 공정', basis: '공정별 계량기 값', total: '10000' },
+  { name: '공용 가스', amount: '3000', where: '너트 공정', basis: '공정별 계량기 값' },
+], []));
+assert.deepEqual(plain(meterFuel.store.data.source_streams.map((stream) => [stream.activity_data, stream.shared_meter.basis, stream.shared_meter.installation_total_activity_data])), [[6000, 'SUB_METER', 10000], [3000, 'SUB_METER', 10000]], '계량값은 그대로, 공장 전체 합계로 정합계수를 적용하도록 기록');
+assert.ok(Math.abs(meterFuel.store.data.processes.reduce((sum, process) => sum + process.direct_attributable_emissions_tco2e, 0) - 10000 * 0.037 * 56.1 / 1000) < 1e-6, '정합계수 적용 후 합계 = 고지서 값의 배출');
+assert.equal(meterFuel.result.created.fuels, 1, '두 줄이지만 연료는 하나');
+const estimateFuelNoNote = await importOf(multi(twoProcess, [
+  { name: '공용 가스', amount: '6000', where: '볼트 공정', basis: '설비용량·가동시간 추정', total: '10000' },
+  { name: '공용 가스', amount: '3000', where: '너트 공정', basis: '설비용량·가동시간 추정' },
+], []));
+assert.match(I.describeActivityImportIssues(estimateFuelNoNote.result.issues), /추정으로 나눌 때는 계량기가 없는 이유와 추정 근거/);
+const measuredButShared = await importOf(multi(twoProcess, [{ name: '공용 가스', amount: '10000', where: W.SHARED_PROCESS_LABEL, basis: '공정별 계량기 값' }], []));
+assert.match(I.describeActivityImportIssues(measuredButShared.result.issues), /같은 연료 이름으로 공정마다 한 줄씩 적지 않아 생산량 비율로 나눴습니다/);
+assert.equal(measuredButShared.store.data.source_streams.length, 2);
+
+// ④ 보일러·스팀 열: 용도 + 공정별 열 사용량
+const boilerFuel = { name: '세척 보일러 가스', amount: '10000', use: '보일러·스팀·온수 (여러 공정이 나눠 씀)', heatSystem: '온수 보일러' };
+const heatWith = multi(twoProcess, [boilerFuel], []);
+heatWith.boilerHeat = [
+  { row: 5, values: { system: '온수 보일러', process: '볼트 공정', quantity: '30', unit: 'Gcal', basis: '계량기로 쟀다' } },
+  { row: 6, values: { system: '온수 보일러', process: '너트 공정', quantity: '70', unit: 'Gcal' } },
+  { row: 7, values: { system: '온수 보일러', process: W.OUTSIDE_PROCESS_LABEL, quantity: '10', unit: 'Gcal', note: '사무동 난방' } },
+];
+const heatRun = await importOf(heatWith);
+const heatStream = heatRun.store.data.source_streams[0];
+assert.deepEqual(plain([heatStream.heat_system.name, heatStream.heat_system.outside_quantity, heatStream.process_id ?? null]), ['온수 보일러', 10, null], '열 공급원 연료는 어느 공정의 직접배출에도 들어가지 않는다');
+assert.deepEqual(plain(heatRun.store.data.processes.map((process) => process.heat_consumption.map((item) => [item.system, item.quantity, item.unit, item.basis]))), [[['온수 보일러', 30, 'Gcal', 'METERED']], [['온수 보일러', 70, 'Gcal', 'METERED']]]);
+assert.ok(Math.abs(resultsOf(heatRun.store).filter((item) => item.output_mass_t > 0).reduce((sum, item) => sum + item.direct_emissions_tco2e, 0) - 10000 * 0.037 * 56.1 / 1000 * 100 / 110) < 1e-6, '연료 배출은 쓴 열량 비율로 공정에 귀속되고 공정 밖 몫(10/110)은 빠진다');
+heatWith.boilerHeat = [];
+const heatProvisional = await importOf(heatWith);
+assert.deepEqual(plain(heatProvisional.store.data.processes.map((process) => [process.heat_consumption[0].unit, process.heat_consumption[0].basis, process.heat_consumption[0].note.startsWith('[임시]')])), [['TJ', 'EFFICIENCY_PROXY', true], ['TJ', 'EFFICIENCY_PROXY', true]], '열 사용량을 모르면 임시 값(표시됨)');
+assert.match(I.describeActivityImportIssues(heatProvisional.result.issues), /\[확인 필요\] 9_보일러열 5번째 줄 — 열 공급원 「온수 보일러」: 공정별 열 사용량이 없어 임시 값/);
+const heatSingle = await importOf(multi([twoProcess[0]], [boilerFuel], []));
+assert.equal(heatSingle.store.data.source_streams.length, 0, '열 공급원을 못 만들면 그 연료를 조용히 한 공정에 넣지 않는다');
+assert.match(I.describeActivityImportIssues(heatSingle.result.issues), /열 공급원 「온수 보일러」을\(를\) 만들지 못해 그 연료를 넣지 않았습니다: 한 공정만 쓰는 열이면/);
+
+// ④ 사 온 열
+const importedHeat = multi(twoProcess, [], []);
+importedHeat.installation.imported_heat = '예';
+importedHeat.importedHeat = [
+  { row: 5, values: { process: '볼트 공정', quantity: '120', unit: 'Gcal', efBasis: '표준값 (연료·보일러 효율)', fuel: '천연가스(LNG·도시가스)', source: '지역난방 고지서' } },
+  { row: 6, values: { process: '너트 공정', quantity: '50', unit: 'GJ', efBasis: '공급사가 준 계수', supplierEf: '60.5' } },
+];
+const importedRun = await importOf(importedHeat);
+assert.deepEqual(plain(importedRun.store.data.processes.map((process) => [process.measurable_heat_import, process.imported_heat_amount, process.imported_heat_unit, process.imported_heat_ef_basis, process.imported_heat_standard_fuel ?? process.imported_heat_supplier_ef_tco2_per_tj])), [['YES', 120, 'Gcal', 'STANDARD_FUEL_BOILER', 'NATURAL_GAS'], ['YES', 50, 'GJ', 'SUPPLIER', 60.5]]);
+importedHeat.importedHeat = [{ row: 5, values: { process: '볼트 공정', quantity: '120', unit: 'Gcal' } }];
+const importedBad = await importOf(importedHeat);
+assert.match(I.describeActivityImportIssues(importedBad.result.issues), /\[넣지 못함\] 8_사온열 5번째 줄 — 볼트 공정: 열 배출계수를 어떻게 정할지 고르세요/);
+assert.ok(importedBad.store.data.processes.every((process) => process.measurable_heat_import === undefined), '틀린 줄은 「아니오」로 두지 않는다 — 앱이 다시 묻는다');
+importedHeat.importedHeat = [];
+assert.match(I.describeActivityImportIssues((await importOf(importedHeat)).result.issues), /사 오는 스팀·온수가 있다고 적혀 있는데 8_사온열 시트가 비어 있습니다/);
+
+// ④ 공정배출·물질수지
+const emissionRun = await importOf({
+  ...multi(twoProcess, [], []),
+  processEmissions: [
+    { row: 5, values: { name: '석회석 투입', kind: '공정배출 — 석회석 등 부원료', amount: '100', where: '볼트 공정', factor: '0.44', factorSource: '공급사·분석 성적서', evidence: '성분분석표' } },
+    { row: 6, values: { name: '슬래그 차감', kind: '물질수지 — 산출 차감 (조강·슬래그)', amount: '10', where: '볼트 공정', factor: '0.5', factorSource: '공급사·분석 성적서', evidence: '성분분석표' } },
+    { row: 7, values: { name: '계수 없는 투입', kind: '물질수지 — 투입 (고철·전극·합금철)', amount: '1', where: '너트 공정' } },
+  ],
+});
+assert.deepEqual(plain(emissionRun.store.data.source_streams.map((stream) => [stream.name, stream.stream_type, stream.method, stream.activity_data])), [['석회석 투입', 'PROCESS_MATERIAL', 'Process Emissions', 100], ['슬래그 차감', 'PROCESS_MATERIAL', 'Mass balance', -10], ['계수 없는 투입', 'PROCESS_MATERIAL', 'Mass balance', 1]], '산출 차감은 양수로 적어도 음수로 저장된다');
+assert.ok(Math.abs(emissionRun.store.data.processes.find((process) => process.name === '볼트 공정').direct_attributable_emissions_tco2e - (100 * 0.44 - 10 * 0.5)) < 1e-9, '공정배출 44 − 물질수지 차감 5 = 39');
+assert.match(I.describeActivityImportIssues(emissionRun.result.issues), /\[확인 필요\] 10_공정배출 7번째 줄 — 계수 없는 투입: 배출계수가 비어 유형의 임시값\(3\)이 들어갔습니다/);
+
+// ④ 사내 이송
+const transferRun = await importOf({
+  ...multi([{ name: '신선 공정', product: '합금강 볼트', mass: '1000' }, { name: '볼트 공정', product: '탄소강 너트', mass: '2000' }], [], []),
+  transfers: [{ row: 5, values: { from: '신선 공정', to: '볼트 공정', mass: '400', note: '와이어' } }],
+});
+assert.deepEqual(plain(transferRun.store.data.internal_transfers.map((item) => [item.mass_t, item.note, item.source_output_line_id ?? null])), [[400, '와이어', null]]);
+const sender = transferRun.store.data.processes.find((process) => process.name === '신선 공정');
+assert.deepEqual(plain([sender.internal_consumption_mass_t, sender.market_output_mass_t, transferRun.result.created.transfers]), [400, 600, 1], '보내는 공정의 내부 소비량·시장 출하량이 맞춰진다(EU 문서 D_Processes)');
+const transferBad = await importOf({
+  ...multi([{ name: '신선 공정', product: '합금강 볼트', mass: '1000' }, { name: '볼트 공정', product: '탄소강 너트', mass: '2000' }], [], []),
+  transfers: [{ row: 5, values: { from: '신선 공정', to: '볼트 공정', mass: '1500' } }, { row: 6, values: { from: '없는 공정', to: '볼트 공정', mass: '1' } }],
+});
+const transferBadReport = I.describeActivityImportIssues(transferBad.result.issues);
+assert.match(transferBadReport, /넘긴 양의 합\(1,500 t\)이 그 공정의 생산량\(1,000 t\)보다 많습니다/);
+assert.match(transferBadReport, /보내는 공정 「없는 공정」을\(를\) 3_공정 시트에서 찾지 못했습니다/);
+assert.equal(transferBad.store.data.internal_transfers.length, 0);
+const twoProducts = await importOf({
+  ...multi([{ name: '신선 공정', product: '합금강 볼트', mass: '1000' }, { name: '신선 공정', product: '탄소강 너트', mass: '500' }, { name: '볼트 공정', product: '휠너트', mass: '2000' }], [], []),
+  transfers: [{ row: 5, values: { from: '신선 공정', to: '볼트 공정', mass: '300', product: '탄소강 너트' } }, { row: 6, values: { from: '신선 공정', to: '볼트 공정', mass: '1' } }],
+});
+const lineOfNut = twoProducts.store.data.product_output_lines.find((line) => line.output_mass_t === 500);
+assert.deepEqual(plain(twoProducts.store.data.internal_transfers.map((item) => [item.source_output_line_id === lineOfNut.id, item.mass_t])), [[true, 300]], '제품이 둘 이상인 공정은 어느 제품을 넘기는지 적어야 한다');
+assert.match(I.describeActivityImportIssues(twoProducts.result.issues), /\[넣지 못함\] 11_사내이송 6번째 줄 — 보내는 공정 「신선 공정」은 제품이 둘 이상입니다/);
+
+// 이 시트들이 없는 서식(앞 판)도 읽힌다 — 새 시트 다섯이 빠져 있어도 오류가 아니다.
+const noExtraSheets = fflate.unzipSync(sampleBytes);
+let strippedWorkbook = fflate.strFromU8(noExtraSheets['xl/workbook.xml']);
+for (const sheetName of ['2b_품번목록', '8_사온열', '9_보일러열', '10_공정배출', '11_사내이송']) strippedWorkbook = strippedWorkbook.replace(new RegExp('<sheet name="' + sheetName + '"[^>]*/>'), '');
+const strippedData = W.parseActivityWorkbook(fflate.zipSync({ ...noExtraSheets, 'xl/workbook.xml': fflate.strToU8(strippedWorkbook) }));
+assert.deepEqual(plain([strippedData.parts.length, strippedData.importedHeat.length, strippedData.boilerHeat.length, strippedData.processEmissions.length, strippedData.transfers.length, strippedData.notes.length]), [0, 0, 0, 0, 0, 0]);
 
 // ── 4) 「확인할 것」 ─────────────────────────────────────────────────
 const broken = structuredClone(plain(sample));
