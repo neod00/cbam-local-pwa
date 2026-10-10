@@ -129,6 +129,23 @@ const careful = {
   precursors: Object.values(STEELS).map((steel) => precursorRow(steel, groupOf(Object.keys(steel.users)[0]), totalOf(steel))),
 };
 
+// (라) 품번 목록(2b)만 채운다: 생산실적을 CN·재질로 합치고, 공정은 재질별로 앱이 만든다(공정 이름은 「<재질> 공정」).
+const GRADE = { P1: 'SCM435', P2: 'SWCH', P3: 'STS304', P4: 'SWCH', P5: 'SCM440-봉강', P6: 'SWCH', P7: 'AL6061' };
+const gradeProcess = (id) => `${GRADE[id]} 공정`;
+const partsOnly = {
+  installation,
+  parts: PRODUCTS.flatMap((product) => [
+    // 같은 제품을 품번 둘로 나눠 적는다(합이 제품 생산량) — 앱이 다시 합친다.
+    { part: `${product.id}-a`, cn: product.cn, grade: GRADE[product.id], mass: String(product.mass * 0.6), exported: product.eu ? '예' : '아니오', scrap: String(product.scrap) },
+    { part: `${product.id}-b`, cn: product.cn, grade: GRADE[product.id], mass: String(product.mass * 0.4), exported: product.eu ? '예' : '아니오' },
+  ]),
+  fuels: FUELS.map((fuel) => fuelRow(fuel, Array.isArray(fuel.users) ? fuel.users.map(gradeProcess).join('; ') : W.SHARED_PROCESS_LABEL)),
+  precursors: Object.values(STEELS).map((steel) => {
+    const first = Object.keys(steel.users)[0];
+    return precursorRow(steel, gradeProcess(first), totalOf(steel));
+  }),
+};
+
 // ── 돌리기 ────────────────────────────────────────────────────────────
 async function run(label, fill) {
   const bytes = new Uint8Array(await W.createActivityWorkbook({ countries, fill }).arrayBuffer());
@@ -154,7 +171,7 @@ async function run(label, fill) {
   return { label, created: result.created, issues: result.issues, see, attribution, readiness, counts: { processes: store.processes.length, streams: store.source_streams.length, precursors: store.precursors.length, lines: store.product_output_lines.length } };
 }
 
-const runs = [await run('(가) 한 공정에 전부', naive), await run('(가2) 한 공정 + 쓰는 제품', naiveAssigned), await run('(나) CN마다 공정', perCn), await run('(다) 원료별 공정', careful)];
+const runs = [await run('(가) 한 공정에 전부', naive), await run('(가2) 한 공정 + 쓰는 제품', naiveAssigned), await run('(나) CN마다 공정', perCn), await run('(다) 원료별 공정', careful), await run('(라) 품번 목록만', partsOnly)];
 const f = (value) => (value === null || value === undefined ? '   —  ' : value.toFixed(3).padStart(6));
 const pct = (value, base) => (value === null || value === undefined ? '' : `(${((value / base - 1) * 100 >= 0 ? '+' : '')}${((value / base - 1) * 100).toFixed(0)}%)`.padStart(7));
 console.log('기준 SEE (직접 + 구매 강재 직접, tCO2e/t)');

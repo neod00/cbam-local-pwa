@@ -1,5 +1,19 @@
 import {
     CARBON_PRICE_CHOICES,
+    expandPartList,
+    FUEL_USE_CHOICES,
+    HEAT_BASIS_CHOICES,
+    HEAT_UNIT_CHOICES,
+    IMPORTED_HEAT_EF_CHOICES,
+    OUTSIDE_PROCESS_LABEL,
+    PART_ROW_BASE,
+    PROCESS_EMISSION_KIND_CHOICES,
+    SHEET_BOILER_HEAT,
+    SHEET_IMPORTED_HEAT,
+    SHEET_PARTS,
+    SHEET_PROCESS_EMISSIONS,
+    SHEET_TRANSFERS,
+    SPLIT_BASIS_CHOICES,
     ELECTRICITY_SOURCE_CHOICES,
     FUEL_FACTOR_SOURCE_CHOICES,
     FUEL_KIND_CHOICES,
@@ -39,7 +53,19 @@ import {
 } from './guided-edit';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
 import type { LocalEntity, Product, ProductionProcess, ProductOutputLine, PurchasedPrecursor, ReportInputs, ReportTranspositionRow, SourceStream, StoreEntityMap, StoreName } from './local-db';
-import { buildImportedHeatUpdate, validateImportedHeatDraft } from './measurable-heat';
+import {
+    buildImportedHeatUpdate,
+    buildProvisionalHeatQuantities,
+    buildSharedHeatUpdates,
+    HEAT_STANDARD_FUELS,
+    validateImportedHeatDraft,
+    validateSharedHeatDraft,
+    type ImportedHeatDraft,
+    type SharedHeatDraft,
+    type SharedHeatDraftConsumer,
+} from './measurable-heat';
+import { calculateSourceStreamEnergyBreakdown } from './source-stream-calculation';
+import type { ElectricitySplitBasis } from './allocation-rules';
 import type { ImportedDefaultValueReference } from './reference-workbooks';
 import { getSectorParameters } from './sector-parameters';
 import { createSourceStreamValidationErrors, firstSourceStreamError, GUIDED_STREAM_KINDS } from './source-stream-input';
@@ -83,7 +109,7 @@ export interface ActivityImportIssue {
 }
 
 export interface ActivityImportResult {
-    created: { installation: number; period: number; products: number; processes: number; fuels: number; precursors: number };
+    created: { installation: number; period: number; products: number; processes: number; fuels: number; precursors: number; transfers: number };
     issues: ActivityImportIssue[];
 }
 
@@ -173,9 +199,14 @@ export async function importActivityWorkbook(
 ): Promise<ActivityImportResult> {
     const { store } = deps;
     const issues: ActivityImportIssue[] = [];
-    const created: ActivityImportResult['created'] = { installation: 0, period: 0, products: 0, processes: 0, fuels: 0, precursors: 0 };
+    // 품번 목록이 있으면 제품·공정 줄로 합쳐 2_제품·3_공정의 줄과 함께 쓴다(품번 줄의 번호는 1000부터 — 끝에서 품번 목록의 줄로 되돌린다).
+    const expansion = expandPartList(data.parts ?? []);
+    const plan = { products: [...data.products, ...expansion.products], processes: [...data.processes, ...expansion.processes] };
+    const created: ActivityImportResult['created'] = { installation: 0, period: 0, products: 0, processes: 0, fuels: 0, precursors: 0, transfers: 0 };
     const note = (level: ActivityImportIssue['level'], sheet: string, message: string, row?: number) => issues.push({ level, sheet, row, message });
     for (const message of data.notes) note('error', '파일', message);
+    for (const problem of expansion.problems) note('error', SHEET_PARTS, problem.message, problem.row);
+    if (expansion.summary) note('info', SHEET_PARTS, expansion.summary);
 
     const [installations, periods, products, existingProcesses, existingStreams, existingPrecursors] = await Promise.all([
         store.list('installations'), store.list('periods'), store.list('products'), store.list('processes'), store.list('source_streams'), store.list('precursors'),
@@ -269,7 +300,7 @@ export async function importActivityWorkbook(
     /** 보고서 입력으로 갈 것들 — 끝에서 한 번에 저장한다 */
     const sectorRows: NonNullable<ReportInputs['sector_parameters']> = [];
     const transpositionRows: ReportTranspositionRow[] = [];
-    for (const row of data.products) {
+    for (const row of plan.products) {
         const name = (row.values.name ?? '').trim();
         if (productByName.has(key(name))) {
             note('info', SHEET_PRODUCTS, `제품 「${name}」은(는) 이미 있어 건너뛰었습니다.`, row.row);
@@ -311,10 +342,12 @@ export async function importActivityWorkbook(
         return saved;
     };
     const meteredMwh = new Map<string, number>();
+    /** 공정별 전력 계량기 정보(이름·그 계량기의 합계·나누는 기준·추정 근거) */
+    const meterOf = new Map<string, { name: string; total?: number; basis?: 'OUTPUT_MASS' | 'SUB_METER' | 'ESTIMATE'; note: string }>();
     /** 이번에 만든 공정의 제품 라인(활동수준 제외 라인은 빼고) */
     const goodLines = new Map<string, ProductOutputLine[]>();
     const groups = new Map<string, ActivityRow[]>();
-    for (const row of data.processes) {
+    for (const row of plan.processes) {
         const name = key(row.values.name);
         if (!name) {
             note('error', SHEET_PROCESSES, '공정 이름이 비어 있어 이 줄을 넣지 못했습니다.', row.row);
@@ -328,7 +361,7 @@ export async function importActivityWorkbook(
             note('info', SHEET_PROCESSES, `공정 「${name}」은(는) 이미 있어 건너뛰었습니다(전력·연료·구매 강재도 그 공정에는 새로 넣지 않습니다).`, rows[0].row);
             continue;
         }
-        const lines: Array<{ product: Product; mass: number }> = [];
+        const lines: Array<{ product: Product; mass: number; pct?: number; reason: string; evidence: string }> = [];
         let scrap = 0;
         let broken = false;
         for (const row of rows) {
@@ -345,13 +378,30 @@ export async function importActivityWorkbook(
                 note('error', SHEET_PROCESSES, `${name}: 불량·스크랩 「${row.values.scrap}」을(를) 0 이상의 숫자로 적어 주세요.`, row.row);
                 broken = true;
             } else {
-                lines.push({ product, mass });
+                lines.push({ product, mass, pct: numberOf(row.values.manualPct), reason: (row.values.manualReason ?? '').trim(), evidence: (row.values.manualEvidence ?? '').trim() });
                 scrap += rowScrap;
             }
         }
         if (broken || lines.length === 0) {
             note('error', SHEET_PROCESSES, `공정 「${name}」을(를) 만들지 못했습니다 — 위 줄을 고쳐 다시 올려 주세요. 이 공정의 연료·구매 강재도 들어가지 않습니다.`, rows[0].row);
             continue;
+        }
+        // 사용자 지정 배분(부속서 III A.2의 예외): 한 줄이라도 적었으면 모든 줄이 적혀 있고 합이 100이어야 한다 — 아니면 조용히 생산량 비율로 두지 않고 막는다.
+        const manual = lines.some((line) => line.pct !== undefined);
+        if (manual) {
+            const bad = lines.filter((line) => line.pct === undefined || Number.isNaN(line.pct) || line.pct < 0);
+            const sum = lines.reduce((total, line) => total + (line.pct ?? 0), 0);
+            if (bad.length > 0) {
+                note('error', SHEET_PROCESSES, `공정 「${name}」: 제품 배분 %를 직접 적으려면 이 공정의 모든 제품 줄에 0 이상의 숫자로 적어야 합니다(${bad.map((line) => `「${line.product.name}」`).join(', ')}이(가) 비었거나 숫자가 아닙니다). 공정을 만들지 못했습니다.`, rows[0].row);
+                continue;
+            }
+            if (Math.abs(sum - 100) > 0.01) {
+                note('error', SHEET_PROCESSES, `공정 「${name}」: 제품 배분 %의 합이 ${Math.round(sum * 1e4) / 1e4}입니다. 100이어야 합니다. 공정을 만들지 못했습니다.`, rows[0].row);
+                continue;
+            }
+            if (lines.some((line) => !line.reason || !line.evidence)) {
+                note('warning', SHEET_PROCESSES, `공정 「${name}」: 제품 배분을 직접 지정했는데 사유나 증빙이 비어 있습니다. 규정은 물리적 관계로 설명되는 사유와 증빙이 있을 때만 이 방법을 인정합니다(부속서 III A.2) — 산정보고서에 「확인 필요」로 남습니다.`, rows[0].row);
+            }
         }
         const draftOf = (product: Product, massT: number, excludedMassT: number): ProcessAnswerDraft => ({
             name, route: rows.map((row) => (row.values.route ?? '').trim()).find(Boolean) ?? '', periodId, product, massT, excludedMassT,
@@ -369,7 +419,8 @@ export async function importActivityWorkbook(
             // 서식의 「제품」 줄은 합격품이다 — EU로 안 나가는 제품의 라인도 활동수준에 들어간다고 적어 둔다(불량·스크랩은 옆 칸으로 따로 받는다).
             // 적어 두지 않으면 엔진이 「이 라인이 스크랩은 아닌지」 확인을 요구한다.
             const role = line.product.reporting_scope === 'NON_CBAM_COPRODUCT' ? { activity_level_role: 'GOOD' as const } : {};
-            const saved = await store.create('product_output_lines', { process_id: process.id, ...buildProcessCreation(draftOf(line.product, line.mass, 0)).productLine, ...role });
+            const manualFields = manual ? { allocation_basis: 'MANUAL' as const, manual_allocation_percent: line.pct ?? 0, manual_allocation_reason: line.reason || undefined, manual_allocation_evidence: line.evidence || undefined } : {};
+            const saved = await store.create('product_output_lines', { process_id: process.id, ...buildProcessCreation(draftOf(line.product, line.mass, 0)).productLine, ...role, ...manualFields });
             goodLines.set(process.id, [...(goodLines.get(process.id) ?? []), saved]);
         }
         if (creation.excludedLine) await store.create('product_output_lines', { process_id: process.id, ...creation.excludedLine });
@@ -384,23 +435,59 @@ export async function importActivityWorkbook(
         }
     }
     const freshList = () => Array.from(fresh.values());
+    // 전력 계량기 이름·합계·기준은 그 공정의 줄들 중 처음 적힌 것을 쓴다.
+    for (const rows of groups.values()) {
+        const process = processByName.get(key(rows[0].values.name));
+        if (!process || !fresh.has(process.id)) continue;
+        const firstOf = (field: string) => rows.map((row) => (row.values[field] ?? '').trim()).find(Boolean) ?? '';
+        const basisValue = labelValue(SPLIT_BASIS_CHOICES, firstOf('elecBasis'));
+        meterOf.set(process.id, { name: firstOf('meter'), total: numberOf(firstOf('meterTotal')), basis: basisValue, note: firstOf('elecNote') });
+    }
 
     // ── 5) 밖에서 산 스팀·온수 ───────────────────────────────────────
     const heatAnswer = yesNo(text('imported_heat'));
+    const importedRows = data.importedHeat ?? [];
     if (heatAnswer === 'NO') {
         for (const process of freshList()) {
             const draft = noImportedHeatDraft(process);
             if (!validateImportedHeatDraft(draft)) await saveProcess(buildImportedHeatUpdate(process, draft));
         }
+        if (importedRows.length > 0) note('warning', SHEET_IMPORTED_HEAT, '1_사업장에서 사 온 열이 「아니오」인데 이 시트에 적힌 줄이 있습니다. 쓰지 않았습니다 — 사 오는 열이 있으면 1_사업장을 「예」로 바꿔 다시 올려 주세요.');
+    } else if (heatAnswer === 'YES' && fresh.size > 0) {
+        const withHeat = new Set<string>();
+        for (const row of importedRows) {
+            const tell = (message: string) => note('error', SHEET_IMPORTED_HEAT, message, row.row);
+            const found = processByName.get(key(row.values.process));
+            if (!found || !fresh.has(found.id)) { tell(`열을 쓴 공정 「${row.values.process ?? '빈 칸'}」을(를) ${SHEET_PROCESSES} 시트에서 찾지 못했습니다.`); continue; }
+            const efBasis = labelValue(IMPORTED_HEAT_EF_CHOICES, row.values.efBasis);
+            const fuelKey = HEAT_STANDARD_FUELS.find((fuel) => key(fuel.label) === key(row.values.fuel))?.key ?? '';
+            const draft: ImportedHeatDraft = {
+                answer: 'YES',
+                amount: numberOf(row.values.quantity) ?? 0,
+                unit: labelValue(HEAT_UNIT_CHOICES, row.values.unit) ?? 'Gcal',
+                basis: efBasis ?? '',
+                supplierEf: numberOf(row.values.supplierEf) ?? 0,
+                fuel: fuelKey,
+                source: (row.values.source ?? '').trim(),
+            };
+            const error = validateImportedHeatDraft(draft);
+            if (error) { tell(`${found.name}: ${error}`); continue; }
+            await saveProcess(buildImportedHeatUpdate(fresh.get(found.id) ?? found, draft));
+            withHeat.add(found.id);
+        }
+        if (importedRows.length === 0) {
+            note('warning', SHEET_INSTALLATION, `밖에서 사 오는 스팀·온수가 있다고 적혀 있는데 ${SHEET_IMPORTED_HEAT} 시트가 비어 있습니다. 열을 쓴 공정과 양·계수를 적어 주세요 — 안 적으면 그 열의 배출이 빠집니다.`);
+        } else {
+            const bare = freshList().filter((process) => !withHeat.has(process.id));
+            if (bare.length > 0) note('info', SHEET_IMPORTED_HEAT, `사 온 열을 적지 않은 공정: ${bare.map((process) => `「${process.name}」`).join(', ')}. 열을 쓰지 않는 공정이면 그대로 두세요 — 지도 4단계가 이 공정에는 다시 묻습니다.`);
+        }
     } else if (fresh.size > 0) {
-        note(heatAnswer === 'YES' ? 'warning' : 'info', SHEET_INSTALLATION, heatAnswer === 'YES'
-            ? '밖에서 사 오는 스팀·온수가 있다고 적혀 있습니다. 이 서식에는 그 양을 적는 칸이 없으니 지도 4단계에서 입력하세요(사 온 열량·공급사 계수).'
-            : '「밖에서 사 오는 스팀·온수가 있나요?」가 비어 있습니다. 없으면 「아니오」로 적어 주세요 — 비워 두면 앱이 다시 묻습니다.');
+        note('info', SHEET_INSTALLATION, '「밖에서 사 오는 스팀·온수가 있나요?」가 비어 있습니다. 없으면 「아니오」로 적어 주세요 — 비워 두면 앱이 다시 묻습니다.');
     }
 
     // ── 6) 전력 ──────────────────────────────────────────────────────
     if (fresh.size > 0) {
-        const total = numberOf(text('electricity_total_mwh'));
+        const plantTotal = numberOf(text('electricity_total_mwh'));
         const factor = numberOf(text('electricity_ef'));
         const source = labelValue(ELECTRICITY_SOURCE_CHOICES, text('electricity_ef_source'));
         const factorOk = factor !== undefined && factor > 0;
@@ -411,42 +498,79 @@ export async function importActivityWorkbook(
             const draft = { mwh, ef: factorOk ? factor : PROCESS_PLACEHOLDER_EF, efSource: factorOk ? source ?? '' : '', allocationNote: process.electricity_allocation_note ?? '' };
             if (!validateElectricityDraft(draft)) await saveProcess(buildElectricityUpdate(process, draft));
         };
-        const targets = freshList();
-        const metered = targets.filter((process) => meteredMwh.has(process.id));
-        let applied = false;
-        if (total !== undefined && !(total > 0)) {
-            note('error', SHEET_INSTALLATION, `공장 전체 전력 사용량 「${text('electricity_total_mwh')}」을(를) 0보다 큰 숫자로 적어 주세요.`);
-        } else if (total !== undefined && targets.length === 1) {
-            await applyFactor(targets[0], total);
-            applied = true;
-        } else if (total !== undefined && metered.length > 0 && metered.length < targets.length) {
-            note('error', SHEET_PROCESSES, `전력을 넣지 못했습니다: 공장 전체 전력(${fmt(total)} MWh)이 있는데 공정별 전력은 ${metered.length}/${targets.length}개 공정에만 적혀 있습니다. 모든 공정에 적거나 모두 비워 주세요(비우면 생산량 비율로 나눕니다).`);
-        } else if (total !== undefined) {
-            // 공정별 값이 없으면 생산량 비율로, 모두 있으면 그 값을 고지서 합계에 맞춘다 — 지도 5단계 「전력 나누기」와 같은 계산·같은 기록.
-            const bySubMeter = metered.length === targets.length;
-            const draft: ElectricitySplitDraft = {
-                group: ELECTRICITY_METER_GROUP,
-                totalMwh: total,
-                basis: bySubMeter ? 'SUB_METER' : 'OUTPUT_MASS',
-                rows: targets.map((process) => ({ processId: process.id, processName: process.name, value: bySubMeter ? meteredMwh.get(process.id) ?? 0 : process.output_mass_t })),
-                note: '',
-            };
-            const error = validateElectricitySplitDraft(draft);
-            if (error) {
-                note('error', SHEET_INSTALLATION, `전력을 나누지 못했습니다: ${error}`);
-            } else {
-                const plan = computeElectricitySplit(draft);
-                if (plan.caution) note('warning', SHEET_PROCESSES, plan.caution);
-                for (const updated of buildElectricitySplitUpdates(targets, plan)) await applyFactor(await saveProcess(updated), updated.electricity_mwh);
-                applied = true;
+        /** 계량기 하나(= 고지서 하나)에 속한 공정들의 전력을 정한다. 반환: 넣었는가. */
+        const runMeter = async (procs: ProductionProcess[], total: number | undefined, groupName: string, chosen: 'OUTPUT_MASS' | 'SUB_METER' | 'ESTIMATE' | undefined, noteText: string, sheet: string, label: string): Promise<boolean> => {
+            if (procs.length === 0) return false;
+            const metered = procs.filter((process) => meteredMwh.has(process.id));
+            if (total !== undefined && !(total > 0)) {
+                note('error', sheet, `${label}의 전력 사용량 「${total}」을(를) 0보다 큰 숫자로 적어 주세요.`);
+                return false;
             }
-        } else if (metered.length > 0) {
-            for (const process of metered) await applyFactor(process, meteredMwh.get(process.id) ?? 0);
-            applied = true;
-            const without = targets.filter((process) => !meteredMwh.has(process.id));
-            if (without.length > 0) note('warning', SHEET_PROCESSES, `전력이 비어 있는 공정: ${without.map((process) => `「${process.name}」`).join(', ')}. 전기를 쓰지 않는 공정이 아니라면 적어 주세요.`);
-        } else {
-            note('warning', SHEET_INSTALLATION, '전력 사용량이 없습니다. 한전 고지서 12개월 합계(kWh ÷ 1,000)를 「공장 전체 전력 사용량」에 적어 주세요.');
+            if (total !== undefined && procs.length === 1) {
+                await applyFactor(procs[0], total);
+                return true;
+            }
+            if (total !== undefined && chosen === undefined && metered.length > 0 && metered.length < procs.length) {
+                note('error', SHEET_PROCESSES, `전력을 넣지 못했습니다: ${label}의 전력(${fmt(total)} MWh)이 있는데 공정별 전력은 ${metered.length}/${procs.length}개 공정에만 적혀 있습니다. 모든 공정에 적거나 모두 비워 주세요(비우면 생산량 비율로 나눕니다).`);
+                return false;
+            }
+            if (total !== undefined) {
+                // 공정별 값이 없으면 생산량 비율로, 모두 있으면 그 값을 고지서 합계에 맞춘다 — 지도 5단계 「전력 나누기」와 같은 계산·같은 기록.
+                const bySubMeter = chosen ? chosen !== 'OUTPUT_MASS' : metered.length === procs.length;
+                if (bySubMeter && metered.length < procs.length) {
+                    note('error', SHEET_PROCESSES, `전력을 넣지 못했습니다: ${label}을(를) ${chosen === 'ESTIMATE' ? '추정' : '계량기 값'}으로 나누려면 모든 공정의 「이 공정의 전력」(${chosen === 'ESTIMATE' ? '추정 사용량' : '계량값'})을 적어야 합니다.`);
+                    return false;
+                }
+                const basis: ElectricitySplitBasis = chosen === 'ESTIMATE' ? 'INDIRECT_ESTIMATE' : bySubMeter ? 'SUB_METER' : 'OUTPUT_MASS';
+                const draft: ElectricitySplitDraft = {
+                    group: groupName,
+                    totalMwh: total,
+                    basis,
+                    rows: procs.map((process) => ({ processId: process.id, processName: process.name, value: basis === 'OUTPUT_MASS' ? process.output_mass_t : meteredMwh.get(process.id) ?? 0 })),
+                    note: noteText,
+                };
+                const error = validateElectricitySplitDraft(draft);
+                if (error) {
+                    note('error', sheet, `전력을 나누지 못했습니다(${label}): ${error}`);
+                    return false;
+                }
+                const splitPlan = computeElectricitySplit(draft);
+                if (splitPlan.caution) note('warning', SHEET_PROCESSES, splitPlan.caution);
+                for (const updated of buildElectricitySplitUpdates(procs, splitPlan)) await applyFactor(await saveProcess(updated), updated.electricity_mwh);
+                return true;
+            }
+            if (metered.length > 0) {
+                for (const process of metered) await applyFactor(process, meteredMwh.get(process.id) ?? 0);
+                const without = procs.filter((process) => !meteredMwh.has(process.id));
+                if (without.length > 0) note('warning', SHEET_PROCESSES, `전력이 비어 있는 공정: ${without.map((process) => `「${process.name}」`).join(', ')}. 전기를 쓰지 않는 공정이 아니라면 적어 주세요.`);
+                return true;
+            }
+            return false;
+        };
+        const everyone = freshList();
+        const plantProcesses = everyone.filter((process) => !meterOf.get(process.id)?.name);
+        const namedMeters = new Map<string, ProductionProcess[]>();
+        for (const process of everyone) {
+            const name = meterOf.get(process.id)?.name;
+            if (name) namedMeters.set(name, [...(namedMeters.get(name) ?? []), process]);
+        }
+        let applied = false;
+        const plantInfo = plantProcesses.map((process) => meterOf.get(process.id)).find((item) => item?.basis || item?.note);
+        if (plantProcesses.length > 0) {
+            const ok = await runMeter(plantProcesses, plantTotal, ELECTRICITY_METER_GROUP, plantInfo?.basis, plantInfo?.note ?? '', SHEET_INSTALLATION, '공장 전체 전력');
+            applied = applied || ok;
+            if (!ok && plantTotal === undefined && plantProcesses.every((process) => !meteredMwh.has(process.id)) && namedMeters.size === 0) {
+                note('warning', SHEET_INSTALLATION, '전력 사용량이 없습니다. 한전 고지서 12개월 합계(kWh ÷ 1,000)를 「공장 전체 전력 사용량」에 적어 주세요.');
+            }
+        }
+        for (const [meterName, procs] of namedMeters) {
+            const info = procs.map((process) => meterOf.get(process.id)).find((item) => item?.total !== undefined || item?.basis || item?.note);
+            const total = procs.map((process) => meterOf.get(process.id)?.total).find((value) => value !== undefined);
+            const ok = await runMeter(procs, total, meterName, info?.basis, info?.note ?? '', SHEET_PROCESSES, `전력 계량기 「${meterName}」`);
+            if (!ok && total === undefined && procs.every((process) => !meteredMwh.has(process.id))) {
+                note('warning', SHEET_PROCESSES, `전력 계량기 「${meterName}」의 전력이 없습니다. 「그 계량기의 전력 (MWh)」을 적어 주세요.`);
+            }
+            applied = applied || ok;
         }
         if (applied && !factorOk) {
             note('warning', SHEET_INSTALLATION, `전력 배출계수가 비어 있어 임시값 ${PROCESS_PLACEHOLDER_EF}을(를) 출처 없이 넣었습니다. 계수와 출처를 확인해 지도 5단계에서 바꾸세요.`);
@@ -458,8 +582,36 @@ export async function importActivityWorkbook(
     // ── 7) 연료 ──────────────────────────────────────────────────────
     let streams: SourceStream[] = [...existingStreams];
     const touched = new Set<string>();
+    // 같은 연료 이름으로 공정마다 한 줄씩 적은 「공정별 계량기 값」·「추정」 줄은 한 항목으로 묶는다(양 칸 = 그 공정의 값, 공장 전체는 「공장 전체 사용량」).
+    type FuelItem = ActivityRow & { perProcess?: Array<{ where: string; value: number | undefined }>; splitBasis?: 'OUTPUT_MASS' | 'SUB_METER' | 'ESTIMATE' };
+    const fuelItems: FuelItem[] = [];
+    {
+        const groupedAt = new Map<string, number>();
+        for (const row of data.fuels) {
+            const nameKey = key(row.values.name);
+            const basisValue = labelValue(SPLIT_BASIS_CHOICES, row.values.basis);
+            const wheres = namesOf(row.values.where);
+            const singleProcess = wheres.length === 1 && ![key(SHARED_PROCESS_LABEL), '공용', '공장 전체'].includes(key(wheres[0]));
+            if (basisValue && basisValue !== 'OUTPUT_MASS' && singleProcess && nameKey) {
+                const at = groupedAt.get(nameKey);
+                const entry = { where: wheres[0], value: numberOf(row.values.amount) };
+                if (at === undefined) {
+                    groupedAt.set(nameKey, fuelItems.length);
+                    fuelItems.push({ row: row.row, values: { ...row.values, amount: row.values.total ?? '', where: wheres[0] }, perProcess: [entry], splitBasis: basisValue });
+                } else {
+                    const item = fuelItems[at];
+                    item.perProcess = [...(item.perProcess ?? []), entry];
+                    item.values = { ...item.values, where: `${item.values.where}${LIST_SEPARATOR} ${wheres[0]}`, amount: item.values.amount || (row.values.total ?? '') };
+                }
+                continue;
+            }
+            fuelItems.push({ ...row, splitBasis: basisValue });
+        }
+    }
+    /** 용도가 보일러·스팀인 연료 — 열을 받는 공정이 정해진 뒤(9_보일러열)에 한꺼번에 만든다 */
+    const heatFuels: Array<{ system: string; draft: Omit<SourceStream, keyof LocalEntity>; row: number; name: string }> = [];
     const meterGroups = existingStreams.map((stream) => stream.shared_meter?.group?.trim()).filter((group): group is string => Boolean(group));
-    for (const row of data.fuels) {
+    for (const row of fuelItems) {
         const name = (row.values.name ?? '').trim();
         const tell = (level: ActivityImportIssue['level'], message: string) => note(level, SHEET_FUELS, `${name || '(이름 없음)'}: ${message}`, row.row);
         const choice = FUEL_KIND_CHOICES.find((item) => key(item.label) === key(row.values.kind) || key(item.label.split(' (')[0]) === key(row.values.kind));
@@ -473,19 +625,20 @@ export async function importActivityWorkbook(
         if (Number.isNaN(ncv) || Number.isNaN(factor)) { tell('error', '순발열량·배출계수는 숫자로 적거나 비워 주세요.'); continue; }
         const own = ncv !== undefined || factor !== undefined;
         const factorSource = labelValue(FUEL_FACTOR_SOURCE_CHOICES, row.values.factorSource);
+        const isHeat = labelValue(FUEL_USE_CHOICES, row.values.use) === 'HEAT_SYSTEM';
         if (own && !factorSource) { tell('error', '순발열량·배출계수를 직접 적었으면 「계수 출처」도 목록에서 골라 주세요. 기본값을 쓰려면 두 칸을 비우세요.'); continue; }
         const where = (row.values.where ?? '').trim();
         const whereNames = namesOf(where);
-        const shared = whereNames.some((item) => key(item) === key(SHARED_PROCESS_LABEL) || key(item) === '공용' || key(item) === '공장 전체');
+        const shared = !isHeat && whereNames.some((item) => key(item) === key(SHARED_PROCESS_LABEL) || key(item) === '공용' || key(item) === '공장 전체');
         // 공정 이름을 ; 로 여럿 적으면 그 공정들끼리만 나눈다(열처리로처럼 일부 제품만 거치는 설비).
-        const several = !shared && whereNames.length >= 2;
+        const several = !isHeat && !shared && whereNames.length >= 2;
         if (several) {
             const unknown = whereNames.filter((item) => { const found = processByName.get(key(item)); return !found || !fresh.has(found.id); });
             if (unknown.length > 0) { tell('error', `쓰는 공정 ${unknown.map((item) => `「${item}」`).join(', ')}을(를) ${SHEET_PROCESSES} 시트에서 찾지 못했습니다. 이름을 똑같이 적고 ${LIST_SEPARATOR} 로 구분해 주세요.`); continue; }
         }
-        const process = shared || several ? undefined : processByName.get(key(where));
-        if (!shared && !where) { tell('error', `「쓰는 공정」이 비어 있습니다. 공정 이름을 적거나, 여러 공정이 같이 쓰면 「${SHARED_PROCESS_LABEL}」을 골라 주세요.`); continue; }
-        if (!shared && !several && (!process || !fresh.has(process.id))) {
+        const process = shared || several || isHeat ? undefined : processByName.get(key(where));
+        if (!shared && !where && !isHeat) { tell('error', `「쓰는 공정」이 비어 있습니다. 공정 이름을 적거나, 여러 공정이 같이 쓰면 「${SHARED_PROCESS_LABEL}」을 골라 주세요.`); continue; }
+        if (!shared && !several && !isHeat && (!process || !fresh.has(process.id))) {
             tell('error', process ? `「${where}」은(는) 이미 있던 공정이라 연료를 새로 넣지 않았습니다.` : `쓰는 공정 「${where}」을(를) ${SHEET_PROCESSES} 시트에서 찾지 못했습니다(그 공정이 위에서 만들어지지 못했을 수도 있습니다).`);
             continue;
         }
@@ -519,7 +672,11 @@ export async function importActivityWorkbook(
         if ((shared || several) && targets.length >= 2) {
             // 지도 4단계 「연료 나누기」와 같은 계산·같은 행 — 계량기 이름은 연료 이름, 기준은 생산량 비율.
             const toStorage = (value: number) => (kind.litres ? litresToTonnes(value, kind.litres.densityKgPerL) : value);
-            const split: FuelSplitDraft = { group: name, total: amount, basis: 'OUTPUT_MASS', rows: targets.map((item) => ({ processId: item.id, processName: item.name, value: item.output_mass_t })), note: '' };
+            const wantsMeasured = row.splitBasis !== undefined && row.splitBasis !== 'OUTPUT_MASS';
+            if (wantsMeasured && !row.perProcess) tell('warning', `나누는 기준이 「${SPLIT_BASIS_CHOICES.find((choice) => choice.value === row.splitBasis)?.label}」인데 같은 연료 이름으로 공정마다 한 줄씩 적지 않아 생산량 비율로 나눴습니다. 공정마다 한 줄에 그 공정의 값을 적어 주세요.`);
+            const splitBasis = wantsMeasured && row.perProcess ? row.splitBasis ?? 'OUTPUT_MASS' : 'OUTPUT_MASS';
+            const valueOf = (item: ProductionProcess) => (splitBasis === 'OUTPUT_MASS' ? item.output_mass_t : row.perProcess?.find((entry) => key(entry.where) === key(item.name))?.value ?? 0);
+            const split: FuelSplitDraft = { group: name, total: amount, basis: splitBasis, rows: targets.map((item) => ({ processId: item.id, processName: item.name, value: valueOf(item) })), note: (row.values.basisNote ?? '').trim() };
             const error = validateFuelSplitDraft(split, meterGroups);
             if (error) { tell('error', error); continue; }
             const plan = computeFuelSplit(split, toStorage);
@@ -537,15 +694,22 @@ export async function importActivityWorkbook(
             updates.push(...changes.update);
             meterGroups.push(name);
         } else {
-            const target = shared || several ? targets[0] : process;
+            const target = isHeat ? freshList()[0] : shared || several ? targets[0] : process;
             if (!target) { tell('error', '넣을 공정이 없습니다 — 공정이 먼저 만들어져야 합니다.'); continue; }
             // 한 공정 안에서는 연료가 제품에 생산량 비율로 나뉜다 — 일부 제품만 거치는 설비라면 공정을 나눠 적어야 한다.
-            if ((goodLines.get(target.id)?.length ?? 0) >= 2 && PARTIAL_ROUTE_FUEL.test(name)) {
+            if (!isHeat && (goodLines.get(target.id)?.length ?? 0) >= 2 && PARTIAL_ROUTE_FUEL.test(name)) {
                 tell('warning', `공정 「${target.name}」에는 제품이 ${goodLines.get(target.id)?.length}개 있어 이 연료가 모든 제품에 생산량 비율로 나뉩니다. 이름으로 보아 일부 제품만 거치는 설비의 연료일 수 있습니다 — 그렇다면 ${SHEET_PROCESSES} 시트에서 그 제품들을 별도 공정으로 적고 이 연료를 그 공정에 넣으세요.`);
             }
             if (streams.some((stream) => stream.process_id === target.id && key(stream.name) === key(name))) { tell('info', '같은 이름의 연료가 이 공정에 이미 있어 건너뛰었습니다.'); continue; }
             const answer: FuelAnswer = { kind, amount: String(amount), name, ncv: String(ncvValue), factor: String(factorValue), factorSource: sourceType, source: sourceText };
-            drafts.push({ ...buildFuelStreamDraft(answer, target), ...fractions });
+            const built = { ...buildFuelStreamDraft(answer, target), ...fractions };
+            if (isHeat) {
+                const invalidHeat = firstSourceStreamError(createSourceStreamValidationErrors(built));
+                if (invalidHeat) { tell('error', invalidHeat); continue; }
+                heatFuels.push({ system: (row.values.heatSystem ?? '').trim() || name, draft: built, row: row.row, name });
+                continue;
+            }
+            drafts.push(built);
         }
         const invalid = [...drafts, ...updates].map((draft) => firstSourceStreamError(createSourceStreamValidationErrors(draft))).find(Boolean);
         if (invalid) { tell('error', invalid); continue; }
@@ -567,6 +731,94 @@ export async function importActivityWorkbook(
         }
         created.fuels += 1;
     }
+    // ── 7b) 보일러·스팀 열 — 열을 받는 공정(9_보일러열)과 함께 열 공급원으로 만든다(지도 4단계 「보일러·스팀」과 같은 검증·같은 빌더) ──
+    {
+        const systems = Array.from(new Set(heatFuels.map((item) => item.system)));
+        for (const system of systems) {
+            const members = heatFuels.filter((item) => item.system === system);
+            const heatRows = (data.boilerHeat ?? []).filter((row) => key(row.values.system) === key(system));
+            const tellSystem = (message: string, row?: number) => note('error', SHEET_BOILER_HEAT, `${system}: ${message}`, row ?? members[0].row);
+            const consumers: SharedHeatDraftConsumer[] = [];
+            let outsideQuantity = 0;
+            let outsideUnit: SharedHeatDraft['outsideUnit'] = 'Gcal';
+            let outsideNote = '';
+            let failed = false;
+            const unquantified: ProductionProcess[] = [];
+            for (const row of heatRows) {
+                const where = (row.values.process ?? '').trim();
+                const quantity = numberOf(row.values.quantity);
+                const unit = labelValue(HEAT_UNIT_CHOICES, row.values.unit) ?? 'Gcal';
+                const basis = labelValue(HEAT_BASIS_CHOICES, row.values.basis) ?? 'METERED';
+                if (Number.isNaN(quantity)) { tellSystem(`쓴 열의 양 「${row.values.quantity}」을(를) 숫자로 적어 주세요.`, row.row); failed = true; continue; }
+                if (where === OUTSIDE_PROCESS_LABEL || where.startsWith('(공정 밖')) {
+                    if (quantity === undefined) { tellSystem('공정 밖의 열 사용량은 비울 수 없습니다 — 양을 적어 주세요.', row.row); failed = true; continue; }
+                    outsideQuantity += quantity;
+                    outsideUnit = unit;
+                    outsideNote = (row.values.note ?? '').trim();
+                    continue;
+                }
+                const found = processByName.get(key(where));
+                if (!found || !fresh.has(found.id)) { tellSystem(`열을 받는 곳 「${where || '빈 칸'}」을(를) ${SHEET_PROCESSES} 시트에서 찾지 못했습니다.`, row.row); failed = true; continue; }
+                if (quantity === undefined) { unquantified.push(fresh.get(found.id) ?? found); continue; }
+                consumers.push({ processId: found.id, quantity, unit, basis, note: (row.values.note ?? '').trim() });
+            }
+            if (failed) { note('error', SHEET_BOILER_HEAT, `열 공급원 「${system}」을(를) 만들지 못해 그 연료(${members.map((item) => `「${item.name}」`).join(', ')})를 넣지 않았습니다 — 위 줄을 고쳐 다시 올려 주세요.`, members[0].row); continue; }
+            // 열 사용량을 모르면 앱의 임시 계산(연료 에너지 × 기준효율 70%를 생산량 비율로)을 쓴다 — 「[임시]」로 표시되어 계속 확인을 요구한다.
+            if (consumers.length === 0 || unquantified.length > 0) {
+                const receivers = unquantified.length > 0 ? unquantified : freshList();
+                const fuelEnergyTj = members.reduce((sum, item) => sum + calculateSourceStreamEnergyBreakdown({ ...item.draft, id: 'temp', created_at: '', updated_at: '' } as SourceStream).total, 0);
+                const provisional = buildProvisionalHeatQuantities({ fuelEnergyTj, rows: receivers.map((process) => ({ processId: process.id, weight: process.output_mass_t })) });
+                if (provisional.length === 0) { note('error', SHEET_BOILER_HEAT, `열 공급원 「${system}」: 쓴 열의 양이 없어 임시로도 채우지 못했습니다(공정의 생산량과 연료 사용량이 필요합니다). 그 연료를 넣지 않았습니다.`, members[0].row); continue; }
+                for (const item of provisional) consumers.push({ processId: item.processId, quantity: item.quantityTj, unit: 'TJ', basis: 'EFFICIENCY_PROXY', note: item.note });
+                note('warning', SHEET_BOILER_HEAT, `열 공급원 「${system}」: 공정별 열 사용량이 없어 임시 값(연료 에너지 × 70%를 생산량 비율로)을 넣었습니다. 규정은 쓴 열량 기준 귀속을 요구하므로 공정별 열 사용량을 받아 ${SHEET_BOILER_HEAT}에 적어 주세요.`, members[0].row);
+            }
+            const pending = members.map((item, index) => ({ ...item.draft, id: `pending_${index}`, created_at: '', updated_at: '' }) as SourceStream);
+            const heatDraft: SharedHeatDraft = { name: system, streamIds: pending.map((item) => item.id), consumers, outsideQuantity, outsideUnit, outsideNote };
+            const heatError = validateSharedHeatDraft(heatDraft, { processes: freshList(), sourceStreams: [...streams, ...pending] });
+            if (heatError) { note('error', SHEET_BOILER_HEAT, `열 공급원 「${system}」을(를) 만들지 못해 그 연료를 넣지 않았습니다: ${heatError}`, members[0].row); continue; }
+            const createdStreams: SourceStream[] = [];
+            for (const item of members) createdStreams.push(await store.create('source_streams', { ...item.draft, process_id: consumers[0].processId }));
+            streams.push(...createdStreams);
+            const result = buildSharedHeatUpdates(freshList(), streams, { ...heatDraft, streamIds: createdStreams.map((item) => item.id) });
+            for (const changed of result.sourceStreams) {
+                const saved = await store.update('source_streams', changed);
+                streams = streams.map((stream) => (stream.id === saved.id ? saved : stream));
+            }
+            for (const changed of result.processes) await saveProcess(changed);
+            for (const consumer of consumers) touched.add(consumer.processId);
+            created.fuels += createdStreams.length;
+        }
+    }
+
+    // ── 7c) 공정배출·물질수지 ───────────────────────────────────────
+    for (const row of data.processEmissions ?? []) {
+        const name = (row.values.name ?? '').trim();
+        const tell = (level: ActivityImportIssue['level'], message: string) => note(level, SHEET_PROCESS_EMISSIONS, `${name || '(이름 없음)'}: ${message}`, row.row);
+        const choice = PROCESS_EMISSION_KIND_CHOICES.find((item) => key(item.label) === key(row.values.kind) || key(item.label.split(' — ')[0]) === key(row.values.kind));
+        const kind = GUIDED_STREAM_KINDS.find((item) => item.key === choice?.key);
+        const amount = numberOf(row.values.amount);
+        const factor = numberOf(row.values.factor);
+        const found = processByName.get(key(row.values.where));
+        if (!name) { tell('error', '배출원 이름이 비어 있어 넣지 못했습니다.'); continue; }
+        if (!kind) { tell('error', `종류 「${row.values.kind ?? '빈 칸'}」을(를) 목록에서 찾지 못했습니다. 목록에서 골라 주세요.`); continue; }
+        if (!(amount !== undefined && amount > 0)) { tell('error', `연간 양 「${row.values.amount ?? '빈 칸'}」을(를) 0보다 큰 숫자로 적어 주세요(산출 차감도 양수로).`); continue; }
+        if (Number.isNaN(factor)) { tell('error', '배출계수는 숫자로 적거나 비워 주세요.'); continue; }
+        if (!found || !fresh.has(found.id)) { tell('error', `쓰는 공정 「${row.values.where ?? '빈 칸'}」을(를) ${SHEET_PROCESSES} 시트에서 찾지 못했습니다.`); continue; }
+        const sourceChoice = labelValue(FUEL_FACTOR_SOURCE_CHOICES, row.values.factorSource);
+        if (factor !== undefined && !sourceChoice) { tell('error', '배출계수를 적었으면 「계수 출처」도 목록에서 골라 주세요.'); continue; }
+        if (factor === undefined) tell('warning', `배출계수가 비어 유형의 임시값(${kind.defaults.emission_factor_tco2e_per_unit})이 들어갔습니다. 성분분석표의 값으로 바꿔 주세요(탄소함량 × 3.664).`);
+        const evidence = (row.values.evidence ?? '').trim();
+        if (!evidence) tell('warning', '근거 자료가 비어 있습니다. 성분분석표·투입 대장 등을 적어 주세요.');
+        const answer: FuelAnswer = { kind, amount: String(amount), name, ncv: '0', factor: String(factor ?? kind.defaults.emission_factor_tco2e_per_unit), factorSource: factor !== undefined && sourceChoice ? sourceChoice : kind.defaults.factor_source_type, source: evidence || MISSING_EVIDENCE_TEXT };
+        const draft = { ...buildFuelStreamDraft(answer, fresh.get(found.id) ?? found), ...(kind.allowsNegative ? { activity_data: -amount } : {}) };
+        const invalid = firstSourceStreamError(createSourceStreamValidationErrors(draft));
+        if (invalid) { tell('error', invalid); continue; }
+        const saved = await store.create('source_streams', draft);
+        streams.push(saved);
+        touched.add(found.id);
+        created.fuels += 1;
+    }
+
     // 연료를 넣은 공정의 직접배출을 「배출원 합계」로 맞춘다(지도 4단계·연료 나누기와 같다) — 안 맞추면 연료가 계산에 들어가지 않는다.
     for (const processId of touched) {
         const process = fresh.get(processId);
@@ -577,6 +829,46 @@ export async function importActivityWorkbook(
     const fuelless = freshList().filter((process) => !touched.has(process.id));
     if (fuelless.length > 0) {
         note('info', SHEET_FUELS, `연료가 하나도 없는 공정: ${fuelless.map((process) => `「${process.name}」`).join(', ')}. 연료를 쓰지 않는 공정이 맞는지 확인하세요.`);
+    }
+
+    // ── 7d) 사내 이송 — 한 공정의 산출물을 다른 공정이 원료로 쓴 양(지도 3단계의 사내 이송과 같은 기록) ──
+    {
+        const sent = new Map<string, number>();
+        const merged = new Map<string, { from: ProductionProcess; to: ProductionProcess; mass: number; product: string; note: string; row: number }>();
+        for (const row of data.transfers ?? []) {
+            const tell = (message: string) => note('error', SHEET_TRANSFERS, message, row.row);
+            const from = processByName.get(key(row.values.from));
+            const to = processByName.get(key(row.values.to));
+            const mass = numberOf(row.values.mass);
+            if (!from || !fresh.has(from.id)) { tell(`보내는 공정 「${row.values.from ?? '빈 칸'}」을(를) ${SHEET_PROCESSES} 시트에서 찾지 못했습니다.`); continue; }
+            if (!to || !fresh.has(to.id)) { tell(`받는 공정 「${row.values.to ?? '빈 칸'}」을(를) ${SHEET_PROCESSES} 시트에서 찾지 못했습니다.`); continue; }
+            if (from.id === to.id) { tell('보내는 공정과 받는 공정이 같습니다.'); continue; }
+            if (!(mass !== undefined && mass > 0)) { tell(`넘긴 양 「${row.values.mass ?? '빈 칸'}」을(를) 0보다 큰 숫자로 적어 주세요.`); continue; }
+            const mergeKey = `${from.id}|${to.id}|${key(row.values.product)}`;
+            const existing = merged.get(mergeKey);
+            if (existing) existing.mass += mass;
+            else merged.set(mergeKey, { from, to, mass, product: (row.values.product ?? '').trim(), note: (row.values.note ?? '').trim(), row: row.row });
+        }
+        for (const item of merged.values()) {
+            const sender = fresh.get(item.from.id) ?? item.from;
+            const lines = goodLines.get(sender.id) ?? [];
+            let sourceLineId: string | undefined;
+            if (lines.length > 1) {
+                const wanted = productByName.get(key(item.product));
+                sourceLineId = lines.find((line) => line.product_id === wanted?.id)?.id;
+                if (!sourceLineId) { note('error', SHEET_TRANSFERS, `보내는 공정 「${sender.name}」은 제품이 둘 이상입니다 — 「보내는 제품」에 어느 제품을 넘기는지 적어 주세요(그 공정의 제품 이름 그대로).`, item.row); continue; }
+            }
+            const total = (sent.get(sender.id) ?? 0) + item.mass;
+            if (total > sender.output_mass_t + 1e-9) { note('error', SHEET_TRANSFERS, `보내는 공정 「${sender.name}」: 넘긴 양의 합(${fmt(total)} t)이 그 공정의 생산량(${fmt(sender.output_mass_t)} t)보다 많습니다.`, item.row); continue; }
+            sent.set(sender.id, total);
+            await store.create('internal_transfers', { period_id: sender.period_id, source_process_id: sender.id, source_output_line_id: sourceLineId, target_process_id: item.to.id, mass_t: item.mass, note: item.note || undefined });
+            created.transfers += 1;
+        }
+        // 보내는 공정의 내부 소비량·시장 출하량(EU 문서 D_Processes)을 지도 3단계와 같이 맞춘다.
+        for (const [processId, internal] of sent) {
+            const process = fresh.get(processId);
+            if (process) await saveProcess({ ...process, internal_consumption_mass_t: internal, market_output_mass_t: process.output_mass_t - internal });
+        }
     }
 
     // ── 8) 구매 강재 ─────────────────────────────────────────────────
@@ -728,6 +1020,14 @@ export async function importActivityWorkbook(
         if (!applicable && (current.carbon_price ?? []).length === 0) note('info', SHEET_INSTALLATION, '「배출권거래제·탄소세를 냈나요?」가 비어 있습니다. 수입업자가 묻는 항목입니다 — 모르면 「아직 모름」을 골라 주세요.');
         if (fresh.size > 0 && !meta.publisher && !meta.document) note('info', SHEET_INSTALLATION, '전력 계수를 공표한 기관·문서가 비어 있습니다. 계수를 어디서 가져왔는지 적어 주세요(산정보고서 제7장).');
         if ((next.rnr ?? []).length === 0) note('info', SHEET_RNR, '역할·책임이 비어 있습니다. 자료를 누가 모으고 확인하는지 아는 만큼 적어 주세요(산정보고서 제12장).');
+    }
+
+    // 품번 목록에서 합쳐 만든 제품·공정 줄의 문제는 품번 목록의 처음 줄을 가리키게 한다.
+    for (const issue of issues) {
+        if (issue.row !== undefined && issue.row >= PART_ROW_BASE) {
+            issue.sheet = SHEET_PARTS;
+            issue.row = expansion.origin.get(issue.row);
+        }
     }
 
     const order = { error: 0, warning: 1, info: 2 };

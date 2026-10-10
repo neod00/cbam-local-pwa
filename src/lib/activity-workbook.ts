@@ -1,4 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { HEAT_STANDARD_FUELS } from './measurable-heat';
 import { columnName, escapeXml, getColumnName, parseAttributes, parseSharedStrings, parseWorkbookSheets, readCellValue } from './activity-data-template';
 
 /**
@@ -21,6 +22,11 @@ export const SHEET_PRODUCTS = '2_제품';
 export const SHEET_PROCESSES = '3_공정';
 export const SHEET_FUELS = '4_연료';
 export const SHEET_PRECURSORS = '5_구매강재';
+export const SHEET_PARTS = '2b_품번목록';
+export const SHEET_IMPORTED_HEAT = '8_사온열';
+export const SHEET_BOILER_HEAT = '9_보일러열';
+export const SHEET_PROCESS_EMISSIONS = '10_공정배출';
+export const SHEET_TRANSFERS = '11_사내이송';
 export const SHEET_RNR = '6_역할책임';
 export const SHEET_EVIDENCE = '7_증빙목록';
 export const SHEET_LISTS = '선택목록';
@@ -29,6 +35,8 @@ export const SHEET_LISTS = '선택목록';
 export const EXAMPLE_PREFIX = '(예시)';
 /** 여러 공정이 같이 쓰는 연료를 뜻하는 「쓰는 공정」 값 */
 export const SHARED_PROCESS_LABEL = '공장 전체(공용)';
+/** 열을 받는 곳이 공정이 아닐 때(사무동 난방 등) */
+export const OUTSIDE_PROCESS_LABEL = '(공정 밖 — 사무동 난방 등)';
 /** 한 칸에 이름을 여럿 적을 때의 구분자(공정·제품) */
 export const LIST_SEPARATOR = ';';
 
@@ -71,13 +79,50 @@ export const CARBON_PRICE_CHOICES = [
     { label: '아직 모름', value: 'TO_CONFIRM' },
 ] as const;
 
+/** 공용 연료·전력을 공정에 나누는 기준 — 값은 지도 4·5단계 「나누기」의 기준과 같다. */
+export const SPLIT_BASIS_CHOICES = [
+    { label: '생산량 비율', value: 'OUTPUT_MASS' },
+    { label: '공정별 계량기 값', value: 'SUB_METER' },
+    { label: '설비용량·가동시간 추정', value: 'ESTIMATE' },
+] as const;
+
+export const FUEL_USE_CHOICES = [
+    { label: '설비에서 직접 태움', value: 'DIRECT' },
+    { label: '보일러·스팀·온수 (여러 공정이 나눠 씀)', value: 'HEAT_SYSTEM' },
+] as const;
+
+export const HEAT_UNIT_CHOICES = [
+    { label: 'Gcal', value: 'Gcal' },
+    { label: 'GJ', value: 'GJ' },
+    { label: 'MWh', value: 'MWh' },
+    { label: 'TJ', value: 'TJ' },
+] as const;
+
+/** 공정이 쓴 열의 양을 어떻게 알았는가 — 값은 지도 4단계 열 공급원의 기준과 같다. */
+export const HEAT_BASIS_CHOICES = [
+    { label: '계량기로 쟀다', value: 'METERED' },
+    { label: '효율로 추정', value: 'EFFICIENCY_PROXY' },
+    { label: '간접 추정 (사유 필요)', value: 'INDIRECT_ESTIMATE' },
+] as const;
+
+export const IMPORTED_HEAT_EF_CHOICES = [
+    { label: '공급사가 준 계수', value: 'SUPPLIER' },
+    { label: '표준값 (연료·보일러 효율)', value: 'STANDARD_FUEL_BOILER' },
+] as const;
+
+export const PROCESS_EMISSION_KIND_CHOICES = [
+    { label: '공정배출 — 석회석 등 부원료', key: 'process-emissions' },
+    { label: '물질수지 — 투입 (고철·전극·합금철)', key: 'mass-balance-in' },
+    { label: '물질수지 — 산출 차감 (조강·슬래그)', key: 'mass-balance-out' },
+] as const;
+
 export const VERIFICATION_CHOICES = [
     { label: '미검증', value: 'UNVERIFIED' },
     { label: '공급사 확인', value: 'SUPPLIER_CONFIRMED' },
     { label: '제3자 검증 완료', value: 'VERIFIED' },
 ] as const;
 
-type ListName = 'yesNo' | 'fuelKind' | 'fuelFactorSource' | 'electricitySource' | 'supplierValue' | 'verification' | 'country' | 'processOrShared' | 'process' | 'product' | 'carbonPrice';
+type ListName = 'yesNo' | 'fuelKind' | 'fuelFactorSource' | 'electricitySource' | 'supplierValue' | 'verification' | 'country' | 'processOrShared' | 'process' | 'product' | 'carbonPrice' | 'splitBasis' | 'fuelUse' | 'heatUnit' | 'heatBasis' | 'efBasis' | 'standardFuel' | 'emissionKind' | 'processOrOutside';
 
 export interface ActivityField {
     key: string;
@@ -160,6 +205,13 @@ export const PROCESS_COLUMNS: ActivityField[] = [
     { key: 'scrap', label: '불량·스크랩 (t)', width: 16, hint: '불량·절단 스크랩으로 나간 양(있으면). 생산량에 넣지 마세요', example: 265 },
     { key: 'route', label: '생산 방식', width: 34, hint: '비워도 됩니다. 예: 와이어 → 냉간압조 → 전조 → 세척', example: '와이어 → 냉간압조 → 전조 → 세척' },
     { key: 'electricity', label: '이 공정의 전력 (MWh)', width: 20, hint: '공정별 전력 계량기가 있을 때만. 없으면 비우고 1_사업장에 공장 전체 값을 적으세요', example: '' },
+    { key: 'manualPct', label: '제품 배분 % (직접 지정할 때)', width: 24, hint: '한 공정의 제품들에 배출을 생산량 비율이 아니라 직접 정한 비율로 나눌 때만. 그 공정 줄들의 합이 100이어야 합니다. 사유와 증빙이 있어야 규정이 인정합니다(부속서 III A.2)', example: '' },
+    { key: 'manualReason', label: '직접 지정한 사유', width: 28, hint: '물리적 관계로 설명되는 사유. 예: 두 제품의 가열 시간 비율이 측정값으로 3:7', example: '' },
+    { key: 'manualEvidence', label: '직접 지정의 증빙', width: 26, hint: '예: 설비 운전 일지, 계측 기록', example: '' },
+    { key: 'meter', label: '전력 계량기 이름', width: 22, hint: '고지서(계량기)가 둘 이상일 때만: 이 공정이 속한 계량기. 비우면 1_사업장의 공장 전체 전력(한전 계량기)', example: '' },
+    { key: 'meterTotal', label: '그 계량기의 전력 (MWh)', width: 22, hint: '위 계량기의 고지서 합계(MWh). 같은 계량기의 공정 줄 중 한 곳에만 적어도 됩니다', example: '' },
+    { key: 'elecBasis', label: '전력 나누는 기준', list: 'splitBasis', width: 24, hint: '비우면 위 「이 공정의 전력」이 모두 적혀 있으면 계량값, 아니면 생산량 비율', example: '' },
+    { key: 'elecNote', label: '전력 추정 근거', width: 28, hint: '「설비용량·가동시간 추정」일 때 필수', example: '' },
 ];
 
 export const FUEL_COLUMNS: ActivityField[] = [
@@ -171,6 +223,11 @@ export const FUEL_COLUMNS: ActivityField[] = [
     { key: 'ncv', label: '순발열량', width: 24, hint: '비우면 기본값. 공급사 성적서 값이 있을 때만 적으세요(도시가스 GJ/Nm³, 그 밖은 GJ/t)', example: '' },
     { key: 'factor', label: '배출계수 (tCO₂e/TJ)', width: 24, hint: '비우면 기본값. 직접 적으면 옆 칸의 출처도 고르세요', example: '' },
     { key: 'factorSource', label: '계수 출처', list: 'fuelFactorSource', width: 26, hint: '순발열량·배출계수를 직접 적었을 때만', example: '' },
+    { key: 'use', label: '연료의 용도', list: 'fuelUse', width: 30, hint: '비우면 「설비에서 직접 태움」. 보일러·스팀을 만드는 연료이고 여러 공정이 열을 나눠 쓰면 아래 「보일러·스팀」을 고르고 9_보일러열에 공정별 열 사용량을 적으세요', example: '' },
+    { key: 'heatSystem', label: '열 공급원 이름', width: 26, hint: '용도가 보일러·스팀일 때만. 비우면 연료 이름. 보일러가 둘 이상이거나 한 보일러에 연료가 둘 이상이면 같은 이름으로 묶습니다', example: '' },
+    { key: 'basis', label: '나누는 기준', list: 'splitBasis', width: 26, hint: '쓰는 공정을 여럿(또는 공장 전체)으로 적었을 때만. 비우면 생산량 비율. 공정별 계량기가 있으면 「공정별 계량기 값」 — 같은 연료 이름으로 공정마다 한 줄씩(양 칸에 그 공정의 계량값), 「공장 전체 사용량」은 한 번만 적으세요', example: '' },
+    { key: 'total', label: '공장 전체 사용량', width: 20, hint: '「공정별 계량기 값」·「설비용량·가동시간 추정」으로 나눌 때: 고지서의 공장 전체 합계(위 양 칸과 같은 단위). 계량값 합이 이것과 다르면 앱이 맞춥니다', example: '' },
+    { key: 'basisNote', label: '추정 근거', width: 30, hint: '「설비용량·가동시간 추정」일 때 필수: 계량기가 없는 이유와 추정 근거(정격용량·가동일지)', example: '' },
     { key: 'factorDoc', label: '계수의 출처 문서', width: 30, hint: '순발열량·배출계수를 직접 적었을 때: 어느 기관·문서·표의 값인지. 예: 삼천리 성적서 2025-03', example: '' },
     { key: 'biomass', label: '바이오매스 비율 (%)', width: 20, hint: '바이오 연료가 섞여 있을 때만. 보통은 비워 둡니다(0%)', example: '' },
     { key: 'oxidation', label: '산화계수', width: 12, hint: '비우면 1. 성적서에 다른 값이 있을 때만', example: '' },
@@ -199,6 +256,63 @@ export const PRECURSOR_COLUMNS: ActivityField[] = [
     { key: 'evidence', label: '근거 자료', width: 34, hint: '예: 공급사 회신 메일 2026-09-05, CBAM 데이터 시트 PDF', example: '공급사 CBAM 데이터 시트 PDF, 2026-09-05 회신' },
 ];
 
+/** 품번 목록 — 품번이 많은 업체가 생산실적을 그대로 붙여 넣는다. 앱이 CN 코드·재질별로 합쳐 제품·공정을 만든다. */
+export const PART_COLUMNS: ActivityField[] = [
+    { key: 'part', label: '품번', required: true, text: true, width: 18, hint: '사내 품번·도면번호. 앱은 이 값으로 합산만 하고 EU 문서에는 싣지 않습니다', example: `${EXAMPLE_PREFIX} HB-1001` },
+    { key: 'pname', label: '품명', width: 26, hint: '알아볼 수 있게(선택)', example: '고강도 볼트 M10' },
+    { key: 'cn', label: 'CN 코드 (8자리)', required: true, text: true, width: 16, hint: '수출신고필증·인보이스의 HS 코드 앞 8자리. 같은 CN끼리 한 제품으로 합쳐집니다', example: '73181582' },
+    { key: 'grade', label: '재질·강종', width: 20, hint: '같은 원료(선재)로 만드는 것은 같은 이름으로. 예: SCM435, SWCH, STS304. 다르면 다른 제품·다른 공정으로 갈라집니다', example: 'SCM435' },
+    { key: 'mass', label: '연간 생산량 (t)', width: 18, hint: '보고기간 합계(합격품). 톤으로 모르면 아래 수량·단중을 적으세요', example: 120 },
+    { key: 'qty', label: '연간 생산 수량 (개)', width: 20, hint: '생산량(t)을 모를 때만. 단중과 곱해 톤으로 바꿉니다', example: '' },
+    { key: 'unitWeight', label: '단중 (g/개)', width: 14, hint: '수량으로 적을 때만. 개당 무게(g)', example: '' },
+    { key: 'exported', label: 'EU로 수출하나요?', list: 'yesNo', width: 18, hint: '비우면 「예」. 「아니오」면 신고 대상이 아니고 같이 쓴 연료·전력의 몫만 나눠 갖습니다', example: YES },
+    { key: 'process', label: '거치는 공정', width: 24, hint: '비우면 재질별로 한 공정(원료가 같은 제품끼리 한 공정이 규정입니다). 열처리를 하는 것과 안 하는 것처럼 공정이 다르면 이름을 달리 적으세요', example: '' },
+    { key: 'scrap', label: '불량·스크랩 (t)', width: 16, hint: '이 품번에서 나온 불량·절단 스크랩(있으면). 생산량에 넣지 마세요', example: '' },
+    { key: 'alloy_mn_cr_ni', label: '합금원소 합계 (%)', width: 18, hint: '재질별로 같으면 그 재질의 한 줄에만 적어도 됩니다', example: '' },
+    { key: 'reducing_agent', label: '원료의 주 환원제 (알면)', width: 22, hint: '재질별로 같으면 그 재질의 첫 줄에만 적어도 됩니다', example: '' },
+    { key: 'scrap_per_t', label: '제품 1 t당 스크랩 사용 (t)', width: 22, hint: '재질별로 같으면 첫 줄에만. 강재를 사다 가공만 하면 0', example: '' },
+    { key: 'preconsumer_scrap_pct', label: '그중 가공 스크랩 비율 (%)', width: 22, hint: '재질별로 같으면 그 재질의 첫 줄에만 적어도 됩니다', example: '' },
+];
+
+/** 밖에서 산 스팀·온수 — 1_사업장에서 「예」라고 한 업체만 */
+export const IMPORTED_HEAT_COLUMNS: ActivityField[] = [
+    { key: 'process', label: '열을 쓴 공정', required: true, list: 'process', width: 30, hint: '3_공정의 공정 이름', example: `${EXAMPLE_PREFIX} STS 나사 공정` },
+    { key: 'quantity', label: '사 온 열의 양', required: true, width: 16, hint: '보고기간 합계. 공급사 고지서의 열량', example: 120 },
+    { key: 'unit', label: '단위', required: true, list: 'heatUnit', width: 12, hint: '공급사 고지서에 적힌 열량의 단위를 고르세요', example: 'Gcal' },
+    { key: 'efBasis', label: '배출계수를 정하는 방법', required: true, list: 'efBasis', width: 28, hint: '공급사가 계수를 줬으면 「공급사가 준 계수」, 모르면 「표준값」', example: IMPORTED_HEAT_EF_CHOICES[1].label },
+    { key: 'supplierEf', label: '공급사 열 배출계수 (tCO₂/TJ)', width: 26, hint: '「공급사가 준 계수」일 때', example: '' },
+    { key: 'fuel', label: '표준값에 쓸 연료', list: 'standardFuel', width: 26, hint: '「표준값」일 때: 공급사가 열을 만든 연료', example: HEAT_STANDARD_FUELS[0].label },
+    { key: 'source', label: '근거 자료', width: 30, hint: '예: 지역난방공사 고지서 2025', example: '지역난방 고지서 2025' },
+];
+
+/** 자체 보일러·스팀을 여러 공정이 나눠 쓸 때 — 공정별로 열을 얼마 썼는지 */
+export const BOILER_HEAT_COLUMNS: ActivityField[] = [
+    { key: 'system', label: '열 공급원', required: true, width: 30, hint: '4_연료에서 「용도」를 보일러로 적은 연료의 「열 공급원 이름」(비웠으면 그 연료 이름)', example: `${EXAMPLE_PREFIX} 세척수 온수 보일러` },
+    { key: 'process', label: '열을 받는 곳', required: true, list: 'processOrOutside', width: 30, hint: '공정 이름. 사무동 난방처럼 공정이 아니면 「(공정 밖 …)」을 고르세요', example: 'STS 나사 공정' },
+    { key: 'quantity', label: '쓴 열의 양', width: 16, hint: '보고기간 합계. 모르면 비우세요 — 비워 두면 앱이 연료 에너지 × 70%를 생산량 비율로 나눈 「임시」 값을 넣고 「확인할 것」에 남깁니다', example: 800 },
+    { key: 'unit', label: '단위', list: 'heatUnit', width: 12, hint: '위 열의 양 단위. 비우면 Gcal로 봅니다', example: 'Gcal' },
+    { key: 'basis', label: '열 사용량을 안 방법', list: 'heatBasis', width: 26, hint: '비우면 「계량기로 쟀다」. 추정이면 근거를 아래 칸에', example: HEAT_BASIS_CHOICES[0].label },
+    { key: 'note', label: '근거', width: 34, hint: '예: 공정별 열량계 검침. 「간접 추정」이면 계량이 불가능한 사유와 추정 근거 필수', example: '열량계 검침 합계' },
+];
+
+export const PROCESS_EMISSION_COLUMNS: ActivityField[] = [
+    { key: 'name', label: '배출원 이름', required: true, width: 30, hint: '예: 석회석 투입, 흑연전극, 슬래그', example: `${EXAMPLE_PREFIX} 석회석 투입` },
+    { key: 'kind', label: '종류', required: true, list: 'emissionKind', width: 34, hint: '공정배출(가열하면 CO₂가 나오는 부원료) / 물질수지 투입 / 물질수지 산출 차감', example: PROCESS_EMISSION_KIND_CHOICES[0].label },
+    { key: 'amount', label: '연간 양 (t)', required: true, width: 16, hint: '보고기간 합계. 「산출 차감」도 양수로 적으세요 — 앱이 차감으로 처리합니다', example: 1200 },
+    { key: 'where', label: '쓰는 공정', required: true, list: 'process', width: 30, hint: '3_공정의 공정 이름', example: 'STS 나사 공정' },
+    { key: 'factor', label: '배출계수 (tCO₂e/t)', width: 20, hint: '성분분석표 기준(탄소함량 × 3.664). 비우면 유형의 자리값이 들어가고 「확인할 것」에 남습니다', example: 0.44 },
+    { key: 'factorSource', label: '계수 출처', list: 'fuelFactorSource', width: 26, hint: '계수를 적었을 때 어디서 나온 값인지', example: FUEL_FACTOR_SOURCE_CHOICES[2].label },
+    { key: 'evidence', label: '근거 자료', width: 30, hint: '예: 석회석 성분분석표, 투입 대장', example: '성분분석표 2025' },
+];
+
+export const TRANSFER_COLUMNS: ActivityField[] = [
+    { key: 'from', label: '보내는 공정', required: true, list: 'process', width: 30, hint: '만든 것을 다른 공정에 넘기는 공정', example: `${EXAMPLE_PREFIX} 신선 공정` },
+    { key: 'to', label: '받는 공정', required: true, list: 'process', width: 30, hint: '그것을 원료로 쓰는 공정', example: '볼트 공정' },
+    { key: 'mass', label: '넘긴 양 (t)', required: true, width: 16, hint: '보고기간 합계. 보내는 공정이 만들어 받는 공정에 넘긴 무게(t)', example: 900 },
+    { key: 'product', label: '보내는 제품', list: 'product', width: 30, hint: '보내는 공정에서 제품을 둘 이상 만들 때만: 어느 제품을 넘기는지', example: '' },
+    { key: 'note', label: '메모', width: 30, hint: '예: 신선 와이어를 볼트 공정이 소비', example: '' },
+];
+
 export const RNR_COLUMNS: ActivityField[] = [
     { key: 'data', label: '자료', required: true, width: 28, hint: '어떤 자료인지. 예: 도시가스 사용량, 생산량, 구매 강재 투입량', example: `${EXAMPLE_PREFIX} 도시가스 사용량` },
     { key: 'collector', label: '모으는 사람', width: 22, hint: '원자료(고지서·일지)를 모으는 담당', example: '총무팀 박OO' },
@@ -216,11 +330,16 @@ export const EVIDENCE_COLUMNS: ActivityField[] = [
 
 const TABLE_SHEETS = [
     { name: SHEET_PRODUCTS, title: '2. 제품 — 이 공장에서 만드는 제품을 한 줄에 하나씩', columns: PRODUCT_COLUMNS },
+    { name: SHEET_PARTS, title: '2b. 품번 목록(선택) — 품번이 많으면 생산실적을 붙여 넣으세요. 앱이 CN 코드·재질별로 합쳐 제품(2_제품)과 공정(3_공정)을 만듭니다. 2_제품·3_공정에 이미 적었다면 비워 두세요', columns: PART_COLUMNS },
     { name: SHEET_PROCESSES, title: '3. 공정 — 제품을 만드는 생산 라인과 생산량', columns: PROCESS_COLUMNS },
     { name: SHEET_FUELS, title: '4. 연료 — 공장에서 태우는 연료(가스·경유·등유 등). 전기는 1_사업장에. 도금·절단·용접·마무리 설비 전용 연료는 적지 않습니다', columns: FUEL_COLUMNS },
     { name: SHEET_PRECURSORS, title: '5. 구매 강재 — 사 와서 가공하는 철강 원료와 그 원료의 배출량', columns: PRECURSOR_COLUMNS },
     { name: SHEET_RNR, title: '6. 역할·책임 — 자료를 누가 모으고 옮기고 확인하는지 (산정보고서에 실립니다. 아는 만큼만)', columns: RNR_COLUMNS },
     { name: SHEET_EVIDENCE, title: '7. 증빙 목록 — 검증인에게 보여 줄 자료와 보관하는 곳 (산정보고서에 실립니다. 아는 만큼만)', columns: EVIDENCE_COLUMNS },
+    { name: SHEET_IMPORTED_HEAT, title: '8. 사 온 열(해당할 때만) — 다른 회사에서 스팀·온수를 사 오면 공정별로 적습니다', columns: IMPORTED_HEAT_COLUMNS },
+    { name: SHEET_BOILER_HEAT, title: '9. 보일러·스팀을 여러 공정이 나눠 쓸 때(해당할 때만) — 열을 받는 공정별 사용량', columns: BOILER_HEAT_COLUMNS },
+    { name: SHEET_PROCESS_EMISSIONS, title: '10. 공정배출·물질수지(해당할 때만) — 석회석 같은 부원료, 전극·고철·슬래그의 탄소', columns: PROCESS_EMISSION_COLUMNS },
+    { name: SHEET_TRANSFERS, title: '11. 사내 이송(해당할 때만) — 한 공정에서 만든 것을 다른 공정이 원료로 쓸 때', columns: TRANSFER_COLUMNS },
 ] as const;
 
 /** 표 시트의 줄 배치: 1 제목 · 2 머리글 · 3 설명 · 4 예시 · 5~ 입력 */
@@ -250,6 +369,11 @@ export interface ActivityWorkbookFill {
     precursors?: ActivityRowValues[];
     rnr?: ActivityRowValues[];
     evidence?: ActivityRowValues[];
+    parts?: ActivityRowValues[];
+    importedHeat?: ActivityRowValues[];
+    boilerHeat?: ActivityRowValues[];
+    processEmissions?: ActivityRowValues[];
+    transfers?: ActivityRowValues[];
 }
 
 /** 작성 예시 — 가상의 나사 공장(대일기업). 공용 가스·경유·전력은 공장 전체 값만 적어 앱이 나누게 한 모습이다. */
@@ -412,11 +536,19 @@ function buildLists(countries: string[]) {
         ['supplierValue', SUPPLIER_VALUE_CHOICES.map((item) => item.label)],
         ['verification', VERIFICATION_CHOICES.map((item) => item.label)],
         ['carbonPrice', CARBON_PRICE_CHOICES.map((item) => item.label)],
+        ['splitBasis', SPLIT_BASIS_CHOICES.map((item) => item.label)],
+        ['fuelUse', FUEL_USE_CHOICES.map((item) => item.label)],
+        ['heatUnit', HEAT_UNIT_CHOICES.map((item) => item.label)],
+        ['heatBasis', HEAT_BASIS_CHOICES.map((item) => item.label)],
+        ['efBasis', IMPORTED_HEAT_EF_CHOICES.map((item) => item.label)],
+        ['standardFuel', HEAT_STANDARD_FUELS.map((item) => item.label)],
+        ['emissionKind', PROCESS_EMISSION_KIND_CHOICES.map((item) => item.label)],
         ['country', countries],
     ];
     const titles: Record<ListName, string> = {
         yesNo: '예/아니오', carbonPrice: '탄소가격', fuelKind: '연료 종류', fuelFactorSource: '계수 출처', electricitySource: '전력 계수 출처', supplierValue: '공급사 값', verification: '검증 여부',
         country: '국가', processOrShared: '쓰는 공정(연료)', process: '쓰는 공정(구매 강재)', product: '제품',
+        splitBasis: '나누는 기준', fuelUse: '연료의 용도', heatUnit: '열 단위', heatBasis: '열 사용량을 안 방법', efBasis: '열 계수 기준', standardFuel: '표준값 연료', emissionKind: '공정배출 종류', processOrOutside: '열을 받는 곳',
     };
     const sheetRef = (name: string, cell: string) => `'${name}'!${cell}`;
     // 공정·제품 이름은 다른 시트에 적은 값을 수식으로 비춘다 — 적는 대로 목록에 나타난다.
@@ -428,6 +560,7 @@ function buildLists(countries: string[]) {
         ...fixed.map(([list, values]) => ({ list, cells: values.map((value) => ({ value }) as Cell) })),
         { list: 'processOrShared' as const, cells: [{ value: SHARED_PROCESS_LABEL }, ...mirror(SHEET_PROCESSES)] },
         { list: 'process' as const, cells: mirror(SHEET_PROCESSES) },
+        { list: 'processOrOutside' as const, cells: [{ value: OUTSIDE_PROCESS_LABEL }, ...mirror(SHEET_PROCESSES)] },
         { list: 'product' as const, cells: mirror(SHEET_PRODUCTS) },
     ];
     const height = Math.max(...columns.map((column) => column.cells.length));
@@ -456,6 +589,8 @@ function guideSheet(): SheetSpec {
         ['3_공정 — 제품을 만드는 라인과 생산량', STYLE.wrap],
         ['4_연료 — 가스·경유·등유 등 공장에서 태우는 연료', STYLE.wrap],
         ['5_구매강재 — 사 와서 가공하는 철강 원료와 공급사가 준 배출량 값', STYLE.wrap],
+        ['2b_품번목록(선택) — 품번이 많으면 생산실적을 붙여 넣습니다. 앱이 CN 코드·재질별로 합쳐 제품과 공정을 만듭니다', STYLE.wrap],
+        ['8_사온열 · 9_보일러열 · 10_공정배출 · 11_사내이송 — 해당하는 업체만 적습니다(아래 「이 서식이 받는 것」 참고)', STYLE.wrap],
         ['6_역할책임 · 7_증빙목록 — 자료를 누가 다루고 어디에 보관하는지(아는 만큼만. 산정보고서에 실립니다)', STYLE.wrap],
         ['', STYLE.plain],
         ['적는 방법', STYLE.section],
@@ -478,8 +613,14 @@ function guideSheet(): SheetSpec {
         ['· 공급사 배출량 값이 없으면 「없음」을 고르세요. EU가 정한 기본값이 들어갑니다(보통 실제보다 큽니다).', STYLE.wrap],
         ['· EU로 수출하지 않는 제품도 같은 설비·연료를 쓰면 적어야 합니다. 그래야 연료·전기가 제품별로 바르게 나뉩니다.', STYLE.wrap],
         ['', STYLE.plain],
+        ['해당할 때만 적는 시트', STYLE.section],
+        ['· 8_사온열 — 다른 회사에서 스팀·온수를 사 오는 경우(1_사업장 「밖에서 사 오는 스팀·온수」를 「예」로).', STYLE.wrap],
+        ['· 9_보일러열 — 자체 보일러·스팀을 여러 공정이 나눠 쓰는 경우. 4_연료에서 그 연료의 「용도」를 보일러·스팀으로 고르고, 공정별로 쓴 열의 양을 적습니다. 모르면 비워 두면 앱이 임시 값을 넣고 알려 줍니다.', STYLE.wrap],
+        ['· 10_공정배출 — 석회석처럼 가열하면 CO₂가 나오는 부원료, 전극·고철·슬래그의 탄소를 따지는 경우.', STYLE.wrap],
+        ['· 11_사내이송 — 한 공정에서 만든 것(예: 신선 와이어)을 다른 공정이 원료로 쓰는 경우.', STYLE.wrap],
+        ['', STYLE.plain],
         ['이 서식이 받지 않는 것', STYLE.section],
-        ['석회석 등 공정배출, 물질수지, 자체 보일러 스팀을 여러 공정에 열량으로 나누기, 공정 사이의 사내 이송은 이 서식에 칸이 없습니다. 해당하면 알려 주세요 — 앱에서 직접 입력합니다.', STYLE.wrap],
+        ['여러 전력 공급원(한전 외 PPA·자가발전)의 내역, 공급사가 일부만 실측값을 준 원료, 공급사의 무상할당 조정값(SEFA), 2027년 이후 기본값은 이 서식에 칸이 없습니다. 해당하면 알려 주세요 — 앱에서 직접 입력합니다.', STYLE.wrap],
         ['', STYLE.plain],
         ['이 파일의 내용은 올리는 사람의 컴퓨터(브라우저) 안에서만 읽습니다. 서버로 보내지 않습니다.', STYLE.hint],
     ];
@@ -543,6 +684,7 @@ export function createActivityWorkbook(options: { countries: string[]; fill?: Ac
     const fill = options.fill;
     const fillOf: Record<string, ActivityRowValues[] | undefined> = {
         [SHEET_PRODUCTS]: fill?.products, [SHEET_PROCESSES]: fill?.processes, [SHEET_FUELS]: fill?.fuels, [SHEET_PRECURSORS]: fill?.precursors, [SHEET_RNR]: fill?.rnr, [SHEET_EVIDENCE]: fill?.evidence,
+        [SHEET_PARTS]: fill?.parts, [SHEET_IMPORTED_HEAT]: fill?.importedHeat, [SHEET_BOILER_HEAT]: fill?.boilerHeat, [SHEET_PROCESS_EMISSIONS]: fill?.processEmissions, [SHEET_TRANSFERS]: fill?.transfers,
     };
     const sheets: SheetSpec[] = [
         guideSheet(),
@@ -582,6 +724,12 @@ export interface ActivityWorkbookData {
     /** 6_역할책임 · 7_증빙목록 — 없는 서식(이 시트가 생기기 전의 파일)도 그대로 읽는다 */
     rnr: ActivityRow[];
     evidence: ActivityRow[];
+    /** 해당할 때만 쓰는 시트들 — 없는 서식(이 시트가 생기기 전의 파일)도 그대로 읽는다 */
+    parts: ActivityRow[];
+    importedHeat: ActivityRow[];
+    boilerHeat: ActivityRow[];
+    processEmissions: ActivityRow[];
+    transfers: ActivityRow[];
     /** 읽으면서 알게 된 문제(머리글을 못 찾은 시트 등) */
     notes: string[];
 }
@@ -640,6 +788,90 @@ function readTable(rows: ReturnType<typeof readSheetRows>, columns: ActivityFiel
     return result;
 }
 
+/** 품번 목록에서 만든 줄의 번호는 이 값부터다 — 표 시트의 실제 줄 번호와 겹치지 않게 한다(처음 줄을 가리키는 표는 PartListExpansion.origin). */
+export const PART_ROW_BASE = 1000;
+
+export interface PartListExpansion {
+    products: ActivityRow[];
+    processes: ActivityRow[];
+    /** 만든 줄 번호 → 품번 목록의 줄 번호 */
+    origin: Map<number, number>;
+    problems: Array<{ row: number; message: string }>;
+    summary?: string;
+}
+
+const partNumber = (value: string | undefined) => {
+    const parsed = Number((value ?? '').replace(/,/g, '').trim());
+    return (value ?? '').trim() !== '' && Number.isFinite(parsed) ? parsed : undefined;
+};
+
+/**
+ * 품번 목록을 제품 줄·공정 줄로 합친다.
+ *  · 제품 = 같은 CN 코드 + 같은 재질 + 같은 수출 여부 — 규정의 기능단위는 CN 코드별 톤(2025/2547 제4조 2항)이고, 원료(재질)가 다르면 따로 둔다.
+ *  · 공정 = 「거치는 공정」 이름, 비우면 「<재질> 공정」 — 원료가 같은 제품끼리 한 공정(부속서 II A.4 · 가이던스 No.3 4.3.1).
+ *  · 양은 합산만 한다. 품번 자체는 산정에 쓰이지 않는다.
+ */
+export function expandPartList(rows: ActivityRow[]): PartListExpansion {
+    const problems: PartListExpansion['problems'] = [];
+    const origin = new Map<number, number>();
+    type ProductAcc = { name: string; cn: string; exported: string; params: Record<string, string>; firstRow: number; parts: number };
+    const products = new Map<string, ProductAcc>();
+    const processes = new Map<string, { name: string; product: string; mass: number; scrap: number; firstRow: number }>();
+    const processOrder: string[] = [];
+    for (const row of rows) {
+        const v = row.values;
+        const partLabel = (v.part ?? '').trim() || '(품번 없음)';
+        const cn = (v.cn ?? '').replace(/\D/g, '');
+        if (cn.length !== 8) { problems.push({ row: row.row, message: `품번 ${partLabel}: CN 코드는 8자리 숫자입니다(「${v.cn ?? '빈 칸'}」).` }); continue; }
+        let mass = partNumber(v.mass);
+        if (mass === undefined) {
+            const qty = partNumber(v.qty);
+            const unit = partNumber(v.unitWeight);
+            if (qty !== undefined && unit !== undefined) mass = qty * unit / 1e6;
+        }
+        if (!(mass !== undefined && mass > 0)) { problems.push({ row: row.row, message: `품번 ${partLabel}: 연간 생산량(t) 또는 수량×단중을 0보다 큰 숫자로 적어 주세요.` }); continue; }
+        const scrap = partNumber(v.scrap) ?? 0;
+        if (scrap < 0) { problems.push({ row: row.row, message: `품번 ${partLabel}: 불량·스크랩은 0 이상이어야 합니다.` }); continue; }
+        const grade = (v.grade ?? '').trim() || '재질 미기재';
+        const notExported = ['아니오', '아니요', 'n', 'no'].includes((v.exported ?? '').trim().toLowerCase());
+        const productName = `${grade} · CN ${cn}${notExported ? ' (비수출)' : ''}`;
+        const productKey = productName.toLowerCase();
+        const existing = products.get(productKey);
+        const params: Record<string, string> = {};
+        for (const field of ['alloy_mn_cr_ni', 'reducing_agent', 'scrap_per_t', 'preconsumer_scrap_pct']) {
+            const value = (v[field] ?? '').trim();
+            if (value) params[field] = value;
+        }
+        if (existing) {
+            for (const [field, value] of Object.entries(params)) existing.params[field] ??= value;
+            existing.parts += 1;
+        } else {
+            products.set(productKey, { name: productName, cn, exported: notExported ? '아니오' : '예', params, firstRow: row.row, parts: 1 });
+        }
+        const processName = (v.process ?? '').trim() || `${grade} 공정`;
+        const processKey = `${processName.toLowerCase()}|${productKey}`;
+        const acc = processes.get(processKey);
+        if (acc) { acc.mass += mass; acc.scrap += scrap; } else { processes.set(processKey, { name: processName, product: productName, mass, scrap, firstRow: row.row }); processOrder.push(processKey); }
+    }
+    const productRows: ActivityRow[] = [];
+    Array.from(products.values()).forEach((item, index) => {
+        const rowNumber = PART_ROW_BASE + index;
+        origin.set(rowNumber, item.firstRow);
+        productRows.push({ row: rowNumber, values: { name: item.name, cn: item.cn, exported: item.exported, ...item.params } });
+    });
+    const processRows: ActivityRow[] = processOrder.map((processKey, index) => {
+        const item = processes.get(processKey)!;
+        const rowNumber = PART_ROW_BASE + 500 + index;
+        origin.set(rowNumber, item.firstRow);
+        return { row: rowNumber, values: { name: item.name, product: item.product, mass: String(Math.round(item.mass * 1e6) / 1e6), scrap: item.scrap > 0 ? String(Math.round(item.scrap * 1e6) / 1e6) : '' } };
+    });
+    const used = rows.length - problems.length;
+    const summary = rows.length > 0
+        ? `품번 ${used}개를 CN 코드·재질별로 합쳐 제품 ${productRows.length}개, 공정 ${new Set(processRows.map((row) => row.values.name.toLowerCase())).size}개로 만들었습니다.`
+        : undefined;
+    return { products: productRows, processes: processRows, origin, problems, summary };
+}
+
 export function isActivityWorkbookV2(sheetNames: string[]): boolean {
     return sheetNames.includes(SHEET_INSTALLATION);
 }
@@ -666,6 +898,7 @@ export function parseActivityWorkbook(bytes: Uint8Array): ActivityWorkbookData {
         return readSheetRows(strFromU8(part), sharedStrings);
     };
 
+    const optionalTable = (name: string, columns: ActivityField[]) => (sheets.some((sheet) => sheet.name === name) ? readTable(rowsOf(name, true), columns, name, notes) : []);
     const installation: Record<string, string> = {};
     const fields = INSTALLATION_FORM.filter((item): item is ActivityField => !('section' in item));
     for (const row of rowsOf(SHEET_INSTALLATION)) {
@@ -683,6 +916,11 @@ export function parseActivityWorkbook(bytes: Uint8Array): ActivityWorkbookData {
         precursors: readTable(rowsOf(SHEET_PRECURSORS), PRECURSOR_COLUMNS, SHEET_PRECURSORS, notes),
         rnr: sheets.some((sheet) => sheet.name === SHEET_RNR) ? readTable(rowsOf(SHEET_RNR, true), RNR_COLUMNS, SHEET_RNR, notes) : [],
         evidence: sheets.some((sheet) => sheet.name === SHEET_EVIDENCE) ? readTable(rowsOf(SHEET_EVIDENCE, true), EVIDENCE_COLUMNS, SHEET_EVIDENCE, notes) : [],
+        parts: optionalTable(SHEET_PARTS, PART_COLUMNS),
+        importedHeat: optionalTable(SHEET_IMPORTED_HEAT, IMPORTED_HEAT_COLUMNS),
+        boilerHeat: optionalTable(SHEET_BOILER_HEAT, BOILER_HEAT_COLUMNS),
+        processEmissions: optionalTable(SHEET_PROCESS_EMISSIONS, PROCESS_EMISSION_COLUMNS),
+        transfers: optionalTable(SHEET_TRANSFERS, TRANSFER_COLUMNS),
         notes,
     };
 }
