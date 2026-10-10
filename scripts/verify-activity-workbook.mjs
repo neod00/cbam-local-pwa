@@ -359,5 +359,16 @@ assert.ok(page.includes('isActivityWorkbookV2(') && page.includes('parseActivity
 assert.ok(page.includes('data-testid="activity-issues-alert"'), '넣지 못한 줄이 있으면 결과가 실제와 다를 수 있다고 말한다');
 assert.ok(page.includes('createActivityWorkbook({') && page.includes('ACTIVITY_WORKBOOK_SAMPLE') && page.includes('describeActivityImportIssues('), '빈 서식·작성 예시 내려받기와 「확인할 것」 복사');
 assert.ok(readFileSync('package.json', 'utf8').includes('"verify:activity-workbook"'));
+// 시스템 경계 안내는 서식만의 것이 아니다 — 지도 4단계 · 질문 화면 · 연료 나누기가 같은 문장과 같은 판단(steel-boundary.ts)을 쓴다.
+const boundaryLib = load('src/lib/steel-boundary.ts');
+for (const [name, expected] of [['전기도금 라인 가스', true], ['태핑기 LPG', true], ['캡 용접', true], ['포장동 난방 등유', true], ['용융아연도금 가스', false], ['지오메트 코팅 건조로', false], ['열처리로 도시가스', false], ['지게차 경유', false], ['', false], [undefined, false]]) {
+  assert.equal(boundaryLib.looksLikeExcludedStepFuel(name), expected, `경계 밖 설비의 연료로 보이는가: ${name}`);
+}
+assert.ok(boundaryLib.STEEL_BOUNDARY_NOTE.includes(boundaryLib.STEEL_BOUNDARY_ANCHOR) && /넣지 않습니다/.test(boundaryLib.STEEL_BOUNDARY_NOTE) && /용융아연도금의 연료는 넣습니다/.test(boundaryLib.STEEL_BOUNDARY_NOTE));
+for (const file of ['src/components/guided/panels.tsx', 'src/components/talk/TalkWorkspace.tsx', 'src/components/guided/FuelSplit.tsx']) {
+  const screen = readFileSync(file, 'utf8');
+  assert.ok(screen.includes('{STEEL_BOUNDARY_NOTE}') && screen.includes('looksLikeExcludedStepFuel(') && screen.includes('{STEEL_BOUNDARY_NAME_WARNING}'), `${file}: 연료를 넣는 자리에 경계 안내와 이름 되묻기가 있다`);
+}
+assert.ok(importSource.includes("from './steel-boundary'") && !/EXCLUDED_STEP_FUEL/.test(importSource), '가져오기도 같은 판단을 쓴다(따로 두지 않는다)');
 
 console.log('Activity workbook v2 verified (서식 모양·선택 목록 · 빈 서식 0건 · 작성 예시 = 기준선 3.764/5.112 · 공용 나누기·배출원 합계·생산라인 · 원료의 쓰는 제품·연료의 쓰는 공정 여럿·섞임 경고 · 「확인할 것」 · 종전 서식 유지).');

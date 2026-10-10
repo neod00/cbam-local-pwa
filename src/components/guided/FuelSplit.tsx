@@ -26,6 +26,7 @@ import {
     matchGuidedStreamKind,
     type GuidedStreamKind,
 } from '@/lib/source-stream-input';
+import { looksLikeExcludedStepFuel, STEEL_BOUNDARY_NAME_WARNING, STEEL_BOUNDARY_NOTE } from '@/lib/steel-boundary';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -315,6 +316,10 @@ export function FuelSplit({
                             <input className={fieldClass} value={source} onChange={(event) => setSource(event.target.value)} placeholder="예: 삼천리 고지서 2025, 주유 전표" />
                         </label>
                     </div>
+                    <p className="text-xs leading-5 text-slate-500" data-testid="steel-boundary-note">{STEEL_BOUNDARY_NOTE}</p>
+                    {looksLikeExcludedStepFuel(group) && (
+                        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-200" data-testid="steel-boundary-warning">{STEEL_BOUNDARY_NAME_WARNING}</p>
+                    )}
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <label className="block text-sm">

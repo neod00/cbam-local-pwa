@@ -13,6 +13,7 @@ import { describePrecursorEditBlock, fillEuDefault, precursorAnswerFromExisting,
 import { defaultProcessName, describeOutputEditBlock } from '@/lib/conversation-process';
 import { EXPORT_PERIOD_SETTING_KEY, getLocalSetting, listLocalItems, type Installation, type InternalTransfer, type Product, type ProductionProcess, type ProductOutputLine, type PurchasedPrecursor, type ReportingPeriod, type SourceStream } from '@/lib/local-db';
 import { FACTOR_SOURCE_TYPE_OPTIONS, matchGuidedStreamKind } from '@/lib/source-stream-input';
+import { looksLikeExcludedStepFuel, STEEL_BOUNDARY_NAME_WARNING, STEEL_BOUNDARY_NOTE } from '@/lib/steel-boundary';
 import type { ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { buildSeeFlowBinding } from '@/lib/see-flow';
@@ -897,6 +898,10 @@ export function TalkWorkspace() {
                         이름 <span className="font-normal text-slate-500">(비우면 연료 이름)</span>
                         <input className={fieldClass} value={fuelName} onChange={(event) => setFuelName(event.target.value)} placeholder={fuelKind.label} />
                     </label>
+                    <p className="mt-2 text-xs leading-5 text-slate-500" data-testid="steel-boundary-note">{STEEL_BOUNDARY_NOTE}</p>
+                    {looksLikeExcludedStepFuel(fuelName) && (
+                        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-200" data-testid="steel-boundary-warning">{STEEL_BOUNDARY_NAME_WARNING}</p>
+                    )}
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                         <Button
                             type="button"
