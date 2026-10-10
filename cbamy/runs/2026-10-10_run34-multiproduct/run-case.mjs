@@ -91,8 +91,8 @@ const installation = {
   electricity_total_mwh: ELECTRICITY.total, electricity_ef: ELECTRICITY.ef, electricity_ef_source: '국가 전력망 평균', imported_heat: '아니오', waste_gases: '아니오',
 };
 const productRows = PRODUCTS.map((product) => ({ name: product.name, cn: product.cn, exported: product.eu ? '예' : '아니오' }));
-const precursorRow = (steel, where, consumed) => ({
-  name: steel.name, cn: steel.cn, consumed, purchased: consumed, country: steel.country, where, supplier: steel.supplier,
+const precursorRow = (steel, where, consumed, products = '') => ({
+  name: steel.name, cn: steel.cn, consumed, purchased: consumed, country: steel.country, where, products, supplier: steel.supplier,
   ...(steel.direct !== undefined
     ? { hasValue: '있음 (공급사가 준 값)', direct: steel.direct, indirect: steel.indirect, verification: '공급사 확인', evidence: '공급사 CBAM 데이터 시트' }
     : { hasValue: '없음 (EU 기본값 사용)', evidence: '공급사 자료 미회신' }),
@@ -107,14 +107,17 @@ const naive = {
   fuels: FUELS.map((fuel) => fuelRow(fuel, W.SHARED_PROCESS_LABEL)),
   precursors: Object.values(STEELS).map((steel) => precursorRow(steel, '체결부품 생산라인', totalOf(steel))),
 };
-// (나) CN마다 공정 하나: 제품 = 공정. 공용이 아닌 연료(열처리 가스)는 「공장 전체」로밖에 못 적는다고 보고 그대로 적는다.
+// (가2) 한 공정이지만 구매 강재마다 「쓰는 제품」을 적는다(새 칸).
+const nameOf = (id) => PRODUCTS.find((product) => product.id === id).name;
+const naiveAssigned = { ...naive, precursors: Object.values(STEELS).map((steel) => precursorRow(steel, '체결부품 생산라인', totalOf(steel), Object.keys(steel.users).map(nameOf).join('; '))) };
+// (나) CN마다 공정 하나: 제품 = 공정. 일부 공정만 쓰는 연료는 그 공정 이름들을 ; 로 이어 적는다(새 표기).
 const perCn = {
   installation, products: productRows,
   processes: PRODUCTS.map((product) => ({ name: `${product.id} 공정`, product: product.name, mass: product.mass, scrap: product.scrap })),
-  fuels: FUELS.map((fuel) => fuelRow(fuel, Array.isArray(fuel.users) && fuel.users.length === 1 ? `${fuel.users[0]} 공정` : W.SHARED_PROCESS_LABEL)),
+  fuels: FUELS.map((fuel) => fuelRow(fuel, Array.isArray(fuel.users) ? fuel.users.map((id) => `${id} 공정`).join('; ') : W.SHARED_PROCESS_LABEL)),
   precursors: Object.values(STEELS).flatMap((steel) => Object.entries(steel.users).map(([id, consumed]) => precursorRow(steel, `${id} 공정`, consumed))),
 };
-// (다) 규정을 아는 사람이: 원료가 같은 제품끼리 한 공정, 일부 공정만 쓰는 연료는 손으로 나눠 공정마다 한 줄.
+// (다) 원료가 같은 제품끼리 한 공정, 일부 공정만 쓰는 연료는 그 공정 이름들을 ; 로 이어 적는다(손으로 나누지 않는다).
 const GROUPS = [['합금강 볼트 공정', ['P1']], ['탄소강 공정', ['P2', 'P4', 'P6']], ['STS 볼트 공정', ['P3']], ['휠너트 공정', ['P5']], ['알루미늄 공정', ['P7']]];
 const groupOf = (id) => GROUPS.find(([, ids]) => ids.includes(id))[0];
 const careful = {
@@ -122,7 +125,7 @@ const careful = {
   processes: GROUPS.flatMap(([name, ids]) => PRODUCTS.filter((product) => ids.includes(product.id)).map((product) => ({ name, product: product.name, mass: product.mass, scrap: product.scrap }))),
   fuels: FUELS.flatMap((fuel) => (fuel.users === 'ALL'
     ? [fuelRow(fuel, W.SHARED_PROCESS_LABEL)]
-    : fuel.users.map((id) => fuelRow(fuel, groupOf(id), Math.round(fuel.amount * massOf([id]) / massOf(fuel.users) * 1000) / 1000, fuel.users.length > 1 ? `${fuel.name} — ${groupOf(id)} 몫(손으로 나눔)` : fuel.name)))),
+    : [fuelRow(fuel, fuel.users.map(groupOf).join('; '))])),
   precursors: Object.values(STEELS).map((steel) => precursorRow(steel, groupOf(Object.keys(steel.users)[0]), totalOf(steel))),
 };
 
@@ -151,21 +154,20 @@ async function run(label, fill) {
   return { label, created: result.created, issues: result.issues, see, attribution, readiness, counts: { processes: store.processes.length, streams: store.source_streams.length, precursors: store.precursors.length, lines: store.product_output_lines.length } };
 }
 
-const runs = [await run('(가) 한 공정에 전부', naive), await run('(나) CN마다 공정', perCn), await run('(다) 원료별 공정 + 손으로 나눔', careful)];
+const runs = [await run('(가) 한 공정에 전부', naive), await run('(가2) 한 공정 + 쓰는 제품', naiveAssigned), await run('(나) CN마다 공정', perCn), await run('(다) 원료별 공정', careful)];
 const f = (value) => (value === null || value === undefined ? '   —  ' : value.toFixed(3).padStart(6));
 const pct = (value, base) => (value === null || value === undefined ? '' : `(${((value / base - 1) * 100 >= 0 ? '+' : '')}${((value / base - 1) * 100).toFixed(0)}%)`.padStart(7));
 console.log('기준 SEE (직접 + 구매 강재 직접, tCO2e/t)');
-console.log(`${'제품'.padEnd(34)}  기준값   ${runs.map((item) => item.label.slice(0, 4).padEnd(15)).join('')}`);
+console.log(`${'제품'.padEnd(34)}  기준값   ${runs.map((item) => item.label.slice(0, 5).padEnd(15)).join('')}`);
 for (const product of PRODUCTS) {
   console.log(`${`${product.id} ${product.name}`.padEnd(34)} ${f(reference[product.id].basis)}   ${runs.map((item) => `${f(item.see[product.id]?.basis)} ${pct(item.see[product.id]?.basis, reference[product.id].basis)}  `).join('')}${product.eu ? 'EU 수출' : ''}`);
 }
 for (const item of runs) {
   console.log(`\n== ${item.label}: 넣은 것 ${JSON.stringify(item.created)} · 저장된 공정 ${item.counts.processes} · 연료 행 ${item.counts.streams} · 구매 강재 ${item.counts.precursors}`);
   console.log(`   서식 「확인할 것」: 넣지 못함 ${item.issues.filter((issue) => issue.level === 'error').length} · 확인 필요 ${item.issues.filter((issue) => issue.level === 'warning').length} · 참고 ${item.issues.filter((issue) => issue.level === 'info').length}`);
-  for (const issue of item.issues.filter((entry) => entry.level !== 'info').slice(0, 4)) console.log(`     [${issue.level}] ${issue.sheet}${issue.row ? ` ${issue.row}줄` : ''} — ${issue.message.slice(0, 130)}`);
+  for (const issue of item.issues.filter((entry) => entry.level !== 'info').slice(0, 6)) console.log(`     [${issue.level}] ${issue.sheet}${issue.row ? ` ${issue.row}줄` : ''} — ${issue.message.slice(0, 150)}`);
   console.log(`   귀속·할당 점검: 수정 ${item.attribution.counts.fix} · 확인 ${item.attribution.counts.review} · 통과 ${item.attribution.counts.ok}`);
   for (const row of item.attribution.rows.filter((entry) => entry.status !== 'ok')) console.log(`     ${row.status} ${row.code} ${row.title.slice(0, 40)} — ${(row.items[0] ?? row.detail).slice(0, 150)}`);
   console.log(`   EU 문서 준비도: 오류 ${item.readiness.errorCount} · 경고 ${item.readiness.warningCount}`);
   for (const issue of item.readiness.issues.filter((entry) => entry.severity === 'error').slice(0, 4)) console.log(`     오류 — ${issue.message.slice(0, 170)}`);
-  for (const issue of item.readiness.issues.filter((entry) => entry.severity !== 'error').slice(0, 5)) console.log(`     경고 — ${issue.message.slice(0, 170)}`);
 }

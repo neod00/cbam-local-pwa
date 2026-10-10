@@ -2,6 +2,7 @@ import {
     ELECTRICITY_SOURCE_CHOICES,
     FUEL_FACTOR_SOURCE_CHOICES,
     FUEL_KIND_CHOICES,
+    LIST_SEPARATOR,
     NO,
     SHARED_PROCESS_LABEL,
     SHEET_FUELS,
@@ -30,10 +31,11 @@ import {
     validateElectricityDraft,
     validateInstallationDraft,
     validatePeriodDraft,
+    validatePrecursorAllocation,
     validatePrecursorDraft,
     validateProductDraft,
 } from './guided-edit';
-import type { LocalEntity, Product, ProductionProcess, PurchasedPrecursor, SourceStream, StoreEntityMap, StoreName } from './local-db';
+import type { LocalEntity, Product, ProductionProcess, ProductOutputLine, PurchasedPrecursor, SourceStream, StoreEntityMap, StoreName } from './local-db';
 import { buildImportedHeatUpdate, validateImportedHeatDraft } from './measurable-heat';
 import type { ImportedDefaultValueReference } from './reference-workbooks';
 import { createSourceStreamValidationErrors, firstSourceStreamError, GUIDED_STREAM_KINDS } from './source-stream-input';
@@ -140,6 +142,12 @@ const yesNo = (input: string | undefined): 'YES' | 'NO' | undefined => {
     if ([key(NO), 'n', 'no', '아니요', 'x'].includes(wanted)) return 'NO';
     return undefined;
 };
+
+/** 한 칸에 ; 로 이어 적은 이름들 */
+const namesOf = (value: string | undefined) => (value ?? '').split(LIST_SEPARATOR).map((item) => item.trim()).filter(Boolean);
+/** 일부 제품만 거치는 설비의 연료로 보이는 이름 — 「공장 전체」로 적혀 있으면 되묻는다. */
+const PARTIAL_ROUTE_FUEL = /열처리|가열로|소둔|침탄|단조|도금|소입|템퍼|QT/i;
+const headingOf = (cn: string | undefined) => (cn ?? '').replace(/\D/g, '').slice(0, 4);
 
 const fmt = (value: number) => new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 4 }).format(value);
 
@@ -271,6 +279,8 @@ export async function importActivityWorkbook(
         return saved;
     };
     const meteredMwh = new Map<string, number>();
+    /** 이번에 만든 공정의 제품 라인(활동수준 제외 라인은 빼고) */
+    const goodLines = new Map<string, ProductOutputLine[]>();
     const groups = new Map<string, ActivityRow[]>();
     for (const row of data.processes) {
         const name = key(row.values.name);
@@ -327,7 +337,8 @@ export async function importActivityWorkbook(
             // 서식의 「제품」 줄은 합격품이다 — EU로 안 나가는 제품의 라인도 활동수준에 들어간다고 적어 둔다(불량·스크랩은 옆 칸으로 따로 받는다).
             // 적어 두지 않으면 엔진이 「이 라인이 스크랩은 아닌지」 확인을 요구한다.
             const role = line.product.reporting_scope === 'NON_CBAM_COPRODUCT' ? { activity_level_role: 'GOOD' as const } : {};
-            await store.create('product_output_lines', { process_id: process.id, ...buildProcessCreation(draftOf(line.product, line.mass, 0)).productLine, ...role });
+            const saved = await store.create('product_output_lines', { process_id: process.id, ...buildProcessCreation(draftOf(line.product, line.mass, 0)).productLine, ...role });
+            goodLines.set(process.id, [...(goodLines.get(process.id) ?? []), saved]);
         }
         if (creation.excludedLine) await store.create('product_output_lines', { process_id: process.id, ...creation.excludedLine });
         fresh.set(process.id, process);
@@ -432,10 +443,17 @@ export async function importActivityWorkbook(
         const factorSource = labelValue(FUEL_FACTOR_SOURCE_CHOICES, row.values.factorSource);
         if (own && !factorSource) { tell('error', '순발열량·배출계수를 직접 적었으면 「계수 출처」도 목록에서 골라 주세요. 기본값을 쓰려면 두 칸을 비우세요.'); continue; }
         const where = (row.values.where ?? '').trim();
-        const shared = key(where) === key(SHARED_PROCESS_LABEL) || key(where) === '공용' || key(where) === '공장 전체';
-        const process = shared ? undefined : processByName.get(key(where));
+        const whereNames = namesOf(where);
+        const shared = whereNames.some((item) => key(item) === key(SHARED_PROCESS_LABEL) || key(item) === '공용' || key(item) === '공장 전체');
+        // 공정 이름을 ; 로 여럿 적으면 그 공정들끼리만 나눈다(열처리로처럼 일부 제품만 거치는 설비).
+        const several = !shared && whereNames.length >= 2;
+        if (several) {
+            const unknown = whereNames.filter((item) => { const found = processByName.get(key(item)); return !found || !fresh.has(found.id); });
+            if (unknown.length > 0) { tell('error', `쓰는 공정 ${unknown.map((item) => `「${item}」`).join(', ')}을(를) ${SHEET_PROCESSES} 시트에서 찾지 못했습니다. 이름을 똑같이 적고 ${LIST_SEPARATOR} 로 구분해 주세요.`); continue; }
+        }
+        const process = shared || several ? undefined : processByName.get(key(where));
         if (!shared && !where) { tell('error', `「쓰는 공정」이 비어 있습니다. 공정 이름을 적거나, 여러 공정이 같이 쓰면 「${SHARED_PROCESS_LABEL}」을 골라 주세요.`); continue; }
-        if (!shared && (!process || !fresh.has(process.id))) {
+        if (!shared && !several && (!process || !fresh.has(process.id))) {
             tell('error', process ? `「${where}」은(는) 이미 있던 공정이라 연료를 새로 넣지 않았습니다.` : `쓰는 공정 「${where}」을(를) ${SHEET_PROCESSES} 시트에서 찾지 못했습니다(그 공정이 위에서 만들어지지 못했을 수도 있습니다).`);
             continue;
         }
@@ -447,11 +465,14 @@ export async function importActivityWorkbook(
         const factorValue = factor ?? kind.defaults.emission_factor_tco2e_per_unit;
         const sourceType = own && factorSource ? factorSource : kind.defaults.factor_source_type;
         const sourceText = evidence || MISSING_EVIDENCE_TEXT;
-        const targets = freshList();
+        const targets = several ? whereNames.map((item) => processByName.get(key(item))).filter((item): item is ProductionProcess => Boolean(item)).map((item) => fresh.get(item.id) ?? item) : freshList();
+        if (shared && targets.length >= 2 && PARTIAL_ROUTE_FUEL.test(name)) {
+            tell('warning', `「${SHARED_PROCESS_LABEL}」로 적혀 모든 공정에 생산량 비율로 나눴습니다. 이름으로 보아 일부 제품만 거치는 설비의 연료일 수 있습니다 — 그렇다면 그 공정 이름만 적어 다시 올리세요(여러 공정이면 ${LIST_SEPARATOR} 로 이어서). 안 그러면 이 설비를 거치지 않는 제품에도 배출이 실립니다.`);
+        }
 
         const drafts: Array<Omit<SourceStream, keyof LocalEntity>> = [];
         const updates: SourceStream[] = [];
-        if (shared && targets.length >= 2) {
+        if ((shared || several) && targets.length >= 2) {
             // 지도 4단계 「연료 나누기」와 같은 계산·같은 행 — 계량기 이름은 연료 이름, 기준은 생산량 비율.
             const toStorage = (value: number) => (kind.litres ? litresToTonnes(value, kind.litres.densityKgPerL) : value);
             const split: FuelSplitDraft = { group: name, total: amount, basis: 'OUTPUT_MASS', rows: targets.map((item) => ({ processId: item.id, processName: item.name, value: item.output_mass_t })), note: '' };
@@ -472,8 +493,12 @@ export async function importActivityWorkbook(
             updates.push(...changes.update);
             meterGroups.push(name);
         } else {
-            const target = shared ? targets[0] : process;
+            const target = shared || several ? targets[0] : process;
             if (!target) { tell('error', '넣을 공정이 없습니다 — 공정이 먼저 만들어져야 합니다.'); continue; }
+            // 한 공정 안에서는 연료가 제품에 생산량 비율로 나뉜다 — 일부 제품만 거치는 설비라면 공정을 나눠 적어야 한다.
+            if ((goodLines.get(target.id)?.length ?? 0) >= 2 && PARTIAL_ROUTE_FUEL.test(name)) {
+                tell('warning', `공정 「${target.name}」에는 제품이 ${goodLines.get(target.id)?.length}개 있어 이 연료가 모든 제품에 생산량 비율로 나뉩니다. 이름으로 보아 일부 제품만 거치는 설비의 연료일 수 있습니다 — 그렇다면 ${SHEET_PROCESSES} 시트에서 그 제품들을 별도 공정으로 적고 이 연료를 그 공정에 넣으세요.`);
+            }
             if (streams.some((stream) => stream.process_id === target.id && key(stream.name) === key(name))) { tell('info', '같은 이름의 연료가 이 공정에 이미 있어 건너뛰었습니다.'); continue; }
             const answer: FuelAnswer = { kind, amount: String(amount), name, ncv: String(ncvValue), factor: String(factorValue), factorSource: sourceType, source: sourceText };
             drafts.push(buildFuelStreamDraft(answer, target));
@@ -507,6 +532,9 @@ export async function importActivityWorkbook(
     // ── 8) 구매 강재 ─────────────────────────────────────────────────
     const knownCountries = Array.from(new Set((deps.defaultValues?.rows ?? []).map((item) => item.country)));
     const withPrecursor = new Set<string>();
+    /** 공정별로, 「쓰는 제품」을 적은 원료와 안 적은 원료 */
+    const assigned = new Map<string, Array<{ name: string; heading: string }>>();
+    const unassigned = new Map<string, Array<{ name: string; heading: string }>>();
     for (const row of data.precursors) {
         const name = (row.values.name ?? '').trim();
         const tell = (level: ActivityImportIssue['level'], message: string) => note(level, SHEET_PRECURSORS, `${name || '(이름 없음)'}: ${message}`, row.row);
@@ -542,6 +570,24 @@ export async function importActivityWorkbook(
             ...buildPrecursorDraft({ name, cn, consumed: String(numbers.consumed ?? ''), purchased: String(numbers.purchased ?? numbers.consumed ?? ''), country, ...answer }),
             supplierInstallation: supplier,
         };
+        // 「쓰는 제품」을 적었으면 그 제품 라인에만 귀속한다(지도 6단계의 제품별 배분과 같은 기록). 여러 제품이면 그 제품들의 생산량 비율.
+        const wanted = namesOf(row.values.products);
+        if (wanted.length > 0) {
+            const lines = goodLines.get(process.id) ?? [];
+            const chosen = wanted.map((item) => lines.find((line) => line.product_id === productByName.get(key(item))?.id));
+            const missing = wanted.filter((_, index) => !chosen[index]);
+            if (missing.length > 0) { tell('error', `쓰는 제품 ${missing.map((item) => `「${item}」`).join(', ')}이(가) 공정 「${process.name}」의 제품이 아닙니다. ${SHEET_PROCESSES} 시트에서 그 공정에 적은 제품 이름을 똑같이 적어 주세요.`); continue; }
+            const picked = chosen.filter((line): line is ProductOutputLine => Boolean(line));
+            const basis = picked.reduce((sum, line) => sum + line.output_mass_t, 0);
+            let rest = draft.consumedMass;
+            draft.outputAllocations = picked.map((line, index) => {
+                const mass = index === picked.length - 1 ? rest : Math.round(draft.consumedMass * line.output_mass_t / basis * 1e6) / 1e6;
+                rest = Math.round((rest - mass) * 1e6) / 1e6;
+                return { product_output_line_id: line.id, product_id: line.product_id, allocated_mass_t: mass, allocation_percent: draft.consumedMass > 0 ? Math.round(mass / draft.consumedMass * 1e6) / 1e4 : undefined };
+            });
+            const allocationError = validatePrecursorAllocation(draft.outputAllocations.reduce((sum, item) => sum + item.allocated_mass_t, 0), draft.consumedMass);
+            if (allocationError) { tell('error', allocationError); continue; }
+        }
         const error = validatePrecursorDraft(draft);
         if (error) { tell('error', error); continue; }
         if (mode === 'ACTUAL' && knownCountries.length > 0 && !knownCountries.includes(country)) tell('warning', `원료를 만든 나라 「${country}」이(가) EU 기본값표의 이름과 다릅니다. 목록에서 골라 주세요(EU 문서의 국가 코드가 이 값으로 정해집니다).`);
@@ -553,8 +599,27 @@ export async function importActivityWorkbook(
         };
         await store.create('precursors', payload);
         withPrecursor.add(process.id);
+        (wanted.length > 0 ? assigned : unassigned).set(process.id, [...((wanted.length > 0 ? assigned : unassigned).get(process.id) ?? []), { name, heading: headingOf(cn) }]);
         created.precursors += 1;
     }
+    // 조용히 섞이지 않게: 한 공정에 제품이 여럿인데 「쓰는 제품」 없이 넣은 원료는 생산량 비율로 모든 제품에 나뉜다.
+    //  · 그 원료의 종류(CN 4자리)가 둘 이상이면 제품마다 원료가 다를 가능성이 크다 → 되묻는다.
+    //  · 철강이 아닌 제품이 그 공정에 있으면 그 제품이 강재 배출의 몫을 가져간다 → 되묻는다.
+    const productById = new Map(Array.from(productByName.values()).map((product) => [product.id, product]));
+    for (const process of freshList()) {
+        const lines = goodLines.get(process.id) ?? [];
+        const loose = unassigned.get(process.id) ?? [];
+        if (lines.length < 2 || loose.length === 0) continue;
+        const headings = [...new Set(loose.map((item) => item.heading))];
+        if (headings.length >= 2) {
+            note('warning', SHEET_PRECURSORS, `공정 「${process.name}」에는 제품이 ${lines.length}개 있고, 종류가 다른 원료 ${loose.map((item) => `「${item.name}」`).join(', ')}을(를) 「쓰는 제품」 없이 넣었습니다. 이대로면 모든 원료가 모든 제품에 생산량 비율로 섞입니다 — 제품마다 쓰는 원료(강종)가 다르면 「쓰는 제품」을 적어 다시 올리세요. 틀리면 제품별 배출량이 크게 달라집니다.`);
+        }
+        const foreign = lines.filter((line) => !/^7[23]/.test((productById.get(line.product_id ?? '')?.cn_code ?? '').replace(/\D/g, '')));
+        if (foreign.length > 0) {
+            note('warning', SHEET_PRECURSORS, `공정 「${process.name}」에 철강이 아닌 제품 ${foreign.map((line) => `「${line.name}」`).join(', ')}이(가) 같이 있습니다. 「쓰는 제품」 없이 넣은 강재의 배출이 이 제품에도 나뉘어 철강 제품의 값이 낮아집니다 — 강재마다 「쓰는 제품」을 적거나 이 제품을 다른 공정으로 적어 주세요.`);
+        }
+    }
+
     // 신고 대상 제품을 만드는 공정만 본다 — EU로 안 나가는 제품의 공정은 구매 강재가 없어도 계산에 영향이 없다.
     const reportable = new Set(Array.from(productByName.values()).filter((product) => product.reporting_scope !== 'NON_CBAM_COPRODUCT').map((product) => product.id));
     const bare = freshList().filter((process) => !withPrecursor.has(process.id) && reportable.has(process.product_id ?? ''));

@@ -187,6 +187,67 @@ assert.ok(merged.store.data.source_streams.length === 1 && !merged.store.data.so
 assert.equal(merged.store.data.processes[0].electricity_mwh, 5412, '공정이 하나면 공장 전체 전력이 그 공정 값');
 assert.equal(merged.store.data.processes[0].electricity_shared_meter, undefined);
 
+// ── 3-1) 다품종 업체(run34): 원료를 쓰는 제품 · 연료를 쓰는 공정 여럿 · 조용히 섞이지 않게 ──
+// 가상 사례에서 「한 공정에 전부」로 적으면 강종이 섞여 휠너트가 −52%, STS 볼트가 +33%로 나왔는데 아무 경고가 없었다.
+const multi = (processes, fuels, precursors) => ({
+  installation: { name: 'Multi Plant', country: 'KR', operator_name: 'Multi Co.', operator_reg_number: '000', operator_address: 'Seoul', latitude: '37', longitude: '127', period_start: '2025-01-01', period_end: '2025-12-31', electricity_total_mwh: '1000', electricity_ef: '0.4747', electricity_ef_source: '국가 전력망 평균', imported_heat: '아니오' },
+  products: [['합금강 볼트', '73181582'], ['탄소강 너트', '73181699'], ['휠너트', '73181692'], ['알루미늄 캡', '76169990']].map(([name, cn], index) => ({ row: 5 + index, values: { name, cn } })),
+  processes: processes.map((values, index) => ({ row: 5 + index, values })),
+  fuels: fuels.map((values, index) => ({ row: 5 + index, values: { kind: '도시가스 (Nm³)', evidence: '고지서', ...values } })),
+  precursors: precursors.map((values, index) => ({ row: 5 + index, values: { country: 'South Korea', hasValue: '있음', indirect: '0', evidence: '공급사', ...values } })),
+  notes: [],
+});
+const alloyWire = { name: '합금강 선재', cn: '72279050', consumed: '1040', direct: '2' };
+const carbonWire = { name: '탄소강 선재', cn: '72139110', consumed: '2080', direct: '1' };
+const seeOf = (run, cn) => resultsOf(run.store).find((item) => item.cn_code === cn && item.output_mass_t > 0).see_direct_incl_precursor;
+// (a) 한 공정에 제품 둘 + 「쓰는 제품」: 원료가 그 제품에만 귀속된다(지도 6단계의 제품별 배분과 같은 기록).
+const oneProcess = [{ name: '라인', product: '합금강 볼트', mass: '1000' }, { name: '라인', product: '탄소강 너트', mass: '2000' }];
+const assignedRun = await importOf(multi(oneProcess, [], [{ ...alloyWire, where: '라인', products: '합금강 볼트' }, { ...carbonWire, where: '라인', products: '탄소강 너트' }]));
+const alloyRecord = assignedRun.store.data.precursors.find((item) => item.name === '합금강 선재');
+const boltLine = assignedRun.store.data.product_output_lines.find((line) => line.output_mass_t === 1000);
+assert.deepEqual(plain(alloyRecord.output_allocations), [{ product_output_line_id: boltLine.id, product_id: boltLine.product_id, allocated_mass_t: 1040, allocation_percent: 100 }]);
+assert.ok(Math.abs(seeOf(assignedRun, '73181582') - 2.08) < 1e-9 && Math.abs(seeOf(assignedRun, '73181699') - 1.04) < 1e-9, '합금강은 볼트에만(1,040 × 2 ÷ 1,000), 탄소강은 너트에만(2,080 × 1 ÷ 2,000)');
+assert.equal(assignedRun.result.issues.filter((issue) => issue.level !== 'info').length, 0);
+// (b) 같은 자료를 「쓰는 제품」 없이: 값이 섞이고(둘 다 1.3867) — 이제 그 사실을 알린다.
+const mixedRun = await importOf(multi(oneProcess, [], [{ ...alloyWire, where: '라인' }, { ...carbonWire, where: '라인' }]));
+assert.ok(Math.abs(seeOf(mixedRun, '73181582') - (1040 * 2 + 2080 * 1) / 3000) < 1e-9, '안 적으면 생산량 비율로 섞인다');
+assert.match(I.describeActivityImportIssues(mixedRun.result.issues), /\[확인 필요\] 5_구매강재 — 공정 「라인」에는 제품이 2개 있고, 종류가 다른 원료 「합금강 선재」, 「탄소강 선재」을\(를\) 「쓰는 제품」 없이 넣었습니다/);
+// 종류(CN 4자리)가 같은 원료만 있으면 묻지 않는다 — 같은 원료로 만드는 제품은 한 공정이 규정이다(부속서 II A.4).
+const sameSteel = await importOf(multi(oneProcess, [], [{ ...carbonWire, where: '라인' }, { ...carbonWire, name: '탄소강 선재 B', where: '라인' }]));
+assert.equal(sameSteel.result.issues.filter((issue) => issue.level === 'warning').length, 0);
+// 한 원료를 제품 둘이 쓰면 ; 로 잇고, 그 둘의 생산량 비율로 나뉜다. 그 공정의 제품이 아니면 넣지 않는다.
+const twoUsers = await importOf(multi([...oneProcess, { name: '라인', product: '휠너트', mass: '1000' }], [], [{ ...carbonWire, where: '라인', products: '합금강 볼트; 탄소강 너트' }]));
+assert.deepEqual(plain(twoUsers.store.data.precursors[0].output_allocations.map((item) => item.allocated_mass_t)), [693.333333, 1386.666667]);
+assert.equal(resultsOf(twoUsers.store).find((item) => item.cn_code === '73181692').see_direct_incl_precursor, 0, '적지 않은 제품에는 귀속되지 않는다');
+const wrongProduct = await importOf(multi(oneProcess, [], [{ ...alloyWire, where: '라인', products: '휠너트' }]));
+assert.equal(wrongProduct.store.data.precursors.length, 0);
+assert.match(I.describeActivityImportIssues(wrongProduct.result.issues), /\[넣지 못함\] 5_구매강재 5번째 줄 — 합금강 선재: 쓰는 제품 「휠너트」이\(가\) 공정 「라인」의 제품이 아닙니다/);
+// 철강이 아닌 제품이 같은 공정에 있으면 강재 배출의 몫을 가져간다 — 알린다.
+const withAluminium = await importOf(multi([...oneProcess, { name: '라인', product: '알루미늄 캡', mass: '100' }], [], [{ ...carbonWire, where: '라인' }]));
+assert.match(I.describeActivityImportIssues(withAluminium.result.issues), /공정 「라인」에 철강이 아닌 제품 「알루미늄 캡」이\(가\) 같이 있습니다/);
+// (c) 연료를 일부 공정만 쓰면 그 공정 이름들을 ; 로 잇는다 — 그 공정들끼리만 생산량 비율로 나뉘고 공용 계량기 기록이 남는다.
+const three = [{ name: '볼트 공정', product: '합금강 볼트', mass: '1000' }, { name: '너트 공정', product: '탄소강 너트', mass: '2000' }, { name: '휠너트 공정', product: '휠너트', mass: '3000' }];
+const partial = await importOf(multi(three, [{ name: '열처리로 가스', amount: '40000', where: '볼트 공정; 휠너트 공정' }], []));
+const partialRows = partial.store.data.source_streams;
+const processNamed = (run, name) => run.store.data.processes.find((process) => process.name === name);
+assert.deepEqual(plain(partialRows.map((stream) => [processNamed(partial, '볼트 공정').id === stream.process_id ? '볼트' : '휠너트', stream.activity_data, stream.shared_meter.group, stream.shared_meter.installation_total_activity_data])), [['볼트', 10000, '열처리로 가스', 40000], ['휠너트', 30000, '열처리로 가스', 40000]]);
+assert.equal(processNamed(partial, '너트 공정').direct_attributable_emissions_tco2e, 0, '적지 않은 공정에는 실리지 않는다');
+assert.equal(partial.result.issues.filter((issue) => issue.level === 'warning' && issue.sheet === '4_연료').length, 0);
+const unknownProcess = await importOf(multi(three, [{ name: '열처리로 가스', amount: '40000', where: '볼트 공정; 없는 공정' }], []));
+assert.equal(unknownProcess.store.data.source_streams.length, 0);
+assert.match(I.describeActivityImportIssues(unknownProcess.result.issues), /쓰는 공정 「없는 공정」을\(를\) 3_공정 시트에서 찾지 못했습니다/);
+// 일부 제품만 거칠 법한 설비의 연료를 「공장 전체」로 적거나, 제품이 여럿인 한 공정에 적으면 되묻는다. 보일러처럼 모두 쓰는 연료는 묻지 않는다.
+const allShared = await importOf(multi(three, [{ name: '열처리로 가스', amount: '40000', where: W.SHARED_PROCESS_LABEL }, { name: '세척 보일러 가스', amount: '100', where: W.SHARED_PROCESS_LABEL }], []));
+const fuelWarnings = allShared.result.issues.filter((issue) => issue.level === 'warning' && issue.sheet === '4_연료');
+assert.equal(fuelWarnings.length, 1);
+assert.match(fuelWarnings[0].message, /^열처리로 가스: 「공장 전체\(공용\)」로 적혀 모든 공정에 생산량 비율로 나눴습니다\. 이름으로 보아 일부 제품만 거치는 설비의 연료일 수 있습니다/);
+const inOneProcess = await importOf(multi(oneProcess, [{ name: '소둔로 가스', amount: '100', where: '라인' }], []));
+assert.match(I.describeActivityImportIssues(inOneProcess.result.issues), /소둔로 가스: 공정 「라인」에는 제품이 2개 있어 이 연료가 모든 제품에 생산량 비율로 나뉩니다/);
+// 서식: 새 칸과 안내.
+assert.ok(W.PRECURSOR_COLUMNS.some((field) => field.key === 'products' && field.list === 'product' && !field.required));
+assert.ok(W.FUEL_COLUMNS.find((field) => field.key === 'where').hint.includes('; 로 이어'));
+for (const phrase of ['CN 코드별로 묶어', '같은 원료로 만드는 제품끼리', '일부 제품만 거치는 설비의 연료']) assert.ok(guide.includes(phrase), `안내 시트: ${phrase}`);
+
 // ── 4) 「확인할 것」 ─────────────────────────────────────────────────
 const broken = structuredClone(plain(sample));
 delete broken.installation.operator_reg_number;
@@ -272,4 +333,4 @@ assert.ok(page.includes('data-testid="activity-issues-alert"'), '넣지 못한 �
 assert.ok(page.includes('createActivityWorkbook({') && page.includes('ACTIVITY_WORKBOOK_SAMPLE') && page.includes('describeActivityImportIssues('), '빈 서식·작성 예시 내려받기와 「확인할 것」 복사');
 assert.ok(readFileSync('package.json', 'utf8').includes('"verify:activity-workbook"'));
 
-console.log('Activity workbook v2 verified (서식 모양·선택 목록 · 빈 서식 0건 · 작성 예시 = 기준선 3.764/5.112 · 공용 나누기·배출원 합계·생산라인 · 「확인할 것」 · 종전 서식 유지).');
+console.log('Activity workbook v2 verified (서식 모양·선택 목록 · 빈 서식 0건 · 작성 예시 = 기준선 3.764/5.112 · 공용 나누기·배출원 합계·생산라인 · 원료의 쓰는 제품·연료의 쓰는 공정 여럿·섞임 경고 · 「확인할 것」 · 종전 서식 유지).');

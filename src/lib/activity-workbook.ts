@@ -27,6 +27,8 @@ export const SHEET_LISTS = '선택목록';
 export const EXAMPLE_PREFIX = '(예시)';
 /** 여러 공정이 같이 쓰는 연료를 뜻하는 「쓰는 공정」 값 */
 export const SHARED_PROCESS_LABEL = '공장 전체(공용)';
+/** 한 칸에 이름을 여럿 적을 때의 구분자(공정·제품) */
+export const LIST_SEPARATOR = ';';
 
 export const YES = '예';
 export const NO = '아니오';
@@ -135,7 +137,7 @@ export const FUEL_COLUMNS: ActivityField[] = [
     { key: 'name', label: '연료 이름', required: true, width: 32, hint: '알아볼 수 있게. 고지서·전표 하나에 한 줄', example: `${EXAMPLE_PREFIX} 지게차 경유` },
     { key: 'kind', label: '연료 종류', required: true, list: 'fuelKind', width: 20, hint: '칸을 눌러 고르세요. 괄호 안이 사용량의 단위입니다', example: '경유 (L)' },
     { key: 'amount', label: '연간 사용량', required: true, width: 18, hint: '고른 종류의 단위로(Nm³·t·L). 보고기간 합계', example: 12400 },
-    { key: 'where', label: '쓰는 공정', required: true, list: 'processOrShared', width: 30, hint: `한 공정만 쓰면 그 공정 이름. 여러 공정이 같이 쓰면 「${SHARED_PROCESS_LABEL}」 — 앱이 생산량 비율로 나눕니다`, example: SHARED_PROCESS_LABEL },
+    { key: 'where', label: '쓰는 공정', required: true, list: 'processOrShared', width: 30, hint: `한 공정만 쓰면 그 공정 이름. 모든 공정이 같이 쓰면 「${SHARED_PROCESS_LABEL}」. 일부 공정만 같이 쓰면(예: 열처리로) 그 공정 이름들을 ; 로 이어 적으세요 — 앱이 생산량 비율로 나눕니다`, example: SHARED_PROCESS_LABEL },
     { key: 'evidence', label: '근거 자료', width: 34, hint: '어디서 본 숫자인지. 예: 삼천리 고지서 2025 12장, 주유 전표 합계', example: '지게차 주유 전표 2025 합계' },
     { key: 'ncv', label: '순발열량', width: 24, hint: '비우면 기본값. 공급사 성적서 값이 있을 때만 적으세요(도시가스 GJ/Nm³, 그 밖은 GJ/t)', example: '' },
     { key: 'factor', label: '배출계수 (tCO₂e/TJ)', width: 24, hint: '비우면 기본값. 직접 적으면 옆 칸의 출처도 고르세요', example: '' },
@@ -149,6 +151,7 @@ export const PRECURSOR_COLUMNS: ActivityField[] = [
     { key: 'purchased', label: '구매량 (t)', width: 16, hint: '비우면 투입량과 같게 봅니다', example: 2980 },
     { key: 'country', label: '원료를 만든 나라', required: true, list: 'country', width: 20, hint: '파는 회사의 나라가 아니라 **만든 공장**의 나라. 목록에서 고르세요', example: 'South Korea' },
     { key: 'where', label: '쓰는 공정', required: true, list: 'process', width: 30, hint: '3_공정 시트의 공정 이름', example: 'STS 나사 공정' },
+    { key: 'products', label: '쓰는 제품', list: 'product', width: 34, hint: '이 원료로 만드는 제품(2_제품의 이름). 비우면 그 공정의 모든 제품이 생산량 비율로 나눠 쓴 것으로 봅니다. 제품마다 강종이 다르면 꼭 적으세요 — 여러 개면 ; 로 이어 적습니다', example: '' },
     { key: 'hasValue', label: '공급사 배출량 값이 있나요?', required: true, list: 'supplierValue', width: 28, hint: '없으면 앱이 EU 기본값을 찾아 넣습니다(직접·간접 칸은 비워 두세요)', example: SUPPLIER_VALUE_CHOICES[0].label },
     { key: 'direct', label: '직접 SEE (tCO₂e/t)', width: 18, hint: '공급사가 준 값. 「있음」일 때만', example: 1.86 },
     { key: 'indirect', label: '간접 SEE (tCO₂e/t)', width: 18, hint: '공급사가 준 값. 「있음」일 때만', example: 0.94 },
@@ -391,6 +394,9 @@ function guideSheet(): SheetSpec {
         ['자주 헷갈리는 것', STYLE.section],
         [`· 한 고지서·전표의 연료를 여러 공정이 같이 쓰면 줄을 나누지 말고 공장 전체 값을 한 줄로 적고, 「쓰는 공정」에 「${SHARED_PROCESS_LABEL}」을 고르세요. 앱이 생산량 비율로 나눕니다.`, STYLE.wrap],
         ['· 전기도 같습니다. 공정별 계량기가 없으면 1_사업장에 공장 전체 값만 적으세요.', STYLE.wrap],
+        ['· 제품은 품번이 아니라 CN 코드별로 묶어 적습니다(같은 CN이면 크기·모양이 달라도 한 줄). 강종이 다르면 줄을 나누세요.', STYLE.wrap],
+        ['· 공정은 「같은 원료로 만드는 제품끼리」 묶습니다. 합금강 볼트와 탄소강 너트처럼 원료가 다른 제품을 한 공정에 적었다면, 5_구매강재의 「쓰는 제품」에 어느 제품의 원료인지 적어야 합니다 — 안 적으면 원료 배출이 모든 제품에 섞입니다.', STYLE.wrap],
+        ['· 열처리로·가열로처럼 일부 제품만 거치는 설비의 연료는 「공장 전체(공용)」가 아니라 그 공정 이름을 적습니다(여러 공정이면 ; 로 이어서).', STYLE.wrap],
         ['· 생산량에는 합격품만. 불량·스크랩은 옆 칸에 따로 적습니다.', STYLE.wrap],
         ['· 구매 강재의 「투입량」은 사 온 양이 아니라 그 기간에 실제로 쓴 양입니다.', STYLE.wrap],
         ['· 공급사 배출량 값이 없으면 「없음」을 고르세요. EU가 정한 기본값이 들어갑니다(보통 실제보다 큽니다).', STYLE.wrap],
