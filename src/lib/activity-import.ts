@@ -1,4 +1,5 @@
 import {
+    CARBON_PRICE_CHOICES,
     ELECTRICITY_SOURCE_CHOICES,
     FUEL_FACTOR_SOURCE_CHOICES,
     FUEL_KIND_CHOICES,
@@ -10,6 +11,7 @@ import {
     SHEET_PRECURSORS,
     SHEET_PROCESSES,
     SHEET_PRODUCTS,
+    SHEET_RNR,
     SUPPLIER_VALUE_CHOICES,
     VERIFICATION_CHOICES,
     YES,
@@ -35,9 +37,11 @@ import {
     validatePrecursorDraft,
     validateProductDraft,
 } from './guided-edit';
-import type { LocalEntity, Product, ProductionProcess, ProductOutputLine, PurchasedPrecursor, SourceStream, StoreEntityMap, StoreName } from './local-db';
+import { getIndirectEmissionsApplicability } from './cbam-product-rules';
+import type { LocalEntity, Product, ProductionProcess, ProductOutputLine, PurchasedPrecursor, ReportInputs, ReportTranspositionRow, SourceStream, StoreEntityMap, StoreName } from './local-db';
 import { buildImportedHeatUpdate, validateImportedHeatDraft } from './measurable-heat';
 import type { ImportedDefaultValueReference } from './reference-workbooks';
+import { getSectorParameters } from './sector-parameters';
 import { createSourceStreamValidationErrors, firstSourceStreamError, GUIDED_STREAM_KINDS } from './source-stream-input';
 import { looksLikeExcludedStepFuel, STEEL_BOUNDARY_ANCHOR } from './steel-boundary';
 
@@ -59,6 +63,15 @@ export interface ActivityImportStore {
     list<K extends StoreName>(store: K): Promise<StoreEntityMap[K][]>;
     create<K extends StoreName>(store: K, item: Omit<StoreEntityMap[K], keyof LocalEntity>): Promise<StoreEntityMap[K]>;
     update<K extends StoreName>(store: K, item: StoreEntityMap[K]): Promise<StoreEntityMap[K]>;
+}
+
+/**
+ * 보고서 입력(`/report-inputs`이 쓰는 설정 한 덩어리)을 읽고 쓰는 자리. 화면은 설정 저장소를, 검사 스크립트는 메모리를 넘긴다.
+ * 넘기지 않으면 서식의 보고서 항목(부문특정 파라미터·전력 계수 근거·역할책임·증빙·탄소가격·서명)은 저장하지 않는다.
+ */
+export interface ActivityImportReportInputs {
+    get(): Promise<ReportInputs | undefined>;
+    set(value: ReportInputs): Promise<void>;
 }
 
 export interface ActivityImportIssue {
@@ -156,7 +169,7 @@ const fmt = (value: number) => new Intl.NumberFormat('ko-KR', { maximumFractionD
 
 export async function importActivityWorkbook(
     data: ActivityWorkbookData,
-    deps: { store: ActivityImportStore; defaultValues?: ImportedDefaultValueReference },
+    deps: { store: ActivityImportStore; defaultValues?: ImportedDefaultValueReference; reportInputs?: ActivityImportReportInputs },
 ): Promise<ActivityImportResult> {
     const { store } = deps;
     const issues: ActivityImportIssue[] = [];
@@ -198,10 +211,12 @@ export async function importActivityWorkbook(
                 operator_name: optional('operator_name'),
                 operator_reg_number: optional('operator_reg_number'),
                 operator_address: optional('operator_address'),
+                cbam_registry_id: optional('cbam_registry_id'),
                 authorized_representative_name: optional('authorized_representative_name'),
                 email: optional('email'),
                 telephone: optional('telephone'),
                 waste_gases: yesNo(text('waste_gases')),
+                waste_gases_note: optional('waste_gases_note'),
             });
             created.installation += 1;
             const missing = [['operator_name', '운영자(법인)명'], ['operator_reg_number', '법인/사업자 등록번호'], ['operator_address', '운영자 주소']]
@@ -251,6 +266,9 @@ export async function importActivityWorkbook(
 
     // ── 3) 제품 ──────────────────────────────────────────────────────
     const productByName = new Map<string, Product>(products.map((product) => [key(product.name), product]));
+    /** 보고서 입력으로 갈 것들 — 끝에서 한 번에 저장한다 */
+    const sectorRows: NonNullable<ReportInputs['sector_parameters']> = [];
+    const transpositionRows: ReportTranspositionRow[] = [];
     for (const row of data.products) {
         const name = (row.values.name ?? '').trim();
         if (productByName.has(key(name))) {
@@ -269,6 +287,17 @@ export async function importActivityWorkbook(
         const product = await store.create('products', { ...buildProductPayload(draft, installation?.id), reporting_scope: exported === 'NO' ? 'NON_CBAM_COPRODUCT' as const : 'CBAM_GOOD' as const });
         productByName.set(key(name), product);
         created.products += 1;
+        // 부문특정 파라미터(2025/2547 부속서 IV 2): 이 제품의 품목군이 요구하는 것만 받는다. 값은 적힌 그대로 — 앱이 추정하지 않는다.
+        const applicability = getIndirectEmissionsApplicability(product);
+        const required = getSectorParameters(applicability.good ?? ((applicability.goods?.length ?? 0) === 1 ? applicability.goods?.[0] : undefined));
+        for (const parameter of required) {
+            const value = (row.values[parameter.key] ?? '').trim();
+            if (value) sectorRows.push({ product_id: product.id, param_key: parameter.key, value });
+        }
+        const missingParameters = required.filter((parameter) => !(row.values[parameter.key] ?? '').trim());
+        if (exported !== 'NO' && missingParameters.length > 0) {
+            note('warning', SHEET_PRODUCTS, `${name}: 부문특정 파라미터가 비어 있습니다 — ${missingParameters.map((parameter) => parameter.label.split(' (')[0]).join(' · ')}. EU로 수출하는 철강 제품의 법정 기재 항목이라 산정보고서에 「기재 필요」로 남습니다.`, row.row);
+        }
     }
 
     // ── 4) 공정과 생산라인 — 같은 공정 이름의 줄을 한 공정으로 묶는다 ──
@@ -460,6 +489,15 @@ export async function importActivityWorkbook(
             tell('error', process ? `「${where}」은(는) 이미 있던 공정이라 연료를 새로 넣지 않았습니다.` : `쓰는 공정 「${where}」을(를) ${SHEET_PROCESSES} 시트에서 찾지 못했습니다(그 공정이 위에서 만들어지지 못했을 수도 있습니다).`);
             continue;
         }
+        const biomass = numberOf(row.values.biomass);
+        const oxidation = numberOf(row.values.oxidation);
+        if (biomass !== undefined && !(biomass >= 0 && biomass <= 100)) { tell('error', `바이오매스 비율 「${row.values.biomass}」을(를) 0~100 사이 숫자(%)로 적어 주세요.`); continue; }
+        if (oxidation !== undefined && !(oxidation > 0 && oxidation <= 1)) { tell('error', `산화계수 「${row.values.oxidation}」을(를) 0보다 크고 1 이하인 숫자로 적어 주세요(예: 0.995).`); continue; }
+        /** 연료 유형 기본값 위에 얹는 값 — 비운 칸은 건드리지 않는다 */
+        const fractions = {
+            ...(biomass !== undefined ? { biomass_fraction: biomass / 100, fossil_fraction: Math.round((1 - biomass / 100) * 1e6) / 1e6 } : {}),
+            ...(oxidation !== undefined ? { oxidation_factor: oxidation } : {}),
+        };
         const evidence = (row.values.evidence ?? '').trim();
         if (!evidence) tell('warning', '근거 자료가 비어 있습니다. 어느 고지서·전표의 숫자인지 적어 주세요.');
         if (looksLikeExcludedStepFuel(name)) {
@@ -489,7 +527,7 @@ export async function importActivityWorkbook(
                 streams,
                 processes: targets,
                 plan,
-                template: { ...kind.defaults, ncv_gj_per_unit: ncvValue, emission_factor_tco2e_per_unit: factorValue, factor_source_type: sourceType },
+                template: { ...kind.defaults, ncv_gj_per_unit: ncvValue, emission_factor_tco2e_per_unit: factorValue, factor_source_type: sourceType, ...fractions },
                 fuelName: choice.label.split(' (')[0],
                 inputUnit: kind.litres ? 'L' : undefined,
                 source: sourceText,
@@ -507,19 +545,25 @@ export async function importActivityWorkbook(
             }
             if (streams.some((stream) => stream.process_id === target.id && key(stream.name) === key(name))) { tell('info', '같은 이름의 연료가 이 공정에 이미 있어 건너뛰었습니다.'); continue; }
             const answer: FuelAnswer = { kind, amount: String(amount), name, ncv: String(ncvValue), factor: String(factorValue), factorSource: sourceType, source: sourceText };
-            drafts.push(buildFuelStreamDraft(answer, target));
+            drafts.push({ ...buildFuelStreamDraft(answer, target), ...fractions });
         }
         const invalid = [...drafts, ...updates].map((draft) => firstSourceStreamError(createSourceStreamValidationErrors(draft))).find(Boolean);
         if (invalid) { tell('error', invalid); continue; }
+        // 측정 방식·자료 품질·계수의 출처 문서는 배출원마다 보고서 입력에 붙는다(산정보고서 제6장).
+        const factorDoc = (row.values.factorDoc ?? '').trim();
+        const measurement = { measurement_method: (row.values.method ?? '').trim() || undefined, data_quality: (row.values.quality ?? '').trim() || undefined, ...(own && factorDoc ? { ncv_source: ncv !== undefined ? factorDoc : undefined, ef_source: factor !== undefined ? factorDoc : undefined } : {}) };
+        const remember = (id: string) => { if (Object.values(measurement).some(Boolean)) transpositionRows.push({ source_stream_id: id, ...measurement }); };
         for (const update of updates) {
             const saved = await store.update('source_streams', update);
             streams = streams.map((stream) => (stream.id === saved.id ? saved : stream));
             if (saved.process_id) touched.add(saved.process_id);
+            remember(saved.id);
         }
         for (const draft of drafts) {
             const saved = await store.create('source_streams', draft);
             streams.push(saved);
             if (saved.process_id) touched.add(saved.process_id);
+            remember(saved.id);
         }
         created.fuels += 1;
     }
@@ -550,8 +594,16 @@ export async function importActivityWorkbook(
             continue;
         }
         if (existingPrecursors.some((item) => item.process_id === process.id && key(item.name) === key(name))) { tell('info', '같은 이름의 구매 강재가 이 공정에 이미 있어 건너뛰었습니다.'); continue; }
-        const numbers = { consumed: numberOf(row.values.consumed), purchased: numberOf(row.values.purchased), direct: numberOf(row.values.direct), indirect: numberOf(row.values.indirect) };
-        if (Object.values(numbers).some((value) => Number.isNaN(value))) { tell('error', '투입량·구매량·SEE는 숫자로 적어 주세요(단위 글자 없이).'); continue; }
+        const numbers = { consumed: numberOf(row.values.consumed), purchased: numberOf(row.values.purchased), direct: numberOf(row.values.direct), indirect: numberOf(row.values.indirect), elecUse: numberOf(row.values.elecUse), elecFactor: numberOf(row.values.elecFactor), nonCbam: numberOf(row.values.nonCbam) };
+        if (Object.values(numbers).some((value) => Number.isNaN(value))) { tell('error', '투입량·구매량·SEE·전력 칸은 숫자로 적어 주세요(단위 글자 없이).'); continue; }
+        // 간접 SEE의 내역(전력사용량 × 전력계수) — 둘 다 있으면 EU 문서에 그대로 실린다. 간접 SEE를 비웠으면 곱해서 채운다.
+        const hasBreakdown = (numbers.elecUse ?? 0) > 0 && (numbers.elecFactor ?? 0) > 0;
+        if ((numbers.elecUse !== undefined) !== (numbers.elecFactor !== undefined)) tell('warning', '원료의 전력 사용량과 전력 계수는 둘 다 적어야 EU 문서에 실립니다. 하나만 있어 쓰지 않았습니다.');
+        if (hasBreakdown) {
+            const product = Math.round((numbers.elecUse ?? 0) * (numbers.elecFactor ?? 0) * 1e6) / 1e6;
+            if (numbers.indirect === undefined) numbers.indirect = product;
+            else if (Math.abs(numbers.indirect - product) > Math.max(0.001, product * 0.01)) tell('warning', `간접 SEE ${numbers.indirect}가 전력 사용량 × 전력 계수(${product})와 다릅니다. 공급사 자료를 다시 확인해 주세요 — 계산에는 간접 SEE 칸의 값을 썼습니다.`);
+        }
         const cn = (row.values.cn ?? '').replace(/\D/g, '');
         const country = resolveSupplierCountry(row.values.country ?? '', knownCountries);
         const chosen = labelValue(SUPPLIER_VALUE_CHOICES, row.values.hasValue);
@@ -575,7 +627,13 @@ export async function importActivityWorkbook(
         const draft = {
             ...buildPrecursorDraft({ name, cn, consumed: String(numbers.consumed ?? ''), purchased: String(numbers.purchased ?? numbers.consumed ?? ''), country, ...answer }),
             supplierInstallation: supplier,
+            supplierPeriod: (row.values.period ?? '').trim(),
+            supplierRoute: (row.values.route ?? '').trim(),
+            bridgeUsage: hasBreakdown ? numbers.elecUse ?? 0 : 0,
+            bridgeFactor: hasBreakdown ? numbers.elecFactor ?? 0 : 0,
         };
+        if (numbers.nonCbam !== undefined && (numbers.nonCbam < 0 || numbers.nonCbam > (numbers.consumed ?? 0))) { tell('error', `CBAM 제품이 아닌 데 쓴 양 「${row.values.nonCbam}」은 0 이상이고 투입량보다 작아야 합니다.`); continue; }
+        if (mode === 'ACTUAL' && !draft.supplierPeriod) tell('info', '공급사 값의 기준 기간이 비어 있습니다. 공급사 자료에 적힌 기간을 적으면 산정보고서에 실립니다.');
         // 「쓰는 제품」을 적었으면 그 제품 라인에만 귀속한다(지도 6단계의 제품별 배분과 같은 기록). 여러 제품이면 그 제품들의 생산량 비율.
         const wanted = namesOf(row.values.products);
         if (wanted.length > 0) {
@@ -602,6 +660,7 @@ export async function importActivityWorkbook(
         const payload: Omit<PurchasedPrecursor, keyof LocalEntity> = {
             ...buildPrecursorCreate(draft, { period_id: process.period_id, process_id: process.id, product_id: process.product_id }),
             ...(status ? { verification_status: status } : {}),
+            ...(numbers.nonCbam !== undefined ? { consumed_for_non_cbam_mass_t: numbers.nonCbam } : {}),
         };
         await store.create('precursors', payload);
         withPrecursor.add(process.id);
@@ -631,6 +690,44 @@ export async function importActivityWorkbook(
     const bare = freshList().filter((process) => !withPrecursor.has(process.id) && reportable.has(process.product_id ?? ''));
     if (bare.length > 0) {
         note('info', SHEET_PRECURSORS, `구매 강재가 없는 공정: ${bare.map((process) => `「${process.name}」`).join(', ')}. 사 온 강재를 쓰는 공정이면 적어 주세요 — 정말 없으면 지도 6단계에서 「쓰지 않음」을 확인하면 됩니다.`);
+    }
+
+    // ── 9) 보고서 입력 — 산정보고서(8단계)에 실리는 것. 이미 적어 둔 값은 덮어쓰지 않고, 비어 있는 자리만 채운다. ──
+    if (deps.reportInputs) {
+        const current = (await deps.reportInputs.get()) ?? {};
+        const next: ReportInputs = { ...current };
+        const fill = <T extends object>(existing: T | undefined, incoming: Partial<T>): T | undefined => {
+            const cleaned = Object.fromEntries(Object.entries(incoming).filter(([, value]) => value !== undefined && value !== '')) as Partial<T>;
+            return Object.keys(cleaned).length === 0 ? existing : ({ ...cleaned, ...(existing ?? {}) } as T);
+        };
+        next.monitoring_plan = fill(current.monitoring_plan, { doc_no: text('monitoring_doc_no'), version: text('monitoring_version'), approved_at: parseWorkbookDate(text('monitoring_approved_at')) ?? text('monitoring_approved_at') });
+        next.declaration = fill(current.declaration, { name: text('declaration_name'), position: text('declaration_position'), date: parseWorkbookDate(text('declaration_date')) ?? text('declaration_date') });
+        if (sectorRows.length > 0) next.sector_parameters = [...(current.sector_parameters ?? []), ...sectorRows];
+        if (transpositionRows.length > 0) next.transpositions = [...(current.transpositions ?? []).filter((item) => !transpositionRows.some((row) => row.source_stream_id === item.source_stream_id)), ...transpositionRows];
+        // 전력 계수의 출처(공표기관·문서·연도)는 공장 값이라 이번에 만든 공정 모두에 붙인다. 산정근거 유형은 5단계에서 고른 출처가 이어진다.
+        const meta = { publisher: text('electricity_ef_publisher') || undefined, document: text('electricity_ef_document') || undefined, vintage: text('electricity_ef_vintage') || undefined };
+        if (Object.values(meta).some(Boolean) && fresh.size > 0) {
+            const others = (current.electricity_ef_meta ?? []).filter((item) => !fresh.has(item.process_id));
+            next.electricity_ef_meta = [...others, ...freshList().filter((process) => process.electricity_mwh > 0).map((process) => ({ process_id: process.id, ...meta }))];
+        }
+        const applicable = labelValue(CARBON_PRICE_CHOICES, text('carbon_price_applicable'));
+        if (text('carbon_price_applicable') && !applicable) note('warning', SHEET_INSTALLATION, `탄소가격 칸의 「${text('carbon_price_applicable')}」을(를) 읽지 못했습니다. 목록에서 골라 주세요.`);
+        if (applicable && (current.carbon_price ?? []).length === 0) {
+            next.carbon_price = [{ target: installation?.name ?? '본 사업장', applicable, note: text('carbon_price_note'), amount: text('carbon_price_amount') || undefined, evidence_status: 'pending' }];
+            if (applicable === 'YES' && !text('carbon_price_amount')) note('warning', SHEET_INSTALLATION, '탄소가격을 냈다고 적었는데 금액이 비어 있습니다. 수입업자가 인증서 차감에 쓰는 값이니 금액과 증빙을 받아 주세요.');
+        }
+        const rnr = data.rnr.map((row) => ({ data: (row.values.data ?? '').trim(), collector: (row.values.collector ?? '').trim(), transposer: (row.values.transposer ?? '').trim(), approver: (row.values.approver ?? '').trim(), system: (row.values.system ?? '').trim() })).filter((row) => row.data);
+        if (rnr.length > 0) next.rnr = [...(current.rnr ?? []), ...rnr.filter((row) => !(current.rnr ?? []).some((item) => key(item.data) === key(row.data)))];
+        const evidenceRows = data.evidence.map((row) => ({ item: (row.values.item ?? '').trim(), proves: (row.values.proves ?? '').trim(), custodian: (row.values.custodian ?? '').trim(), status: (row.values.status ?? '').trim() || '확보' })).filter((row) => row.item);
+        if (evidenceRows.length > 0) next.evidence = [...(current.evidence ?? []), ...evidenceRows.filter((row) => !(current.evidence ?? []).some((item) => key(item.item) === key(row.item)))];
+        await deps.reportInputs.set(next);
+
+        // 산정보고서에 「기재 필요」로 남을 것 — 서식을 채운 사람에게 돌려보낼 수 있게 알린다.
+        if (!next.monitoring_plan?.doc_no) note('info', SHEET_INSTALLATION, '모니터링 계획 문서번호가 비어 있습니다. 사내 방법론 문서가 있으면 번호·판·승인일을 적어 주세요(산정보고서 제12장).');
+        if (!next.declaration?.name) note('info', SHEET_INSTALLATION, '보고서 서명자가 비어 있습니다. 산정 결과에 책임지는 사람의 이름·직위를 적어 주세요.');
+        if (!applicable && (current.carbon_price ?? []).length === 0) note('info', SHEET_INSTALLATION, '「배출권거래제·탄소세를 냈나요?」가 비어 있습니다. 수입업자가 묻는 항목입니다 — 모르면 「아직 모름」을 골라 주세요.');
+        if (fresh.size > 0 && !meta.publisher && !meta.document) note('info', SHEET_INSTALLATION, '전력 계수를 공표한 기관·문서가 비어 있습니다. 계수를 어디서 가져왔는지 적어 주세요(산정보고서 제7장).');
+        if ((next.rnr ?? []).length === 0) note('info', SHEET_RNR, '역할·책임이 비어 있습니다. 자료를 누가 모으고 확인하는지 아는 만큼 적어 주세요(산정보고서 제12장).');
     }
 
     const order = { error: 0, warning: 1, info: 2 };
