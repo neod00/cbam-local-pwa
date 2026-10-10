@@ -586,7 +586,12 @@ function calculateOwnResults(input: {
 
     // Art 4(6): 같은 기능단위(같은 CN) 재화를 같은 보고기간에 공정 여럿으로 나누면 안 된다 —
     // 생산경로가 달라도 단일 공정(전 경로 가중평균)이어야 한다. 공정의 대표 제품과 생산라인 제품을
-    // 모두 센다. CBAM 신고 대상 재화만 본다(공동산출물은 기능단위 논의 대상이 아니다).
+    // 모두 센다. 공정을 묶는 출발점은 「사업장이 만드는 모든 CN 코드」다(EU 가이던스 No.3 4.3.1) — 신고 대상 재화와, 신고하지는 않지만
+    // CBAM 품목인 재화(EU로 수출하지 않는 철강 제품)를 함께 센다. CBAM 품목이 아닌 공동산출물은 기능단위 논의 대상이 아니다.
+    const isProcessDefinitionGood = (candidate: Product) => {
+        const scope = getProductReportingScope(candidate);
+        return isCbamReportingScope(scope) || (scope === 'NON_CBAM_COPRODUCT' && (getIndirectEmissionsApplicability(candidate).goods ?? []).length > 0);
+    };
     const processKeysById = new Map<string, Set<string>>();
     const processCountByFunctionalUnit = new Map<string, number>();
     for (const process of input.processes) {
@@ -594,7 +599,7 @@ function calculateOwnResults(input: {
         const candidates = [process.product_id, ...(outputLinesByProcess.get(process.id) ?? []).map((line) => line.product_id)];
         for (const productId of candidates) {
             const candidate = productId ? productById.get(productId) : undefined;
-            if (!candidate || !isCbamReportingScope(getProductReportingScope(candidate))) continue;
+            if (!candidate || !isProcessDefinitionGood(candidate)) continue;
             const key = functionalUnitKey(process.period_id, candidate);
             if (key) keys.add(key);
         }
@@ -613,7 +618,7 @@ function calculateOwnResults(input: {
         const candidates = [process.product_id, ...(outputLinesByProcess.get(process.id) ?? []).map((line) => line.product_id)];
         if (candidates.some((productId) => {
             const candidate = productId ? productById.get(productId) : undefined;
-            return Boolean(candidate) && isCbamReportingScope(getProductReportingScope(candidate)) && isIronOrSteelProductsGood(candidate);
+            return candidate !== undefined && isProcessDefinitionGood(candidate) && isIronOrSteelProductsGood(candidate);
         })) {
             steelProcessIds.add(process.id);
         }

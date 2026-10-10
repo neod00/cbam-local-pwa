@@ -146,7 +146,14 @@ const yesNo = (input: string | undefined): 'YES' | 'NO' | undefined => {
 /** 한 칸에 ; 로 이어 적은 이름들 */
 const namesOf = (value: string | undefined) => (value ?? '').split(LIST_SEPARATOR).map((item) => item.trim()).filter(Boolean);
 /** 일부 제품만 거치는 설비의 연료로 보이는 이름 — 「공장 전체」로 적혀 있으면 되묻는다. */
-const PARTIAL_ROUTE_FUEL = /열처리|가열로|소둔|침탄|단조|도금|소입|템퍼|QT/i;
+const PARTIAL_ROUTE_FUEL = /열처리|가열로|소둔|침탄|단조|소입|템퍼|QT/i;
+/**
+ * 철강 제품의 직접배출에 **넣지 않는** 공정의 연료로 보이는 이름 — 2025/2547 부속서 I 3.16.2: 도금(plating)·절단·용접·마무리는 시스템 경계에서 배출을 뺀다.
+ * 같은 조항이 「넣는다」고 한 용융아연도금(galvanizing)·코팅은 여기서 빼 둔다(이름에 「용융」·「코팅」·「지오메트」가 있으면 묻지 않는다).
+ */
+const EXCLUDED_STEP_FUEL = /도금|절단|태핑|탭핑|용접|선별|포장|마무리|plating|cutting|welding|finishing/i;
+const INCLUDED_COATING = /용융|코팅|지오메트|다크로|galvaniz|coating/i;
+export const STEEL_BOUNDARY_ANCHOR = '2025/2547 부속서 I 3.16.2';
 const headingOf = (cn: string | undefined) => (cn ?? '').replace(/\D/g, '').slice(0, 4);
 
 const fmt = (value: number) => new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 4 }).format(value);
@@ -459,6 +466,9 @@ export async function importActivityWorkbook(
         }
         const evidence = (row.values.evidence ?? '').trim();
         if (!evidence) tell('warning', '근거 자료가 비어 있습니다. 어느 고지서·전표의 숫자인지 적어 주세요.');
+        if (EXCLUDED_STEP_FUEL.test(name) && !INCLUDED_COATING.test(name)) {
+            tell('warning', `이름으로 보아 도금·절단·용접·마무리 설비의 연료일 수 있습니다. 이 공정들의 배출은 철강 제품의 직접배출에 넣지 않습니다(${STEEL_BOUNDARY_ANCHOR}) — 그 설비 전용 연료라면 이 줄을 지우고 다시 올리세요(넣은 채로 두면 배출량이 실제보다 크게 나옵니다). 용융아연도금·코팅·열처리·단조·소둔의 연료는 넣는 것이 맞습니다.`);
+        }
         if (!own && kind.key === 'fuel-mass') tell('warning', `순발열량·배출계수가 비어 「유류·기타」의 임시값(${kind.defaults.ncv_gj_per_unit} GJ/t · ${kind.defaults.emission_factor_tco2e_per_unit})이 들어갔습니다. 유종에 맞는 값을 적어 주세요(LPG 47.3 · 63.1 등).`);
         if (ncv === undefined && kind.key === 'fuel-gas') tell('info', `도시가스 순발열량은 기본 자리값 ${kind.defaults.ncv_gj_per_unit} GJ/Nm³로 넣었습니다. 도시가스사에 순발열량을 확인하면 더 정확합니다(고지서의 MJ는 총발열량이라 그대로 쓰면 안 됩니다).`);
         const ncvValue = ncv ?? kind.defaults.ncv_gj_per_unit;

@@ -243,10 +243,37 @@ assert.equal(fuelWarnings.length, 1);
 assert.match(fuelWarnings[0].message, /^열처리로 가스: 「공장 전체\(공용\)」로 적혀 모든 공정에 생산량 비율로 나눴습니다\. 이름으로 보아 일부 제품만 거치는 설비의 연료일 수 있습니다/);
 const inOneProcess = await importOf(multi(oneProcess, [{ name: '소둔로 가스', amount: '100', where: '라인' }], []));
 assert.match(I.describeActivityImportIssues(inOneProcess.result.issues), /소둔로 가스: 공정 「라인」에는 제품이 2개 있어 이 연료가 모든 제품에 생산량 비율로 나뉩니다/);
+// 시스템 경계(2025/2547 부속서 I 3.16.2): 도금·절단·용접·마무리 설비의 배출은 철강 제품의 직접배출에 넣지 않는다 — 그런 이름의 연료는 되묻는다.
+// 같은 조항이 넣는다고 한 용융아연도금·코팅, 그리고 열처리·단조·보일러는 이 알림의 대상이 아니다.
+const boundary = await importOf(multi(three, [
+  { name: '전기도금 라인 가스', amount: '10', where: '볼트 공정' }, { name: '캡 용접기 LPG', amount: '10', where: '볼트 공정' },
+  { name: '용융아연도금 가스', amount: '10', where: '볼트 공정' }, { name: '지오메트 코팅 건조로 가스', amount: '10', where: '볼트 공정' },
+  { name: '열처리로 가스', amount: '10', where: '볼트 공정' }, { name: '세척 보일러 가스', amount: '10', where: '볼트 공정' },
+], []));
+const boundaryWarnings = boundary.result.issues.filter((issue) => issue.level === 'warning' && /직접배출에 넣지 않습니다/.test(issue.message));
+assert.deepEqual(plain(boundaryWarnings.map((issue) => issue.row)), [5, 6], '전기도금·용접만 되묻는다');
+assert.ok(boundaryWarnings[0].message.includes(I.STEEL_BOUNDARY_ANCHOR) && boundaryWarnings[0].message.includes('용융아연도금·코팅·열처리·단조·소둔의 연료는 넣는 것이 맞습니다'));
+assert.equal(boundary.store.data.source_streams.length, 6, '되묻되 지우지는 않는다(앱은 그 설비 전용인지 모른다)');
+// 「일부 제품만 거치는 설비」 알림은 더 이상 도금을 그렇게 보지 않는다.
+const platingShared = await importOf(multi(three, [{ name: '도금 라인 가스', amount: '10', where: W.SHARED_PROCESS_LABEL }], []));
+assert.ok(!platingShared.result.issues.some((issue) => /일부 제품만 거치는 설비/.test(issue.message)) && platingShared.result.issues.some((issue) => /직접배출에 넣지 않습니다/.test(issue.message)));
+// 공정 묶기 점검(V04): EU로 수출하지 않는 철강 제품의 공정도 센다 — 같은 원료를 쓰는 철강 공정이 갈라져 있으면 확인을 요구한다(가이던스 No.3 4.3.1: 출발점은 사업장이 만드는 모든 CN).
+const splitCarbon = multi(three.slice(0, 2), [], [{ ...carbonWire, where: '볼트 공정' }, { ...carbonWire, name: '탄소강 선재 2', where: '너트 공정' }]);
+const attributionOf = (run) => load('src/lib/attribution-status.ts').buildAttributionStatus({ processes: run.store.data.processes, productOutputLines: run.store.data.product_output_lines, sourceStreams: run.store.data.source_streams, precursorCount: run.store.data.precursors.length, results: resultsOf(run.store), installation: run.store.data.installations[0], hrefOf: engine.getLocalCalculationWarningHref });
+assert.equal(attributionOf(await importOf(splitCarbon)).rows.find((row) => row.id === 'MULTIFUNCTIONAL').status, 'review');
+const splitCarbonNotExported = structuredClone(splitCarbon);
+splitCarbonNotExported.products[1].values.exported = '아니오';
+const notExportedRun = await importOf(splitCarbonNotExported);
+assert.equal(notExportedRun.store.data.products.find((product) => product.cn_code === '73181699').reporting_scope, 'NON_CBAM_COPRODUCT');
+assert.equal(attributionOf(notExportedRun).rows.find((row) => row.id === 'MULTIFUNCTIONAL').status, 'review', '수출하지 않는 철강 제품의 공정도 같은 원료면 묶기 점검에 걸린다');
+// CBAM 품목이 아닌 제품(알루미늄… 이 앱은 철강만이므로 품목군이 철강 제품이 아니면 세지 않는다)은 그대로 세지 않는다.
+const aluminiumPartner = multi([{ name: '볼트 공정', product: '합금강 볼트', mass: '1000' }, { name: '캡 공정', product: '알루미늄 캡', mass: '100' }], [], [{ ...carbonWire, where: '볼트 공정' }, { ...carbonWire, name: '탄소강 선재 2', where: '캡 공정' }]);
+aluminiumPartner.products[3].values.exported = '아니오';
+assert.notEqual(attributionOf(await importOf(aluminiumPartner)).rows.find((row) => row.id === 'MULTIFUNCTIONAL')?.status, 'review');
 // 서식: 새 칸과 안내.
 assert.ok(W.PRECURSOR_COLUMNS.some((field) => field.key === 'products' && field.list === 'product' && !field.required));
 assert.ok(W.FUEL_COLUMNS.find((field) => field.key === 'where').hint.includes('; 로 이어'));
-for (const phrase of ['CN 코드별로 묶어', '같은 원료로 만드는 제품끼리', '일부 제품만 거치는 설비의 연료']) assert.ok(guide.includes(phrase), `안내 시트: ${phrase}`);
+for (const phrase of ['CN 코드별로 묶어', '같은 원료로 만드는 제품끼리', '일부 제품만 거치는 설비의 연료', '마무리 설비 전용 연료는 적지 않습니다']) assert.ok(guide.includes(phrase), `안내 시트: ${phrase}`);
 
 // ── 4) 「확인할 것」 ─────────────────────────────────────────────────
 const broken = structuredClone(plain(sample));
