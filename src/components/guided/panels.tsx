@@ -88,6 +88,7 @@ import {
     GUIDED_STREAM_KINDS,
     matchGuidedStreamKind,
 } from '@/lib/source-stream-input';
+import { looksLikeExcludedStepFuel, STEEL_BOUNDARY_NAME_WARNING, STEEL_BOUNDARY_NOTE } from '@/lib/steel-boundary';
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ExternalLink, Lock, Pencil, Plus, Sparkles, Trash2, Upload } from 'lucide-react';
 import { CURRENT_CBAM_PERIOD } from '@/lib/cbam-period';
 import Link from 'next/link';
@@ -1433,6 +1434,14 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
                 <Field label="배출원 이름" hint="나중에 알아볼 이름. 비우면 유형 이름을 씁니다.">
                     <input className={fieldClass} value={streamName} onChange={(event) => setStreamName(event.target.value)} placeholder={kind.label} />
                 </Field>
+                {kind.defaults.stream_type === 'FUEL' && (
+                    <>
+                        <p className="text-xs leading-5 text-slate-500" data-testid="steel-boundary-note">{STEEL_BOUNDARY_NOTE}</p>
+                        {looksLikeExcludedStepFuel(streamName) && (
+                            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-200" data-testid="steel-boundary-warning">{STEEL_BOUNDARY_NAME_WARNING}</p>
+                        )}
+                    </>
+                )}
 
                 <Field label={kind.activityLabel} hint={kind.activityHint}>
                     <input
