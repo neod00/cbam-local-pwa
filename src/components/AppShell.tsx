@@ -3,6 +3,7 @@
 import AdminShell from '@/components/AdminShell';
 import BeginnerAppShell from '@/components/BeginnerAppShell';
 import { GuidedWorkspace } from '@/components/guided/GuidedWorkspace';
+import { FileMenu } from '@/components/FileMenu';
 import LicenseGate from '@/components/LicenseGate';
 import { ModernDashboard } from '@/components/ModernDashboard';
 import { ModernProducts } from '@/components/ModernProducts';
@@ -290,6 +291,7 @@ function GuidedShell({ children, title }: { children: ReactNode; title: string }
                     {/* 옛 화면(새 UI·이전 버전)으로 나가는 버튼은 뺐다 — 두 셸은 동결이다(UX 컨셉 v4 §14-5).
                         옛 화면에서 지도로 돌아오는 버튼(onUseGuided)은 남겨 두어, 옛 모드 값이 저장된 브라우저의 사용자가 갇히지 않는다. */}
                     <div className="flex items-center gap-2">
+                        <FileMenu />
                         <TodoNavLink />
                         <PeriodBadge />
                     </div>
