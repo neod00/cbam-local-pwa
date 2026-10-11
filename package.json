@@ -22,6 +22,7 @@
     "verify:guided-panels": "node scripts/verify-guided-panels.mjs",
     "verify:reporting-period": "node scripts/verify-reporting-period.mjs",
     "generate:cn-master": "node scripts/generate-cn-master.mjs",
+    "generate:cn-descriptions": "node scripts/generate-cn-descriptions.mjs",
     "verify:beginner-ui": "node scripts/verify-beginner-ui.mjs",
     "verify:admin-boundary": "node scripts/verify-admin-boundary.mjs",
     "verify:ai-staff": "node scripts/verify-ai-staff-boundary.mjs",

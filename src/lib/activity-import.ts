@@ -32,6 +32,8 @@ import {
     type ActivityRow,
     type ActivityWorkbookData,
 } from './activity-workbook';
+import { describeCn, glossCn, shortCnText, strengthMpaFromText } from './cn-description';
+import { CN_MASTER } from './cn-master.generated';
 import { isImplausibleElectricityIntensity, sumReconciledSourceStreamEmissions } from './allocation-rules';
 import { buildFuelStreamDraft, noImportedHeatDraft, type FuelAnswer } from './conversation-energy';
 import { buildPrecursorDraft, fillEuDefault } from './conversation-precursor';
@@ -330,6 +332,50 @@ export async function importActivityWorkbook(
         if (exported !== 'NO' && missingParameters.length > 0) {
             note('warning', SHEET_PRODUCTS, `${name}: 부문특정 파라미터가 비어 있습니다 — ${missingParameters.map((parameter) => parameter.label.split(' (')[0]).join(' · ')}. EU로 수출하는 철강 제품의 법정 기재 항목이라 산정보고서에 「기재 필요」로 남습니다.`, row.row);
         }
+    }
+
+    // ── 3b) CN 대조 — 적은 CN이 무엇을 뜻하는지 EU 공식 품명으로 되돌려 보여 준다(run35 P1-07) ──
+    //  CN을 잘못 적어도 8단계의 EU 문서를 열어서야 알던 문제. 채우는 사람이 그 자리에서 대조하고, 품명이 말하는 것과 어긋나는 이름은 알린다.
+    {
+        const seen = new Map<string, { names: string[]; row: number; exported: boolean }>();
+        for (const row of plan.products) {
+            const cn = (row.values.cn ?? '').replace(/\D/g, '');
+            if (cn.length !== 8) continue;
+            const isExported = !(row.values.exported && yesNo(row.values.exported) === 'NO');
+            const entry = seen.get(cn) ?? { names: [], row: row.row, exported: false };
+            entry.names.push((row.values.name ?? '').trim());
+            entry.exported ||= isExported;
+            seen.set(cn, entry);
+        }
+        let shown = 0;
+        for (const [cn, entry] of seen) {
+            const description = describeCn(cn);
+            const names = Array.from(new Set(entry.names.filter(Boolean))).slice(0, 3).map((item) => `「${item}」`).join(', ');
+            if (!description) {
+                if (CN_MASTER[cn]) continue; // 철강이 아닌 CBAM 품목은 지원 범위 안내가 따로 있다.
+                note(entry.exported ? 'warning' : 'info', SHEET_PRODUCTS, `CN ${cn}은(는) CBAM 대상 목록(EU 템플릿 20241213)에 없는 코드입니다(${names}). 수출신고필증의 HS 코드 앞 8자리를 다시 확인하세요. CBAM 대상이 아니면 신고하지 않지만, 같은 설비·연료를 쓰면 연료·전력의 몫은 나눠 갖습니다.`, entry.row);
+                continue;
+            }
+            if (shown >= 30) continue;
+            shown += 1;
+            const gloss = glossCn(description);
+            note('info', SHEET_PRODUCTS, `CN ${cn} = ${shortCnText(description.text)}${gloss.length > 0 ? ` — 읽는 법: ${gloss.join(' · ')}` : ''}. 적은 제품: ${names}. 맞는 CN인지 수출신고필증과 대조하세요.`, entry.row);
+        }
+        if (seen.size > 30) note('info', SHEET_PRODUCTS, `CN은 ${seen.size}종이라 앞의 30종만 품명을 보여 드렸습니다.`);
+        // 이름·품번에 적힌 볼트 강도 구분(8.8, 10.9 …)이 CN의 인장강도 구분과 어긋나는가
+        const strengthCheck = (cn: string, text: string, sheet: string, row: number, label: string) => {
+            const description = describeCn(cn);
+            const mpa = strengthMpaFromText(text);
+            if (!description?.tensile || mpa === undefined) return;
+            const high = mpa >= 800;
+            if (high && description.tensile === 'LT_800') note('warning', sheet, `${label}: 이름에 강도 구분(${mpa / 100 >= 10 ? mpa / 100 : (mpa / 100).toFixed(1)}급 안팎)이 적혀 있어 인장강도 800 MPa 이상으로 보이는데, 적은 CN ${cn}은(는) 「800 MPa 미만」 구분입니다. 800 MPa 이상 볼트의 CN을 확인하세요(같은 7318 15 계열에 별도 CN이 있습니다).`, row);
+            if (!high && description.tensile === 'GE_800') note('warning', sheet, `${label}: 이름에 강도 구분이 적혀 있어 인장강도 800 MPa 미만으로 보이는데, 적은 CN ${cn}은(는) 「800 MPa 이상」 구분입니다. CN을 확인하세요.`, row);
+        };
+        for (const row of data.parts ?? []) {
+            const cn = (row.values.cn ?? '').replace(/\D/g, '');
+            strengthCheck(cn, `${row.values.pname ?? ''} ${row.values.part ?? ''}`, SHEET_PARTS, row.row, `품번 ${(row.values.part ?? '').trim() || '(품번 없음)'}`);
+        }
+        for (const row of data.products) strengthCheck((row.values.cn ?? '').replace(/\D/g, ''), row.values.name ?? '', SHEET_PRODUCTS, row.row, `제품 「${(row.values.name ?? '').trim()}」`);
     }
 
     // ── 4) 공정과 생산라인 — 같은 공정 이름의 줄을 한 공정으로 묶는다 ──
@@ -910,6 +956,8 @@ export async function importActivityWorkbook(
     // ── 8) 구매 강재 ─────────────────────────────────────────────────
     const knownCountries = Array.from(new Set((deps.defaultValues?.rows ?? []).map((item) => item.country)));
     const withPrecursor = new Set<string>();
+    /** 공정별 구매 강재의 CN — 끝에서 제품 CN과 재질(스테인리스 여부)이 맞는지 본다 */
+    const precursorCnsByProcess = new Map<string, string[]>();
     /** 공정별로, 「쓰는 제품」을 적은 원료와 안 적은 원료 */
     const assigned = new Map<string, Array<{ name: string; heading: string }>>();
     const unassigned = new Map<string, Array<{ name: string; heading: string }>>();
@@ -992,6 +1040,7 @@ export async function importActivityWorkbook(
         };
         await store.create('precursors', payload);
         withPrecursor.add(process.id);
+        precursorCnsByProcess.set(process.id, [...(precursorCnsByProcess.get(process.id) ?? []), (row.values.cn ?? '').replace(/\D/g, '')]);
         (wanted.length > 0 ? assigned : unassigned).set(process.id, [...((wanted.length > 0 ? assigned : unassigned).get(process.id) ?? []), { name, heading: headingOf(cn) }]);
         created.precursors += 1;
     }
@@ -1010,6 +1059,22 @@ export async function importActivityWorkbook(
         const foreign = lines.filter((line) => !/^7[23]/.test((productById.get(line.product_id ?? '')?.cn_code ?? '').replace(/\D/g, '')));
         if (foreign.length > 0) {
             note('warning', SHEET_PRECURSORS, `공정 「${process.name}」에 철강이 아닌 제품 ${foreign.map((line) => `「${line.name}」`).join(', ')}이(가) 같이 있습니다. 「쓰는 제품」 없이 넣은 강재의 배출이 이 제품에도 나뉘어 철강 제품의 값이 낮아집니다 — 강재마다 「쓰는 제품」을 적거나 이 제품을 다른 공정으로 적어 주세요.`);
+        }
+    }
+
+    // 재질 일치: 선재·봉강으로 같은 재질의 제품을 만든다 — 스테인리스 제품(CN)에 비스테인리스 원료만, 또는 그 반대는 어느 한쪽 CN이 틀렸다.
+    for (const process of freshList()) {
+        const sources = (precursorCnsByProcess.get(process.id) ?? []).map((cn) => describeCn(cn)).filter((item): item is NonNullable<typeof item> => item !== undefined && item.material !== 'UNKNOWN');
+        if (sources.length === 0) continue;
+        const goodCns = Array.from(new Set((goodLines.get(process.id) ?? []).map((line) => (productById.get(line.product_id ?? '')?.cn_code ?? '').replace(/\D/g, '')))).filter(Boolean);
+        for (const cn of goodCns) {
+            const good = describeCn(cn);
+            if (!good || good.material === 'UNKNOWN') continue;
+            if (sources.every((source) => source.material !== good.material)) {
+                const goodLabel = good.material === 'STAINLESS' ? '스테인리스강' : '스테인리스가 아닌 철강';
+                const sourceLabel = good.material === 'STAINLESS' ? '스테인리스가 아닙니다' : '모두 스테인리스입니다';
+                note('warning', SHEET_PRECURSORS, `공정 「${process.name}」: 제품 CN ${cn}은(는) ${goodLabel}인데 쓴 원료(CN ${Array.from(new Set(sources.map((source) => source.cn))).join(', ')})는 ${sourceLabel}. 같은 재질의 선재로 만드는 제품이라 제품 CN이나 원료 CN 중 하나가 틀렸을 수 있습니다 — 수출신고필증과 공급사 명세서를 확인하세요.`);
+            }
         }
     }
 

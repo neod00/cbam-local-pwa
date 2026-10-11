@@ -121,4 +121,27 @@ if (normalize(tampered) === normalize(crlf)) {
     fail('게이트 자가검사: 내용이 달라졌는데 정규화 비교가 같다고 판정합니다 — 게이트가 무력합니다.');
 }
 
+// CN 품명(영문) 생성 파일 — 같은 원본에서 재생성한 것과 같아야 한다. 화면이 「공식 품명」이라고 보여 주므로 손으로 고친 문장이 섞이면 안 된다.
+const DESCRIPTIONS = 'src/lib/cn-descriptions.generated.ts';
+const committedDescriptions = readFileSync(DESCRIPTIONS, 'utf8');
+let regeneratedDescriptions;
+try {
+    execFileSync('node', ['scripts/generate-cn-descriptions.mjs'], { stdio: 'pipe' });
+    regeneratedDescriptions = readFileSync(DESCRIPTIONS, 'utf8');
+} finally {
+    writeFileSync(DESCRIPTIONS, committedDescriptions);
+}
+if (normalize(regeneratedDescriptions) !== normalize(committedDescriptions)) {
+    fail(`${DESCRIPTIONS}가 원본 템플릿에서 재생성한 결과와 다릅니다. \`npm run generate:cn-descriptions\`를 실행하세요.`);
+}
+const descriptionCount = (committedDescriptions.match(/^    "\d{8}": "/gm) ?? []).length;
+if (descriptionCount !== 478) {
+    fail(`CN 품명 개수가 478이 아닙니다: ${descriptionCount}`);
+}
+for (const [cn, needle] of [['73181575', 'of stainless steel'], ['73181582', 'other than stainless'], ['73181588', '=> 800 MPa']]) {
+    if (!new RegExp(`"${cn}": "[^"\\n]*${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(committedDescriptions.replace(/\\"/g, "'"))) {
+        fail(`CN ${cn}의 품명에 「${needle}」가 없습니다.`);
+    }
+}
+
 console.log(`CN master verification passed (CN ${cnCount}종 · 품목군 ${goodsCount}종 · 원본 sha256 ${actualSha.slice(0, 12)}… · 재생성 내용 동일, 개행 무관).`);
