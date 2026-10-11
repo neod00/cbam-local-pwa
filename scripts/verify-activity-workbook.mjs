@@ -668,4 +668,34 @@ const oldNameRun = await importOf(withParts([{ part: 'EB-1', cn: '73181582', gra
 ] }));
 assert.equal(oldNameRun.result.created.precursors, 2, '예전 판이 짓던 「SCM435 공정」·「SWCH35K 공정」이라는 이름도 묶음 공정을 가리킨다(이미 채워 둔 파일이 깨지지 않는다)');
 
+// ── run35 P1-07) 적은 CN이 무엇인지 공식 품명으로 되돌려 보여 주고, 품명과 어긋나는 자료를 알린다 ──
+const cnDesc = load('src/lib/cn-description.ts');
+assert.ok(cnDesc.describeCn('73181575').stainless && cnDesc.describeCn('73181575').material === 'STAINLESS', '73181575 = 스테인리스 육각볼트');
+assert.equal(cnDesc.describeCn('7318 15 82').tensile, 'LT_800', '73181582 = 비스테인리스 · 인장강도 800 MPa 미만');
+assert.equal(cnDesc.describeCn('73181588').tensile, 'GE_800', '73181588 = 800 MPa 이상');
+assert.equal(cnDesc.describeCn('73181582').material, 'NON_STAINLESS');
+assert.equal(cnDesc.describeCn('87089997'), undefined, '철강 목록에 없는 CN은 품명이 없다');
+assert.deepEqual([cnDesc.strengthMpaFromText('엔진 볼트 M10 10.9'), cnDesc.strengthMpaFromText('볼트 4.8 M6'), cnDesc.strengthMpaFromText('M12 x 1.25 볼트'), cnDesc.strengthMpaFromText('볼트 M10 1.5')], [1000, 400, undefined, undefined], '강도 구분은 표준 값만 읽는다(피치 1.25·1.5는 거른다)');
+const echoRun = await importOf(withParts([
+  { part: 'A-1', pname: '일반 볼트 4.8', cn: '73181575', grade: 'SWCH18A', mass: '100' },
+  { part: 'A-2', pname: '엔진 볼트 10.9', cn: '73181582', grade: 'SCM435', mass: '100' },
+  { part: 'A-3', pname: '정상 볼트 8.8', cn: '73181588', grade: 'SCM435', mass: '100' },
+  { part: 'A-4', pname: '샤프트', cn: '87089997', grade: 'S45C', mass: '10', exported: '아니오' },
+  { part: 'A-5', pname: '샤프트 EU', cn: '87089997', grade: 'S45C', mass: '10' },
+  { part: 'S-1', pname: 'STS 볼트', cn: '73181535', grade: 'STS304', mass: '10' },
+], { precursors: [
+  { row: 5, values: { name: 'SWCH18A 와이어', cn: '72171039', consumed: '100', country: 'South Korea', where: 'SWCH18A', hasValue: '없음 (EU 기본값 사용)' } },
+  { row: 6, values: { name: 'STS 와이어', cn: '72230019', consumed: '10', country: 'South Korea', where: 'STS304', hasValue: '없음 (EU 기본값 사용)' } },
+  { row: 7, values: { name: 'SCM 와이어', cn: '72299090', consumed: '200', country: 'South Korea', where: 'SCM435', hasValue: '없음 (EU 기본값 사용)' } },
+] }));
+const echoText = I.describeActivityImportIssues(echoRun.result.issues);
+assert.match(echoText, /CN 73181575 = Hexagon screws and bolts, of stainless steel.*읽는 법: 스테인리스강.*적은 제품: 「SWCH18A · CN 73181575」/, '적은 CN의 공식 품명과 읽는 법을 그대로 보여 준다');
+assert.match(echoText, /CN 73181582 = .*읽는 법: 스테인리스가 아닌 철강 · 인장강도 800 MPa 미만/);
+assert.match(echoText, /\[확인 필요\] 5_구매강재 — 공정 「SWCH18A 공정」: 제품 CN 73181575은\(는\) 스테인리스강인데 쓴 원료\(CN 72171039\)는 스테인리스가 아닙니다/, '스테인리스 제품 CN에 비스테인리스 선재 — 어느 한쪽 CN이 틀렸다');
+assert.ok(!/공정 「STS304 공정」: 제품 CN/.test(echoText) && !/공정 「SCM435 공정」: 제품 CN/.test(echoText), '재질이 맞는 공정(STS 볼트 + STS 선재, 탄소강 볼트 + 합금강 선재)에는 말하지 않는다');
+assert.match(echoText, /\[확인 필요\] 2b_품번목록 .*품번 A-2: 이름에 강도 구분.*800 MPa 이상.*CN 73181582은\(는\) 「800 MPa 미만」/, '10.9급 볼트에 800 MPa 미만 CN');
+assert.ok(!/품번 A-3: 이름에 강도 구분/.test(echoText) && !/품번 A-1: 이름에 강도 구분/.test(echoText), '강도와 CN이 맞는 줄(8.8 + 800 MPa 이상, 스테인리스는 구분 없음)은 말하지 않는다');
+assert.match(echoText, /\[확인 필요\] 2b_품번목록 .*CN 87089997은\(는\) CBAM 대상 목록.*에 없는 코드/, '수출 품번의 목록 밖 CN은 확인 필요');
+assert.equal(echoRun.result.issues.filter((issue) => /CN 87089997/.test(issue.message) && issue.level === 'warning').length, 1, '같은 CN은 한 번만 알린다(수출분이 있으면 확인 필요)');
+
 console.log('Activity workbook v2 verified (서식 모양·선택 목록 · 빈 서식 0건 · 작성 예시 = 기준선 3.764/5.112 · 공용 나누기·배출원 합계·생산라인 · 원료의 쓰는 제품·연료의 쓰는 공정 여럿·섞임 경고 · 「확인할 것」 · 종전 서식 유지).');

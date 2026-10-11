@@ -577,6 +577,19 @@ function ProductsPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
     const reportingProducts = data.products.filter((product) => isCbamReportingScope(getProductReportingScope(product)));
     const cnDigits = cn.replace(/\D/g, '');
     const coverage = cnDigits.length >= 4 ? getCbamCoverage({ cn_code: cnDigits, hs_code: cnDigits.slice(0, 4) }) : null;
+    // 적은 CN의 EU 공식 품명 — CN을 잘못 적어도 8단계의 EU 문서를 열어서야 알던 문제(run35 P1-07). 품명 표(약 100 KB)는 CN 8자리가 되면 그때 불러온다.
+    const [cnNames, setCnNames] = useState<Record<string, { text: string; gloss: string[] } | null>>({});
+    useEffect(() => {
+        if (cnDigits.length !== 8) return;
+        let active = true;
+        void import('@/lib/cn-description').then((lib) => {
+            if (!active) return;
+            const description = lib.describeCn(cnDigits);
+            setCnNames((current) => ({ ...current, [cnDigits]: description ? { text: description.text, gloss: lib.glossCn(description) } : null }));
+        });
+        return () => { active = false; };
+    }, [cnDigits]);
+    const cnName = cnDigits.length === 8 ? cnNames[cnDigits] : undefined;
     // EU 문서 생성 범위. 판정은 Export와 **같은 함수**로 한다 — 여기서 따로 목록을 적으면
     // 화면과 실제 Export가 갈라진다.
     const exportSupport = getEuExportGoodsSupport(cnDigits);
@@ -683,6 +696,13 @@ function ProductsPanel({ data, steps, onSaved, onSelectStep }: PanelProps) {
                         ))}
                     </datalist>
                 </Field>
+                {cnName && (
+                    <div className="rounded-lg bg-slate-100 px-3 py-2 text-xs leading-5 text-slate-700" data-testid="cn-official-name">
+                        <span className="font-semibold">EU 공식 품명</span> — {cnName.text}
+                        {cnName.gloss.length > 0 && <span className="ml-1 font-semibold text-slate-900">({cnName.gloss.join(' · ')})</span>}
+                        <span className="block text-slate-500">수출신고필증의 품명과 같은 제품인지 대조하세요.</span>
+                    </div>
+                )}
                 {/* 범위 밖 품목군은 **여기서** 말한다. 7단계에서 「매핑할 수 없습니다」로
                     만나면 원인도 해법도 알 수 없다(씨밤이 P1-run09-01). */}
                 {cnDigits.length === 8 && !exportSupport.supported && (
