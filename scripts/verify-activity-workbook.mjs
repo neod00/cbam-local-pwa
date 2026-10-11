@@ -669,6 +669,21 @@ const oldNameRun = await importOf(withParts([{ part: 'EB-1', cn: '73181582', gra
 ] }));
 assert.equal(oldNameRun.result.created.precursors, 2, '예전 판이 짓던 「SCM435 공정」·「SWCH35K 공정」이라는 이름도 묶음 공정을 가리킨다(이미 채워 둔 파일이 깨지지 않는다)');
 
+// ── LPG·프로판(t) 연료 종류 ──
+assert.ok(W.FUEL_KIND_CHOICES.some((choice) => choice.key === 'fuel-lpg-t' && choice.label === 'LPG·프로판 (t)'), '서식 목록에 LPG·프로판 (t)');
+assert.equal(W.FUEL_KIND_CHOICES[0].key, 'fuel-gas');
+assert.equal(W.FUEL_KIND_CHOICES[2].key, 'fuel-diesel-l', '예시가 위치로 고르는 앞 항목은 그대로(목록 끝에 덧붙였다)');
+const lpgRun = await importOf(withParts([{ part: 'A-1', cn: '73181582', grade: 'SCM435', mass: '100' }], {
+  fuels: [{ row: 5, values: { name: '열처리 분위기가스 LPG', kind: 'LPG·프로판 (t)', amount: '62', where: '공장 전체(공용)', evidence: 'LPG 납품 전표 2025' } }],
+}));
+const lpgStream = lpgRun.store.data.source_streams[0];
+assert.deepEqual(plain([lpgStream.ncv_gj_per_unit, lpgStream.emission_factor_tco2e_per_unit, lpgStream.activity_unit]), [47.3, 63.1, 't'], '서식의 LPG 줄은 IPCC LPG 기본값으로 들어간다');
+assert.ok(!/임시값/.test(I.describeActivityImportIssues(lpgRun.result.issues)), 'LPG를 고르면 「유류·기타 임시값」 경고가 나오지 않는다');
+const otherRun = await importOf(withParts([{ part: 'A-1', cn: '73181582', grade: 'SCM435', mass: '100' }], {
+  fuels: [{ row: 5, values: { name: '난방 연료', kind: '유류·기타 (t)', amount: '62', where: '공장 전체(공용)', evidence: '전표' } }],
+}));
+assert.match(I.describeActivityImportIssues(otherRun.result.issues), /「LPG·프로판 \(t\)」을 고르면 기본값이 맞게 들어갑니다/, '유류·기타 임시값 경고가 LPG 종류를 안내한다');
+
 // ── run35 P1-07) 적은 CN이 무엇인지 공식 품명으로 되돌려 보여 주고, 품명과 어긋나는 자료를 알린다 ──
 const cnDesc = load('src/lib/cn-description.ts');
 assert.ok(cnDesc.describeCn('73181575').stainless && cnDesc.describeCn('73181575').material === 'STAINLESS', '73181575 = 스테인리스 육각볼트');

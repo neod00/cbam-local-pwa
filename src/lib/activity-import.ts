@@ -737,7 +737,7 @@ export async function importActivityWorkbook(
         if (looksLikeExcludedStepFuel(name)) {
             tell('warning', `이름으로 보아 도금·절단·용접·마무리 설비의 연료일 수 있습니다. 이 공정들의 배출은 철강 제품의 직접배출에 넣지 않습니다(${STEEL_BOUNDARY_ANCHOR}) — 그 설비 전용 연료라면 이 줄을 지우고 다시 올리세요(넣은 채로 두면 배출량이 실제보다 크게 나옵니다). 용융아연도금·코팅·열처리·단조·소둔의 연료는 넣는 것이 맞습니다.`);
         }
-        if (!own && kind.key === 'fuel-mass') tell('warning', `순발열량·배출계수가 비어 「유류·기타」의 임시값(${kind.defaults.ncv_gj_per_unit} GJ/t · ${kind.defaults.emission_factor_tco2e_per_unit})이 들어갔습니다. 유종에 맞는 값을 적어 주세요(LPG 47.3 · 63.1 등).`);
+        if (!own && kind.key === 'fuel-mass') tell('warning', `순발열량·배출계수가 비어 「유류·기타」의 임시값(${kind.defaults.ncv_gj_per_unit} GJ/t · ${kind.defaults.emission_factor_tco2e_per_unit})이 들어갔습니다. 유종에 맞는 값을 적어 주세요. LPG·프로판이면 연료 종류에서 「LPG·프로판 (t)」을 고르면 기본값이 맞게 들어갑니다.`);
         if (ncv === undefined && kind.key === 'fuel-gas') tell('info', `도시가스 순발열량은 기본 자리값 ${kind.defaults.ncv_gj_per_unit} GJ/Nm³로 넣었습니다. 도시가스사에 순발열량을 확인하면 더 정확합니다(고지서의 MJ는 총발열량이라 그대로 쓰면 안 됩니다).`);
         const ncvValue = ncv ?? kind.defaults.ncv_gj_per_unit;
         const factorValue = factor ?? kind.defaults.emission_factor_tco2e_per_unit;

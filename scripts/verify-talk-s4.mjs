@@ -37,7 +37,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 const close = (a, b, message) => assert.ok(Math.abs(a - b) < 1e-6, `${message}: ${a} vs ${b}`);
 
 const kind = (key) => app.TALK_FUEL_KINDS.find((item) => item.key === key);
-assert.deepEqual(plain(app.TALK_FUEL_KINDS.map((item) => item.key)), ['fuel-gas', 'fuel-mass', 'fuel-natural-gas-t', 'fuel-diesel-l', 'fuel-kerosene-l'], '연료 연소 다섯 유형(공정배출·물질수지는 지도 4단계)');
+assert.deepEqual(plain(app.TALK_FUEL_KINDS.map((item) => item.key)), ['fuel-gas', 'fuel-mass', 'fuel-natural-gas-t', 'fuel-lpg-t', 'fuel-diesel-l', 'fuel-kerosene-l'], '연료 연소 여섯 유형(공정배출·물질수지는 지도 4단계)');
 const process = { id: 'pr', period_id: 'per' };
 
 // ── 1) 배출원 초안 ───────────────────────────────────────────────────
