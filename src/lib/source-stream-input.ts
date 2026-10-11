@@ -249,10 +249,10 @@ export const GUIDED_STREAM_KINDS: GuidedStreamKind[] = [
         activityLabel: '연간 사용량 (t)',
         activityHint: '연료 구매대장·계량기 검침 합계',
         factorLabel: '배출계수 (tCO₂e/TJ)',
-        factorHint: '자리값 73은 임시값입니다. 유종마다 다릅니다(경유 74.1 · 등유 71.9 · LPG 63.1, IPCC 2006). 천연가스·LNG는 「천연가스·LNG (t)」를 쓰세요. 자기 성적서 값이 있으면 그것으로 바꾸세요.',
+        factorHint: '자리값 73은 임시값입니다. 유종마다 다릅니다(경유 74.1 · 등유 71.9, IPCC 2006). 천연가스·LNG는 「천연가스·LNG (t)」, LPG·프로판은 「LPG·프로판 (t)」를 쓰세요. 자기 성적서 값이 있으면 그것으로 바꾸세요.',
         allowsNegative: false,
         needsNcv: true,
-        ncvHint: '자리값 48은 임시값입니다. 유종마다 다릅니다(경유 43.0 · 등유 43.8 · LPG 47.3 GJ/t, IPCC 2006). 천연가스·LNG는 「천연가스·LNG (t)」를 쓰세요. 경유·등유는 아래 「리터(L)」 유형을 쓰면 환산까지 해 줍니다.',
+        ncvHint: '자리값 48은 임시값입니다. 유종마다 다릅니다(경유 43.0 · 등유 43.8 GJ/t, IPCC 2006). 천연가스·LNG는 「천연가스·LNG (t)」, LPG·프로판은 「LPG·프로판 (t)」를 쓰세요. 경유·등유는 아래 「리터(L)」 유형을 쓰면 환산까지 해 줍니다.',
         defaults: {
             stream_type: 'FUEL', method: 'Combustion', activity_unit: 't',
             ncv_gj_per_unit: 48, emission_factor_tco2e_per_unit: 73,
@@ -274,6 +274,24 @@ export const GUIDED_STREAM_KINDS: GuidedStreamKind[] = [
         defaults: {
             stream_type: 'FUEL', method: 'Combustion', activity_unit: 't',
             ncv_gj_per_unit: 48, emission_factor_tco2e_per_unit: 56.1,
+            emission_factor_basis: 'PER_TJ', oxidation_factor: 1, conversion_factor: 1,
+            fossil_fraction: 1, biomass_fraction: 0, factor_source_type: 'EU_OR_IPCC_DEFAULT',
+        },
+    },
+    {
+        key: 'fuel-lpg-t',
+        label: '연료 연소 — LPG·프로판 (t)',
+        hint: '열처리 분위기가스·가열로용 LPG(프로판·부탄)를 톤으로 사는 경우의 연간 사용량. 도시가스를 Nm³로 청구받으면 「도시가스」를 쓰세요',
+        activityLabel: '연간 사용량 (t)',
+        activityHint: 'LPG 납품 전표·구매대장 12개월 합계(t). kg으로 적힌 전표는 ÷ 1,000 하세요.',
+        factorLabel: '배출계수 (tCO₂e/TJ)',
+        factorHint: 'IPCC 2006 LPG 기본값 63.1입니다. 공급사 성적서 값이 있으면 그것으로 바꾸세요.',
+        allowsNegative: false,
+        needsNcv: true,
+        ncvHint: 'IPCC 2006 LPG 기본값 47.3 GJ/t입니다(순발열량, t 기준). 프로판·부탄 혼합비에 따라 조금 다르니 공급사 성적서에 순발열량이 있으면 그 값으로 바꾸세요.',
+        defaults: {
+            stream_type: 'FUEL', method: 'Combustion', activity_unit: 't',
+            ncv_gj_per_unit: 47.3, emission_factor_tco2e_per_unit: 63.1,
             emission_factor_basis: 'PER_TJ', oxidation_factor: 1, conversion_factor: 1,
             fossil_fraction: 1, biomass_fraction: 0, factor_source_type: 'EU_OR_IPCC_DEFAULT',
         },
@@ -378,10 +396,12 @@ function guidedKindByKey(key: string): GuidedStreamKind {
 export function matchGuidedStreamKind(stream: Pick<SourceStream,
     'stream_type' | 'method' | 'activity_unit' | 'activity_data'> & Partial<Pick<SourceStream, 'ncv_gj_per_unit' | 'emission_factor_tco2e_per_unit'>>): GuidedStreamKind {
     if (stream.stream_type === 'FUEL') {
-        // t 단위 연료가 둘이다(유류·기타 / 천연가스). 천연가스의 기본값 쌍(순발열량 48 · 계수 56.1)을 그대로 쓴 행만 천연가스로 되짚고, 나머지는 예전처럼 「유류·기타」다.
+        // t 단위 연료가 셋이다(유류·기타 / 천연가스 / LPG). 천연가스의 기본값 쌍(순발열량 48 · 계수 56.1)을 그대로 쓴 행만 천연가스로 되짚고, 나머지는 예전처럼 「유류·기타」다.
         if (stream.activity_unit === 't') {
             const naturalGas = guidedKindByKey('fuel-natural-gas-t');
             if (stream.ncv_gj_per_unit === naturalGas.defaults.ncv_gj_per_unit && stream.emission_factor_tco2e_per_unit === naturalGas.defaults.emission_factor_tco2e_per_unit) return naturalGas;
+            const lpg = guidedKindByKey('fuel-lpg-t');
+            if (stream.ncv_gj_per_unit === lpg.defaults.ncv_gj_per_unit && stream.emission_factor_tco2e_per_unit === lpg.defaults.emission_factor_tco2e_per_unit) return lpg;
             return guidedKindByKey('fuel-mass');
         }
         return GUIDED_STREAM_KINDS.find((kind) =>

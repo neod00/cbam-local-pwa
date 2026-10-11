@@ -191,6 +191,17 @@ assert.equal(M.matchGuidedStreamKind({ ...tonFuel, ncv_gj_per_unit: 48, emission
 assert.equal(M.matchGuidedStreamKind({ ...tonFuel, ncv_gj_per_unit: 48, emission_factor_tco2e_per_unit: 73 }).key, 'fuel-mass');
 assert.equal(M.matchGuidedStreamKind({ ...tonFuel, ncv_gj_per_unit: 43, emission_factor_tco2e_per_unit: 74.1 }).key, 'fuel-mass');
 assert.equal(M.matchGuidedStreamKind({ ...tonFuel, activity_unit: 'Nm3' }).key, 'fuel-gas');
+// ── [run35 P2-03] LPG·프로판(t): 열처리 분위기가스에 흔한데 유류 자리값(48 · 73)으로 들어가던 것 — IPCC 2006 LPG(47.3 GJ/t · 63.1)로 채운다 ──
+const lpgKind = [...M.GUIDED_STREAM_KINDS].find((k) => k.key === 'fuel-lpg-t');
+const oilKind = [...M.GUIDED_STREAM_KINDS].find((k) => k.key === 'fuel-mass');
+assert.ok(lpgKind && !lpgKind.litres, 'LPG·프로판 (t) 유형이 없다');
+assert.deepEqual(host([lpgKind.defaults.activity_unit, lpgKind.defaults.ncv_gj_per_unit, lpgKind.defaults.emission_factor_tco2e_per_unit, lpgKind.defaults.emission_factor_basis, lpgKind.defaults.factor_source_type]), ['t', 47.3, 63.1, 'PER_TJ', 'EU_OR_IPCC_DEFAULT']);
+const lpgEmissions = M.calculateSourceStreamEmissions({ ...lpgKind.defaults, activity_data: 62 });
+assert.ok(Math.abs(lpgEmissions - 62 * 47.3 * 63.1 / 1000) < 1e-9 && Math.abs(lpgEmissions - 185.05) < 0.01, `LPG 62 t 배출이 185.05가 아니다: ${lpgEmissions}`);
+assert.ok(lpgEmissions < M.calculateSourceStreamEmissions({ ...oilKind.defaults, activity_data: 62 }), '유류 자리값(48 · 73)으로 넣으면 LPG보다 크게 나온다 — 그래서 따로 둔다');
+assert.equal(M.matchGuidedStreamKind({ ...tonFuel, ncv_gj_per_unit: 47.3, emission_factor_tco2e_per_unit: 63.1 }).key, 'fuel-lpg-t', '기본값 쌍을 그대로 쓴 t 행은 LPG로 되짚는다');
+assert.equal(M.matchGuidedStreamKind({ ...tonFuel, ncv_gj_per_unit: 46, emission_factor_tco2e_per_unit: 63.1 }).key, 'fuel-mass', '성적서 값으로 바꾼 행은 예전처럼 유류·기타(데이터 형태 불변)');
+assert.ok(/LPG·프로판 \(t\)/.test(oilKind.factorHint), '「유류·기타」 안내가 LPG는 따로 있다고 말한다');
 // 「유류·기타」 안내는 더 이상 LNG를 자기 몫으로 말하지 않는다.
 const massKind = [...M.GUIDED_STREAM_KINDS].find((k) => k.key === 'fuel-mass');
 assert.ok(!/LNG 56\.1/.test(massKind.factorHint) && /천연가스·LNG \(t\)/.test(massKind.factorHint) && /천연가스·LNG \(t\)/.test(massKind.ncvHint));

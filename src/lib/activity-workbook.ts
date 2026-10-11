@@ -50,6 +50,7 @@ export const FUEL_KIND_CHOICES = [
     { label: '경유 (L)', key: 'fuel-diesel-l' },
     { label: '등유 (L)', key: 'fuel-kerosene-l' },
     { label: '유류·기타 (t)', key: 'fuel-mass' },
+    { label: 'LPG·프로판 (t)', key: 'fuel-lpg-t' },
 ] as const;
 
 export const FUEL_FACTOR_SOURCE_CHOICES = [
