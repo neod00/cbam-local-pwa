@@ -116,6 +116,8 @@ export interface ActivityImportIssue {
 export interface ActivityImportResult {
     created: { installation: number; period: number; products: number; processes: number; fuels: number; precursors: number; transfers: number };
     issues: ActivityImportIssue[];
+    /** 다른 해의 파일이라 아무것도 쓰지 않았다 — 이 프로젝트의 자료는 그대로이므로 「마지막 올리기 결과」를 바꾸지 않는다 */
+    rejectedForYear?: boolean;
 }
 
 export const ISSUE_LEVEL_LABEL: Record<ActivityImportIssue['level'], string> = {
@@ -272,6 +274,7 @@ export async function importActivityWorkbook(
 
     // ── 2) 보고기간 ──────────────────────────────────────────────────
     let periodId: string | undefined;
+    let yearConflict = false;
     {
         const start = parseWorkbookDate(text('period_start'));
         const end = parseWorkbookDate(text('period_end'));
@@ -287,6 +290,11 @@ export async function importActivityWorkbook(
             const same = periods.find((period) => period.start_date === start && period.end_date === end);
             if (same) {
                 periodId = same.id;
+            } else if (periods.length > 0 && existingProcesses.length > 0) {
+                // 다른 해의 파일을 같은 프로젝트에 올리면 공정·제품 이름이 같아 새 해의 연료·구매 강재가 전부 「이미 있던 공정」으로 거부된다(실험으로 확인) —
+                // 기간만 하나 더 생기고 자료는 들어가지 않는 어정쩡한 상태를 만들지 않는다. 이 프로젝트에는 아무것도 쓰지 않는다.
+                note('error', SHEET_INSTALLATION, `이 프로젝트에는 이미 ${periods.map((period) => `「${period.name}」`).join(', ')} 자료가 있습니다. 이 파일은 다른 보고기간(${start} ~ ${end})이라 넣지 않았습니다 — 한 프로젝트는 한 해 자료입니다. 지도의 「새 프로젝트」로 새 해를 시작해 올리세요(지난해 자료는 설정의 백업(.cbam)으로 보관하세요).`);
+                yearConflict = true;
             } else {
                 const wholeYear = start.endsWith('-01-01') && end.endsWith('-12-31') && start.slice(0, 4) === end.slice(0, 4);
                 const draft = { name: text('period_name') || (wholeYear ? `${start.slice(0, 4)}년 연간` : `${start} ~ ${end}`), startDate: start, endDate: end };
@@ -299,6 +307,11 @@ export async function importActivityWorkbook(
                 }
             }
         }
+    }
+
+    if (yearConflict) {
+        const order = { error: 0, warning: 1, info: 2 };
+        return { created, rejectedForYear: true, issues: issues.map((issue, index) => ({ issue, index })).sort((a, b) => order[a.issue.level] - order[b.issue.level] || a.index - b.index).map((item) => item.issue) };
     }
 
     // ── 3) 제품 ──────────────────────────────────────────────────────
