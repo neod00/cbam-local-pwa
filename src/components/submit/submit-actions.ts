@@ -1,5 +1,6 @@
 import { createCalculationReport } from '@/lib/calculation-report';
 import { createDeliveryPackage } from '@/lib/delivery-package';
+import { createMonitoringPlanDocument } from '@/lib/monitoring-plan';
 import { createEuExportFilename, createEuTemplateExportCopyResult, downloadBlob, scopeRecordsToExportPeriod } from '@/lib/eu-template-export';
 import { ACTIVITY_IMPORT_RESULT_SETTING_KEY, CBAM_LAST_BACKUP_AT_KEY, exportLocalBackup, setLocalSetting } from '@/lib/local-db';
 import { buildSubmitChecklist, type SubmitData } from './submit-data';
@@ -75,6 +76,45 @@ export async function downloadReport(data: SubmitData) {
     const { report } = buildReport(data, new Date());
     downloadBlob(report.blob, report.filename);
     return { filename: report.filename, notices: report.issues.map((issue) => `[${issue.gate}] ${issue.message}`) };
+}
+
+/**
+ * 모니터링 계획 초안(Word) — 입력된 자료를 부속서 II A.5의 22개 항목에 옮겨 적고, 앱이 모르는 것은 「작성 필요」로 둔다.
+ * 읽기만 한다(저장소에 쓰지 않는다). 산정보고서와 같은 보고기간 범위를 쓴다.
+ */
+export async function downloadMonitoringPlan(data: SubmitData) {
+    if (data.periods.length > 1 && !data.periods.some((period) => period.id === data.reportingPeriodId)) {
+        throw new Error(`보고기간이 ${data.periods.length}개입니다. 지도 화면 1단계에서 문서에 넣을 기간을 먼저 고르세요.`);
+    }
+    const { reportableResults } = buildSubmitChecklist(data);
+    const docScope = scopeRecordsToExportPeriod({
+        periods: data.periods,
+        reportingPeriodId: data.reportingPeriodId,
+        processes: data.processes,
+        productOutputLines: data.productOutputLines,
+        sourceStreams: data.sourceStreams,
+        precursors: data.precursors,
+        results: reportableResults,
+    });
+    const result = createMonitoringPlanDocument({
+        installations: data.installations,
+        periods: docScope.periods,
+        products: data.products,
+        processes: docScope.processes,
+        productOutputLines: docScope.productOutputLines,
+        sourceStreams: docScope.sourceStreams,
+        precursors: docScope.precursors,
+        internalTransfers: data.internalTransfers,
+        reportInputs: data.reportInputs,
+        benchmarks: data.benchmarkReference,
+        generatedAt: new Date(),
+    });
+    downloadBlob(result.blob, result.filename);
+    const { counts } = result.plan;
+    return {
+        filename: result.filename,
+        summary: `22개 항목 중 자동 ${counts.AUTO} · 일부 채움 ${counts.PARTIAL} · 작성 필요 ${counts.TODO} · 해당 없음으로 보임 ${counts.NA}`,
+    };
 }
 
 export async function downloadPackage(data: SubmitData) {

@@ -6,10 +6,10 @@ import type { SubmissionRow } from '@/lib/submission-status';
 import { AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { dismissUploadNotice, downloadBackupOnly, downloadEuCopy, downloadPackage, downloadReport } from './submit-actions';
+import { dismissUploadNotice, downloadBackupOnly, downloadEuCopy, downloadMonitoringPlan, downloadPackage, downloadReport } from './submit-actions';
 import { loadSubmitData, type SubmitData } from './submit-data';
 
-type FileKey = 'eu' | 'report' | 'package' | 'backup';
+type FileKey = 'eu' | 'report' | 'plan' | 'package' | 'backup';
 
 const fmt = (value: number, digits = 3) => new Intl.NumberFormat('ko-KR', { minimumFractionDigits: 0, maximumFractionDigits: digits }).format(Number.isFinite(value) ? value : 0);
 const when = (iso: string) => new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
@@ -165,6 +165,10 @@ export function SubmitWorkspace() {
                     {fileCard('report', '산정 보고서 (Word)', '검증인·사내 보관용. 값의 출처(실측·기본값)가 그대로 적힙니다.', '내려받기', async () => {
                         const result = await downloadReport(data);
                         return { text: `${result.filename} 을(를) 내려받았습니다.`, notices: result.notices };
+                    }, false)}
+                    {fileCard('plan', '모니터링 계획 초안 (Word)', '규정이 요구하는 모니터링 계획의 22개 항목에 입력된 자료를 옮겨 적은 초안입니다. 앱이 모르는 것은 「작성 필요」로 비워 둡니다 — 회사가 확인·보완해야 합니다.', '내려받기', async () => {
+                        const result = await downloadMonitoringPlan(data);
+                        return { text: `${result.filename} — ${result.summary}.` };
                     }, false)}
                     {fileCard('package', '전달 패키지 (zip)', '위 두 파일 + 점검표 + 백업을 한 번에.', '내려받기', async () => {
                         const result = await downloadPackage(data);
