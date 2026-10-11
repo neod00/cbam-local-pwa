@@ -50,13 +50,13 @@ const bytesOf = async (blob) => new Uint8Array(await blob.arrayBuffer());
 const blankBytes = await bytesOf(W.createActivityWorkbook({ countries }));
 const blankZip = fflate.unzipSync(blankBytes);
 const names = W.readActivityWorkbookSheetNames(blankBytes);
-assert.deepEqual(plain(names), ['안내', '1_사업장', '2_제품', '2b_품번목록', '3_공정', '4_연료', '5_구매강재', '6_역할책임', '7_증빙목록', '8_사온열', '9_보일러열', '10_공정배출', '11_사내이송', '선택목록']);
+assert.deepEqual(plain(names), ['안내', '1_사업장', '2_제품', '2b_품번목록', '3_공정', '4_연료', '5_구매강재', '6_역할책임', '7_증빙목록', '8_사온열', '9_보일러열', '10_공정배출', '11_사내이송', '12_전력공급원', '선택목록']);
 assert.ok(W.isActivityWorkbookV2(names) && !W.isActivityWorkbookV2(['README', 'Products', 'Processes']), '시트 이름으로 새 서식과 종전 서식을 가린다');
 assert.ok(blankZip['xl/styles.xml'], '머리글 색·입력 칸을 꾸미는 styles.xml이 있다');
 const sheetText = (index) => fflate.strFromU8(blankZip[`xl/worksheets/sheet${index}.xml`]).replaceAll('&apos;', "'").replaceAll('&quot;', '"');
 const lists = sheetText(names.length);
 const sheetIndex = (name) => names.indexOf(name) + 1;
-for (const [sheetName, columns] of [['2_제품', W.PRODUCT_COLUMNS], ['2b_품번목록', W.PART_COLUMNS], ['3_공정', W.PROCESS_COLUMNS], ['4_연료', W.FUEL_COLUMNS], ['5_구매강재', W.PRECURSOR_COLUMNS], ['6_역할책임', W.RNR_COLUMNS], ['7_증빙목록', W.EVIDENCE_COLUMNS], ['8_사온열', W.IMPORTED_HEAT_COLUMNS], ['9_보일러열', W.BOILER_HEAT_COLUMNS], ['10_공정배출', W.PROCESS_EMISSION_COLUMNS], ['11_사내이송', W.TRANSFER_COLUMNS]]) {
+for (const [sheetName, columns] of [['2_제품', W.PRODUCT_COLUMNS], ['2b_품번목록', W.PART_COLUMNS], ['3_공정', W.PROCESS_COLUMNS], ['4_연료', W.FUEL_COLUMNS], ['5_구매강재', W.PRECURSOR_COLUMNS], ['6_역할책임', W.RNR_COLUMNS], ['7_증빙목록', W.EVIDENCE_COLUMNS], ['8_사온열', W.IMPORTED_HEAT_COLUMNS], ['9_보일러열', W.BOILER_HEAT_COLUMNS], ['10_공정배출', W.PROCESS_EMISSION_COLUMNS], ['11_사내이송', W.TRANSFER_COLUMNS], ['12_전력공급원', W.ELECTRICITY_SOURCE_COLUMNS]]) {
   const xml = sheetText(sheetIndex(sheetName));
   const labels = columns.map((field) => field.label);
   assert.equal(new Set(labels).size, labels.length, '머리글은 겹치지 않는다(머리글 글자로 칸을 찾는다)');
@@ -485,7 +485,7 @@ assert.match(I.describeActivityImportIssues(twoProducts.result.issues), /\[넣�
 // 이 시트들이 없는 서식(앞 판)도 읽힌다 — 새 시트 다섯이 빠져 있어도 오류가 아니다.
 const noExtraSheets = fflate.unzipSync(sampleBytes);
 let strippedWorkbook = fflate.strFromU8(noExtraSheets['xl/workbook.xml']);
-for (const sheetName of ['2b_품번목록', '8_사온열', '9_보일러열', '10_공정배출', '11_사내이송']) strippedWorkbook = strippedWorkbook.replace(new RegExp('<sheet name="' + sheetName + '"[^>]*/>'), '');
+for (const sheetName of ['2b_품번목록', '8_사온열', '9_보일러열', '10_공정배출', '11_사내이송', '12_전력공급원']) strippedWorkbook = strippedWorkbook.replace(new RegExp('<sheet name="' + sheetName + '"[^>]*/>'), '');
 const strippedData = W.parseActivityWorkbook(fflate.zipSync({ ...noExtraSheets, 'xl/workbook.xml': fflate.strToU8(strippedWorkbook) }));
 assert.deepEqual(plain([strippedData.parts.length, strippedData.importedHeat.length, strippedData.boilerHeat.length, strippedData.processEmissions.length, strippedData.transfers.length, strippedData.notes.length]), [0, 0, 0, 0, 0, 0]);
 
@@ -668,6 +668,108 @@ const oldNameRun = await importOf(withParts([{ part: 'EB-1', cn: '73181582', gra
   { row: 6, values: { name: 'SWCH35K 와이어', cn: '72171050', consumed: '50', country: 'South Korea', where: 'SWCH35K 공정', hasValue: '없음 (EU 기본값 사용)' } },
 ] }));
 assert.equal(oldNameRun.result.created.precursors, 2, '예전 판이 짓던 「SCM435 공정」·「SWCH35K 공정」이라는 이름도 묶음 공정을 가리킨다(이미 채워 둔 파일이 깨지지 않는다)');
+
+// ── 서식이 받지 못하던 여섯 가지(일부 실측 · SEFA · 기본값 연도 · 직접배출 합계 · 구매 강재 없음 · 여러 전력 공급원) ──
+const sixBase = withParts([{ part: 'A-1', cn: '73181582', grade: 'SCM435', mass: '1000' }, { part: 'A-2', cn: '73181588', grade: 'SCM435', mass: '500' }]);
+const precursorRow = (extra) => ({ row: 5, values: { name: 'SCM435 와이어', cn: '72299090', consumed: '1500', country: 'South Korea', where: 'SCM435', hasValue: '있음 (공급사가 준 값)', direct: '2.1', indirect: '0.2', evidence: '공급사 회신 2026-09', ...extra } });
+const run = async (extra, precursors = [precursorRow({})], data = {}) => importOf({ ...sixBase, precursors, ...data, installation: { ...sixBase.installation, ...(data.installation ?? {}) } });
+
+// ① 일부만 있음(SEMI_ACTUAL)
+const semi = await run({}, [precursorRow({ hasValue: '일부만 있음 (실측과 기본값이 섞인 값)', evidence: '직접은 실측, 간접은 EU 기본값 — 공급사 회신 2026-09' })]);
+assert.equal(semi.store.data.precursors[0].data_mode, 'SEMI_ACTUAL', '「일부만 있음」은 혼합(SEMI_ACTUAL)으로 저장된다');
+assert.deepEqual(plain([semi.store.data.precursors[0].direct_see_tco2e_per_t, semi.store.data.precursors[0].indirect_see_tco2e_per_t]), [2.1, 0.2], '공급사가 준 숫자를 그대로 쓴다');
+assert.match(I.describeActivityImportIssues(semi.result.issues), /「일부만 있음」으로 넣었습니다/);
+const semiBlank = await run({}, [precursorRow({ hasValue: '일부만 있음 (실측과 기본값이 섞인 값)', direct: '' })]);
+assert.match(I.describeActivityImportIssues(semiBlank.result.issues), /「일부만 있음」인데 직접 SEE가 비어 있습니다/);
+assert.equal(semiBlank.result.created.precursors, 0, '값이 없으면 넣지 않는다');
+
+// ② 기본값 연도
+const y2026 = await run({}, [precursorRow({ hasValue: '없음 (EU 기본값 사용)', direct: '', indirect: '' })]);
+const y2027 = await run({}, [precursorRow({ hasValue: '없음 (EU 기본값 사용)', direct: '', indirect: '', defaultYear: '2027' })]);
+const y2028 = await run({}, [precursorRow({ hasValue: '없음 (EU 기본값 사용)', direct: '', indirect: '', defaultYear: '2028년 이후' })]);
+assert.deepEqual(plain([y2026, y2027, y2028].map((item) => item.store.data.precursors[0].default_value_year)), ['2026', '2027', '2028_ONWARDS'], '기본값 연도가 저장된다(비우면 2026)');
+const yearSee = (item) => item.store.data.precursors[0].direct_see_tco2e_per_t + item.store.data.precursors[0].indirect_see_tco2e_per_t;
+assert.ok(yearSee(y2027) > yearSee(y2026) && yearSee(y2028) > yearSee(y2027), 'EU 기본값은 해가 갈수록 커진다(할증)');
+assert.match(y2027.store.data.precursors[0].default_value_justification, /2027, markup 포함/);
+assert.match(I.describeActivityImportIssues(y2028.result.issues), /2028년 이후년 기준|2028년 이후/);
+const yMeasured = await run({}, [precursorRow({ defaultYear: '2027' })]);
+assert.match(I.describeActivityImportIssues(yMeasured.result.issues), /기본값 연도는 「없음\(EU 기본값\)」일 때만 쓰입니다/);
+assert.equal(yMeasured.store.data.precursors[0].default_value_year, '2026', '공급사 값에는 연도를 적용하지 않는다');
+
+// ③ SEFA
+const sefa = await run({}, [precursorRow({ sefa: '1.234', sefaSource: '검증보고서 VR-2026-001', verification: '제3자 검증 완료' })]);
+assert.deepEqual(plain([sefa.store.data.precursors[0].supplier_sefa_tco2e_per_t, sefa.store.data.precursors[0].supplier_sefa_source]), [1.234, '검증보고서 VR-2026-001']);
+assert.ok(!/SEFA/.test(I.describeActivityImportIssues(sefa.result.issues)), '검증 완료 + 근거가 있으면 말하지 않는다');
+const sefaUnverified = await run({}, [precursorRow({ sefa: '1.234' })]);
+assert.match(I.describeActivityImportIssues(sefaUnverified.result.issues), /SEFA를 적었지만 검증 여부가 「제3자 검증 완료」가 아니라 인증서 비용 계산에는 쓰이지 않습니다/);
+assert.match(I.describeActivityImportIssues(sefaUnverified.result.issues), /SEFA의 근거 문서/);
+const sefaBad = await run({}, [precursorRow({ sefa: '많음' })]);
+assert.equal(sefaBad.store.data.precursors[0].supplier_sefa_tco2e_per_t, undefined);
+assert.match(I.describeActivityImportIssues(sefaBad.result.issues), /SEFA 「많음」을\(를\) 0 이상의 숫자로 읽지 못해/);
+
+// ④ 직접배출 합계(수기)
+const manualData = withParts([{ part: 'A-1', cn: '73181582', grade: 'SCM435', mass: '1000' }], {
+  processes: [{ row: 5, values: { name: '소둔 공정', product: 'SCM435 · CN 73181582', mass: '1000', directTotal: '420.5', directTotalNote: '연속측정(CEMS) 연간 합계 — 측정보고서 p.12' } }],
+});
+const manual = await importOf({ ...manualData, parts: [], products: [{ row: 5, values: { name: 'SCM435 · CN 73181582', cn: '73181582', exported: '예' } }] });
+const manualProcess = manual.store.data.processes.find((item) => item.name === '소둔 공정');
+assert.deepEqual(plain([manualProcess.direct_attributable_emissions_tco2e, manualProcess.direct_emissions_input_mode, manualProcess.direct_emissions_input_note]), [420.5, 'MANUAL_TOTAL', '연속측정(CEMS) 연간 합계 — 측정보고서 p.12'], '수기 합계 · 방식 · 근거가 지도 3단계와 같은 기록으로 저장된다');
+const manualResult = resultsOf(manual.store).find((item) => item.process_name === '소둔 공정');
+assert.ok(Math.abs(manualResult.direct_emissions_tco2e - 420.5) < 1e-9, '계산도 적은 합계를 쓴다');
+const manualWithFuel = await importOf({ ...manualData, parts: [], products: [{ row: 5, values: { name: 'SCM435 · CN 73181582', cn: '73181582', exported: '예' } }], fuels: [{ row: 5, values: { name: '소둔로 가스', kind: '도시가스 (Nm³)', amount: '100000', where: '소둔 공정', evidence: '고지서' } }] });
+assert.equal(manualWithFuel.store.data.processes.find((item) => item.name === '소둔 공정').direct_emissions_input_mode, 'MANUAL_TOTAL', '연료 줄이 있어도 직접 적은 합계가 우선한다');
+assert.match(I.describeActivityImportIssues(manualWithFuel.result.issues), /직접배출 합계\(420\.5 tCO₂e\)를 직접 적었고 이 공정에는 연료 줄도 있습니다/);
+const manualNoNote = await importOf({ ...manualData, parts: [], products: [{ row: 5, values: { name: 'SCM435 · CN 73181582', cn: '73181582', exported: '예' } }], processes: [{ row: 5, values: { name: '소둔 공정', product: 'SCM435 · CN 73181582', mass: '1000', directTotal: '420.5' } }] });
+assert.match(I.describeActivityImportIssues(manualNoNote.result.issues), /직접배출 합계의 산정 방법·근거가 비어 있습니다/);
+const manualBad = await importOf({ ...manualData, parts: [], products: [{ row: 5, values: { name: 'SCM435 · CN 73181582', cn: '73181582', exported: '예' } }], processes: [{ row: 5, values: { name: '소둔 공정', product: 'SCM435 · CN 73181582', mass: '1000', directTotal: '-3' } }] });
+assert.match(I.describeActivityImportIssues(manualBad.result.issues), /직접배출 합계 「-3」을\(를\) 0 이상의 숫자로/);
+assert.notEqual(manualBad.store.data.processes[0].direct_emissions_input_mode, 'MANUAL_TOTAL', '틀린 값은 넣지 않는다');
+
+// ⑤ 구매 강재 없음 확인
+const noSteelPlant = await importOf({ ...sixBase, precursors: [], installation: { ...sixBase.installation, purchased_steel: '아니오' } });
+assert.ok(noSteelPlant.store.data.processes.every((item) => item.no_purchased_precursors === true), '1_사업장 「아니오」: 모든 공정을 구매 강재 없음으로 확인한다');
+assert.ok(!/구매 강재가 없는 공정:/.test(I.describeActivityImportIssues(noSteelPlant.result.issues)), '확인했으면 「구매 강재가 없는 공정」으로 다시 묻지 않는다');
+const noSteelWith = await importOf({ ...sixBase, precursors: [precursorRow({})], installation: { ...sixBase.installation, purchased_steel: '아니오' } });
+assert.ok(noSteelWith.store.data.processes.filter((item) => item.name === 'SCM435 공정').every((item) => !item.no_purchased_precursors), '구매 강재 줄이 있는 공정에는 넣지 않는다');
+const noSteelPerProcess = await importOf({ ...manualData, parts: [], products: [{ row: 5, values: { name: 'SCM435 · CN 73181582', cn: '73181582', exported: '예' } }], processes: [{ row: 5, values: { name: '소둔 공정', product: 'SCM435 · CN 73181582', mass: '1000', noPrecursor: '예' } }] });
+assert.equal(noSteelPerProcess.store.data.processes[0].no_purchased_precursors, true, '3_공정의 「예」');
+const noSteelUnset = await importOf({ ...sixBase, precursors: [] });
+assert.ok(noSteelUnset.store.data.processes.every((item) => !item.no_purchased_precursors), '비우면 아무것도 확인한 것이 아니다(종전과 같다)');
+
+// ⑥ 여러 전력 공급원
+const elecBase = { installation: { ...sixBase.installation, electricity_total_mwh: '1000', electricity_ef: '', electricity_ef_source: '' } };
+const sourcesRun = await importOf({ ...sixBase, ...elecBase, electricitySources: [
+  { row: 5, values: { name: '한전 계통 전력', country: 'South Korea', mwh: '600', ef: '0.4594' } },
+  { row: 6, values: { name: '○○태양광 PPA', country: 'South Korea', mwh: '400', ef: '0.05' } },
+] });
+const expectedAverage = (600 * 0.4594 + 400 * 0.05) / 1000;
+assert.ok(sourcesRun.store.data.processes.every((item) => Math.abs(item.electricity_ef_tco2e_per_mwh - expectedAverage) < 1e-6), `계수는 공급원별 가중평균 ${expectedAverage}`);
+assert.ok(sourcesRun.store.data.processes.every((item) => item.electricity_ef_source === 'MIX'), '출처는 「혼합」으로 들어간다');
+const metaRows = sourcesRun.store.report.electricity_ef_meta;
+assert.ok(metaRows.length > 0 && metaRows.every((item) => item.basis === 'MULTI_SOURCE' && item.sources.length === 2 && item.sources[1].name === '○○태양광 PPA'), '보고서 입력(제7장)에 다출처 내역이 실린다');
+assert.match(I.describeActivityImportIssues(sourcesRun.result.issues), /전력 배출계수는 공급원별 가중평균 [0-9.]+ tCO₂e\/MWh로 넣었습니다/);
+const sourcesMismatch = await importOf({ ...sixBase, ...elecBase, electricitySources: [{ row: 5, values: { name: '한전', mwh: '500', ef: '0.4594' } }, { row: 6, values: { name: 'PPA', mwh: '100', ef: '0.05' } }] });
+assert.match(I.describeActivityImportIssues(sourcesMismatch.result.issues), /공급원별 전력량의 합\(600 MWh\)이 1_사업장의 공장 전체 전력\(1,000 MWh\)과 다릅니다/);
+const sourcesWritten = await importOf({ ...sixBase, installation: { ...elecBase.installation, electricity_ef: '0.4', electricity_ef_source: '국가 전력망 평균' }, electricitySources: [{ row: 5, values: { name: '한전', mwh: '600', ef: '0.4594' } }, { row: 6, values: { name: 'PPA', mwh: '400', ef: '0.05' } }] });
+assert.ok(sourcesWritten.store.data.processes.every((item) => item.electricity_ef_tco2e_per_mwh === 0.4), '적은 계수가 있으면 그 값을 쓴다');
+assert.match(I.describeActivityImportIssues(sourcesWritten.result.issues), /전력 배출계수 0\.4가 12_전력공급원의 가중평균\([0-9.]+\)과 다릅니다/);
+assert.match(I.describeActivityImportIssues(sourcesWritten.result.issues), /전력 공급원이 여럿인데 전력 계수 출처가 「혼합」이 아닙니다/);
+const sourcesBad = await importOf({ ...sixBase, ...elecBase, electricitySources: [{ row: 5, values: { name: '한전', mwh: '600', ef: '0.4594' } }, { row: 6, values: { name: 'PPA', mwh: '많음', ef: '0.05' } }] });
+assert.match(I.describeActivityImportIssues(sourcesBad.result.issues), /전력량과 배출계수를 0 이상의 숫자로 적지 않은 줄이 1개/);
+// 서식이 새 시트·칸을 가진다
+assert.ok(W.ELECTRICITY_SOURCE_COLUMNS.map((column) => column.key).join() === 'name,country,mwh,ef');
+assert.ok(W.PROCESS_COLUMNS.slice(-3).map((column) => column.key).join() === 'noPrecursor,directTotal,directTotalNote');
+assert.ok(W.PRECURSOR_COLUMNS.slice(-3).map((column) => column.key).join() === 'defaultYear,sefa,sefaSource');
+assert.equal(W.SUPPLIER_VALUE_CHOICES[2].value, 'SEMI_ACTUAL');
+assert.deepEqual(plain(W.DEFAULT_YEAR_CHOICES.map((choice) => choice.value)), ['2026', '2027', '2028_ONWARDS']);
+// 새 칸으로 채운 서식을 엑셀로 쓰고 다시 읽는다(왕복)
+const sixFilled = W.parseActivityWorkbook(await bytesOf(W.createActivityWorkbook({ countries, fill: {
+  ...W.ACTIVITY_WORKBOOK_SAMPLE,
+  processes: [{ ...W.ACTIVITY_WORKBOOK_SAMPLE.processes[0], directTotal: 410, directTotalNote: 'CEMS', noPrecursor: '아니오' }],
+  precursors: [{ ...W.ACTIVITY_WORKBOOK_SAMPLE.precursors[1], defaultYear: '2027', sefa: 1.5, sefaSource: '보고서' }],
+  electricitySources: [{ name: '한전', country: 'South Korea', mwh: 5412, ef: 0.4747 }],
+} })));
+assert.deepEqual(plain([sixFilled.processes[0].values.directTotal, sixFilled.processes[0].values.directTotalNote, sixFilled.precursors[0].values.defaultYear, sixFilled.precursors[0].values.sefa, sixFilled.electricitySources[0].values.name]), ['410', 'CEMS', '2027', '1.5', '한전']);
 
 // ── LPG·프로판(t) 연료 종류 ──
 assert.ok(W.FUEL_KIND_CHOICES.some((choice) => choice.key === 'fuel-lpg-t' && choice.label === 'LPG·프로판 (t)'), '서식 목록에 LPG·프로판 (t)');

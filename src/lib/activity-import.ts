@@ -27,11 +27,14 @@ import {
     SHEET_PRODUCTS,
     SHEET_RNR,
     SUPPLIER_VALUE_CHOICES,
+    DEFAULT_YEAR_CHOICES,
+    SHEET_ELECTRICITY_SOURCES,
     VERIFICATION_CHOICES,
     YES,
     type ActivityRow,
     type ActivityWorkbookData,
 } from './activity-workbook';
+import { weightedAverageEf } from './electricity-ef-basis';
 import { describeCn, glossCn, shortCnText, strengthMpaFromText } from './cn-description';
 import { CN_MASTER } from './cn-master.generated';
 import { isImplausibleElectricityIntensity, sumReconciledSourceStreamEmissions } from './allocation-rules';
@@ -388,6 +391,10 @@ export async function importActivityWorkbook(
         processByName.set(key(saved.name), saved);
         return saved;
     };
+    /** 직접배출을 합계로 직접 적은 공정(다른 방법으로 산정) — 연료 줄이 있어도 이 값을 쓴다 */
+    const manualDirect = new Map<string, { value: number; note: string; row: number }>();
+    /** 「구매한 강재를 쓰지 않나요?」를 「예」로 적은 공정 */
+    const noPrecursorFlag = new Set<string>();
     const meteredMwh = new Map<string, number>();
     /** 공정별 전력 계량기 정보(이름·그 계량기의 합계·나누는 기준·추정 근거) */
     const meterOf = new Map<string, { name: string; total?: number; basis?: 'OUTPUT_MASS' | 'SUB_METER' | 'ESTIMATE'; note: string }>();
@@ -467,6 +474,22 @@ export async function importActivityWorkbook(
         // 지도 3단계·질문 화면과 같은 순서: 공정 → 제품 라인(제품마다) → 활동수준 제외 라인.
         const creation = buildProcessCreation(draft);
         const process = await store.create('processes', creation.process);
+        // 직접배출 합계(수기) · 구매 강재 없음 확인 — 첫 줄에 적힌 값을 쓴다
+        const firstOf = (field: string) => rows.map((row) => (row.values[field] ?? '').trim()).find(Boolean) ?? '';
+        const manualText = firstOf('directTotal');
+        if (manualText) {
+            const manualValue = numberOf(manualText);
+            if (manualValue === undefined || Number.isNaN(manualValue) || manualValue < 0) {
+                note('error', SHEET_PROCESSES, `${name}: 직접배출 합계 「${manualText}」을(를) 0 이상의 숫자로 적어 주세요. 이 값은 넣지 않았습니다.`, rows[0].row);
+            } else {
+                const manualNote = firstOf('directTotalNote');
+                if (!manualNote) note('warning', SHEET_PROCESSES, `${name}: 직접배출 합계의 산정 방법·근거가 비어 있습니다. 연료 줄 대신 합계를 쓰는 것은 근거가 있어야 검증인이 받아들입니다(모니터링 계획의 방법 기술).`, rows[0].row);
+                manualDirect.set(process.id, { value: manualValue, note: manualNote, row: rows[0].row });
+            }
+        }
+        const noPrecursorText = firstOf('noPrecursor');
+        if (noPrecursorText && yesNo(noPrecursorText) === undefined) note('warning', SHEET_PROCESSES, `${name}: 「구매한 강재를 쓰지 않나요?」의 「${noPrecursorText}」을(를) 읽지 못했습니다. 「예」 또는 「아니오」를 골라 주세요.`, rows[0].row);
+        if (yesNo(noPrecursorText) === 'YES') noPrecursorFlag.add(process.id);
         for (const line of lines) {
             // 서식의 「제품」 줄은 합격품이다 — EU로 안 나가는 제품의 라인도 활동수준에 들어간다고 적어 둔다(불량·스크랩은 옆 칸으로 따로 받는다).
             // 적어 두지 않으면 엔진이 「이 라인이 스크랩은 아닌지」 확인을 요구한다.
@@ -556,8 +579,18 @@ export async function importActivityWorkbook(
     }
 
     // ── 6) 전력 ──────────────────────────────────────────────────────
+    // 12_전력공급원: 한전 외에 PPA·직접 연결·자가발전으로도 받으면 공급원별 전력량×계수의 가중평균(Article 9)이 이 사업장의 계수가 된다.
+    const sourceRows = (data.electricitySources ?? []).map((row) => ({ name: (row.values.name ?? '').trim(), country: (row.values.country ?? '').trim(), mwh: (row.values.mwh ?? '').trim(), ef: (row.values.ef ?? '').trim(), row: row.row }));
+    const sourceAverage = sourceRows.length > 0 ? weightedAverageEf(sourceRows) : undefined;
+    if (sourceAverage) {
+        if (sourceAverage.droppedRows > 0) note('error', SHEET_ELECTRICITY_SOURCES, `전력량과 배출계수를 0 이상의 숫자로 적지 않은 줄이 ${sourceAverage.droppedRows}개 있어 가중평균에서 뺐습니다. 모든 공급원의 두 칸을 숫자로 적어 주세요.`, sourceRows[0]?.row);
+        if (sourceAverage.usableRows === 1) note('info', SHEET_ELECTRICITY_SOURCES, '전력 공급원이 한 곳뿐입니다. 한 곳이면 1_사업장의 전력 계수와 출처만 적으면 됩니다.');
+    }
     if (fresh.size > 0) {
         const plantTotal = numberOf(text('electricity_total_mwh'));
+        if (sourceAverage?.ef !== undefined && plantTotal !== undefined && plantTotal > 0 && Math.abs(sourceAverage.totalMwh - plantTotal) > Math.max(0.5, plantTotal * 0.01)) {
+            note('warning', SHEET_ELECTRICITY_SOURCES, `공급원별 전력량의 합(${fmt(sourceAverage.totalMwh)} MWh)이 1_사업장의 공장 전체 전력(${fmt(plantTotal)} MWh)과 다릅니다. 가중평균은 공급원별 값으로 정했습니다 — 어느 쪽이 맞는지 고지서·계약서로 확인하세요.`);
+        }
         // 단위 실수(kWh를 MWh 칸에) — 생산량 1 t당 전력이 상식 밖이면 알린다. 값은 그대로 넣고, 엔진도 같은 기준으로 경고를 남긴다.
         const plantOutput = freshList().reduce((sum, process) => sum + process.output_mass_t, 0);
         if (plantTotal !== undefined && plantOutput > 0 && isImplausibleElectricityIntensity(plantTotal, plantOutput)) {
@@ -569,8 +602,16 @@ export async function importActivityWorkbook(
                 note('warning', SHEET_PROCESSES, `${process.name}: 공정의 전력 ${fmt(mwh)} MWh는 생산량 1 t당 ${fmt(mwh / process.output_mass_t)} MWh입니다 — 지나치게 큽니다. kWh를 그대로 적지 않았나요? MWh는 kWh ÷ 1,000입니다.`);
             }
         }
-        const factor = numberOf(text('electricity_ef'));
-        const source = labelValue(ELECTRICITY_SOURCE_CHOICES, text('electricity_ef_source'));
+        const writtenFactor = numberOf(text('electricity_ef'));
+        // 계수를 비웠고 공급원 내역이 있으면 가중평균을 계수로, 출처는 「혼합」으로 넣는다. 적었으면 적은 값을 쓰고 평균과 다르면 알린다.
+        const averageEf = sourceAverage?.ef !== undefined ? Math.round(sourceAverage.ef * 1e6) / 1e6 : undefined;
+        const factor = writtenFactor ?? averageEf;
+        if (writtenFactor === undefined && averageEf !== undefined) note('info', SHEET_ELECTRICITY_SOURCES, `전력 배출계수는 공급원별 가중평균 ${averageEf} tCO₂e/MWh로 넣었습니다(공급원 ${sourceAverage?.usableRows}곳).`);
+        if (writtenFactor !== undefined && averageEf !== undefined && Math.abs(writtenFactor - averageEf) > Math.max(1e-4, averageEf * 0.01)) {
+            note('warning', SHEET_INSTALLATION, `전력 배출계수 ${writtenFactor}가 12_전력공급원의 가중평균(${averageEf})과 다릅니다. 적은 값을 썼습니다 — 가중평균을 쓰려면 이 칸을 비우세요.`);
+        }
+        const source = labelValue(ELECTRICITY_SOURCE_CHOICES, text('electricity_ef_source')) ?? (averageEf !== undefined ? 'MIX' : undefined);
+        if (averageEf !== undefined && source !== undefined && source !== 'MIX') note('warning', SHEET_INSTALLATION, '전력 공급원이 여럿인데 전력 계수 출처가 「혼합」이 아닙니다. 보고서에는 출처 유형이 그대로 실립니다 — 공급원이 여럿이면 「혼합」이 맞는지 확인하세요.');
         const factorOk = factor !== undefined && factor > 0;
         if (text('electricity_ef') && !factorOk) note('error', SHEET_INSTALLATION, `전력 배출계수 「${text('electricity_ef')}」을(를) 0보다 큰 숫자로 적어 주세요.`);
         if (text('electricity_ef_source') && !source) note('warning', SHEET_INSTALLATION, `전력 배출계수 출처 「${text('electricity_ef_source')}」을(를) 목록에서 찾지 못했습니다. 목록에서 골라 주세요.`);
@@ -905,11 +946,21 @@ export async function importActivityWorkbook(
     // 연료를 넣은 공정의 직접배출을 「배출원 합계」로 맞춘다(지도 4단계·연료 나누기와 같다) — 안 맞추면 연료가 계산에 들어가지 않는다.
     for (const processId of touched) {
         const process = fresh.get(processId);
-        if (process) {
+        if (process && !manualDirect.has(processId)) {
             await saveProcess({ ...process, direct_attributable_emissions_tco2e: sumReconciledSourceStreamEmissions(process.id, streams), direct_emissions_input_mode: 'SOURCE_STREAM_SUM' });
         }
     }
-    const fuelless = freshList().filter((process) => !touched.has(process.id));
+    // 직접배출을 합계로 직접 준 공정 — 지도 3단계의 「수기 합계」와 같은 기록(방식·사유). 연료 줄이 있으면 대조용으로만 남는다.
+    for (const [processId, manual] of manualDirect) {
+        const process = fresh.get(processId);
+        if (!process) continue;
+        await saveProcess({ ...process, direct_attributable_emissions_tco2e: manual.value, direct_emissions_input_mode: 'MANUAL_TOTAL', direct_emissions_input_note: manual.note || undefined });
+        if (touched.has(processId)) {
+            const sum = sumReconciledSourceStreamEmissions(processId, streams);
+            note('warning', SHEET_PROCESSES, `${process.name}: 직접배출 합계(${fmt(manual.value)} tCO₂e)를 직접 적었고 이 공정에는 연료 줄도 있습니다(합 ${fmt(sum)} tCO₂e). 계산에는 적은 합계를 쓰고 연료 줄은 대조용으로만 남습니다 — 둘이 크게 다르면 어느 쪽이 맞는지 확인하세요.`, manual.row);
+        }
+    }
+    const fuelless = freshList().filter((process) => !touched.has(process.id) && !manualDirect.has(process.id));
     if (fuelless.length > 0) {
         note('info', SHEET_FUELS, `연료가 하나도 없는 공정: ${fuelless.map((process) => `「${process.name}」`).join(', ')}. 연료를 쓰지 않는 공정이 맞는지 확인하세요.`);
     }
@@ -984,22 +1035,34 @@ export async function importActivityWorkbook(
         const cn = (row.values.cn ?? '').replace(/\D/g, '');
         const country = resolveSupplierCountry(row.values.country ?? '', knownCountries);
         const chosen = labelValue(SUPPLIER_VALUE_CHOICES, row.values.hasValue);
-        const mode: 'ACTUAL' | 'DEFAULT' = chosen ?? (numbers.direct !== undefined ? 'ACTUAL' : 'DEFAULT');
+        const mode: 'ACTUAL' | 'DEFAULT' | 'SEMI_ACTUAL' = chosen ?? (numbers.direct !== undefined ? 'ACTUAL' : 'DEFAULT');
         if (!chosen) tell('info', `「공급사 배출량 값이 있나요?」가 비어, 직접 SEE 칸이 ${mode === 'ACTUAL' ? '채워져 있어 「있음」' : '비어 있어 「없음(EU 기본값)」'}으로 보았습니다.`);
+        // 실측이 섞인 값(일부만 있음)도 공급사가 준 숫자를 그대로 쓴다 — 앱은 성분을 가르지 않는다. 근거에 어느 부분이 기본값인지 남겨야 한다.
+        const measured = mode !== 'DEFAULT';
+        const yearText = (row.values.defaultYear ?? '').trim();
+        const yearChoice = labelValue(DEFAULT_YEAR_CHOICES, yearText);
+        if (yearText && !yearChoice) tell('warning', `기본값 연도 「${yearText}」을(를) 읽지 못해 2026으로 넣었습니다. 목록에서 골라 주세요.`);
+        if (yearChoice && measured) tell('info', '기본값 연도는 「없음(EU 기본값)」일 때만 쓰입니다. 이 줄은 공급사 값을 쓰므로 무시했습니다.');
+        const defaultYear = ((!measured && yearChoice) || '2026') as PurchasedPrecursor['default_value_year'];
+        const sefaText = (row.values.sefa ?? '').trim();
+        const sefaValue = sefaText ? numberOf(sefaText) : undefined;
+        if (sefaText && (sefaValue === undefined || Number.isNaN(sefaValue) || sefaValue < 0)) tell('warning', `SEFA 「${sefaText}」을(를) 0 이상의 숫자로 읽지 못해 넣지 않았습니다.`);
         const evidence = (row.values.evidence ?? '').trim();
         const supplier = (row.values.supplier ?? '').trim();
         let answer;
-        if (mode === 'ACTUAL') {
-            if (numbers.direct === undefined) { tell('error', '공급사 값이 「있음」인데 직접 SEE가 비어 있습니다. 값을 적거나 「없음」으로 바꿔 주세요.'); continue; }
+        if (measured) {
+            if (numbers.direct === undefined) { tell('error', `공급사 값이 「${mode === 'SEMI_ACTUAL' ? '일부만 있음' : '있음'}」인데 직접 SEE가 비어 있습니다. 값을 적거나 「없음」으로 바꿔 주세요.`); continue; }
             if (numbers.indirect === undefined) tell('warning', '간접 SEE가 비어 0으로 넣었습니다. 공급사 자료에 간접(전력) 값이 있는지 확인해 주세요.');
-            if (!evidence) tell('warning', '근거 자료가 비어 있습니다. 공급사가 언제 어떤 문서로 준 값인지 적어 주세요.');
-            answer = { mode, directSee: String(numbers.direct), indirectSee: String(numbers.indirect ?? 0), source: evidence || MISSING_EVIDENCE_TEXT, justification: '' };
+            if (!evidence) tell('warning', mode === 'SEMI_ACTUAL' ? '근거 자료가 비어 있습니다. 어느 부분이 실측이고 어느 부분이 기본값인지, 공급사가 어떤 문서로 준 값인지 적어 주세요.' : '근거 자료가 비어 있습니다. 공급사가 언제 어떤 문서로 준 값인지 적어 주세요.');
+            if (mode === 'SEMI_ACTUAL') tell('info', '「일부만 있음」으로 넣었습니다. 기본값이 섞인 값은 기본값 비중이 크면 실측 확보를 우선하세요 — 앱은 성분을 나누지 않고 공급사가 준 숫자를 그대로 씁니다.');
+            answer = { mode: 'ACTUAL' as const, directSee: String(numbers.direct), indirectSee: String(numbers.indirect ?? 0), source: evidence || MISSING_EVIDENCE_TEXT, justification: '' };
         } else {
             if (numbers.direct !== undefined || numbers.indirect !== undefined) tell('warning', '공급사 값이 「없음」이라 적어 둔 직접·간접 SEE는 쓰지 않고 EU 기본값을 넣었습니다.');
             // 질문 화면의 「모르겠어요 — EU 기본값 채우기」와 같은 조회·같은 문구.
-            const filled = fillEuDefault({ reference: deps.defaultValues, country, cnDigits: cn });
+            const filled = fillEuDefault({ reference: deps.defaultValues, country, cnDigits: cn, year: defaultYear });
             if (!filled.ok) { tell('error', `EU 기본값을 넣지 못했습니다: ${filled.reason}`); continue; }
-            answer = { mode, directSee: String(filled.direct), indirectSee: String(filled.indirect), source: filled.source, justification: evidence ? `${filled.justification} · ${evidence}` : filled.justification };
+            if (defaultYear !== '2026') tell('info', `${defaultYear === '2028_ONWARDS' ? '2028년 이후' : `${defaultYear}년`} 기준 EU 기본값을 넣었습니다. 보고기간이 그 해의 것인지 확인하세요.`);
+            answer = { mode: 'DEFAULT' as const, directSee: String(filled.direct), indirectSee: String(filled.indirect), source: filled.source, justification: evidence ? `${filled.justification} · ${evidence}` : filled.justification };
         }
         const draft = {
             ...buildPrecursorDraft({ name, cn, consumed: String(numbers.consumed ?? ''), purchased: String(numbers.purchased ?? numbers.consumed ?? ''), country, ...answer }),
@@ -1008,9 +1071,10 @@ export async function importActivityWorkbook(
             supplierRoute: (row.values.route ?? '').trim(),
             bridgeUsage: hasBreakdown ? numbers.elecUse ?? 0 : 0,
             bridgeFactor: hasBreakdown ? numbers.elecFactor ?? 0 : 0,
+            dataMode: mode,
         };
         if (numbers.nonCbam !== undefined && (numbers.nonCbam < 0 || numbers.nonCbam > (numbers.consumed ?? 0))) { tell('error', `CBAM 제품이 아닌 데 쓴 양 「${row.values.nonCbam}」은 0 이상이고 투입량보다 작아야 합니다.`); continue; }
-        if (mode === 'ACTUAL' && !draft.supplierPeriod) tell('info', '공급사 값의 기준 기간이 비어 있습니다. 공급사 자료에 적힌 기간을 적으면 산정보고서에 실립니다.');
+        if (measured && !draft.supplierPeriod) tell('info', '공급사 값의 기준 기간이 비어 있습니다. 공급사 자료에 적힌 기간을 적으면 산정보고서에 실립니다.');
         // 「쓰는 제품」을 적었으면 그 제품 라인에만 귀속한다(지도 6단계의 제품별 배분과 같은 기록). 여러 제품이면 그 제품들의 생산량 비율.
         const wanted = namesOf(row.values.products);
         if (wanted.length > 0) {
@@ -1031,14 +1095,20 @@ export async function importActivityWorkbook(
         }
         const error = validatePrecursorDraft(draft);
         if (error) { tell('error', error); continue; }
-        if (mode === 'ACTUAL' && knownCountries.length > 0 && !knownCountries.includes(country)) tell('warning', `원료를 만든 나라 「${country}」이(가) EU 기본값표의 이름과 다릅니다. 목록에서 골라 주세요(EU 문서의 국가 코드가 이 값으로 정해집니다).`);
+        if (measured && knownCountries.length > 0 && !knownCountries.includes(country)) tell('warning', `원료를 만든 나라 「${country}」이(가) EU 기본값표의 이름과 다릅니다. 목록에서 골라 주세요(EU 문서의 국가 코드가 이 값으로 정해집니다).`);
         const status = labelValue(VERIFICATION_CHOICES, row.values.verification);
         if (row.values.verification && !status) tell('warning', `검증 여부 「${row.values.verification}」을(를) 읽지 못해 「미검증」으로 넣었습니다.`);
         const payload: Omit<PurchasedPrecursor, keyof LocalEntity> = {
             ...buildPrecursorCreate(draft, { period_id: process.period_id, process_id: process.id, product_id: process.product_id }),
             ...(status ? { verification_status: status } : {}),
             ...(numbers.nonCbam !== undefined ? { consumed_for_non_cbam_mass_t: numbers.nonCbam } : {}),
+            default_value_year: defaultYear,
+            ...(sefaValue !== undefined && !Number.isNaN(sefaValue) && sefaValue >= 0 ? { supplier_sefa_tco2e_per_t: sefaValue, ...((row.values.sefaSource ?? '').trim() ? { supplier_sefa_source: (row.values.sefaSource ?? '').trim() } : {}) } : {}),
         };
+        if (payload.supplier_sefa_tco2e_per_t !== undefined) {
+            if ((status ?? 'UNVERIFIED') !== 'VERIFIED') tell('warning', 'SEFA를 적었지만 검증 여부가 「제3자 검증 완료」가 아니라 인증서 비용 계산에는 쓰이지 않습니다(2025/2620 부속서 3.3). 검증보고서를 받으면 검증 여부를 바꾸세요.');
+            if (!(row.values.sefaSource ?? '').trim()) tell('warning', 'SEFA의 근거 문서(검증보고서 번호·발행일)가 비어 있습니다.');
+        }
         await store.create('precursors', payload);
         withPrecursor.add(process.id);
         precursorCnsByProcess.set(process.id, [...(precursorCnsByProcess.get(process.id) ?? []), (row.values.cn ?? '').replace(/\D/g, '')]);
@@ -1079,9 +1149,29 @@ export async function importActivityWorkbook(
         }
     }
 
+    // 「구매한 강재를 쓰지 않음」 확인 — 공정에 적었거나 1_사업장에서 「사 온 철강 원료를 쓰나요?」를 「아니오」로 답한 경우.
+    // 지도 6단계의 「쓰지 않음 확인」과 같은 값(no_purchased_precursors)이다. 구매 강재 줄이 있는 공정에는 넣지 않는다.
+    {
+        const plantAnswer = text('purchased_steel');
+        const plantNo = yesNo(plantAnswer) === 'NO';
+        if (plantAnswer && yesNo(plantAnswer) === undefined) note('warning', SHEET_INSTALLATION, `「사 온 철강 원료를 쓰나요?」의 「${plantAnswer}」을(를) 읽지 못했습니다. 「예」 또는 「아니오」를 골라 주세요.`);
+        let confirmed = 0;
+        for (const process of freshList()) {
+            const flagged = noPrecursorFlag.has(process.id);
+            if (!flagged && !plantNo) continue;
+            if (withPrecursor.has(process.id)) {
+                if (flagged) note('warning', SHEET_PROCESSES, `${process.name}: 「구매한 강재를 쓰지 않나요?」를 「예」로 적었지만 5_구매강재에 이 공정의 줄이 있어 구매 강재가 있는 것으로 두었습니다.`);
+                continue;
+            }
+            await saveProcess({ ...process, no_purchased_precursors: true });
+            confirmed += 1;
+        }
+        if (confirmed > 0) note('info', SHEET_PRECURSORS, `구매한 강재가 없다고 확인한 공정이 ${confirmed}개 있습니다(${plantNo ? '1_사업장의 답' : '3_공정의 답'}). 사 온 철강 원료(선재·봉강·코일)가 실제로 없는 공정이 맞는지 확인하세요 — 철강 가공품은 SEE의 대부분이 구매 강재에서 나옵니다.`);
+    }
+
     // 신고 대상 제품을 만드는 공정만 본다 — EU로 안 나가는 제품의 공정은 구매 강재가 없어도 계산에 영향이 없다.
     const reportable = new Set(Array.from(productByName.values()).filter((product) => product.reporting_scope !== 'NON_CBAM_COPRODUCT').map((product) => product.id));
-    const bare = freshList().filter((process) => !withPrecursor.has(process.id) && reportable.has(process.product_id ?? ''));
+    const bare = freshList().filter((process) => !withPrecursor.has(process.id) && !process.no_purchased_precursors && reportable.has(process.product_id ?? ''));
     if (bare.length > 0) {
         note('info', SHEET_PRECURSORS, `구매 강재가 없는 공정: ${bare.map((process) => `「${process.name}」`).join(', ')}. 사 온 강재를 쓰는 공정이면 적어 주세요 — 정말 없으면 지도 6단계에서 「쓰지 않음」을 확인하면 됩니다.`);
     }
@@ -1099,7 +1189,8 @@ export async function importActivityWorkbook(
         if (sectorRows.length > 0) next.sector_parameters = [...(current.sector_parameters ?? []), ...sectorRows];
         if (transpositionRows.length > 0) next.transpositions = [...(current.transpositions ?? []).filter((item) => !transpositionRows.some((row) => row.source_stream_id === item.source_stream_id)), ...transpositionRows];
         // 전력 계수의 출처(공표기관·문서·연도)는 공장 값이라 이번에 만든 공정 모두에 붙인다. 산정근거 유형은 5단계에서 고른 출처가 이어진다.
-        const meta = { publisher: text('electricity_ef_publisher') || undefined, document: text('electricity_ef_document') || undefined, vintage: text('electricity_ef_vintage') || undefined };
+        const multi = sourceAverage?.ef !== undefined ? { basis: 'MULTI_SOURCE' as const, sources: sourceRows.filter((item) => item.name || item.mwh || item.ef).map((item) => ({ name: item.name, country: item.country, mwh: item.mwh, ef: item.ef })) } : {};
+        const meta = { publisher: text('electricity_ef_publisher') || undefined, document: text('electricity_ef_document') || undefined, vintage: text('electricity_ef_vintage') || undefined, ...multi };
         if (Object.values(meta).some(Boolean) && fresh.size > 0) {
             const others = (current.electricity_ef_meta ?? []).filter((item) => !fresh.has(item.process_id));
             next.electricity_ef_meta = [...others, ...freshList().filter((process) => process.electricity_mwh > 0).map((process) => ({ process_id: process.id, ...meta }))];
