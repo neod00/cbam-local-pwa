@@ -387,6 +387,20 @@ export interface ReportInputs {
 export const REPORT_INPUTS_SETTING_KEY = "report:inputs";
 
 /**
+ * 마지막으로 올린 활동자료 서식의 결과 — 「넣지 못한 줄」이 남아 있으면 제출 화면이 「보낼 수 있습니다」라고만 말하지 않게 한다(run35 P1-05).
+ * 올릴 때마다 덮어쓰고(깨끗이 올렸으면 비움), 사용자가 직접 고쳤다고 닫으면 비운다. 새 프로젝트가 지우고 백업에 함께 들어간다.
+ */
+export const ACTIVITY_IMPORT_RESULT_SETTING_KEY = "activity-import:last";
+
+export interface ActivityImportRecord {
+  imported_at: string;
+  filename: string;
+  /** 넣지 못한 줄의 수(목록은 앞의 20건만 담는다) */
+  unplaced_count: number;
+  unplaced: Array<{ sheet: string; row?: number; message: string }>;
+}
+
+/**
  * EU Communication 사본이 다룰 보고기간의 id.
  *
  * 화면에 남는 상태가 아니라 **프로젝트 자료**로 저장한다. 화면 상태로 두면 지도의
@@ -916,6 +930,7 @@ export const NEW_PROJECT_PRESERVED_SETTING_KEYS = [
  */
 export const NEW_PROJECT_CLEARED_SETTINGS: Record<string, string> = {
   "report:inputs": "산정보고서 입력값(문서번호 등)",
+  "activity-import:last": "마지막 서식 올리기 결과(넣지 못한 줄 목록)",
   "export:reporting-period": "EU 문서 기간 선택",
   "export:response-type": "수출 유형 선택",
 };

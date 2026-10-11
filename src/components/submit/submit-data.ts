@@ -11,12 +11,14 @@ import {
     type EuTemplateValidationResult,
 } from '@/lib/eu-template-export';
 import {
+    ACTIVITY_IMPORT_RESULT_SETTING_KEY,
     CBAM_LAST_BACKUP_AT_KEY,
     EXPORT_PERIOD_SETTING_KEY,
     getBackupStatus,
     getLocalSetting,
     listLocalItems,
     REPORT_INPUTS_SETTING_KEY,
+    type ActivityImportRecord,
     type Installation,
     type InternalTransfer,
     type Product,
@@ -55,6 +57,8 @@ export interface SubmitData {
     defaultValueReference?: ImportedDefaultValueReference;
     benchmarkReference?: ImportedBenchmarkReference;
     reportInputs?: ReportInputs;
+    /** 마지막으로 올린 서식의 결과(넣지 못한 줄) */
+    lastImport?: ActivityImportRecord;
     scenarioAssumptions?: ScenarioAssumptions;
     template?: { file: File; validation: EuTemplateValidationResult };
     lastBackupAt?: string;
@@ -81,6 +85,7 @@ export async function loadSubmitData(): Promise<SubmitData> {
         scenarioAssumptions,
         reportInputs,
         reportingPeriodId,
+        lastImport,
         todo,
     ] = await Promise.all([
         listLocalItems('installations'),
@@ -96,6 +101,7 @@ export async function loadSubmitData(): Promise<SubmitData> {
         getLocalSetting<ScenarioAssumptions>(SCENARIO_ASSUMPTIONS_SETTING_KEY),
         getLocalSetting<ReportInputs>(REPORT_INPUTS_SETTING_KEY),
         getLocalSetting<string>(EXPORT_PERIOD_SETTING_KEY),
+        getLocalSetting<ActivityImportRecord>(ACTIVITY_IMPORT_RESULT_SETTING_KEY),
         loadTodoData(),
     ]);
 
@@ -127,6 +133,9 @@ export async function loadSubmitData(): Promise<SubmitData> {
         blockingIssues: readiness.issues.filter((issue) => issue.severity === 'error').map((issue) => ({ message: issue.message, href: getEuExportIssueEditHref(issue) })),
         todoItems: todo.result.items,
         attribution: todo.attribution,
+        lastImport: lastImport && lastImport.unplaced_count > 0
+            ? { filename: lastImport.filename, unplacedCount: lastImport.unplaced_count, unplaced: lastImport.unplaced.map((item) => ({ message: `${item.sheet}${item.row ? ` ${item.row}번째 줄` : ''} — ${item.message}`, href: '/upload' })) }
+            : undefined,
     });
 
     const headlineResults = scopedResults;
@@ -153,6 +162,7 @@ export async function loadSubmitData(): Promise<SubmitData> {
         defaultValueReference,
         benchmarkReference,
         reportInputs,
+        lastImport,
         scenarioAssumptions,
         template,
         lastBackupAt,

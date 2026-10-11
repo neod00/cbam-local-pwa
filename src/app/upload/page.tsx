@@ -5,6 +5,7 @@ import {
     createLocalItem,
     getLocalSetting,
     listLocalItems,
+    ACTIVITY_IMPORT_RESULT_SETTING_KEY,
     REPORT_INPUTS_SETTING_KEY,
     setLocalSetting,
     type ReportInputs,
@@ -502,6 +503,14 @@ export default function UploadPage() {
                     },
                 });
                 const { created } = result;
+                // 넣지 못한 줄이 남았다는 사실을 제출 화면이 알도록 남긴다(깨끗이 올렸으면 비운다).
+                const unplaced = result.issues.filter((issue) => issue.level === 'error');
+                await setLocalSetting(ACTIVITY_IMPORT_RESULT_SETTING_KEY, {
+                    imported_at: new Date().toISOString(),
+                    filename: file.name,
+                    unplaced_count: unplaced.length,
+                    unplaced: unplaced.slice(0, 20).map((issue) => ({ sheet: issue.sheet, row: issue.row, message: issue.message })),
+                });
                 setActivitySummary({ products: created.products, processes: created.processes, sourceStreams: created.fuels, precursors: created.precursors, skipped: 0 });
                 setActivityIssues(result.issues);
                 setActivityMessage(`서식을 넣었습니다 — 사업장 ${created.installation} · 보고기간 ${created.period} · 제품 ${created.products} · 공정 ${created.processes} · 연료 ${created.fuels} · 구매 강재 ${created.precursors}건.`);

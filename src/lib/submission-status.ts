@@ -29,12 +29,16 @@ export interface SubmissionBlocker {
 }
 
 export interface SubmissionVerdict {
-    kind: 'blocked' | 'notice' | 'ready' | 'empty';
+    /**
+     * blocked = 준비도 오류로 파일을 만들 수 없음 · incomplete = 파일은 만들 수 있지만 자료가 덜 들어옴(넣지 못한 서식 줄, 구매 강재 미확인)
+     * · notice = 보낼 수 있되 알릴 것이 있음 · ready · empty
+     */
+    kind: 'blocked' | 'incomplete' | 'notice' | 'ready' | 'empty';
     headline: string;
     detail: string;
     /** 주의로 남은 줄 수 */
     noticeCount: number;
-    /** 파일을 막는 오류(준비도 검사) — 무엇이 막는지 화면이 그대로 말한다. 최대 5건 */
+    /** blocked: 파일을 막는 오류(준비도 검사) · incomplete: 빠진 자료(넣지 못한 서식 줄). 무엇인지 화면이 그대로 말한다. 최대 5건 */
     blockers: SubmissionBlocker[];
 }
 
@@ -60,6 +64,8 @@ export function buildSubmissionSummary(input: {
     blockingIssues?: SubmissionBlocker[];
     todoItems: TodoItem[];
     attribution: AttributionStatusResult;
+    /** 마지막으로 올린 서식에서 넣지 못한 줄(없으면 undefined 또는 빈 배열) */
+    lastImport?: { filename?: string; unplacedCount: number; unplaced: SubmissionBlocker[] };
 }): SubmissionSummary {
     const rows: SubmissionRow[] = [];
     const hasData = input.products.length > 0;
@@ -86,6 +92,19 @@ export function buildSubmissionSummary(input: {
     rows.push(input.fuelOrElectricityEntered && energyQuestions.length === 0
         ? { id: 'energy', title: '연료 · 전력', status: 'ok', detail: '연료·전력·밖에서 산 열 질문에 모두 답했습니다.' }
         : { id: 'energy', title: '연료 · 전력', status: 'notice', detail: input.fuelOrElectricityEntered ? `답하지 않은 질문이 ${energyQuestions.length}개 있습니다.` : '연료·전력이 아직 입력되지 않았습니다.', href: '/todo', hrefLabel: '할 일에서 보기' });
+
+    // 올린 서식에서 넣지 못한 줄 — 그 자료는 빠진 채 계산된다(run35 P1-05)
+    const unplacedCount = input.lastImport?.unplacedCount ?? 0;
+    if (unplacedCount > 0) {
+        rows.push({
+            id: 'upload',
+            title: '올린 서식에서 넣지 못한 줄',
+            status: 'notice',
+            detail: `${unplacedCount}건 — 그 자료가 빠진 채 계산됩니다. 서식을 고쳐 다시 올리거나, 지도에서 직접 넣은 뒤 이 알림을 닫으세요.`,
+            href: '/upload',
+            hrefLabel: '서식 다시 올리기',
+        });
+    }
 
     // 구매 강재
     const defaultCount = input.precursors.filter((precursor) => precursor.data_mode !== 'ACTUAL').length;
@@ -132,6 +151,18 @@ export function buildSubmissionSummary(input: {
             detail: `EU 문서를 만들기 전에 해결할 것이 ${Math.max(input.readiness.errorCount, blockedByRows)}건 있습니다. 아래 표와 할 일에서 먼저 해결하세요.`,
             noticeCount: noticeRows.length,
             blockers: (input.blockingIssues ?? []).slice(0, 5),
+        };
+    } else if (unplacedCount > 0 || (hasData && input.precursors.length === 0 && input.todoItems.some((item) => /^q:[^:]+:precursor$/.test(item.id)))) {
+        // 파일은 만들 수 있지만 「보낼 수 있습니다」라고만 하면 거짓이다 — 철강 가공품은 SEE의 대부분이 구매 강재에서 나온다.
+        const reasons: string[] = [];
+        if (unplacedCount > 0) reasons.push(`올린 서식에서 넣지 못한 줄이 ${unplacedCount}건 있어 그 자료가 빠진 채 계산됩니다.`);
+        if (hasData && input.precursors.length === 0 && input.todoItems.some((item) => /^q:[^:]+:precursor$/.test(item.id))) reasons.push('구매한 강재를 아직 넣지도, 「없음」이라고 확인하지도 않았습니다 — 철강 가공품은 SEE의 대부분이 여기서 나오므로 지금 값은 일부일 뿐입니다.');
+        verdict = {
+            kind: 'incomplete',
+            headline: '자료가 아직 덜 들어왔습니다.',
+            detail: `${reasons.join(' ')} 파일은 만들 수 있지만 수입업자에게 보내기 전에 채우세요.`,
+            noticeCount: noticeRows.length,
+            blockers: unplacedCount > 0 ? (input.lastImport?.unplaced ?? []).slice(0, 5) : [],
         };
     } else if (noticeRows.length > 0) {
         verdict = {

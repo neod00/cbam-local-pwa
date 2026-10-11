@@ -1,7 +1,7 @@
 import { createCalculationReport } from '@/lib/calculation-report';
 import { createDeliveryPackage } from '@/lib/delivery-package';
 import { createEuExportFilename, createEuTemplateExportCopyResult, downloadBlob, scopeRecordsToExportPeriod } from '@/lib/eu-template-export';
-import { CBAM_LAST_BACKUP_AT_KEY, exportLocalBackup } from '@/lib/local-db';
+import { ACTIVITY_IMPORT_RESULT_SETTING_KEY, CBAM_LAST_BACKUP_AT_KEY, exportLocalBackup, setLocalSetting } from '@/lib/local-db';
 import { buildSubmitChecklist, type SubmitData } from './submit-data';
 
 /**
@@ -108,6 +108,14 @@ export async function downloadPackage(data: SubmitData) {
     downloadBlob(packageResult.blob, packageResult.filename);
     window.localStorage.setItem(CBAM_LAST_BACKUP_AT_KEY, backup.manifest.exported_at);
     return { filename: packageResult.filename, files: packageResult.files, backupAt: backup.manifest.exported_at, notices: calculationReport.issues.map((issue) => `[${issue.gate}] ${issue.message}`) };
+}
+
+/**
+ * 「올린 서식에서 넣지 못한 줄」 알림을 닫는다 — 사용자가 그 자료를 지도에서 직접 넣었다고 알린 경우.
+ * 입력 자료는 건드리지 않고 알림 기록만 비운다(레코드를 만들거나 고치지 않는다).
+ */
+export async function dismissUploadNotice() {
+    await setLocalSetting(ACTIVITY_IMPORT_RESULT_SETTING_KEY, { imported_at: new Date().toISOString(), filename: '', unplaced_count: 0, unplaced: [] });
 }
 
 /** 백업(.cbam)만 받는다 — 설정 화면의 「백업 내보내기」와 같은 파일 형식·이름 규칙. */

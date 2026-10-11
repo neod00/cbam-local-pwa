@@ -82,6 +82,23 @@ assert.match(row(asked, 'energy').detail, /답하지 않은 질문이 2개/);
 assert.equal(row(buildSubmissionSummary({ ...base, fuelOrElectricityEntered: false }), 'energy').status, 'notice');
 assert.equal(row(buildSubmissionSummary({ ...base, precursors: [] }), 'precursors').detail, '구매한 강재가 없다고 확인했습니다.');
 
+// ── 자료가 덜 들어왔다(run35 P1-05): 올린 서식에서 넣지 못한 줄 · 구매 강재를 아직 안 넣고 확인도 안 함 ──
+const unplaced = buildSubmissionSummary({ ...base, lastImport: { filename: 'x.xlsx', unplacedCount: 9, unplaced: [{ message: '5_구매강재 5번째 줄 — SCM435 와이어: 쓰는 공정을 찾지 못했습니다', href: '/upload' }] } });
+assert.equal(unplaced.verdict.kind, 'incomplete', '넣지 못한 줄이 남았으면 「보낼 수 있습니다」라고만 하지 않는다');
+assert.equal(unplaced.verdict.headline, '자료가 아직 덜 들어왔습니다.');
+assert.match(unplaced.verdict.detail, /넣지 못한 줄이 9건 있어 그 자료가 빠진 채 계산됩니다/);
+assert.equal(unplaced.verdict.blockers.length, 1, '무엇이 빠졌는지 그대로 보여 준다');
+assert.equal(row(unplaced, 'upload').status, 'notice', '새로 막지는 않는다(막는 것은 준비도 오류뿐) — 파일은 만들 수 있다');
+assert.match(row(unplaced, 'upload').detail, /9건/);
+assert.equal(row(unplaced, 'upload').href, '/upload');
+const noPrecursorAsked = buildSubmissionSummary({ ...base, precursors: [], todoItems: [{ id: 'q:a:precursor', area: '구매 전구물질', title: '' }] });
+assert.equal(noPrecursorAsked.verdict.kind, 'incomplete', '구매 강재를 넣지도 확인하지도 않았으면 덜 들어온 것이다');
+assert.match(noPrecursorAsked.verdict.detail, /SEE의 대부분이 여기서 나오므로/);
+assert.equal(buildSubmissionSummary({ ...base, precursors: [], todoItems: [] }).verdict.kind, 'ready', '구매 강재가 없다고 확인했으면(질문이 없으면) 그대로 보낼 수 있다');
+assert.equal(buildSubmissionSummary({ ...base, lastImport: { unplacedCount: 0, unplaced: [] } }).verdict.kind, 'ready', '넣지 못한 줄이 없으면 아무 말도 하지 않는다');
+assert.equal(buildSubmissionSummary({ ...base, readiness: { errorCount: 1, warningCount: 0 }, lastImport: { unplacedCount: 2, unplaced: [] } }).verdict.kind, 'blocked', '준비도 오류가 있으면 그쪽이 먼저다');
+assert.ok(!row(unplaced, 'upload') || row(buildSubmissionSummary(base), 'upload') === undefined, '알림 줄은 넣지 못한 줄이 있을 때만 생긴다');
+
 // ── 2) /export와 같은 호출 ─────────────────────────────────────────
 // 호출 하나의 인자 객체에서 「키: 값」 목록을 뽑는다(깊이 1, 값의 공백·`data.` 접두를 지운다).
 function argEntries(text, call, argIndex = 0) {
@@ -148,7 +165,10 @@ assert.ok(exportPage.includes("periods.length > 1 && !periods.some((period) => p
 const dir = 'src/components/submit';
 for (const name of readdirSync(dir).filter((entry) => /\.(ts|tsx)$/.test(entry))) {
   const text = file(`${dir}/${name}`);
-  assert.ok(!/createLocalItem|updateLocalItem|deleteLocalItem|setLocalSetting/.test(text), `${name}: 레코드·설정을 만들거나 고치지 않는다`);
+  // 입력 자료(레코드)는 건드리지 않는다. 쓰기는 하나만 허용한다: 「넣지 못한 줄」 알림 기록을 비우는 dismissUploadNotice(submit-actions.ts) — 사용자가 직접 넣었다고 알린 경우.
+  const setting = text.match(/await setLocalSetting\(([^,)]*)/g) ?? [];
+  assert.ok(!/createLocalItem|updateLocalItem|deleteLocalItem/.test(text), `${name}: 레코드를 만들거나 고치지 않는다`);
+  assert.ok(name === 'submit-actions.ts' ? setting.length === 1 && /ACTIVITY_IMPORT_RESULT_SETTING_KEY/.test(setting[0]) : setting.length === 0, `${name}: 설정 쓰기는 알림 기록 비우기 하나뿐이다`);
   assert.equal(/localStorage\.setItem|exportLocalBackup/.test(text), name === 'submit-actions.ts', `${name}: 백업을 만들고 마지막 백업 시각을 쓰는 것은 submit-actions.ts에서만(읽기는 어디서든)`);
 }
 assert.deepEqual(plain(actions.match(/localStorage\.setItem\(([A-Z_]+)/g)), ['localStorage.setItem(CBAM_LAST_BACKUP_AT_KEY', 'localStorage.setItem(CBAM_LAST_BACKUP_AT_KEY'], '쓰는 것은 마지막 백업 시각 하나');
