@@ -1,6 +1,7 @@
 'use client';
 
 import { CumulativeBar } from '@/components/guided/CumulativeBar';
+import { productWithCn } from '@/lib/product-label';
 import { ElectricitySplit } from '@/components/guided/ElectricitySplit';
 import { FuelSplit } from '@/components/guided/FuelSplit';
 import { SharedHeat } from '@/components/guided/SharedHeat';
@@ -490,7 +491,7 @@ export function TalkWorkspace() {
                             onClick={() => { setFocusId(item.id); setEditing(null); setAddingProduct(false); setAddingFuel(false); setAddingPrecursor(false); setMessage(''); }}
                             className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${item.id === focusProductId && !addingProduct ? 'border-teal-500 bg-teal-50 text-teal-900' : 'border-slate-200 bg-white text-slate-600 hover:border-teal-400'}`}
                         >
-                            {item.name} · CN {item.cnCode || '—'}{item.pending.length > 0 ? ` · 남은 질문 ${item.pending.length}개` : ' · 완료'}
+                            {productWithCn(item.name, item.cnCode, '—')}{item.pending.length > 0 ? ` · 남은 질문 ${item.pending.length}개` : ' · 완료'}
                         </button>
                     ))}
                 </div>

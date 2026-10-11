@@ -160,6 +160,7 @@ const prelude = ['const { strToU8, zipSync, strFromU8, unzipSync } = fflate;'].c
     'src/lib/measurable-heat.ts',
     'src/lib/precursor-verification.ts',
     'src/lib/calculation-engine.ts',
+    'src/lib/product-label.ts',
 ]
     .map((path) => readFileSync(path, 'utf8')
         .replace(/^import .*;\r?\n/gm, '')

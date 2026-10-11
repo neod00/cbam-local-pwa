@@ -289,6 +289,25 @@ export function buildTodoItems(input: TodoInput): TodoResult {
         items.splice(items.indexOf(second), 1);
     }
 
+    // 같은 열 공급원의 「열 사용량이 임시 값」은 공정마다 한 건씩 오지만 한 가지 일이다 — 열 공급원당 한 건으로 합친다(run35 P2-02).
+    const heatTitle = /^(.+?): (?:열 공급원 )?「(.+?)」(?:의)? 열 사용량이 임시 값입니다/;
+    const heatGroups = new Map<string, TodoItem[]>();
+    for (const item of items) {
+        const match = item.title.match(heatTitle);
+        if (!match) continue;
+        const groupKey = `${item.owner}|${match[2]}`;
+        heatGroups.set(groupKey, [...(heatGroups.get(groupKey) ?? []), item]);
+    }
+    for (const list of heatGroups.values()) {
+        if (list.length < 2) continue;
+        const [first, ...rest] = list;
+        const system = first.title.match(heatTitle)![2];
+        const names = list.map((item) => item.title.match(heatTitle)![1]);
+        const shown = names.slice(0, 3).join(', ') + (names.length > 3 ? ` 외 ${names.length - 3}개` : '');
+        first.title = `열 공급원 「${system}」의 열 사용량이 임시 값입니다 — 공정 ${names.length}개(${shown})에 공정별 열 사용 자료 없이 생산량 비율로 채웠습니다`;
+        for (const duplicate of rest) items.splice(items.indexOf(duplicate), 1);
+    }
+
     const rank = (item: TodoItem) => (item.severity === 'error' ? 0 : 1);
     items.sort((a, b) => rank(a) - rank(b));
     const count = (owner: TodoOwner) => items.filter((item) => item.owner === owner).length;

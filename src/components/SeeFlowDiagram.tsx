@@ -1,5 +1,6 @@
 'use client';
 
+import { productWithCn } from '@/lib/product-label';
 import { glossaryText } from '@/lib/cbam-glossary';
 import { buildSeeFlowBinding, describeSeeFlowIndirect, EXAMPLE_SEE_FLOW, type SeeFlowBinding } from '@/lib/see-flow';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
@@ -109,7 +110,7 @@ export function SeeFlowDiagram({
         : `총 SEE (내부 검토용) ${fmtSee(seeTotal)} tCO₂e/t`;
     const caption = isExample
         ? '수치는 이해용 가상 예시입니다 — 입력하면 우리 회사 값으로 바뀝니다'
-        : `${productName ?? '대표 품목'}${cnCode ? ` · CN ${cnCode}` : ''} 기준 · 신고 대상 생산량 합계`;
+        : `${productWithCn(productName ?? '대표 품목', cnCode)} 기준 · 신고 대상 생산량 합계`;
 
     return (
         <div className={className}>

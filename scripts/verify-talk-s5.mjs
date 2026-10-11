@@ -24,6 +24,7 @@ const source = [
   strip('src/lib/precursor-verification.ts'),
   strip('src/lib/calculation-engine.ts'),
   strip('src/lib/see-flow.ts'),
+  strip('src/lib/product-label.ts'),
   strip('src/lib/talk-flow.ts'),
   strip('src/lib/talk-summary.ts'),
   'globalThis.app = { calculateLocalResults, buildSeeFlowBinding, describeSeeFlowIndirect, deriveTalkState, pickTalkProcess, summarizeTalkResult };',

@@ -1,6 +1,7 @@
 'use client';
 
 import { GuidedMap } from '@/components/guided/GuidedMap';
+import { productWithCn } from '@/lib/product-label';
 import { GuidedStepPanel, type GuidedData } from '@/components/guided/panels';
 import { calculateLocalResults } from '@/lib/calculation-engine';
 import { evaluateEuExportReadiness, scopeRecordsToExportPeriod } from '@/lib/eu-template-export';
@@ -295,7 +296,7 @@ function GuidedWorkspaceInner() {
                         <p className="truncate text-xs text-slate-500">
                             {!data.loaded
                                 ? '저장된 자료를 읽는 중입니다…'
-                                : primaryProduct ? `${primaryProduct.name}${primaryProduct.cn_code ? ` · CN ${primaryProduct.cn_code}` : ''}` : '지도를 따라가면 EU 제출 문서가 완성됩니다'}
+                                : primaryProduct ? productWithCn(primaryProduct.name, primaryProduct.cn_code) : '지도를 따라가면 EU 제출 문서가 완성됩니다'}
                             {data.loaded && period ? ` · ${period.name}` : ''}
                         </p>
                     </div>

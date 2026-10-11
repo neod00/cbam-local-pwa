@@ -27,6 +27,7 @@ const source = [
   strip('src/lib/source-stream-input.ts'),
   strip('src/lib/guided-edit.ts'),
   strip('src/lib/conversation-energy.ts'),
+  strip('src/lib/product-label.ts'),
   strip('src/lib/talk-flow.ts'),
   'globalThis.app = { calculateLocalResults, sumReconciledSourceStreamEmissions, GUIDED_STREAM_KINDS, TALK_FUEL_KINDS, TALK_FUEL_KIND_KEYS, buildFuelStreamDraft, noImportedHeatDraft, ELECTRICITY_PLACEHOLDER_EF, ELECTRICITY_DEFAULT_EF_SOURCE, ELECTRICITY_EF_SOURCE_OPTIONS, validateImportedHeatDraft, buildImportedHeatUpdate, validateElectricityDraft, buildElectricityUpdate, createSourceStreamValidationErrors, firstSourceStreamError, deriveTalkState };',
 ].join('\n');

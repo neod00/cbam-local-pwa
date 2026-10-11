@@ -18,6 +18,7 @@ const source = [
   strip('src/lib/cbam-product-rules.ts'),
   strip('src/lib/reporting-scope.ts'),
   strip('src/lib/conversation-process.ts'),
+  strip('src/lib/product-label.ts'),
   strip('src/lib/talk-flow.ts'),
   'globalThis.app = { buildProcessCreation, validateProcessAnswer, defaultProcessName, deriveTalkState, DEFAULT_PROCESS_ROUTE, PROCESS_PLACEHOLDER_EF, EXCLUDED_LINE_NAME, EXCLUDED_LINE_NOTE };',
 ].join('\n');

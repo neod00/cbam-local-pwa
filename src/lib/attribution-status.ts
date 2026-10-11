@@ -110,12 +110,34 @@ export function buildAttributionStatus(input: {
     const notApplicable: string[] = [];
 
     for (const spec of SPECS) {
-        const warnings = byCheck.get(spec.id) ?? [];
+        let warnings = byCheck.get(spec.id) ?? [];
+        // 같은 열 공급원의 「열 사용량이 임시 값」은 공정마다 한 건씩 오지만 한 가지 일이다 — 열 공급원당 한 건으로 센다(run35 P2-02).
+        const provisionalSystems = new Set<string>();
+        if (spec.id === 'HEAT') {
+            const heatMessage = /「(.+?)」 열 사용량이 임시 값입니다/;
+            const merged: typeof warnings = [];
+            const bySystem = new Map<string, { first: (typeof warnings)[number]; count: number }>();
+            for (const warning of warnings) {
+                const system = warning.message.match(heatMessage)?.[1];
+                if (!system) { merged.push(warning); continue; }
+                const entry = bySystem.get(system);
+                if (entry) { entry.count += 1; continue; }
+                const created = { first: warning, count: 1 };
+                bySystem.set(system, created);
+                merged.push(warning);
+            }
+            for (const [system, entry] of bySystem) {
+                provisionalSystems.add(system);
+                if (entry.count > 1) merged[merged.indexOf(entry.first)] = { ...entry.first, message: `열 공급원 「${system}」의 열 사용량이 임시 값입니다 — 공정 ${entry.count}개에 공정별 열 사용 자료 없이 생산량 비율로 채웠습니다 (2025/2547 ANNEX III A.3 · A.2.2)` };
+            }
+            warnings = merged;
+        }
         // 에너지 나누기 현황이 이미 가진 문제 항목(합계 불일치·귀속 불가·임시값)도 같은 점검으로 센다.
+        // 같은 열 공급원의 임시값은 위 경고가 이미 말하므로 중복해서 세지 않는다.
         const energyItems = spec.id === 'SHARED_METER'
             ? energy.items.filter((item) => item.kind !== 'HEAT' && item.problem)
             : spec.id === 'HEAT'
-                ? energy.items.filter((item) => item.kind === 'HEAT' && (item.problem || item.provisional))
+                ? energy.items.filter((item) => item.kind === 'HEAT' && (item.problem || (item.provisional && !provisionalSystems.has(item.title.match(/「(.+?)」/)?.[1] ?? ''))))
                 : [];
         if (!spec.applicable(ctx) && warnings.length === 0 && energyItems.length === 0) {
             notApplicable.push(`${spec.code} ${spec.title.split(' (')[0]}`);

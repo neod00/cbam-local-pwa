@@ -36,6 +36,7 @@ const source = [
   strip('src/lib/bundled-references.ts'),
   strip('src/lib/conversation-precursor.ts'),
   strip('src/lib/see-flow.ts'),
+  strip('src/lib/product-label.ts'),
   strip('src/lib/talk-flow.ts'),
   strip('src/lib/supplier-request.ts'),
   strip('src/lib/default-substitution.ts'),
@@ -93,6 +94,17 @@ const twoGoods = { ...base, products: [product, productTwo], processes: [{ ...pr
 const outputAsked = (result) => plain(result.items.filter((item) => /:output$/.test(item.id)).map((item) => item.id));
 assert.deepEqual(outputAsked(app.buildTodoItems(twoGoods)), ['q:g2:output'], '생산 라인을 모르면 둘째 제품의 생산량을 묻는다(종전)');
 assert.deepEqual(outputAsked(app.buildTodoItems({ ...twoGoods, productOutputLines: [{ id: 'l1', process_id: 'pr', product_id: 'g', output_mass_t: 600 }, { id: 'l2', process_id: 'pr', product_id: 'g2', output_mass_t: 400 }] })), [], '둘 다 생산 라인이 있으면 묻지 않는다');
+
+// 같은 열 공급원의 「임시 값」 알림은 공정마다 한 건씩 오지만 한 가지 일이다 — 열 공급원당 한 건(run35 P2-02).
+const heatIssue = (processName) => issue('warning', '생산공정', `${processName}: 열 공급원 「온수 보일러」의 열 사용량이 임시 값입니다 — 공정별 열 사용 자료 없이 생산량 비율로 채웠습니다`);
+const processTwo = { ...process, id: 'pr2', name: '너트 공정' };
+const processThree = { ...process, id: 'pr3', name: '와셔 공정' };
+const heatMerged = app.buildTodoItems({ ...base, processes: [process, processTwo, processThree], readinessIssues: [heatIssue('나사 공정'), heatIssue('너트 공정'), heatIssue('와셔 공정')] });
+const heatItems = heatMerged.items.filter((item) => /열 사용량이 임시 값/.test(item.title));
+assert.equal(heatItems.length, 1, '같은 열 공급원의 임시 값 알림은 한 건');
+assert.match(heatItems[0].title, /열 공급원 「온수 보일러」의 열 사용량이 임시 값입니다 — 공정 3개\(나사 공정, 너트 공정, 와셔 공정\)/);
+const heatOther = app.buildTodoItems({ ...base, processes: [process, processTwo], readinessIssues: [heatIssue('나사 공정'), { ...heatIssue('너트 공정'), message: '너트 공정: 열 공급원 「열풍기」의 열 사용량이 임시 값입니다 — x' }] });
+assert.equal(heatOther.items.filter((item) => /열 사용량이 임시 값/.test(item.title)).length, 2, '열 공급원이 다르면 따로 둔다');
 
 // 시작 전: 가장 앞 질문 하나만.
 const fresh = app.buildTodoItems({ ...base, installations: [], periods: [], products: [], processes: [] });

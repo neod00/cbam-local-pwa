@@ -1,6 +1,7 @@
 'use client';
 
 import { SeeFlowDiagram } from '@/components/SeeFlowDiagram';
+import { productWithCn } from '@/lib/product-label';
 import { calculateLocalResults, type LocalCalculationResult } from '@/lib/calculation-engine';
 import {
     evaluateEuExportReadiness,
@@ -397,7 +398,7 @@ export function BeginnerDashboard() {
                             </span>
                         )}
                         {data.products[0] && (
-                            <span className="inline-flex items-center gap-1.5"><Package className="h-4 w-4 text-slate-400" />{data.products[0].name}{data.products[0].cn_code ? ` · CN ${data.products[0].cn_code}` : ''}</span>
+                            <span className="inline-flex items-center gap-1.5"><Package className="h-4 w-4 text-slate-400" />{productWithCn(data.products[0].name, data.products[0].cn_code)}</span>
                         )}
                         <span className="inline-flex items-center gap-1.5"><ListChecks className="h-4 w-4 text-slate-400" />CBAM 신고 품목 {summary.reportingProductCount}개 · 배분 참고 {summary.allocationOnlyCount}개</span>
                     </div>

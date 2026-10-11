@@ -98,7 +98,7 @@ export function deriveGuidedSteps(input: GuidedMapInput, binding: SeeFlowBinding
             title: '생산공정',
             status: statusOf(processDone),
             summary: processDone
-                ? `공정 ${input.processCount}개 · ${fmt(binding.outputMassT)} t`
+                ? `공정 ${input.processCount}개 · 신고 제품 ${fmt(binding.outputMassT)} t`
                 : '공정과 생산량을 연결',
         },
         {
