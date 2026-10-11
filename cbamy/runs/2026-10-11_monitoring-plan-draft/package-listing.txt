@@ -1,0 +1,8 @@
+1176781	01_CBAM Communication template for installations_en_20241213_cbam-local-copy_20261011.xlsx
+6964	02_Calculation_Basis_Summary_KO-EN.docx
+8063	03_Evidence_Checklist_KO-EN.docx
+27880	04_Calculation_Report.docx
+11122	05_Monitoring_Plan_Draft.docx
+5867013	internal_archive/06_cbam-local-backup-20261011142849.cbam
+753	internal_archive/07_export-log.json
+2497	README_KO-EN.txt

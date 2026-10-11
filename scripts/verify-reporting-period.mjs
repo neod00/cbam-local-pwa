@@ -239,7 +239,7 @@ assert.match(
   assert.equal(single.results.length, 1);
 }
 const exportPageSource = readFileSync('src/app/export/page.tsx', 'utf8');
-assert.equal((exportPageSource.match(/periods: docScope\.periods,/g) ?? []).length, 3, '산정보고서 2곳·전달 패키지 1곳이 모두 기간 범위를 따라야 한다');
+assert.equal((exportPageSource.match(/periods: docScope.periods,/g) ?? []).length, 4, '산정보고서 2곳·전달 패키지 1곳·모니터링 계획 초안 1곳이 모두 기간 범위를 따라야 한다');
 assert.match(exportPageSource, /보고서가 다룰 기간을 먼저 고르세요/, '기간 미선택 상태로 산정보고서가 나간다');
 
 console.log('Reporting period verification passed (정렬 결정성 · 단일 선택 지점 · 기간 필터 · 미선택 차단 · 선택 저장).');

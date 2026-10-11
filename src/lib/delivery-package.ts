@@ -42,6 +42,11 @@ export interface DeliveryPackageInput {
      * 없으면 패키지에서 생략한다(하위호환).
      */
     calculationReportBlob?: Blob;
+    /**
+     * 모니터링 계획 초안(.docx). 생성은 호출부가 하고 여기서는 포장만 한다. 없으면 생략한다(하위호환) —
+     * 있으면 산정보고서(04) 다음 번호로 들어가고 내부 보관물이 그만큼 뒤로 밀린다.
+     */
+    monitoringPlanBlob?: Blob;
     generatedAt: Date;
     installations: Installation[];
     periods: ReportingPeriod[];
@@ -376,10 +381,12 @@ function createReadmeText(input: DeliveryPackageInput, files: string[]) {
         '- The filled Communication Template should be opened in Microsoft Excel and recalculated before external sharing.',
         '- The DOCX files are editable working summaries/checklists, not official verification reports.',
         '- 04_Calculation_Report.docx: items marked "기재 필요" / "확인 필요" are not yet completed. Review and complete them, and sign the operator declaration, before submitting to a verifier.',
+        ...(input.monitoringPlanBlob ? ['- Monitoring_Plan_Draft.docx: a DRAFT built from the data entered in the app, not a finished monitoring plan. Items marked "작성 필요" must be written by the company, and the company must review and approve it.'] : []),
         '- The .cbam backup can contain sensitive local project data. Share it only when explicitly intended.',
         '- The template copy, summaries and calculation report cover one reporting period only. The .cbam backup is a full restore file and holds every period in the project.',
         '- 작성된 Communication Template은 외부 공유 전 Microsoft Excel에서 열고 재계산해야 합니다.',
         '- DOCX 파일은 수정 가능한 실무 요약/체크리스트이며 공식 검증보고서가 아닙니다.',
+        ...(input.monitoringPlanBlob ? ['- Monitoring_Plan_Draft.docx: 앱에 입력된 자료로 만든 초안이며 완성된 모니터링 계획이 아닙니다. 「작성 필요」 항목은 회사가 직접 써야 하고, 회사가 확인·승인해야 합니다.'] : []),
         '- 04_Calculation_Report.docx: 「기재 필요」·「확인 필요」로 표기된 항목은 아직 완료되지 않았습니다. 제3자 검증 제출 전에 해당 항목을 채우고 운영자 선언에 서명하세요.',
         '- .cbam 백업에는 민감한 로컬 프로젝트 자료가 포함될 수 있으므로 명시적으로 의도한 경우에만 공유하세요.',
         '- 템플릿 사본·요약·산정보고서는 고른 보고기간 하나만 다룹니다. .cbam 백업은 복원용 전체 파일이라 프로젝트의 모든 기간이 들어 있습니다.',
@@ -403,7 +410,10 @@ export async function createDeliveryPackage(input: DeliveryPackageInput): Promis
     const checklistDocxPath = '03_Evidence_Checklist_KO-EN.docx';
     // 산정보고서는 제3자 검증 대비 문서라 전달물 중 가장 무겁다. 04로 넣고 내부 보관물은 05/06으로 민다.
     const calculationReportPath = input.calculationReportBlob ? '04_Calculation_Report.docx' : undefined;
-    const archivePrefix = calculationReportPath ? { backup: '05', log: '06' } : { backup: '04', log: '05' };
+    // 모니터링 계획 초안은 산정보고서 바로 뒤. 번호가 하나씩 밀려도 산정보고서가 없던 예전 패키지(04/05)와 보고서만 있던 패키지(05/06)는 그대로다.
+    const monitoringPlanPath = input.monitoringPlanBlob ? `${calculationReportPath ? '05' : '04'}_Monitoring_Plan_Draft.docx` : undefined;
+    const deliverableCount = (calculationReportPath ? 1 : 0) + (monitoringPlanPath ? 1 : 0);
+    const archivePrefix = deliverableCount === 2 ? { backup: '06', log: '07' } : deliverableCount === 1 ? { backup: '05', log: '06' } : { backup: '04', log: '05' };
     const backupPath = `internal_archive/${archivePrefix.backup}_${createCbamBackupFilename(input.backup.manifest.exported_at)}`;
     const logPath = `internal_archive/${archivePrefix.log}_export-log.json`;
     const readmePath = 'README_KO-EN.txt';
@@ -412,6 +422,7 @@ export async function createDeliveryPackage(input: DeliveryPackageInput): Promis
         summaryDocxPath,
         checklistDocxPath,
         ...(calculationReportPath ? [calculationReportPath] : []),
+        ...(monitoringPlanPath ? [monitoringPlanPath] : []),
         backupPath,
         logPath,
         readmePath,
@@ -419,6 +430,9 @@ export async function createDeliveryPackage(input: DeliveryPackageInput): Promis
     const exportWorkbookBytes = new Uint8Array(await input.exportWorkbookBlob.arrayBuffer());
     const calculationReportBytes = input.calculationReportBlob
         ? new Uint8Array(await input.calculationReportBlob.arrayBuffer())
+        : undefined;
+    const monitoringPlanBytes = input.monitoringPlanBlob
+        ? new Uint8Array(await input.monitoringPlanBlob.arrayBuffer())
         : undefined;
     const log = {
         generated_at: input.generatedAt.toISOString(),
@@ -449,6 +463,7 @@ export async function createDeliveryPackage(input: DeliveryPackageInput): Promis
         [summaryDocxPath]: createCalculationBasisSummaryDocx(input),
         [checklistDocxPath]: createEvidenceChecklistDocx(input),
         ...(calculationReportPath && calculationReportBytes ? { [calculationReportPath]: calculationReportBytes } : {}),
+        ...(monitoringPlanPath && monitoringPlanBytes ? { [monitoringPlanPath]: monitoringPlanBytes } : {}),
         [backupPath]: strToU8(JSON.stringify(input.backup, null, 2)),
         [logPath]: strToU8(JSON.stringify(log, null, 2)),
         [readmePath]: strToU8(createReadmeText(input, files)),

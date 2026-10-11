@@ -79,9 +79,25 @@ export async function downloadReport(data: SubmitData) {
 }
 
 /**
- * 모니터링 계획 초안(Word) — 입력된 자료를 부속서 II A.5의 22개 항목에 옮겨 적고, 앱이 모르는 것은 「작성 필요」로 둔다.
- * 읽기만 한다(저장소에 쓰지 않는다). 산정보고서와 같은 보고기간 범위를 쓴다.
+ * 모니터링 계획 초안 — 입력된 자료를 부속서 II A.5의 22개 항목에 옮겨 적고, 앱이 모르는 것은 「작성 필요」로 둔다.
+ * 단독 내려받기와 전달 패키지가 같은 함수·같은 범위를 쓴다. 읽기만 한다. 보고기간 범위는 산정보고서와 같다.
  */
+function buildMonitoringPlan(data: SubmitData, docScope: ReturnType<typeof scopeRecordsToExportPeriod>, generatedAt: Date) {
+    return createMonitoringPlanDocument({
+        installations: data.installations,
+        periods: docScope.periods,
+        products: data.products,
+        processes: docScope.processes,
+        productOutputLines: docScope.productOutputLines,
+        sourceStreams: docScope.sourceStreams,
+        precursors: docScope.precursors,
+        internalTransfers: data.internalTransfers,
+        reportInputs: data.reportInputs,
+        benchmarks: data.benchmarkReference,
+        generatedAt,
+    });
+}
+
 export async function downloadMonitoringPlan(data: SubmitData) {
     if (data.periods.length > 1 && !data.periods.some((period) => period.id === data.reportingPeriodId)) {
         throw new Error(`보고기간이 ${data.periods.length}개입니다. 지도 화면 1단계에서 문서에 넣을 기간을 먼저 고르세요.`);
@@ -96,19 +112,7 @@ export async function downloadMonitoringPlan(data: SubmitData) {
         precursors: data.precursors,
         results: reportableResults,
     });
-    const result = createMonitoringPlanDocument({
-        installations: data.installations,
-        periods: docScope.periods,
-        products: data.products,
-        processes: docScope.processes,
-        productOutputLines: docScope.productOutputLines,
-        sourceStreams: docScope.sourceStreams,
-        precursors: docScope.precursors,
-        internalTransfers: data.internalTransfers,
-        reportInputs: data.reportInputs,
-        benchmarks: data.benchmarkReference,
-        generatedAt: new Date(),
-    });
+    const result = buildMonitoringPlan(data, docScope, new Date());
     downloadBlob(result.blob, result.filename);
     const { counts } = result.plan;
     return {
@@ -125,6 +129,7 @@ export async function downloadPackage(data: SubmitData) {
     const backup = await exportLocalBackup();
     // 산정보고서는 여기서 만들어 패키지에 넣는다. 발행 게이트가 막으면 예외로 올라와 패키지 생성이 중단된다 — 미완성 보고서를 담아 내보내지 않기 위함.
     const { report: calculationReport, docScope } = buildReport(data, generatedAt);
+    const monitoringPlan = buildMonitoringPlan(data, docScope, generatedAt);
     const { checklist, readiness } = buildSubmitChecklist(data, { checkedCellCount: exportResult.verification.checkedCellCount });
     const packageResult = await createDeliveryPackage({
         backup,
@@ -134,6 +139,7 @@ export async function downloadPackage(data: SubmitData) {
         exportWorkbookBlob: exportResult.blob,
         exportWorkbookFilename,
         generatedAt,
+        monitoringPlanBlob: monitoringPlan.blob,
         installations: data.installations,
         periods: docScope.periods,
         precursors: docScope.precursors,

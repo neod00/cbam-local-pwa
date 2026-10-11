@@ -104,5 +104,10 @@ const actions = readFileSync('src/components/submit/submit-actions.ts', 'utf8');
 assert.ok(actions.includes('export async function downloadMonitoringPlan') && actions.includes('createMonitoringPlanDocument('));
 assert.ok(readFileSync('src/components/submit/SubmitWorkspace.tsx', 'utf8').includes("fileCard('plan', '모니터링 계획 초안 (Word)'"), '제출 화면의 받을 파일에 카드가 있다');
 assert.ok(readFileSync('package.json', 'utf8').includes('"verify:monitoring-plan"'));
+// 전달 패키지: 제출 화면과 상세 Export 화면이 같은 함수로 계획 초안을 만들어 같은 이름의 인자로 넘긴다.
+assert.ok(actions.includes('monitoringPlanBlob: monitoringPlan.blob') && actions.includes('buildMonitoringPlan(data, docScope, generatedAt)'), '제출 화면의 패키지에 계획 초안');
+const exportPage = readFileSync('src/app/export/page.tsx', 'utf8');
+assert.ok(exportPage.includes('createMonitoringPlanDocument({') && exportPage.includes('monitoringPlanBlob: monitoringPlan.blob'), '상세 Export 화면의 패키지에도 같은 계획 초안');
+assert.ok(readFileSync('src/lib/delivery-package.ts', 'utf8').includes('monitoringPlanBlob?: Blob'), '패키지 입력은 선택 항목(없으면 예전 구조 그대로)');
 
 console.log('Monitoring plan verified (22개 항목 · 입력값만 옮김 · 직접 쓰는 항목은 작성 필요+물음 · 초안 문구 · 읽기 전용 · 배선).');
