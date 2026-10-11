@@ -81,7 +81,7 @@ for (const fragment of [
   const asLib = fragment
     .replace('supplierCountry', 'input.country').replace('cnDigits, ', 'input.cnDigits, ').replace('(reference, ', '(input.reference, ')
     .replace('${reference.summary', '${input.reference.summary').replace('${match.country}', '${match.country}')
-    .replace("(2026, markup", "(2026, markup").replace("'2026'", 'DEFAULT_FILL_YEAR');
+    .replace('(2026, markup', '(${yearLabel}, markup').replace('직접값은 2026 markup', '직접값은 ${yearLabel} markup').replace("'2026'", 'year').replace("'2026')", 'year)');
   assert.ok(lib.includes(fragment) || lib.includes(asLib), `채우기 함수에도 같은 조각 「${fragment.slice(0, 40)}…」`);
 }
 // 초안 필드 = 패널의 baseDraft

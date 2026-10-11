@@ -37,18 +37,22 @@ export function fillEuDefault(input: {
     reference: ImportedDefaultValueReference | undefined;
     country: string;
     cnDigits: string;
+    /** 가져올 기본값의 연도. 비우면 지도 패널과 같은 2026. */
+    year?: '2026' | '2027' | '2028_ONWARDS';
 }): DefaultFill {
+    const year = input.year ?? DEFAULT_FILL_YEAR;
+    const yearLabel = year === '2028_ONWARDS' ? '2028년 이후' : year;
     if (!input.reference) {
         return { ok: false, reason: 'EU 기본값 자료를 아직 불러오지 못했습니다. 앱을 다시 열거나, 자료 업로드 화면에서 EU 기본값(DVs) 파일을 직접 가져오세요.' };
     }
     if (!input.country.trim()) {
         return { ok: false, reason: '먼저 「공급국가」를 고르세요. EU 기본값은 원료를 만든 나라마다 다릅니다(예: 같은 STS 와이어가 한국 4.015 · 대만 11).' };
     }
-    const match = findDefaultValueReference(input.reference, input.country, input.cnDigits, DEFAULT_FILL_YEAR);
+    const match = findDefaultValueReference(input.reference, input.country, input.cnDigits, year);
     if (!match) {
         return { ok: false, reason: `${input.country} · CN ${input.cnDigits || '미입력'}에 맞는 기본값을 찾지 못했습니다. 공급국가와 CN 코드를 확인하세요.` };
     }
-    const { direct, indirect, hasIndirect } = resolveDefaultSeeForYear(match, DEFAULT_FILL_YEAR);
+    const { direct, indirect, hasIndirect } = resolveDefaultSeeForYear(match, year);
     return {
         ok: true,
         direct,
@@ -56,11 +60,11 @@ export function fillEuDefault(input: {
         hasIndirect,
         source: `${input.reference.summary.filename} / ${match.country} / ${match.cn_code}`,
         justification:
-            `공급사 measured SEE 미입수 — EU 국가/CN 기본값(2026, markup 포함) 적용. 직접 ${direct}`
+            `공급사 measured SEE 미입수 — EU 국가/CN 기본값(${yearLabel}, markup 포함) 적용. 직접 ${direct}`
             + (hasIndirect ? ` · 간접 ${indirect}` : ' · 이 CN의 공식 DV는 간접값 미제공(간접 0)'),
         message: hasIndirect
             ? 'EU 기본값을 채웠습니다. 공급사 실측자료를 받으면 교체하세요.'
-            : '이 CN의 공식 DV는 간접값을 제공하지 않아 간접을 0으로 두었습니다(직접값은 2026 markup 포함). 공급사 실측자료를 받으면 교체하세요.',
+            : `이 CN의 공식 DV는 간접값을 제공하지 않아 간접을 0으로 두었습니다(직접값은 ${yearLabel} markup 포함). 공급사 실측자료를 받으면 교체하세요.`,
     };
 }
 

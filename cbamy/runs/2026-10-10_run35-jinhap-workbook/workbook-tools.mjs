@@ -31,7 +31,7 @@ const countries = [...new Set(defaultValues.rows.map((row) => row.country))];
 const TABLES = [
   [W.SHEET_PRODUCTS, W.PRODUCT_COLUMNS, 'products'], [W.SHEET_PARTS, W.PART_COLUMNS, 'parts'], [W.SHEET_PROCESSES, W.PROCESS_COLUMNS, 'processes'],
   [W.SHEET_FUELS, W.FUEL_COLUMNS, 'fuels'], [W.SHEET_PRECURSORS, W.PRECURSOR_COLUMNS, 'precursors'], [W.SHEET_RNR, W.RNR_COLUMNS, 'rnr'], [W.SHEET_EVIDENCE, W.EVIDENCE_COLUMNS, 'evidence'],
-  [W.SHEET_IMPORTED_HEAT, W.IMPORTED_HEAT_COLUMNS, 'importedHeat'], [W.SHEET_BOILER_HEAT, W.BOILER_HEAT_COLUMNS, 'boilerHeat'], [W.SHEET_PROCESS_EMISSIONS, W.PROCESS_EMISSION_COLUMNS, 'processEmissions'], [W.SHEET_TRANSFERS, W.TRANSFER_COLUMNS, 'transfers'],
+  [W.SHEET_IMPORTED_HEAT, W.IMPORTED_HEAT_COLUMNS, 'importedHeat'], [W.SHEET_BOILER_HEAT, W.BOILER_HEAT_COLUMNS, 'boilerHeat'], [W.SHEET_PROCESS_EMISSIONS, W.PROCESS_EMISSION_COLUMNS, 'processEmissions'], [W.SHEET_TRANSFERS, W.TRANSFER_COLUMNS, 'transfers'], [W.SHEET_ELECTRICITY_SOURCES, W.ELECTRICITY_SOURCE_COLUMNS, 'electricitySources'],
 ];
 const letter = (index) => (index < 26 ? String.fromCharCode(65 + index) : `A${String.fromCharCode(65 + index - 26)}`);
 
