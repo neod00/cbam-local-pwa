@@ -6,7 +6,7 @@ import type { SubmissionRow } from '@/lib/submission-status';
 import { AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { downloadBackupOnly, downloadEuCopy, downloadPackage, downloadReport } from './submit-actions';
+import { dismissUploadNotice, downloadBackupOnly, downloadEuCopy, downloadPackage, downloadReport } from './submit-actions';
 import { loadSubmitData, type SubmitData } from './submit-data';
 
 type FileKey = 'eu' | 'report' | 'package' | 'backup';
@@ -72,7 +72,8 @@ export function SubmitWorkspace() {
             ? '내장 EU 템플릿을 불러오지 못했습니다. 상세 Export 화면에서 직접 올려 주세요.'
             : '';
     const backupStatus = getBackupStatus(data.lastBackupAt);
-    const verdictClass = summary.verdict.kind === 'ready' ? 'border-teal-200 bg-teal-50' : summary.verdict.kind === 'notice' ? 'border-teal-200 bg-teal-50' : 'border-red-200 bg-red-50';
+    const incomplete = summary.verdict.kind === 'incomplete';
+    const verdictClass = summary.verdict.kind === 'ready' ? 'border-teal-200 bg-teal-50' : summary.verdict.kind === 'notice' ? 'border-teal-200 bg-teal-50' : incomplete ? 'border-amber-300 bg-amber-50' : 'border-red-200 bg-red-50';
 
     const fileCard = (key: FileKey, title: string, description: string, buttonLabel: string, action: () => Promise<{ text: string; notices?: string[] }>, primary: boolean) => {
         const message = messages[key];
@@ -116,18 +117,25 @@ export function SubmitWorkspace() {
 
             <div className={`rounded-xl border px-5 py-4 text-sm leading-6 ${verdictClass}`} data-testid="submit-verdict" data-kind={summary.verdict.kind}>
                 <p className="flex items-start gap-2">
-                    {blocked ? <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-red-700" /> : <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-teal-700" />}
+                    {blocked ? <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-red-700" /> : incomplete ? <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-amber-700" /> : <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-teal-700" />}
                     <span><b>{summary.verdict.headline}</b> {summary.verdict.detail}</span>
                 </p>
                 {summary.verdict.blockers.length > 0 && (
                     <ul className="mt-2 space-y-1.5 pl-6" data-testid="submit-blockers">
                         {summary.verdict.blockers.map((blocker, index) => (
-                            <li key={index} className="flex flex-wrap items-start gap-x-3 text-sm leading-6 text-red-900" data-testid="submit-blocker">
+                            <li key={index} className={`flex flex-wrap items-start gap-x-3 text-sm leading-6 ${incomplete ? 'text-amber-900' : 'text-red-900'}`} data-testid="submit-blocker">
                                 <span className="min-w-0 flex-1">{blocker.message}</span>
                                 {blocker.href && <Link href={blocker.href} className="inline-flex flex-none items-center gap-1 font-bold text-teal-700 hover:underline">고치러 가기<ArrowRight className="h-3.5 w-3.5" /></Link>}
                             </li>
                         ))}
                     </ul>
+                )}
+                {data.lastImport && data.lastImport.unplaced_count > 0 && (
+                    <p className="mt-3 pl-6">
+                        <Button type="button" variant="secondary" disabled={busy !== ''} onClick={() => { void dismissUploadNotice().then(reload); }} data-testid="dismiss-upload-notice">
+                            지도에서 직접 넣었습니다 — 이 알림 닫기
+                        </Button>
+                    </p>
                 )}
             </div>
 

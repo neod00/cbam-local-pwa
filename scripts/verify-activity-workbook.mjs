@@ -570,6 +570,7 @@ const legacyBytes = await bytesOf(legacy.createActivityDataTemplateWorkbook());
 assert.ok(!W.isActivityWorkbookV2(W.readActivityWorkbookSheetNames(legacyBytes)));
 const page = readFileSync('src/app/upload/page.tsx', 'utf8');
 assert.ok(page.includes('isActivityWorkbookV2(') && page.includes('parseActivityDataTemplate(file)') && page.includes('importActivityWorkbook('), '올리는 화면이 시트 이름으로 두 서식을 가려 각각의 경로로 보낸다');
+assert.ok(page.includes('ACTIVITY_IMPORT_RESULT_SETTING_KEY') && page.includes('unplaced_count'), '올린 결과(넣지 못한 줄)를 저장해 제출 화면이 알게 한다')
 assert.ok(page.includes('data-testid="activity-issues-alert"'), '넣지 못한 줄이 있으면 결과가 실제와 다를 수 있다고 말한다');
 assert.ok(page.includes('createActivityWorkbook({') && page.includes('ACTIVITY_WORKBOOK_SAMPLE') && page.includes('describeActivityImportIssues('), '빈 서식·작성 예시 내려받기와 「확인할 것」 복사');
 assert.ok(readFileSync('package.json', 'utf8').includes('"verify:activity-workbook"'));
