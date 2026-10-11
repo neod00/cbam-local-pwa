@@ -23,6 +23,7 @@ import {
 } from '@/lib/eu-template-export';
 import { createDeliveryPackage } from '@/lib/delivery-package';
 import { createCalculationReport } from '@/lib/calculation-report';
+import { createMonitoringPlanDocument } from '@/lib/monitoring-plan';
 import { EXPORT_PERIOD_SETTING_KEY, REPORT_INPUTS_SETTING_KEY } from '@/lib/local-db';
 import type { ReportInputs } from '@/lib/local-db';
 import {
@@ -634,6 +635,20 @@ export default function ExportPage() {
                 reportInputs,
             });
             setReportNotices(calculationReport.issues.map((issue) => `[${issue.gate}] ${issue.message}`));
+            // 모니터링 계획 초안 — 제출 화면의 패키지와 같은 함수·같은 범위(입력 자료를 22개 항목에 옮기고 모르는 것은 「작성 필요」).
+            const monitoringPlan = createMonitoringPlanDocument({
+                installations,
+                periods: docScope.periods,
+                products,
+                processes: docScope.processes,
+                productOutputLines: docScope.productOutputLines,
+                sourceStreams: docScope.sourceStreams,
+                precursors: docScope.precursors,
+                internalTransfers,
+                reportInputs,
+                benchmarks: benchmarkReference,
+                generatedAt,
+            });
 
             const packageResult = await createDeliveryPackage({
                 backup,
@@ -643,6 +658,7 @@ export default function ExportPage() {
                 exportWorkbookBlob: exportResult.blob,
                 exportWorkbookFilename,
                 generatedAt,
+                monitoringPlanBlob: monitoringPlan.blob,
                 installations,
                 periods: docScope.periods,
                 precursors: docScope.precursors,

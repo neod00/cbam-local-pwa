@@ -1403,6 +1403,43 @@ assertEqual(
   'README lists the calculation report and its completion caution'
 );
 
+// 모니터링 계획 초안: 산정보고서 바로 뒤(05), 내부 보관물은 06/07. 산정보고서가 없으면 04, 보관물 05/06. 둘 다 없으면 위 구조 그대로.
+const packageBase = {
+  backup,
+  exportChecklist: checklist,
+  exportVerification: exportResult.verification,
+  exportWorkbookBlob: exportResult.blob,
+  exportWorkbookFilename: 'synthetic-cbam-template_cbam-local-copy_20260614.xlsx',
+  generatedAt: packageGeneratedAt,
+  installations: [installation],
+  periods: [period],
+  precursors: [precursor],
+  processes: [process],
+  products: [product],
+  readiness,
+  results: [calculationResult],
+  sourceStreams: [sourceStream],
+  templateFilename: file.name,
+  writtenCellCount: exportResult.writtenCellCount,
+};
+const fakeDocx = (text) => new Blob([strToU8Bytes(text)], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+const withBoth = await deliveryPackage.createDeliveryPackage({ ...packageBase, calculationReportBlob: fakeDocx('fake-report'), monitoringPlanBlob: fakeDocx('fake-plan') });
+const withBothZip = fflate.unzipSync(new Uint8Array(await withBoth.blob.arrayBuffer()));
+assertEqual(String(withBoth.files.length), '8', 'package file count with report and monitoring plan');
+assertEqual(fflate.strFromU8(withBothZip['05_Monitoring_Plan_Draft.docx']), 'fake-plan', 'monitoring plan is 05 after the report');
+assertEqual(fflate.strFromU8(withBothZip['04_Calculation_Report.docx']), 'fake-report', 'report stays 04');
+assertEqual(String(Boolean(withBothZip['internal_archive/06_cbam-local-backup-20260614000000.cbam'])), 'true', 'backup is 06 with report + plan');
+assertEqual(String(Boolean(withBothZip['internal_archive/07_export-log.json'])), 'true', 'log is 07 with report + plan');
+const bothReadme = fflate.strFromU8(withBothZip['README_KO-EN.txt']);
+assertEqual(String(bothReadme.includes('Monitoring_Plan_Draft.docx') && bothReadme.includes('DRAFT') && bothReadme.includes('초안')), 'true', 'README warns that the monitoring plan is a draft');
+const planOnly = await deliveryPackage.createDeliveryPackage({ ...packageBase, monitoringPlanBlob: fakeDocx('fake-plan') });
+const planOnlyZip = fflate.unzipSync(new Uint8Array(await planOnly.blob.arrayBuffer()));
+assertEqual(String(Boolean(planOnlyZip['04_Monitoring_Plan_Draft.docx'])), 'true', 'without a report the plan takes 04');
+assertEqual(String(Boolean(planOnlyZip['internal_archive/05_cbam-local-backup-20260614000000.cbam'])), 'true', 'backup 05 with plan only');
+assertEqual(String(Boolean(planOnlyZip['internal_archive/06_export-log.json'])), 'true', 'log 06 with plan only');
+const noReadmePlan = fflate.strFromU8(packageZip['README_KO-EN.txt']);
+assertEqual(String(noReadmePlan.includes('Monitoring_Plan_Draft')), 'false', 'a package without the plan does not mention it');
+
 const summaryDocxZip = fflate.unzipSync(packageZip['02_Calculation_Basis_Summary_KO-EN.docx']);
 const checklistDocxZip = fflate.unzipSync(packageZip['03_Evidence_Checklist_KO-EN.docx']);
 assertEqual(String(Boolean(summaryDocxZip['word/document.xml'])), 'true', 'summary docx document xml');

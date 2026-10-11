@@ -170,7 +170,7 @@ export function SubmitWorkspace() {
                         const result = await downloadMonitoringPlan(data);
                         return { text: `${result.filename} — ${result.summary}.` };
                     }, false)}
-                    {fileCard('package', '전달 패키지 (zip)', '위 두 파일 + 점검표 + 백업을 한 번에.', '내려받기', async () => {
+                    {fileCard('package', '전달 패키지 (zip)', '위 세 파일(EU 엑셀 · 산정 보고서 · 모니터링 계획 초안) + 점검표 + 백업을 한 번에.', '내려받기', async () => {
                         const result = await downloadPackage(data);
                         return { text: `${result.filename} — 파일 ${result.files.length}개를 담았습니다. 백업도 함께 만들어 기록했습니다.`, notices: result.notices };
                     }, false)}
