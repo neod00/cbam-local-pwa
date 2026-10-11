@@ -505,7 +505,8 @@ export default function UploadPage() {
                 const { created } = result;
                 // 넣지 못한 줄이 남았다는 사실을 제출 화면이 알도록 남긴다(깨끗이 올렸으면 비운다).
                 const unplaced = result.issues.filter((issue) => issue.level === 'error');
-                await setLocalSetting(ACTIVITY_IMPORT_RESULT_SETTING_KEY, {
+                // 다른 해의 파일이라 거부됐으면 이 프로젝트의 자료는 그대로다 — 「넣지 못한 줄」 기록을 바꾸지 않는다.
+                if (!result.rejectedForYear) await setLocalSetting(ACTIVITY_IMPORT_RESULT_SETTING_KEY, {
                     imported_at: new Date().toISOString(),
                     filename: file.name,
                     unplaced_count: unplaced.length,
@@ -640,6 +641,9 @@ export default function UploadPage() {
                                 </div>
                                 <p className="mt-3 text-xs leading-5 text-slate-500">
                                     파일은 브라우저에서 만들어지며 회사 자료는 서버로 전송되지 않습니다. 예전 서식(영문 4시트)으로 받은 파일도 그대로 올릴 수 있습니다.
+                                </p>
+                                <p className="mt-2 text-xs leading-5 text-slate-600" data-testid="one-year-per-project">
+                                    <b>서식 한 파일은 한 해 자료이고, 프로젝트도 한 해 자료를 담습니다.</b> 다음 해 자료는 지도의 「새 프로젝트」로 시작해 올리세요. 지난해 자료는 설정의 백업(.cbam)으로 보관하면 됩니다.
                                 </p>
                             </div>
                         </div>

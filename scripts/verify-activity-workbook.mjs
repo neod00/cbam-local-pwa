@@ -771,6 +771,24 @@ const sixFilled = W.parseActivityWorkbook(await bytesOf(W.createActivityWorkbook
 } })));
 assert.deepEqual(plain([sixFilled.processes[0].values.directTotal, sixFilled.processes[0].values.directTotalNote, sixFilled.precursors[0].values.defaultYear, sixFilled.precursors[0].values.sefa, sixFilled.electricitySources[0].values.name]), ['410', 'CEMS', '2027', '1.5', '한전']);
 
+// ── 한 프로젝트는 한 해 자료 — 다른 해의 파일은 아무것도 쓰지 않고 이유를 한 번만 말한다 ──
+const yearStore = memoryStore();
+const yearFirst = await importOf({ ...sixBase, precursors: [precursorRow({})] }, yearStore);
+assert.ok(yearFirst.result.created.processes > 0 && !yearFirst.result.rejectedForYear, '첫 해는 그대로 들어간다');
+const before = JSON.stringify(plain(yearStore.data));
+const yearSecond = await importOf({ ...sixBase, precursors: [precursorRow({})], installation: { ...sixBase.installation, period_start: '2026-01-01', period_end: '2026-12-31', period_name: '' } }, yearStore);
+assert.equal(yearSecond.result.rejectedForYear, true, '다른 해의 파일은 거부된다');
+assert.deepEqual(plain(Object.values(yearSecond.result.created)), [0, 0, 0, 0, 0, 0, 0], '아무것도 만들지 않는다');
+assert.equal(JSON.stringify(plain(yearStore.data)), before, '이 프로젝트의 자료는 한 글자도 바뀌지 않는다(빈 보고기간도 만들지 않는다)');
+const yearIssues = yearSecond.result.issues.filter((issue) => issue.level === 'error');
+assert.equal(yearIssues.length, 1, '「이미 있던 공정이라…」를 여러 건 늘어놓지 않고 이유를 한 번만 말한다');
+assert.match(yearIssues[0].message, /이 파일은 다른 보고기간\(2026-01-01 ~ 2026-12-31\)이라 넣지 않았습니다 — 한 프로젝트는 한 해 자료입니다.*「새 프로젝트」/);
+// 같은 해를 다시 올리는 것(빠진 자료를 보태는 흐름)은 종전대로
+const yearAgain = await importOf({ ...sixBase, precursors: [precursorRow({ name: '추가 와이어' })] }, yearStore);
+assert.ok(!yearAgain.result.rejectedForYear, '같은 해의 파일은 거부하지 않는다');
+assert.equal(readFileSync('src/app/upload/page.tsx', 'utf8').includes('data-testid="one-year-per-project"'), true, '올리기 화면이 「한 프로젝트는 한 해」를 말한다');
+assert.ok(readFileSync('src/app/upload/page.tsx', 'utf8').includes('if (!result.rejectedForYear)'), '거부된 올리기는 「마지막 올리기 결과」를 바꾸지 않는다');
+
 // ── LPG·프로판(t) 연료 종류 ──
 assert.ok(W.FUEL_KIND_CHOICES.some((choice) => choice.key === 'fuel-lpg-t' && choice.label === 'LPG·프로판 (t)'), '서식 목록에 LPG·프로판 (t)');
 assert.equal(W.FUEL_KIND_CHOICES[0].key, 'fuel-gas');
