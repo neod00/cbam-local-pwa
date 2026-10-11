@@ -87,7 +87,9 @@ for (const fragment of [
 // 초안 필드 = 패널의 baseDraft
 const baseDraftBlock = panels.slice(panels.indexOf('const baseDraft: PrecursorDraft = {'));
 const baseDraftLiteral = baseDraftBlock.slice(baseDraftBlock.indexOf('{') + 1, baseDraftBlock.indexOf('};'));
-const panelKeys = baseDraftLiteral.split('\n').map((line) => line.match(/^\s+([a-zA-Z]+)[,:]/)?.[1]).filter(Boolean).sort();
+// supplierOperator·supplierRegistryId는 지도 패널만 다루는 선택 칸이다(질문 화면은 만들 때 비워 두고, 고칠 때 저장된 값을 실어 준다).
+const PANEL_ONLY_KEYS = ['supplierOperator', 'supplierRegistryId'];
+const panelKeys = baseDraftLiteral.split('\n').map((line) => line.match(/^\s+([a-zA-Z]+)[,:]/)?.[1]).filter((key) => key && !PANEL_ONLY_KEYS.includes(key)).sort();
 const answer = { name: ' 대만산 선재 ', cn: '7223 0019', consumed: '1,050', purchased: '', country: 'Taiwan', mode: 'DEFAULT', directSee: '11', indirectSee: '0', source: tw.source, justification: tw.justification };
 const draft = app.buildPrecursorDraft(answer);
 assert.deepEqual(Object.keys(draft).sort(), panelKeys, '초안의 필드가 지도 패널의 baseDraft와 같다');

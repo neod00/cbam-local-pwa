@@ -156,6 +156,8 @@ export function buildPrecursorEditDraft(existing: PurchasedPrecursor, answer: Pr
         bridgeUsage: existing.indirect_electricity_mwh_per_t ?? 0,
         bridgeFactor: existing.indirect_electricity_factor_tco2e_per_mwh ?? 0,
         supplierInstallation: existing.supplier_installation,
+        supplierOperator: existing.supplier_operator_name ?? '',
+        supplierRegistryId: existing.supplier_registry_id ?? '',
         supplierRoute: existing.production_route,
         supplierPeriod: existing.supplier_reporting_period ?? '',
         outputAllocations: kept.length === 1 ? [{ ...kept[0], allocated_mass_t: draft.consumedMass, allocation_percent: 100 }] : existing.output_allocations,

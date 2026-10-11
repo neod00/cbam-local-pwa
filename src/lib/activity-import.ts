@@ -1080,6 +1080,8 @@ export async function importActivityWorkbook(
         const draft = {
             ...buildPrecursorDraft({ name, cn, consumed: String(numbers.consumed ?? ''), purchased: String(numbers.purchased ?? numbers.consumed ?? ''), country, ...answer }),
             supplierInstallation: supplier,
+            supplierOperator: (row.values.supplierOperator ?? '').trim(),
+            supplierRegistryId: (row.values.supplierRegistry ?? '').trim(),
             supplierPeriod: (row.values.period ?? '').trim(),
             supplierRoute: (row.values.route ?? '').trim(),
             bridgeUsage: hasBreakdown ? numbers.elecUse ?? 0 : 0,

@@ -759,7 +759,7 @@ assert.match(I.describeActivityImportIssues(sourcesBad.result.issues), /전력�
 // 서식이 새 시트·칸을 가진다
 assert.ok(W.ELECTRICITY_SOURCE_COLUMNS.map((column) => column.key).join() === 'name,country,mwh,ef');
 assert.ok(W.PROCESS_COLUMNS.slice(-3).map((column) => column.key).join() === 'noPrecursor,directTotal,directTotalNote');
-assert.ok(W.PRECURSOR_COLUMNS.slice(-3).map((column) => column.key).join() === 'defaultYear,sefa,sefaSource');
+assert.ok(W.PRECURSOR_COLUMNS.slice(-5).map((column) => column.key).join() === 'defaultYear,sefa,sefaSource,supplierOperator,supplierRegistry');
 assert.equal(W.SUPPLIER_VALUE_CHOICES[2].value, 'SEMI_ACTUAL');
 assert.deepEqual(plain(W.DEFAULT_YEAR_CHOICES.map((choice) => choice.value)), ['2026', '2027', '2028_ONWARDS']);
 // 새 칸으로 채운 서식을 엑셀로 쓰고 다시 읽는다(왕복)
@@ -771,6 +771,18 @@ const sixFilled = W.parseActivityWorkbook(await bytesOf(W.createActivityWorkbook
 } })));
 assert.deepEqual(plain([sixFilled.processes[0].values.directTotal, sixFilled.processes[0].values.directTotalNote, sixFilled.precursors[0].values.defaultYear, sixFilled.precursors[0].values.sefa, sixFilled.electricitySources[0].values.name]), ['410', 'CEMS', '2027', '1.5', '한전']);
 
+// ── 공급사 운영자·Registry 식별자(부속서 IV 항목 28) ──
+const identityRun = await importOf(withParts([{ part: 'A-1', cn: '73181582', grade: 'SCM435', mass: '100' }], {
+  precursors: [{ row: 5, values: { name: 'SCM435 와이어', cn: '72299090', consumed: '100', country: 'South Korea', where: 'SCM435', hasValue: '있음 (공급사가 준 값)', direct: '2', indirect: '0.1', evidence: '회신', supplier: '○○제철 포항공장', supplierOperator: '○○제철(주)', supplierRegistry: 'KR-INST-0042' } }],
+}));
+const identity = identityRun.store.data.precursors[0];
+assert.deepEqual(plain([identity.supplier_installation, identity.supplier_operator_name, identity.supplier_registry_id]), ['○○제철 포항공장', '○○제철(주)', 'KR-INST-0042'], '공장 이름과 운영자·식별자가 따로 저장된다');
+const noIdentity = await importOf(withParts([{ part: 'A-1', cn: '73181582', grade: 'SCM435', mass: '100' }], {
+  precursors: [{ row: 5, values: { name: 'SCM435 와이어', cn: '72299090', consumed: '100', country: 'South Korea', where: 'SCM435', hasValue: '있음 (공급사가 준 값)', direct: '2', indirect: '0.1', evidence: '회신' } }],
+}));
+assert.deepEqual(plain([noIdentity.store.data.precursors[0].supplier_operator_name ?? null, noIdentity.store.data.precursors[0].supplier_registry_id ?? null]), [null, null], '비우면 비어 있다(예전 서식과 같다)');
+assert.match(readFileSync('src/lib/calculation-report.ts', 'utf8'), /공급사 운영자\(법인\).*supplier_operator_name[\s\S]{0,80}공급사 CBAM Registry 식별자.*supplier_registry_id/, '산정보고서 구매 강재 표에 두 칸이 실린다(모르면 「미기재」)');
+assert.match(readFileSync('src/components/guided/panels.tsx', 'utf8'), /data-testid="precursor-supplier-operator"[\s\S]{0,1200}data-testid="precursor-supplier-registry"/, '지도 6단계의 공급사 상세에 두 칸');
 // ── 한 프로젝트는 한 해 자료 — 다른 해의 파일은 아무것도 쓰지 않고 이유를 한 번만 말한다 ──
 const yearStore = memoryStore();
 const yearFirst = await importOf({ ...sixBase, precursors: [precursorRow({})] }, yearStore);

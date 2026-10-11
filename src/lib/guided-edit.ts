@@ -274,6 +274,9 @@ export interface PrecursorDraft {
     dataMode: PurchasedPrecursor['data_mode'];
     justification: string;
     supplierInstallation: string;
+    /** 공급사 운영자(법인)명 · CBAM Registry 식별자(선택). undefined = 이 화면이 관리하지 않는다(저장된 값을 그대로 둔다). */
+    supplierOperator?: string;
+    supplierRegistryId?: string;
     supplierRoute: string;
     supplierPeriod: string;
     /**
@@ -340,6 +343,10 @@ export function buildPrecursorPayload(draft: PrecursorDraft, link: PrecursorLink
         precursor_cn_code: draft.cnDigits,
         production_route: draft.supplierRoute.trim(),
         supplier_installation: draft.supplierInstallation.trim(),
+        // 이 두 칸을 모르는 호출부(질문 화면 등)는 undefined를 넘기므로 키를 아예 빼 저장된 값을 지키지 않게 하지 않는다 —
+        // 이 칸을 다루는 화면이 빈 칸으로 비우면(빈 글자) 값이 지워진다.
+        ...(draft.supplierOperator !== undefined ? { supplier_operator_name: draft.supplierOperator.trim() || undefined } : {}),
+        ...(draft.supplierRegistryId !== undefined ? { supplier_registry_id: draft.supplierRegistryId.trim() || undefined } : {}),
         supplier_reporting_period: draft.supplierPeriod.trim() || undefined,
         supplier_country: draft.supplierCountry.trim(),
         data_mode: draft.dataMode,
