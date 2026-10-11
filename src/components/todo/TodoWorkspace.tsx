@@ -2,6 +2,7 @@
 
 import { confirmNoImportedHeat } from '@/components/talk/talk-writes';
 import { Button } from '@/components/ui';
+import { productWithCn } from '@/lib/product-label';
 import { FACTOR_SOURCE_CHOICES, INSTALLATION_FIELD_SPECS, type FactorSourceType } from '@/lib/todo-edits';
 import type { AttributionStatus } from '@/lib/attribution-status';
 import type { TodoItem, TodoOwner } from '@/lib/todo-items';
@@ -153,7 +154,7 @@ export function TodoWorkspace() {
             {item.supplier && item.supplier.items.length > 0 && (
                 <ul className="space-y-0.5 text-xs leading-5 text-slate-600">
                     {item.supplier.items.map((entry) => (
-                        <li key={`${entry.name}-${entry.cnCode}`}>{entry.name}{entry.cnCode ? ` · CN ${entry.cnCode}` : ''}{entry.massT > 0 ? ` · ${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(entry.massT)} t` : ''}</li>
+                        <li key={`${entry.name}-${entry.cnCode}`}>{productWithCn(entry.name, entry.cnCode)}{entry.massT > 0 ? ` · ${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(entry.massT)} t` : ''}</li>
                     ))}
                 </ul>
             )}

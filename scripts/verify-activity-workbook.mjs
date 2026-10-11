@@ -424,7 +424,7 @@ assert.ok(Math.abs(resultsOf(heatRun.store).filter((item) => item.output_mass_t 
 heatWith.boilerHeat = [];
 const heatProvisional = await importOf(heatWith);
 assert.deepEqual(plain(heatProvisional.store.data.processes.map((process) => [process.heat_consumption[0].unit, process.heat_consumption[0].basis, process.heat_consumption[0].note.startsWith('[임시]')])), [['TJ', 'EFFICIENCY_PROXY', true], ['TJ', 'EFFICIENCY_PROXY', true]], '열 사용량을 모르면 임시 값(표시됨)');
-assert.match(I.describeActivityImportIssues(heatProvisional.result.issues), /\[확인 필요\] 9_보일러열 5번째 줄 — 열 공급원 「온수 보일러」: 공정별 열 사용량이 없어 임시 값/);
+assert.match(I.describeActivityImportIssues(heatProvisional.result.issues), /\[확인 필요\] 4_연료 5번째 줄 — 열 공급원 「온수 보일러」: 공정별 열 사용량이 없어 임시 값/); // 줄은 연료의 줄이다 — 시트 이름도 4_연료(run35 P2-02)
 const heatSingle = await importOf(multi([twoProcess[0]], [boilerFuel], []));
 assert.equal(heatSingle.store.data.source_streams.length, 0, '열 공급원을 못 만들면 그 연료를 조용히 한 공정에 넣지 않는다');
 assert.match(I.describeActivityImportIssues(heatSingle.result.issues), /열 공급원 「온수 보일러」을\(를\) 만들지 못해 그 연료를 넣지 않았습니다: 한 공정만 쓰는 열이면/);

@@ -18,6 +18,7 @@ const strip = (path, all = true) => readFileSync(path, 'utf8')
 const source = [
   readFileSync('src/lib/cn-master.generated.ts', 'utf8').replace(/^export /gm, ''),
   strip('src/lib/cbam-product-rules.ts'),
+  strip('src/lib/product-label.ts'),
   strip('src/lib/talk-flow.ts'),
   'globalThis.app = { deriveTalkState, linkProcessesByOutputLines, pickFocusProcess, pickFocusProductId, talkSkipKey, describeDuplicateCn, describeTalkPartial, describeTalkBarPartial };',
 ].join('\n');

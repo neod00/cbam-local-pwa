@@ -1,6 +1,7 @@
 'use client';
 
 import type { EmissionTrace, TraceNode } from '@/lib/emission-trace';
+import { productWithCn } from '@/lib/product-label';
 import { AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -80,7 +81,7 @@ export function TraceWorkspace() {
                 <label className="block text-sm font-semibold text-slate-700">
                     제품 · 공정
                     <select className="mt-1 block min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm" value={trace.resultId} onChange={(event) => setSelected(event.target.value)}>
-                        {data.traces.map((item) => <option key={item.resultId} value={item.resultId}>{item.productName}{item.cnCode ? ` · CN ${item.cnCode}` : ''} — {item.processName}</option>)}
+                        {data.traces.map((item) => <option key={item.resultId} value={item.resultId}>{productWithCn(item.productName, item.cnCode)} — {item.processName}</option>)}
                     </select>
                 </label>
             )}
@@ -88,7 +89,7 @@ export function TraceWorkspace() {
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="추적 결과">
                 <div className="flex flex-wrap items-baseline justify-between gap-3">
                     <div>
-                        <p className="text-xs font-semibold text-slate-500">{trace.productName}{trace.cnCode ? ` · CN ${trace.cnCode}` : ''} · {trace.processName}{data.periodName ? ` · ${data.periodName}` : ''}</p>
+                        <p className="text-xs font-semibold text-slate-500">{productWithCn(trace.productName, trace.cnCode)} · {trace.processName}{data.periodName ? ` · ${data.periodName}` : ''}</p>
                         <p className="mt-1 text-3xl font-bold tabular-nums text-slate-950" data-testid="trace-see">{trace.see === null ? '—' : fmt(trace.see)} <span className="text-sm font-normal text-slate-500">tCO₂e/t (CBAM 산정 기준 SEE)</span></p>
                         <p className="mt-0.5 text-xs text-slate-500">총 SEE(검토용) {fmt(trace.totalSee)} tCO₂e/t · 생산량 {fmt(trace.outputMassT)} t</p>
                     </div>

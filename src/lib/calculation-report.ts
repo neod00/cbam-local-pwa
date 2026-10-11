@@ -1,4 +1,5 @@
 import { cell, createDocx, paragraph, table } from './docx-builder';
+import { productWithCn } from './product-label';
 import { checkDisplaySum, formatForReport, formatIntegerForReport, formatPercentForReport, formatRawForReport, roundForReport } from './report-format';
 import { getCbamGoodsMetadata, getIndirectEmissionsApplicability } from './cbam-product-rules';
 import { getSectorParameters, SECTOR_PARAM_CITATION } from './sector-parameters';
@@ -569,7 +570,7 @@ function coverSection(input: CalculationReportInput, isInterim: boolean) {
     const rows: Array<[string, string]> = [
         ['보고기간 (Reporting period)', period ? `${period.start_date} ~ ${period.end_date}` : PLACEHOLDER],
         ['대상 제품 (CBAM good)', reportable.length > 0
-            ? reportable.map((result) => `${result.product_name} · CN ${result.cn_code ?? '-'}`).join('\n')
+            ? reportable.map((result) => productWithCn(result.product_name, result.cn_code, '-')).join('\n')
             : PLACEHOLDER],
         // 품목군 분야를 조회해 분기한다. 고정 리터럴이면 비철강 품목에서 거짓이 된다(씨밤이 P3).
         ['대상 온실가스 (GHG scope)', isIronSteelOnly(input)

@@ -34,6 +34,7 @@ const source = [
   strip('src/lib/guided-edit.ts'),
   strip('src/lib/bundled-references.ts'),
   strip('src/lib/conversation-precursor.ts'),
+  strip('src/lib/product-label.ts'),
   strip('src/lib/talk-flow.ts'),
   'globalThis.app = { calculateLocalResults, expandBundledDefaultValues, fillEuDefault, buildPrecursorDraft, validatePrecursorDraft, buildPrecursorCreate, deriveTalkState, describeTalkBarPartial };',
 ].join('\n');

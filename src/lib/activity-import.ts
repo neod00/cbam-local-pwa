@@ -819,7 +819,8 @@ export async function importActivityWorkbook(
         for (const system of systems) {
             const members = heatFuels.filter((item) => item.system === system);
             const heatRows = (data.boilerHeat ?? []).filter((row) => key(row.values.system) === key(system));
-            const tellSystem = (message: string, row?: number) => note('error', SHEET_BOILER_HEAT, `${system}: ${message}`, row ?? members[0].row);
+            // 줄 번호가 있으면 9_보일러열의 줄이고, 없으면 4_연료에서 이 열 공급원을 만드는 연료의 줄이다 — 시트 이름을 줄에 맞춘다(run35 P2-02).
+            const tellSystem = (message: string, row?: number) => note('error', row === undefined ? SHEET_FUELS : SHEET_BOILER_HEAT, `${system}: ${message}`, row ?? members[0].row);
             const consumers: SharedHeatDraftConsumer[] = [];
             let outsideQuantity = 0;
             let outsideUnit: SharedHeatDraft['outsideUnit'] = 'Gcal';
@@ -850,14 +851,14 @@ export async function importActivityWorkbook(
                 const receivers = unquantified.length > 0 ? unquantified : freshList();
                 const fuelEnergyTj = members.reduce((sum, item) => sum + calculateSourceStreamEnergyBreakdown({ ...item.draft, id: 'temp', created_at: '', updated_at: '' } as SourceStream).total, 0);
                 const provisional = buildProvisionalHeatQuantities({ fuelEnergyTj, rows: receivers.map((process) => ({ processId: process.id, weight: process.output_mass_t })) });
-                if (provisional.length === 0) { note('error', SHEET_BOILER_HEAT, `열 공급원 「${system}」: 쓴 열의 양이 없어 임시로도 채우지 못했습니다(공정의 생산량과 연료 사용량이 필요합니다). 그 연료를 넣지 않았습니다.`, members[0].row); continue; }
+                if (provisional.length === 0) { note('error', SHEET_FUELS, `열 공급원 「${system}」: 쓴 열의 양이 없어 임시로도 채우지 못했습니다(공정의 생산량과 연료 사용량이 필요합니다). 그 연료를 넣지 않았습니다.`, members[0].row); continue; }
                 for (const item of provisional) consumers.push({ processId: item.processId, quantity: item.quantityTj, unit: 'TJ', basis: 'EFFICIENCY_PROXY', note: item.note });
-                note('warning', SHEET_BOILER_HEAT, `열 공급원 「${system}」: 공정별 열 사용량이 없어 임시 값(연료 에너지 × 70%를 생산량 비율로)을 넣었습니다. 규정은 쓴 열량 기준 귀속을 요구하므로 공정별 열 사용량을 받아 ${SHEET_BOILER_HEAT}에 적어 주세요.`, members[0].row);
+                note('warning', SHEET_FUELS, `열 공급원 「${system}」: 공정별 열 사용량이 없어 임시 값(연료 에너지 × 70%를 생산량 비율로)을 넣었습니다. 규정은 쓴 열량 기준 귀속을 요구하므로 공정별 열 사용량을 받아 ${SHEET_BOILER_HEAT}에 적어 주세요.`, members[0].row);
             }
             const pending = members.map((item, index) => ({ ...item.draft, id: `pending_${index}`, created_at: '', updated_at: '' }) as SourceStream);
             const heatDraft: SharedHeatDraft = { name: system, streamIds: pending.map((item) => item.id), consumers, outsideQuantity, outsideUnit, outsideNote };
             const heatError = validateSharedHeatDraft(heatDraft, { processes: freshList(), sourceStreams: [...streams, ...pending] });
-            if (heatError) { note('error', SHEET_BOILER_HEAT, `열 공급원 「${system}」을(를) 만들지 못해 그 연료를 넣지 않았습니다: ${heatError}`, members[0].row); continue; }
+            if (heatError) { note('error', SHEET_FUELS, `열 공급원 「${system}」을(를) 만들지 못해 그 연료를 넣지 않았습니다: ${heatError}`, members[0].row); continue; }
             const createdStreams: SourceStream[] = [];
             for (const item of members) createdStreams.push(await store.create('source_streams', { ...item.draft, process_id: consumers[0].processId }));
             streams.push(...createdStreams);

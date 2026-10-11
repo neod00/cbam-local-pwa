@@ -1,4 +1,5 @@
 import { getAppScopeExclusion, APP_SCOPE_EXCLUSION_TEXT, getCbamCoverage } from './cbam-product-rules';
+import { productWithCn } from './product-label';
 import type { Installation, Product, ProductOutputLine, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 
 /**
@@ -131,7 +132,7 @@ export function deriveTalkState(input: {
         chips.push({ id: 'period', title: '보고기간', answer: `${period.name} (${period.start_date} ~ ${period.end_date})` });
     }
     if (product) {
-        chips.push({ id: 'product', title: '만드는 제품', answer: `${product.name} · CN ${product.cn_code ?? '—'}` });
+        chips.push({ id: 'product', title: '만드는 제품', answer: productWithCn(product.name, product.cn_code, '—') });
     }
 
     // 지금 보는 기간(첫 기간)의 공정. 공정이 하나라도 있으면 「생산량」 질문에는 이미 답한 것으로 본다 —

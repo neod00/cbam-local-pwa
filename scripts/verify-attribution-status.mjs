@@ -128,6 +128,15 @@ const wasteStatus = build(messy, { installation: { waste_gases: 'YES' } });
 assert.equal(rowOf(wasteStatus, 'WASTE_GAS').status, 'review');
 assert.match(rowOf(wasteStatus, 'WASTE_GAS').detail, /계산하지 않습니다/);
 assert.equal(rowOf(build(clean, { installation: { waste_gases: 'YES' } }), 'WASTE_GAS'), undefined, '공정이 하나면 폐가스 이전 보정을 말하지 않는다');
+// 같은 열 공급원의 「임시 값」 경고는 공정마다 오지만 한 건으로 센다(run35 P2-02)
+const heatWarn = (processName) => ({ message: `확인 필요(규정): ${processName}: 「온수 보일러」 열 사용량이 임시 값입니다 — 공정별 열 사용 자료 없이 생산량 비율로 채웠습니다`, target: { type: 'process', id: processName }, check: 'HEAT' });
+const heatStatus = app.buildAttributionStatus({
+  processes: [], productOutputLines: [], sourceStreams: [], precursorCount: 0, hrefOf: () => '/',
+  results: [{ warnings: [], warningDetails: [heatWarn('나사 공정'), heatWarn('너트 공정'), heatWarn('와셔 공정'), { ...heatWarn('와셔 공정'), message: '확인 필요(규정): 와셔 공정: 「열풍기」 열 사용량이 임시 값입니다 — x' }] }],
+});
+const heatRow = heatStatus.rows.find((row) => row.id === 'HEAT');
+assert.match(heatRow.detail, /^2건 /, '같은 열 공급원 3개 공정 + 다른 열 공급원 1개 = 2건');
+assert.ok(heatRow.items.some((item) => /열 공급원 「온수 보일러」의 열 사용량이 임시 값입니다 — 공정 3개/.test(item)), '같은 공급원은 한 줄로 합쳐 공정 수를 말한다');
 // 심각도 규칙
 assert.equal(app.attributionSeverityOf('차단: x'), 'fix');
 assert.equal(app.attributionSeverityOf('확인 필요(자료): x'), 'fix');

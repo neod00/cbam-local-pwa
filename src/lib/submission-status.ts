@@ -1,3 +1,4 @@
+import { productWithCn } from './product-label';
 import type { AttributionStatusResult } from './attribution-status';
 import type { EuExportReadinessResult } from './eu-template-export';
 import type { Installation, PurchasedPrecursor, ReportingPeriod } from './local-db';
@@ -72,7 +73,7 @@ export function buildSubmissionSummary(input: {
 
     // 제품과 CN
     rows.push(hasData
-        ? { id: 'products', title: '제품과 CN 코드', status: 'ok', detail: input.products.map((product) => `${product.name} · CN ${product.cnCode ?? '—'}`).join(' / ') }
+        ? { id: 'products', title: '제품과 CN 코드', status: 'ok', detail: input.products.map((product) => productWithCn(product.name, product.cnCode, '—')).join(' / ') }
         : { id: 'products', title: '제품과 CN 코드', status: 'blocked', detail: '신고 대상 제품의 산정 결과가 아직 없습니다.', href: '/talk', hrefLabel: '질문으로 입력' });
 
     // 보고기간

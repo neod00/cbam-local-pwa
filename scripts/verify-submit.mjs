@@ -11,7 +11,8 @@ import vm from 'node:vm';
 import ts from 'typescript';
 
 const file = (path) => readFileSync(path, 'utf8');
-const source = file('src/lib/submission-status.ts').replace(/^import [\s\S]*?;\r?\n/gm, '').replace(/^export /gm, '') + '\nglobalThis.app = { buildSubmissionSummary };';
+const strip = (path) => file(path).replace(/^import [\s\S]*?;\r?\n/gm, '').replace(/^export /gm, '');
+const source = strip('src/lib/product-label.ts') + '\n' + strip('src/lib/submission-status.ts') + '\nglobalThis.app = { buildSubmissionSummary };';
 const context = vm.createContext({ Intl });
 vm.runInContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.None, target: ts.ScriptTarget.ES2022 } }).outputText, context);
 const { buildSubmissionSummary } = context.app;
@@ -81,6 +82,11 @@ assert.match(row(asked, 'precursors').detail, /구매한 강재가 있는지 아
 assert.match(row(asked, 'energy').detail, /답하지 않은 질문이 2개/);
 assert.equal(row(buildSubmissionSummary({ ...base, fuelOrElectricityEntered: false }), 'energy').status, 'notice');
 assert.equal(row(buildSubmissionSummary({ ...base, precursors: [] }), 'precursors').detail, '구매한 강재가 없다고 확인했습니다.');
+
+// ── run35 P2-01) 이름에 CN이 이미 들어 있으면 「… · CN … · CN …」로 겹치지 않는다 ──
+const dupName = buildSubmissionSummary({ ...base, products: [{ name: 'SWCH18A · CN 73181575', cnCode: '73181575', outputMassT: 500 }, { name: 'STS 나사', cnCode: '73181552', outputMassT: 10 }, { name: '이름만', outputMassT: 1 }] });
+assert.equal(row(dupName, 'products').detail, 'SWCH18A · CN 73181575 / STS 나사 · CN 73181552 / 이름만 · CN —', 'CN이 이름에 있으면 그대로, 없으면 붙이고, 비면 「—」');
+assert.equal(row(buildSubmissionSummary({ ...base, products: [{ name: 'CN 73181575 볼트', cnCode: '7318 15 75', outputMassT: 1 }] }), 'products').detail, 'CN 73181575 볼트', '공백이 섞인 CN 표기도 같은 코드로 본다');
 
 // ── 자료가 덜 들어왔다(run35 P1-05): 올린 서식에서 넣지 못한 줄 · 구매 강재를 아직 안 넣고 확인도 안 함 ──
 const unplaced = buildSubmissionSummary({ ...base, lastImport: { filename: 'x.xlsx', unplacedCount: 9, unplaced: [{ message: '5_구매강재 5번째 줄 — SCM435 와이어: 쓰는 공정을 찾지 못했습니다', href: '/upload' }] } });
