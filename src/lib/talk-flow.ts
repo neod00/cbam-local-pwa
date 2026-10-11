@@ -1,5 +1,5 @@
 import { getAppScopeExclusion, APP_SCOPE_EXCLUSION_TEXT, getCbamCoverage } from './cbam-product-rules';
-import type { Installation, Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
+import type { Installation, Product, ProductOutputLine, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 
 /**
  * 질문으로 입력(대화형 모드 S1) — 어느 질문이 지금 차례인지와 답을 칩으로 보여 주는 순수 규칙.
@@ -49,11 +49,36 @@ export function pickTalkProcess<T extends Pick<ProductionProcess, 'product_id'>>
  * 제품이 둘 이상일 때(S6) 「지금 묻는 제품」의 공정. 첫 제품은 예전 규칙 그대로(자기 공정, 없으면 첫 공정 — 이미 있는 공정이 생산량 질문을 대신한다),
  * 둘째 이후 제품은 **자기 공정만** — 없으면 공정이 없는 것이다(다른 제품의 공정에 질문이 붙으면 안 된다).
  */
-export function pickFocusProcess<T extends Pick<ProductionProcess, 'product_id'>>(processes: T[], products: Pick<Product, 'id'>[], product: Pick<Product, 'id'> | undefined): T | undefined {
+export function pickFocusProcess<T extends Pick<ProductionProcess, 'id' | 'product_id'>>(
+    processes: T[],
+    products: Pick<Product, 'id'>[],
+    product: Pick<Product, 'id'> | undefined,
+    /** 제품 → 그 제품의 생산 라인이 든 공정 id들. 한 공정에서 제품을 여럿 만들면 공정 자체는 대표 제품 하나만 가리킨다(run35 P1-06). */
+    linkedProcessIds?: ReadonlyMap<string, ReadonlySet<string>>,
+): T | undefined {
     if (!product) return undefined;
     const own = processes.find((process) => process.product_id === product.id);
     if (own) return own;
+    const linked = linkedProcessIds?.get(product.id);
+    const viaLine = linked ? processes.find((process) => linked.has(process.id)) : undefined;
+    if (viaLine) return viaLine;
     return product.id === products[0]?.id ? processes[0] : undefined;
+}
+
+/**
+ * 제품별로 「그 제품을 실제로 만드는(생산량이 있는 합격품 라인이 든) 공정」을 모은다.
+ * 한 공정에서 제품을 여럿 만들면(같은 원료의 여러 CN, 수출분·내수분) 공정의 product_id는 대표 제품 하나뿐이고 나머지는 생산 라인으로만 이어진다 —
+ * 이것을 보지 않으면 이미 생산량을 넣은 제품의 생산량을 다시 묻는다.
+ */
+export function linkProcessesByOutputLines(lines: Pick<ProductOutputLine, 'process_id' | 'product_id' | 'output_mass_t' | 'activity_level_role'>[] | undefined): Map<string, Set<string>> {
+    const map = new Map<string, Set<string>>();
+    for (const line of lines ?? []) {
+        if (!line.product_id || line.activity_level_role === 'EXCLUDED' || !(line.output_mass_t > 0)) continue;
+        const set = map.get(line.product_id) ?? new Set<string>();
+        set.add(line.process_id);
+        map.set(line.product_id, set);
+    }
+    return map;
 }
 
 /** 「나중에 입력」으로 건너뛴 질문을 제품별로 기억하는 열쇠 — 한 제품의 건너뛰기가 다른 제품의 같은 질문을 가리지 않게 */
@@ -88,6 +113,8 @@ export function deriveTalkState(input: {
     precursors?: PurchasedPrecursor[];
     /** 모든 배출원 — 첫 공정의 것만 센다 */
     sourceStreams?: SourceStream[];
+    /** 모든 생산 라인 — 한 공정에서 만드는 둘째 이후 제품이 자기 공정을 찾는 데 쓴다(없으면 공정의 대표 제품만 본다) */
+    productOutputLines?: ProductOutputLine[];
     /** 지금 물을 제품(없거나 모르면 첫 제품). 질문 5~8은 이 제품의 공정에 붙는다 */
     focusProductId?: string;
 }): TalkState {
@@ -110,7 +137,8 @@ export function deriveTalkState(input: {
     // 지금 보는 기간(첫 기간)의 공정. 공정이 하나라도 있으면 「생산량」 질문에는 이미 답한 것으로 본다 —
     // 이 화면은 새 공정 하나만 만들고, 이미 있는 공정(여러 개·이송·고치기)은 지도 화면의 몫이다.
     const periodProcesses = (input.processes ?? []).filter((process) => period && process.period_id === period.id);
-    const firstProcess = pickFocusProcess(periodProcesses, input.products, product);
+    const linked = linkProcessesByOutputLines(input.productOutputLines);
+    const firstProcess = pickFocusProcess(periodProcesses, input.products, product, linked);
     if (!isFirstProduct) {
         // 둘째 이후 제품: 자기 공정이 있을 때만 칩이 선다(첫 제품의 생산량을 이 제품의 답으로 보이지 않는다).
         if (firstProcess) {
@@ -163,7 +191,7 @@ export function deriveTalkState(input: {
 
     // 제품 하나의 남은 질문(공정이 생긴 뒤의 것). 첫 제품은 이미 있는 공정이 생산량 질문을 대신하고, 둘째 이후 제품은 자기 공정이 있어야 한다.
     const pendingOf = (target: Product, first: boolean): TalkQuestionId[] => {
-        const process = pickFocusProcess(periodProcesses, input.products, target);
+        const process = pickFocusProcess(periodProcesses, input.products, target, linked);
         if (first ? periodProcesses.length === 0 : !process) return ['output'];
         if (!process) return [];
         const list: TalkQuestionId[] = [];
@@ -291,13 +319,15 @@ export function describeTalkPartial(input: {
     processes: ProductionProcess[];
     precursors: PurchasedPrecursor[];
     sourceStreams: SourceStream[];
+    /** 생산 라인 — 한 공정에서 만드는 제품을 「생산량 없음」으로 세지 않게 한다 */
+    productOutputLines?: ProductOutputLine[];
 }): string | undefined {
     if (input.processes.length === 0) return undefined;
     const missingOutput: string[] = [];
     let precursorsPending = false;
     let energyMissing = false;
     for (const product of input.products) {
-        const process = pickFocusProcess(input.processes, input.products, product);
+        const process = pickFocusProcess(input.processes, input.products, product, linkProcessesByOutputLines(input.productOutputLines));
         if (!process) {
             missingOutput.push(product.name);
             continue;

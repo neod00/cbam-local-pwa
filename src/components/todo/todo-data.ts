@@ -78,6 +78,7 @@ export async function loadTodoData(): Promise<TodoData> {
         processes,
         precursors,
         sourceStreams,
+        productOutputLines,
         internalTransfers,
         readinessIssues,
         engineWarnings,

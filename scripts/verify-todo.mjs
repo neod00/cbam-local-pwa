@@ -87,6 +87,13 @@ const base = { installations: [inst], periods: [period], products: [product], pr
 const issue = (severity, area, message, extra = {}) => ({ severity, area, message, ...extra });
 const owners = (result) => plain(result.items.map((item) => [item.id, item.owner, item.severity]));
 
+// 한 공정에서 만드는 둘째 제품(수출분·내수분, 같은 원료의 다른 CN): 생산 라인이 있으면 「생산량을 알려 주세요」를 다시 묻지 않는다(run35 P1-06).
+const productTwo = { ...product, id: 'g2', name: 'STS 나사 (비수출)', cn_code: '73181552', reporting_scope: 'CBAM_GOOD' };
+const twoGoods = { ...base, products: [product, productTwo], processes: [{ ...process, electricity_mwh: 10, measurable_heat_import: 'NO', no_purchased_precursors: true }], sourceStreams: [{ id: 's', process_id: 'pr', name: '도시가스' }] };
+const outputAsked = (result) => plain(result.items.filter((item) => /:output$/.test(item.id)).map((item) => item.id));
+assert.deepEqual(outputAsked(app.buildTodoItems(twoGoods)), ['q:g2:output'], '생산 라인을 모르면 둘째 제품의 생산량을 묻는다(종전)');
+assert.deepEqual(outputAsked(app.buildTodoItems({ ...twoGoods, productOutputLines: [{ id: 'l1', process_id: 'pr', product_id: 'g', output_mass_t: 600 }, { id: 'l2', process_id: 'pr', product_id: 'g2', output_mass_t: 400 }] })), [], '둘 다 생산 라인이 있으면 묻지 않는다');
+
 // 시작 전: 가장 앞 질문 하나만.
 const fresh = app.buildTodoItems({ ...base, installations: [], periods: [], products: [], processes: [] });
 assert.deepEqual(owners(fresh), [['q:company', 'company', 'notice']]);

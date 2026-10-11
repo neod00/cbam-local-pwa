@@ -19,7 +19,7 @@ const source = [
   readFileSync('src/lib/cn-master.generated.ts', 'utf8').replace(/^export /gm, ''),
   strip('src/lib/cbam-product-rules.ts'),
   strip('src/lib/talk-flow.ts'),
-  'globalThis.app = { deriveTalkState, pickFocusProcess, pickFocusProductId, talkSkipKey, describeDuplicateCn, describeTalkPartial, describeTalkBarPartial };',
+  'globalThis.app = { deriveTalkState, linkProcessesByOutputLines, pickFocusProcess, pickFocusProductId, talkSkipKey, describeDuplicateCn, describeTalkPartial, describeTalkBarPartial };',
 ].join('\n');
 const context = vm.createContext({ Intl });
 vm.runInContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.None, target: ts.ScriptTarget.ES2022 } }).outputText, context);
@@ -51,6 +51,20 @@ assert.equal(s0.focusProductId, 'b');
 const sFirst = app.deriveTalkState({ ...base, processes: [procA], precursors: [], sourceStreams: [streamA], focusProductId: 'a' });
 assert.deepEqual(plain(sFirst.pending), []);
 assert.equal(plain(app.deriveTalkState({ installations: [inst], periods: [period], products: [prodA], processes: [procA], precursors: [], sourceStreams: [streamA] }).pending).length, 0, '제품이 하나면 focus 없이도 같다');
+
+// ── run35 P1-06) 한 공정에서 제품을 여럿 만들 때: 공정은 대표 제품 하나만 가리키고 나머지 제품은 생산 라인으로 이어진다 ──
+const lineA = { id: 'la', process_id: 'pa', product_id: 'a', output_mass_t: 3000 };
+const lineB = { id: 'lb', process_id: 'pa', product_id: 'b', output_mass_t: 240 };
+assert.equal(app.pickFocusProcess([procA], [prodA, prodB], prodB, app.linkProcessesByOutputLines([lineA, lineB])).id, 'pa', '둘째 제품의 생산 라인이 든 공정이 그 제품의 공정이다');
+assert.equal(app.pickFocusProcess([procA], [prodA, prodB], prodB, app.linkProcessesByOutputLines([lineA, { ...lineB, output_mass_t: 0 }])), undefined, '생산량 0인 라인은 만든다고 보지 않는다');
+assert.equal(app.pickFocusProcess([procA], [prodA, prodB], prodB, app.linkProcessesByOutputLines([lineA, { ...lineB, activity_level_role: 'EXCLUDED' }])), undefined, '활동수준 제외 라인도 아니다');
+const shared = app.deriveTalkState({ ...base, processes: [procA], precursors: [], sourceStreams: [streamA], productOutputLines: [lineA, lineB], focusProductId: 'b' });
+assert.deepEqual(plain(shared.pending), [], '이미 생산량을 넣은 둘째 제품의 생산량을 다시 묻지 않는다');
+assert.equal(shared.chips.find((chip) => chip.id === 'output').answer, 'STS 나사 공정 · 3,240 t', '답은 그 공정의 것');
+assert.deepEqual(plain(shared.products.map((item) => item.pending)), [[], []], '제품별 남은 질문도 비어 있다');
+assert.deepEqual(plain(app.deriveTalkState({ ...base, processes: [procA], precursors: [], sourceStreams: [streamA], focusProductId: 'b' }).pending), ['output'], '라인을 모르면(예전 호출) 종전과 같다');
+assert.ok((app.describeTalkPartial({ products: [prodA, prodB], processes: [procA], precursors: [], sourceStreams: [streamA] }) ?? '').includes('냉간압조 와이어'), '라인이 없으면 생산량 없는 제품으로 센다');
+assert.ok(!(app.describeTalkPartial({ products: [prodA, prodB], processes: [procA], precursors: [], sourceStreams: [streamA], productOutputLines: [lineA, lineB] }) ?? '').includes('냉간압조 와이어'), '라인이 있으면 세지 않는다');
 
 // 공정이 생긴 뒤에는 그 공정에 대해 구매 강재·연료·전력·열이 차례로 남는다.
 const s1 = app.deriveTalkState({ ...base, processes: [procA, procB], precursors: [], sourceStreams: [streamA], focusProductId: 'b' });

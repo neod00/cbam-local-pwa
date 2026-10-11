@@ -18,7 +18,7 @@ import type { ImportedDefaultValueReference } from '@/lib/reference-workbooks';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { buildSeeFlowBinding } from '@/lib/see-flow';
 import { PRODUCT_FAMILY_PRESETS, findDetailPreset, findDetailPresetForProduct, findFamilyPreset, getCalculationSetupForDetail } from '@/lib/product-family-presets';
-import { deriveTalkState, describeCnInput, describeDuplicateCn, describeTalkPartial, pickFocusProcess, pickFocusProductId, talkSkipKey, yearlyPeriodDraft, type TalkQuestionId } from '@/lib/talk-flow';
+import { deriveTalkState, describeCnInput, describeDuplicateCn, describeTalkPartial, linkProcessesByOutputLines, pickFocusProcess, pickFocusProductId, talkSkipKey, yearlyPeriodDraft, type TalkQuestionId } from '@/lib/talk-flow';
 import { summarizeTalkResult, type TalkIssue } from '@/lib/talk-summary';
 import { AlertTriangle, ArrowRight, CheckCircle2, Pencil } from 'lucide-react';
 import Link from 'next/link';
@@ -204,7 +204,7 @@ export function TalkWorkspace() {
     const current = state.pending.find((id) => !skipped.includes(talkSkipKey(focusProductId, id)));
     const question: TalkQuestionId | undefined = editing ?? (addingProduct ? 'product' : addingPrecursor ? 'precursor' : addingFuel ? 'fuel' : current);
     const periodProcesses = data.processes.filter((process) => process.period_id === data.periods[0]?.id);
-    const focusProcess = pickFocusProcess(periodProcesses, data.products, focusProduct);
+    const focusProcess = pickFocusProcess(periodProcesses, data.products, focusProduct, linkProcessesByOutputLines(data.productOutputLines));
     // 칩으로 고칠 수 있는 단순한 경우(S7). 아니면 칩은 지도 화면 링크로 남는다(이유는 칩 설명에).
     const focusLines = data.productOutputLines.filter((line) => line.process_id === focusProcess?.id);
     const outputBlock = focusProcess ? describeOutputEditBlock({ process: focusProcess, lines: data.productOutputLines, transfers: data.internalTransfers }) : '공정이 없습니다.';
@@ -215,7 +215,7 @@ export function TalkWorkspace() {
     const editingStream = data.sourceStreams.find((stream) => stream.id === editItemId);
     const editingPrecursor = data.precursors.find((precursor) => precursor.id === editItemId);
     // 한 제품이라도 생산량·구매 강재·연료/전력이 비었으면 막대의 숫자는 일부일 뿐이다(제품이 하나일 때와 같은 문안).
-    const barPartial = describeTalkPartial({ products: data.products, processes: periodProcesses, precursors: data.precursors, sourceStreams: data.sourceStreams });
+    const barPartial = describeTalkPartial({ products: data.products, processes: periodProcesses, precursors: data.precursors, sourceStreams: data.sourceStreams, productOutputLines: data.productOutputLines });
     const summary = useMemo(() => summarizeTalkResult({ binding, issues: data.issues, partialNote: barPartial }), [binding, data.issues, barPartial]);
     const energySplit = useMemo(() => summarizeEnergySplits({ processes: periodProcesses, sourceStreams: data.sourceStreams }), [periodProcesses, data.sourceStreams]);
     const countries = useMemo(() => Array.from(new Set((reference?.rows ?? []).map((row) => row.country))).filter((name) => !name.startsWith('_')).sort((a, b) => a.localeCompare(b)), [reference]);

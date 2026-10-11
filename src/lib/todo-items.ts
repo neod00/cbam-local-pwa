@@ -1,11 +1,11 @@
 import { describePrecursorEditBlock } from './conversation-precursor';
 import type { DefaultSubstitutionImpact } from './default-substitution';
 import type { EuExportIssueFix } from './eu-template-export';
-import type { InternalTransfer, Installation, Product, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
+import type { InternalTransfer, Installation, Product, ProductOutputLine, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import { isUnverifiedActualPrecursor, PRECURSOR_ACTUAL_VALUE_RULE } from './precursor-verification';
 import { groupPrecursorsBySupplier } from './supplier-request';
 import type { InstallationFieldKey } from './todo-edits';
-import { deriveTalkState, pickFocusProcess, type TalkQuestionId } from './talk-flow';
+import { deriveTalkState, linkProcessesByOutputLines, pickFocusProcess, type TalkQuestionId } from './talk-flow';
 
 /**
  * 할 일 화면 — 지금 앱이 알고 있는 「남은 일」을 **누가 할 일인지**로 모은다(UX 목업 4번).
@@ -78,6 +78,8 @@ export interface TodoInput {
     processes: ProductionProcess[];
     precursors: PurchasedPrecursor[];
     sourceStreams: SourceStream[];
+    /** 생산 라인 — 한 공정에서 만드는 둘째 이후 제품의 「생산량」 질문을 다시 하지 않게 한다(run35 P1-06) */
+    productOutputLines?: ProductOutputLine[];
     internalTransfers?: InternalTransfer[];
     readinessIssues: TodoReadinessIssue[];
     engineWarnings: TodoEngineWarning[];
@@ -181,7 +183,7 @@ export function buildTodoItems(input: TodoInput): TodoResult {
     const periodNameOf = (id: string | undefined) => input.periods.find((item) => item.id === id)?.name ?? '';
 
     // ── 1) 안 한 질문 → 우리 회사가 답할 것 ─────────────────────────────
-    const overview = deriveTalkState({ installations: input.installations, periods: input.periods, products: input.products, processes: input.processes, precursors: input.precursors, sourceStreams: input.sourceStreams });
+    const overview = deriveTalkState({ installations: input.installations, periods: input.periods, products: input.products, processes: input.processes, precursors: input.precursors, sourceStreams: input.sourceStreams, productOutputLines: input.productOutputLines });
     if (!input.installations[0] || !period || input.products.length === 0) {
         const first = overview.pending[0];
         if (first) {
@@ -190,7 +192,7 @@ export function buildTodoItems(input: TodoInput): TodoResult {
     } else {
         for (const entry of overview.products) {
             const product = input.products.find((item) => item.id === entry.id);
-            const process = pickFocusProcess(periodProcesses, input.products, product);
+            const process = pickFocusProcess(periodProcesses, input.products, product, linkProcessesByOutputLines(input.productOutputLines));
             for (const id of entry.pending) {
                 add({
                     id: `q:${entry.id}:${id}`,
