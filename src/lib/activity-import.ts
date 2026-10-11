@@ -207,6 +207,7 @@ export async function importActivityWorkbook(
     for (const message of data.notes) note('error', '파일', message);
     for (const problem of expansion.problems) note('error', SHEET_PARTS, problem.message, problem.row);
     if (expansion.summary) note('info', SHEET_PARTS, expansion.summary);
+    for (const message of expansion.notes) note('info', SHEET_PARTS, message);
 
     const [installations, periods, products, existingProcesses, existingStreams, existingPrecursors] = await Promise.all([
         store.list('installations'), store.list('periods'), store.list('products'), store.list('processes'), store.list('source_streams'), store.list('precursors'),
@@ -346,6 +347,11 @@ export async function importActivityWorkbook(
     const meterOf = new Map<string, { name: string; total?: number; basis?: 'OUTPUT_MASS' | 'SUB_METER' | 'ESTIMATE'; note: string }>();
     /** 이번에 만든 공정의 제품 라인(활동수준 제외 라인은 빼고) */
     const goodLines = new Map<string, ProductOutputLine[]>();
+    /** 공정에 든 제품 수 — 같은 CN의 수출분·비수출분은 한 제품이다(기능단위는 CN별 톤, 2025/2547 제4조 2항). 섞임 경고는 이 수로 본다. */
+    const distinctGoods = (lines: ProductOutputLine[] | undefined) => {
+        const cnById = new Map(Array.from(productByName.values()).map((product) => [product.id, (product.cn_code ?? '').replace(/\D/g, '')]));
+        return new Set((lines ?? []).map((line) => cnById.get(line.product_id ?? '') || line.product_id || line.name)).size;
+    };
     const groups = new Map<string, ActivityRow[]>();
     for (const row of plan.processes) {
         const name = key(row.values.name);
@@ -442,6 +448,11 @@ export async function importActivityWorkbook(
         if (short && short !== process.name) aliasOwners.set(key(short), [...(aliasOwners.get(key(short)) ?? []), process]);
     }
     for (const [alias, owners] of aliasOwners) if (owners.length === 1 && !processByName.has(alias)) processByName.set(alias, owners[0]);
+    // 품번 목록의 재질 이름(적힌 모양 그대로)도 그 재질이 들어간 공정을 가리킨다 — 공정이 여러 재질을 묶은 것이어도(「SCM435·SWCH35K 공정」).
+    for (const [grade, processName] of expansion.aliases) {
+        const owner = processByName.get(key(processName));
+        if (owner && fresh.has(owner.id) && !processByName.has(key(grade))) processByName.set(key(grade), owner);
+    }
     /** 공정을 못 찾았을 때 덧붙이는 말 — 이번 파일로 만든 공정 이름을 그대로 보여 준다. */
     const processHint = () => {
         const names = [...fresh.values()].map((process) => `「${process.name}」`);
@@ -686,7 +697,8 @@ export async function importActivityWorkbook(
         const factorValue = factor ?? kind.defaults.emission_factor_tco2e_per_unit;
         const sourceType = own && factorSource ? factorSource : kind.defaults.factor_source_type;
         const sourceText = evidence || MISSING_EVIDENCE_TEXT;
-        const targets = several ? whereNames.map((item) => processByName.get(key(item))).filter((item): item is ProductionProcess => Boolean(item)).map((item) => fresh.get(item.id) ?? item) : freshList();
+        // 재질 이름 둘이 같은 묶음 공정을 가리키면(SCM435;SWCH35K → 「SCM435·SWCH35K 공정」) 한 공정으로 본다.
+        const targets = several ? whereNames.map((item) => processByName.get(key(item))).filter((item): item is ProductionProcess => Boolean(item)).map((item) => fresh.get(item.id) ?? item).filter((item, index, list) => list.findIndex((other) => other.id === item.id) === index) : freshList();
         if (shared && targets.length >= 2 && PARTIAL_ROUTE_FUEL.test(name)) {
             tell('warning', `「${SHARED_PROCESS_LABEL}」로 적혀 모든 공정에 생산량 비율로 나눴습니다. 이름으로 보아 일부 제품만 거치는 설비의 연료일 수 있습니다 — 그렇다면 그 공정 이름만 적어 다시 올리세요(여러 공정이면 ${LIST_SEPARATOR} 로 이어서). 안 그러면 이 설비를 거치지 않는 제품에도 배출이 실립니다.`);
         }
@@ -721,8 +733,8 @@ export async function importActivityWorkbook(
             const target = isHeat ? freshList()[0] : shared || several ? targets[0] : process;
             if (!target) { tell('error', '넣을 공정이 없습니다 — 공정이 먼저 만들어져야 합니다.'); continue; }
             // 한 공정 안에서는 연료가 제품에 생산량 비율로 나뉜다 — 일부 제품만 거치는 설비라면 공정을 나눠 적어야 한다.
-            if (!isHeat && (goodLines.get(target.id)?.length ?? 0) >= 2 && PARTIAL_ROUTE_FUEL.test(name)) {
-                tell('warning', `공정 「${target.name}」에는 제품이 ${goodLines.get(target.id)?.length}개 있어 이 연료가 모든 제품에 생산량 비율로 나뉩니다. 이름으로 보아 일부 제품만 거치는 설비의 연료일 수 있습니다 — 그렇다면 ${SHEET_PROCESSES} 시트에서 그 제품들을 별도 공정으로 적고 이 연료를 그 공정에 넣으세요.`);
+            if (!isHeat && distinctGoods(goodLines.get(target.id)) >= 2 && PARTIAL_ROUTE_FUEL.test(name)) {
+                tell('warning', `공정 「${target.name}」에는 CN 코드가 ${distinctGoods(goodLines.get(target.id))}종 있어 이 연료가 모든 제품에 생산량 비율로 나뉩니다. 이름으로 보아 일부 제품만 거치는 설비의 연료일 수 있습니다 — 그렇다면 ${SHEET_PROCESSES} 시트에서 그 제품들을 별도 공정으로 적고 이 연료를 그 공정에 넣으세요.`);
             }
             if (streams.some((stream) => stream.process_id === target.id && key(stream.name) === key(name))) { tell('info', '같은 이름의 연료가 이 공정에 이미 있어 건너뛰었습니다.'); continue; }
             const answer: FuelAnswer = { kind, amount: String(amount), name, ncv: String(ncvValue), factor: String(factorValue), factorSource: sourceType, source: sourceText };
@@ -990,10 +1002,10 @@ export async function importActivityWorkbook(
     for (const process of freshList()) {
         const lines = goodLines.get(process.id) ?? [];
         const loose = unassigned.get(process.id) ?? [];
-        if (lines.length < 2 || loose.length === 0) continue;
+        if (distinctGoods(lines) < 2 || loose.length === 0) continue;
         const headings = [...new Set(loose.map((item) => item.heading))];
         if (headings.length >= 2) {
-            note('warning', SHEET_PRECURSORS, `공정 「${process.name}」에는 제품이 ${lines.length}개 있고, 종류가 다른 원료 ${loose.map((item) => `「${item.name}」`).join(', ')}을(를) 「쓰는 제품」 없이 넣었습니다. 이대로면 모든 원료가 모든 제품에 생산량 비율로 섞입니다 — 제품마다 쓰는 원료(강종)가 다르면 「쓰는 제품」을 적어 다시 올리세요. 틀리면 제품별 배출량이 크게 달라집니다.`);
+            note('warning', SHEET_PRECURSORS, `공정 「${process.name}」에는 CN 코드가 ${distinctGoods(lines)}종 있고, 종류가 다른 원료 ${loose.map((item) => `「${item.name}」`).join(', ')}을(를) 「쓰는 제품」 없이 넣었습니다. 이대로면 모든 원료가 모든 제품에 생산량 비율로 섞입니다 — 제품마다 쓰는 원료(강종)가 다르면 「쓰는 제품」을 적어 다시 올리세요. 틀리면 제품별 배출량이 크게 달라집니다.`);
         }
         const foreign = lines.filter((line) => !/^7[23]/.test((productById.get(line.product_id ?? '')?.cn_code ?? '').replace(/\D/g, '')));
         if (foreign.length > 0) {

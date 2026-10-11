@@ -214,7 +214,7 @@ assert.equal(assignedRun.result.issues.filter((issue) => issue.level !== 'info')
 // (b) 같은 자료를 「쓰는 제품」 없이: 값이 섞이고(둘 다 1.3867) — 이제 그 사실을 알린다.
 const mixedRun = await importOf(multi(oneProcess, [], [{ ...alloyWire, where: '라인' }, { ...carbonWire, where: '라인' }]));
 assert.ok(Math.abs(seeOf(mixedRun, '73181582') - (1040 * 2 + 2080 * 1) / 3000) < 1e-9, '안 적으면 생산량 비율로 섞인다');
-assert.match(I.describeActivityImportIssues(mixedRun.result.issues), /\[확인 필요\] 5_구매강재 — 공정 「라인」에는 제품이 2개 있고, 종류가 다른 원료 「합금강 선재」, 「탄소강 선재」을\(를\) 「쓰는 제품」 없이 넣었습니다/);
+assert.match(I.describeActivityImportIssues(mixedRun.result.issues), /\[확인 필요\] 5_구매강재 — 공정 「라인」에는 CN 코드가 2종 있고, 종류가 다른 원료 「합금강 선재」, 「탄소강 선재」을\(를\) 「쓰는 제품」 없이 넣었습니다/);
 // 종류(CN 4자리)가 같은 원료만 있으면 묻지 않는다 — 같은 원료로 만드는 제품은 한 공정이 규정이다(부속서 II A.4).
 const sameSteel = await importOf(multi(oneProcess, [], [{ ...carbonWire, where: '라인' }, { ...carbonWire, name: '탄소강 선재 B', where: '라인' }]));
 assert.equal(sameSteel.result.issues.filter((issue) => issue.level === 'warning').length, 0);
@@ -245,7 +245,7 @@ const fuelWarnings = allShared.result.issues.filter((issue) => issue.level === '
 assert.equal(fuelWarnings.length, 1);
 assert.match(fuelWarnings[0].message, /^열처리로 가스: 「공장 전체\(공용\)」로 적혀 모든 공정에 생산량 비율로 나눴습니다\. 이름으로 보아 일부 제품만 거치는 설비의 연료일 수 있습니다/);
 const inOneProcess = await importOf(multi(oneProcess, [{ name: '소둔로 가스', amount: '100', where: '라인' }], []));
-assert.match(I.describeActivityImportIssues(inOneProcess.result.issues), /소둔로 가스: 공정 「라인」에는 제품이 2개 있어 이 연료가 모든 제품에 생산량 비율로 나뉩니다/);
+assert.match(I.describeActivityImportIssues(inOneProcess.result.issues), /소둔로 가스: 공정 「라인」에는 CN 코드가 2종 있어 이 연료가 모든 제품에 생산량 비율로 나뉩니다/);
 // 시스템 경계(2025/2547 부속서 I 3.16.2): 도금·절단·용접·마무리 설비의 배출은 철강 제품의 직접배출에 넣지 않는다 — 그런 이름의 연료는 되묻는다.
 // 같은 조항이 넣는다고 한 용융아연도금·코팅, 그리고 열처리·단조·보일러는 이 알림의 대상이 아니다.
 const boundary = await importOf(multi(three, [
@@ -349,11 +349,11 @@ assert.deepEqual(plain(partProducts.map((product) => [product.name, product.cn_c
   ['SCM435 · CN 73181582', '73181582', 'CBAM_GOOD'], ['SWCH · CN 73181699', '73181699', 'CBAM_GOOD'], ['SWCH · CN 73181558 (비수출)', '73181558', 'NON_CBAM_COPRODUCT'],
 ], '품번 여섯 줄(하나는 틀림) → CN·재질·수출 여부가 같은 것끼리 제품 셋');
 const partProcesses = Object.fromEntries(partsRun.store.data.processes.map((process) => [process.name, [process.output_mass_t, process.market_output_mass_t]]));
-assert.deepEqual(plain(partProcesses), { 'SCM435 공정': [200, 200], 'SWCH 공정': [24, 24], '열처리 공정': [10, 10] }, '공정은 재질별(원료가 같은 제품끼리), 「거치는 공정」을 적으면 그 이름. 수량 × 단중(1,000,000개 × 20 g = 20 t) 환산 포함');
+assert.deepEqual(plain(partProcesses), { 'SCM435 공정': [200, 200], 'SWCH 공정': [24, 24], '열처리 공정': [10, 10] }, '공정은 CN과 재질을 이은 덩어리별(같은 재질을 쓰는 CN끼리 한 공정), 「거치는 공정」을 적으면 그 이름. 수량 × 단중(1,000,000개 × 20 g = 20 t) 환산 포함');
 assert.equal(partsRun.store.data.product_output_lines.filter((line) => line.activity_level_role === 'EXCLUDED').reduce((sum, line) => sum + line.output_mass_t, 0), 5, '불량·스크랩은 합산된다');
 assert.equal(partsRun.store.data.product_output_lines.filter((line) => line.process_id === partsRun.store.data.processes.find((process) => process.name === 'SWCH 공정').id && line.activity_level_role !== 'EXCLUDED').length, 2, '한 공정에 제품 라인 둘(수출 · 비수출)');
 const partsReport = I.describeActivityImportIssues(partsRun.result.issues);
-assert.match(partsReport, /\[참고\] 2b_품번목록 — 품번 5개를 CN 코드·재질별로 합쳐 제품 3개, 공정 3개로 만들었습니다/);
+assert.match(partsReport, /\[참고\] 2b_품번목록 — 품번 5개를 CN 코드별로 합쳐 제품 3개, 공정 3개로 만들었습니다/);
 assert.match(partsReport, /\[넣지 못함\] 2b_품번목록 10번째 줄 — 품번 BAD-1: CN 코드는 8자리 숫자입니다/);
 assert.match(partsReport, /\[확인 필요\] 2b_품번목록 5번째 줄 — SCM435 · CN 73181582: 부문특정 파라미터가 비어 있습니다/, '제품 줄의 문제는 품번 목록의 처음 줄로 되돌린다');
 assert.deepEqual(plain(partsRun.store.report.sector_parameters.map((item) => [item.param_key, item.value])), [['alloy_mn_cr_ni', '1.2']], '재질별 첫 값이 제품의 부문특정 파라미터로 간다');
@@ -588,7 +588,7 @@ assert.ok(importSource.includes("from './steel-boundary'") && !/EXCLUDED_STEP_FU
 // ── run35) 품번 목록으로 채운 사람은 공정 이름을 모르고 재질만 안다 · 전력 칸의 kWh ──
 const aliasRun = await importOf(withParts([
   { part: 'EB-1', cn: '73181582', grade: 'SCM435', mass: '4400' },
-  { part: 'CB-1', cn: '73181582', grade: 'SWCH35K', mass: '4000' },
+  { part: 'CB-1', cn: '73181588', grade: 'SWCH35K', mass: '4000' },
   { part: 'GB-1', cn: '73181575', grade: 'SWCH18A', mass: '3300' },
 ], {
   fuels: [
@@ -623,5 +623,49 @@ assert.equal(load('src/lib/allocation-rules.ts').isImplausibleElectricityIntensi
 const reworded = Object.fromEntries(Object.entries(fflate.unzipSync(sampleBytes)).map(([name, bytes]) => [name, name.endsWith('.xml') ? fflate.strToU8(fflate.strFromU8(bytes).replaceAll('3_공정 시트의 공정 이름', '예전 판의 설명 문구').replaceAll('한 공정만 쓰면 그 공정 이름', '예전 판의 설명 — 한 공정만 쓰면')) : bytes]));
 const rewordedData = W.parseActivityWorkbook(fflate.zipSync(reworded));
 assert.deepEqual([rewordedData.fuels.length, rewordedData.precursors.length], [sample.fuels.length, sample.precursors.length], '설명 줄의 문구가 지금과 달라도 자료 줄 수는 같다');
+
+// ── run35 P1-01) 규정은 CN별로 묶는다 — 재질이 달라도 같은 CN은 한 제품·한 공정, 같은 재질을 쓰는 CN은 한 다기능 공정 ──
+const cnRun = await importOf(withParts([
+  { part: 'EB-1', cn: '73181582', grade: 'SCM435', mass: '4400', alloy_mn_cr_ni: '1.4', reducing_agent: '고로' },
+  { part: 'CB-1', cn: '73181582', grade: 'SWCH35K', mass: '4000', alloy_mn_cr_ni: '0.75', reducing_agent: '전기로' },
+  { part: 'EB-2', cn: '73181582', grade: 'SCM 435', mass: '300' },
+  { part: 'EB-3', cn: '73181582', grade: 'SCM435', mass: '2000', exported: '아니오' },
+  { part: 'GB-1', cn: '73181575', grade: 'SWCH18A', mass: '500', alloy_mn_cr_ni: '0.75' },
+  { part: 'TS-1', cn: '73181499', grade: 'SWCH18A', mass: '400' },
+  { part: 'SB-1', cn: '73181535', grade: 'STS304', mass: '120', alloy_mn_cr_ni: '27.5' },
+], {
+  fuels: [
+    { row: 5, values: { name: '열처리로 도시가스', kind: '도시가스 (Nm³)', amount: '1000', where: 'SCM435;SWCH35K' } },
+  ],
+  precursors: [
+    { row: 5, values: { name: 'SCM435 와이어', cn: '72299090', consumed: '4530', country: 'South Korea', where: 'SCM435', hasValue: '없음 (EU 기본값 사용)' } },
+    { row: 6, values: { name: 'SWCH35K 와이어', cn: '72171050', consumed: '4120', country: 'South Korea', where: 'SWCH35K', hasValue: '없음 (EU 기본값 사용)' } },
+    { row: 7, values: { name: 'SWCH18A 와이어', cn: '72171039', consumed: '900', country: 'South Korea', where: 'SWCH18A', hasValue: '없음 (EU 기본값 사용)' } },
+    { row: 8, values: { name: 'STS304 와이어', cn: '72230019', consumed: '125', country: 'South Korea', where: 'STS304', hasValue: '없음 (EU 기본값 사용)' } },
+  ],
+}));
+const cnData = cnRun.store.data;
+assert.deepEqual(plain(cnData.products.map((product) => [product.name, product.cn_code]).sort()), [
+  ['SCM435·SWCH35K · CN 73181582', '73181582'], ['SCM435 · CN 73181582 (비수출)', '73181582'], ['SWCH18A · CN 73181499', '73181499'], ['SWCH18A · CN 73181575', '73181575'], ['STS304 · CN 73181535', '73181535'],
+].sort(), '같은 CN(73181582)은 재질이 SCM435·SWCH35K로 달라도 수출분 한 제품 — 「SCM 435」는 같은 재질로 봄');
+assert.deepEqual(plain(cnData.processes.map((process) => [process.name, process.output_mass_t]).sort()), [['SCM435·SWCH35K 공정', 10700], ['SWCH18A 공정', 900], ['STS304 공정', 120]].sort(), '같은 CN은 한 공정, 같은 재질(SWCH18A)을 쓰는 두 CN은 한 다기능 공정, 다른 재질(STS)은 따로');
+assert.equal(cnData.precursors.length, 4, '「쓰는 공정」에 재질 하나(SCM435, SWCH35K)만 적어도 그 재질이 든 묶음 공정으로 간다');
+const cnGas = cnData.source_streams.find((stream) => stream.name.includes('열처리로'));
+assert.equal(cnData.processes.find((process) => process.id === cnGas.process_id).name, 'SCM435·SWCH35K 공정', '여러 재질을 묶은 한 공정에 연료가 붙는다(; 로 이은 두 재질이 같은 공정을 가리킴)');
+const cnIssues = I.describeActivityImportIssues(cnRun.result.issues);
+assert.match(cnIssues, /「SCM435」, 「SCM 435」은\(는\) 같은 재질로 보았습니다/, '재질 표기 차이(띄어쓰기)는 같은 것으로 보고 알린다');
+assert.match(cnIssues, /같은 재질을 쓰는 CN은 한 공정으로 묶었습니다/);
+assert.ok(!/V02|같은 재화\(CN/.test(cnIssues) && !resultsOf(cnRun.store).some((item) => item.warnings.some((warning) => /생산공정 \d+개로 나누어/.test(warning))), '재질이 다른 같은 CN을 한 공정으로 만들어 V02·V03 경고가 나오지 않는다');
+const cnParams = Object.fromEntries(cnRun.store.report.sector_parameters.map((item) => [item.param_key + '|' + item.product_name, item.value]));
+const mixedParams = cnRun.store.report.sector_parameters.filter((item) => item.param_key === 'alloy_mn_cr_ni');
+assert.ok(mixedParams.some((item) => Math.abs(Number(item.value) - (1.4 * 4400 + 0.75 * 4000 + 1.4 * 300) / 8700) < 1e-3), '한 제품 안 재질이 다르면 부문특정 파라미터는 생산량 가중평균(가이던스 No.3 4.9.1)이고, 값이 없는 줄(SCM 435)은 같은 재질의 값을 물려받는다');
+assert.ok(mixedParams.some((item) => Number(item.value) === 0.75), '같은 재질(SWCH18A)의 다른 CN(탭타이트)에도 첫 줄의 값이 물려진다');
+void cnParams;
+assert.ok(!/CN 코드가 d+종/.test(cnIssues), '한 CN의 수출분·비수출분은 한 제품이다 — 「제품 2개」라며 섞임을 경고하지 않는다');
+const oldNameRun = await importOf(withParts([{ part: 'EB-1', cn: '73181582', grade: 'SCM435', mass: '100' }, { part: 'CB-1', cn: '73181582', grade: 'SWCH35K', mass: '50' }], { precursors: [
+  { row: 5, values: { name: 'SCM435 와이어', cn: '72299090', consumed: '100', country: 'South Korea', where: 'SCM435 공정', hasValue: '없음 (EU 기본값 사용)' } },
+  { row: 6, values: { name: 'SWCH35K 와이어', cn: '72171050', consumed: '50', country: 'South Korea', where: 'SWCH35K 공정', hasValue: '없음 (EU 기본값 사용)' } },
+] }));
+assert.equal(oldNameRun.result.created.precursors, 2, '예전 판이 짓던 「SCM435 공정」·「SWCH35K 공정」이라는 이름도 묶음 공정을 가리킨다(이미 채워 둔 파일이 깨지지 않는다)');
 
 console.log('Activity workbook v2 verified (서식 모양·선택 목록 · 빈 서식 0건 · 작성 예시 = 기준선 3.764/5.112 · 공용 나누기·배출원 합계·생산라인 · 원료의 쓰는 제품·연료의 쓰는 공정 여럿·섞임 경고 · 「확인할 것」 · 종전 서식 유지).');

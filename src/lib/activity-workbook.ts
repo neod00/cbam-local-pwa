@@ -261,12 +261,12 @@ export const PART_COLUMNS: ActivityField[] = [
     { key: 'part', label: '품번', required: true, text: true, width: 18, hint: '사내 품번·도면번호. 앱은 이 값으로 합산만 하고 EU 문서에는 싣지 않습니다', example: `${EXAMPLE_PREFIX} HB-1001` },
     { key: 'pname', label: '품명', width: 26, hint: '알아볼 수 있게(선택)', example: '고강도 볼트 M10' },
     { key: 'cn', label: 'CN 코드 (8자리)', required: true, text: true, width: 16, hint: '수출신고필증·인보이스의 HS 코드 앞 8자리. 같은 CN끼리 한 제품으로 합쳐집니다', example: '73181582' },
-    { key: 'grade', label: '재질·강종', width: 20, hint: '같은 원료(선재)로 만드는 것은 같은 이름으로. 예: SCM435, SWCH, STS304. 다르면 다른 제품·다른 공정으로 갈라집니다', example: 'SCM435' },
+    { key: 'grade', label: '재질·강종', width: 20, hint: '쓰는 선재의 재질·강종. 예: SCM435, SWCH18A, STS304. 같은 CN이면 재질이 달라도 한 제품·한 공정으로 합쳐 가중평균이 됩니다(규정 제4조). 같은 재질을 쓰는 CN끼리도 한 공정이 됩니다', example: 'SCM435' },
     { key: 'mass', label: '연간 생산량 (t)', width: 18, hint: '보고기간 합계(합격품). 톤으로 모르면 아래 수량·단중을 적으세요', example: 120 },
     { key: 'qty', label: '연간 생산 수량 (개)', width: 20, hint: '생산량(t)을 모를 때만. 단중과 곱해 톤으로 바꿉니다', example: '' },
     { key: 'unitWeight', label: '단중 (g/개)', width: 14, hint: '수량으로 적을 때만. 개당 무게(g)', example: '' },
     { key: 'exported', label: 'EU로 수출하나요?', list: 'yesNo', width: 18, hint: '비우면 「예」. 「아니오」면 신고 대상이 아니고 같이 쓴 연료·전력의 몫만 나눠 갖습니다', example: YES },
-    { key: 'process', label: '거치는 공정', width: 24, hint: '비우면 재질별로 한 공정(원료가 같은 제품끼리 한 공정이 규정입니다). 열처리를 하는 것과 안 하는 것처럼 공정이 다르면 이름을 달리 적으세요', example: '' },
+    { key: 'process', label: '거치는 공정', width: 24, hint: '비워 두세요. 같은 CN은 열처리 유무처럼 만드는 경로가 달라도 한 공정이 규정입니다(제4조 6항) — 앱이 CN과 재질로 알아서 묶습니다. 정말 따로 두어야 할 때만 공정 이름을 적으세요', example: '' },
     { key: 'scrap', label: '불량·스크랩 (t)', width: 16, hint: '이 품번에서 나온 불량·절단 스크랩(있으면). 생산량에 넣지 마세요', example: '' },
     { key: 'alloy_mn_cr_ni', label: '합금원소 합계 (%)', width: 18, hint: '재질별로 같으면 그 재질의 한 줄에만 적어도 됩니다', example: '' },
     { key: 'reducing_agent', label: '원료의 주 환원제 (알면)', width: 22, hint: '재질별로 같으면 그 재질의 첫 줄에만 적어도 됩니다', example: '' },
@@ -330,7 +330,7 @@ export const EVIDENCE_COLUMNS: ActivityField[] = [
 
 const TABLE_SHEETS = [
     { name: SHEET_PRODUCTS, title: '2. 제품 — 이 공장에서 만드는 제품을 한 줄에 하나씩', columns: PRODUCT_COLUMNS },
-    { name: SHEET_PARTS, title: '2b. 품번 목록(선택) — 품번이 많으면 생산실적을 붙여 넣으세요. 앱이 CN 코드·재질별로 합쳐 제품(2_제품)과 공정(3_공정)을 만듭니다. 공정 이름은 「재질 + 공정」(예: SCM435 공정)이 되며, 4_연료·5_구매강재의 「쓰는 공정」에는 재질만 적어도 됩니다. 2_제품·3_공정에 이미 적었다면 비워 두세요', columns: PART_COLUMNS },
+    { name: SHEET_PARTS, title: '2b. 품번 목록(선택) — 품번이 많으면 생산실적을 붙여 넣으세요. 앱이 CN 코드별로 합쳐 제품(2_제품)과 공정(3_공정)을 만듭니다 — 같은 CN은 재질이 달라도 한 제품·한 공정입니다. 공정 이름은 쓴 재질로 지어지고(예: SCM435 공정), 4_연료·5_구매강재의 「쓰는 공정」에는 재질만 적어도 됩니다. 2_제품·3_공정에 이미 적었다면 비워 두세요', columns: PART_COLUMNS },
     { name: SHEET_PROCESSES, title: '3. 공정 — 제품을 만드는 생산 라인과 생산량', columns: PROCESS_COLUMNS },
     { name: SHEET_FUELS, title: '4. 연료 — 공장에서 태우는 연료(가스·경유·등유 등). 전기는 1_사업장에. 도금·절단·용접·마무리 설비 전용 연료는 적지 않습니다', columns: FUEL_COLUMNS },
     { name: SHEET_PRECURSORS, title: '5. 구매 강재 — 사 와서 가공하는 철강 원료와 그 원료의 배출량', columns: PRECURSOR_COLUMNS },
@@ -589,7 +589,7 @@ function guideSheet(): SheetSpec {
         ['3_공정 — 제품을 만드는 라인과 생산량', STYLE.wrap],
         ['4_연료 — 가스·경유·등유 등 공장에서 태우는 연료', STYLE.wrap],
         ['5_구매강재 — 사 와서 가공하는 철강 원료와 공급사가 준 배출량 값', STYLE.wrap],
-        ['2b_품번목록(선택) — 품번이 많으면 생산실적을 붙여 넣습니다. 앱이 CN 코드·재질별로 합쳐 제품과 공정을 만듭니다', STYLE.wrap],
+        ['2b_품번목록(선택) — 품번이 많으면 생산실적을 붙여 넣습니다. 앱이 CN 코드별로 합쳐 제품과 공정을 만듭니다', STYLE.wrap],
         ['8_사온열 · 9_보일러열 · 10_공정배출 · 11_사내이송 — 해당하는 업체만 적습니다(아래 「이 서식이 받는 것」 참고)', STYLE.wrap],
         ['6_역할책임 · 7_증빙목록 — 자료를 누가 다루고 어디에 보관하는지(아는 만큼만. 산정보고서에 실립니다)', STYLE.wrap],
         ['', STYLE.plain],
@@ -604,7 +604,8 @@ function guideSheet(): SheetSpec {
         ['자주 헷갈리는 것', STYLE.section],
         [`· 한 고지서·전표의 연료를 여러 공정이 같이 쓰면 줄을 나누지 말고 공장 전체 값을 한 줄로 적고, 「쓰는 공정」에 「${SHARED_PROCESS_LABEL}」을 고르세요. 앱이 생산량 비율로 나눕니다.`, STYLE.wrap],
         ['· 전기도 같습니다. 공정별 계량기가 없으면 1_사업장에 공장 전체 값만 적으세요.', STYLE.wrap],
-        ['· 제품은 품번이 아니라 CN 코드별로 묶어 적습니다(같은 CN이면 크기·모양이 달라도 한 줄). 강종이 다르면 줄을 나누세요.', STYLE.wrap],
+        ['· 제품은 품번이 아니라 CN 코드별로 묶어 적습니다. 같은 CN이면 크기·모양·강종이 달라도 한 줄입니다(규정 제4조 2항: 같은 CN의 톤이 기능단위). 강종이 섞이면 원료 이름을 그대로 적고 원료마다 쓴 양을 적으면 앱이 가중평균합니다.', STYLE.wrap],
+        ['· 같은 CN은 만드는 경로(열처리 유무 등)가 달라도 한 공정입니다(제4조 6항). 서로 다른 CN이라도 크기·모양만 다르고 같은 원료면 한 공정으로 묶어야 합니다(부속서 II A.4).', STYLE.wrap],
         ['· 공정은 「같은 원료로 만드는 제품끼리」 묶습니다. 합금강 볼트와 탄소강 너트처럼 원료가 다른 제품을 한 공정에 적었다면, 5_구매강재의 「쓰는 제품」에 어느 제품의 원료인지 적어야 합니다 — 안 적으면 원료 배출이 모든 제품에 섞입니다.', STYLE.wrap],
         ['· 열처리로·가열로처럼 일부 제품만 거치는 설비의 연료는 「공장 전체(공용)」가 아니라 그 공정 이름을 적습니다(여러 공정이면 ; 로 이어서).', STYLE.wrap],
         ['· 도금(전기도금)·절단·태핑·용접·선별·포장 같은 마무리 설비 전용 연료는 적지 않습니다 — 규정이 철강 제품의 배출에서 빼는 공정입니다. 단조·열처리·소둔·산세·신선·코팅·용융아연도금의 연료는 적습니다. 열처리나 코팅을 다른 회사에 맡긴다면 알려 주세요(그 회사의 배출 자료가 필요할 수 있습니다).', STYLE.wrap],
@@ -800,6 +801,10 @@ export interface PartListExpansion {
     origin: Map<number, number>;
     problems: Array<{ row: number; message: string }>;
     summary?: string;
+    /** 재질 이름(적힌 모양) → 그 재질이 들어간 공정 이름 — 「쓰는 공정」에 재질만 적어도 찾게 한다. 한 공정에만 있는 재질만. */
+    aliases: Array<[string, string]>;
+    /** 알려 줄 참고(재질 표기 차이를 같은 것으로 본 것 등) */
+    notes: string[];
 }
 
 const partNumber = (value: string | undefined) => {
@@ -807,19 +812,26 @@ const partNumber = (value: string | undefined) => {
     return (value ?? '').trim() !== '' && Number.isFinite(parsed) ? parsed : undefined;
 };
 
+/** 재질 이름을 같은 것으로 보는 키 — 띄어쓰기·하이픈·밑줄·대소문자 차이를 무시한다(SCM 435 = SCM435 = scm-435). */
+const gradeKey = (value: string) => value.replace(/[\s\-_./]+/g, '').toLowerCase();
+const PART_PARAM_FIELDS = ['alloy_mn_cr_ni', 'reducing_agent', 'scrap_per_t', 'preconsumer_scrap_pct'] as const;
+const PART_NUMERIC_PARAMS = new Set<string>(['alloy_mn_cr_ni', 'scrap_per_t', 'preconsumer_scrap_pct']);
+
 /**
  * 품번 목록을 제품 줄·공정 줄로 합친다.
- *  · 제품 = 같은 CN 코드 + 같은 재질 + 같은 수출 여부 — 규정의 기능단위는 CN 코드별 톤(2025/2547 제4조 2항)이고, 원료(재질)가 다르면 따로 둔다.
- *  · 공정 = 「거치는 공정」 이름, 비우면 「<재질> 공정」 — 원료가 같은 제품끼리 한 공정(부속서 II A.4 · 가이던스 No.3 4.3.1).
+ *  · 제품 = 같은 CN 코드 + 같은 수출 여부. 재질이 달라도 같은 CN이면 한 제품이다 — 규정의 기능단위는 CN 코드별 톤이다(2025/2547 제4조 2항).
+ *  · 공정 = 「거치는 공정」 이름. 비우면 CN과 재질을 잇는 그물의 한 덩어리가 한 공정이다:
+ *      같은 CN은 한 공정(제4조 1·6항, 가이던스 No.3 4.1.1), 같은 재질을 쓰는 CN은 한 다기능 공정(부속서 II A.4 · 가이던스 No.3 4.3.1).
+ *      재질이 아주 다른 CN(예: 탄소강 볼트와 STS 볼트)은 이어지지 않아 따로 선다.
+ *  · 부문 파라미터는 한 CN 안에서 생산량 가중평균(가이던스 No.3 4.9.1: 같은 CN의 연평균) — 같은 재질의 다른 줄에 적힌 값을 물려받는다.
  *  · 양은 합산만 한다. 품번 자체는 산정에 쓰이지 않는다.
  */
 export function expandPartList(rows: ActivityRow[]): PartListExpansion {
     const problems: PartListExpansion['problems'] = [];
     const origin = new Map<number, number>();
-    type ProductAcc = { name: string; cn: string; exported: string; params: Record<string, string>; firstRow: number; parts: number };
-    const products = new Map<string, ProductAcc>();
-    const processes = new Map<string, { name: string; product: string; mass: number; scrap: number; firstRow: number }>();
-    const processOrder: string[] = [];
+    type Part = { row: number; cn: string; grade: string; gradeKey: string; exported: boolean; process: string; mass: number; scrap: number; params: Record<string, string> };
+    const parts: Part[] = [];
+    const spellings = new Map<string, string[]>(); // 재질 키 → 적힌 모양들(처음 것이 대표)
     for (const row of rows) {
         const v = row.values;
         const partLabel = (v.part ?? '').trim() || '(품번 없음)';
@@ -834,44 +846,124 @@ export function expandPartList(rows: ActivityRow[]): PartListExpansion {
         if (!(mass !== undefined && mass > 0)) { problems.push({ row: row.row, message: `품번 ${partLabel}: 연간 생산량(t) 또는 수량×단중을 0보다 큰 숫자로 적어 주세요.` }); continue; }
         const scrap = partNumber(v.scrap) ?? 0;
         if (scrap < 0) { problems.push({ row: row.row, message: `품번 ${partLabel}: 불량·스크랩은 0 이상이어야 합니다.` }); continue; }
-        const grade = (v.grade ?? '').trim() || '재질 미기재';
-        const notExported = ['아니오', '아니요', 'n', 'no'].includes((v.exported ?? '').trim().toLowerCase());
-        const productName = `${grade} · CN ${cn}${notExported ? ' (비수출)' : ''}`;
-        const productKey = productName.toLowerCase();
-        const existing = products.get(productKey);
+        const written = (v.grade ?? '').trim();
+        const grade = written || '재질 미기재';
+        const gKey = gradeKey(grade);
+        const seen = spellings.get(gKey) ?? [];
+        if (!seen.includes(grade)) spellings.set(gKey, [...seen, grade]);
         const params: Record<string, string> = {};
-        for (const field of ['alloy_mn_cr_ni', 'reducing_agent', 'scrap_per_t', 'preconsumer_scrap_pct']) {
+        for (const field of PART_PARAM_FIELDS) {
             const value = (v[field] ?? '').trim();
             if (value) params[field] = value;
         }
-        if (existing) {
-            for (const [field, value] of Object.entries(params)) existing.params[field] ??= value;
-            existing.parts += 1;
-        } else {
-            products.set(productKey, { name: productName, cn, exported: notExported ? '아니오' : '예', params, firstRow: row.row, parts: 1 });
-        }
-        const processName = (v.process ?? '').trim() || `${grade} 공정`;
-        const processKey = `${processName.toLowerCase()}|${productKey}`;
-        const acc = processes.get(processKey);
-        if (acc) { acc.mass += mass; acc.scrap += scrap; } else { processes.set(processKey, { name: processName, product: productName, mass, scrap, firstRow: row.row }); processOrder.push(processKey); }
+        const notExported = ['아니오', '아니요', 'n', 'no'].includes((v.exported ?? '').trim().toLowerCase());
+        parts.push({ row: row.row, cn, grade, gradeKey: gKey, exported: !notExported, process: (v.process ?? '').trim(), mass, scrap, params });
     }
+    const displayGrade = (part: Part) => spellings.get(part.gradeKey)![0];
+
+    // 공정 덩어리: 「거치는 공정」을 적지 않은 줄의 CN과 재질을 잇는다.
+    const parent = new Map<string, string>();
+    const find = (node: string): string => { let current = node; while ((parent.get(current) ?? current) !== current) current = parent.get(current)!; return current; };
+    const union = (a: string, b: string) => { parent.set(find(a), find(b)); };
+    for (const part of parts) {
+        if (part.process) continue;
+        parent.set(`cn:${part.cn}`, parent.get(`cn:${part.cn}`) ?? `cn:${part.cn}`);
+        parent.set(`g:${part.gradeKey}`, parent.get(`g:${part.gradeKey}`) ?? `g:${part.gradeKey}`);
+        union(`cn:${part.cn}`, `g:${part.gradeKey}`);
+    }
+    const componentGrades = new Map<string, string[]>();
+    for (const part of parts) {
+        if (part.process) continue;
+        const root = find(`cn:${part.cn}`);
+        const list = componentGrades.get(root) ?? [];
+        if (!list.includes(displayGrade(part))) list.push(displayGrade(part));
+        componentGrades.set(root, list);
+    }
+    const processNameOf = (part: Part) => part.process || `${componentGrades.get(find(`cn:${part.cn}`))!.join('·')} 공정`;
+
+    // 제품: CN + 수출 여부
+    type ProductAcc = { cn: string; exported: boolean; grades: string[]; firstRow: number; parts: Part[] };
+    const products = new Map<string, ProductAcc>();
+    for (const part of parts) {
+        const productKey = `${part.cn}|${part.exported ? 1 : 0}`;
+        const acc = products.get(productKey) ?? { cn: part.cn, exported: part.exported, grades: [], firstRow: part.row, parts: [] };
+        if (!acc.grades.includes(displayGrade(part))) acc.grades.push(displayGrade(part));
+        acc.parts.push(part);
+        products.set(productKey, acc);
+    }
+    const productNameOf = (acc: ProductAcc) => `${acc.grades.join('·')} · CN ${acc.cn}${acc.exported ? '' : ' (비수출)'}`;
+
+    // 부문 파라미터: 같은 재질의 다른 줄 값을 물려받고(재질의 첫 값), 한 제품 안에서는 생산량 가중평균
+    const gradeParams = new Map<string, Record<string, string>>();
+    for (const part of parts) {
+        const known = gradeParams.get(part.gradeKey) ?? {};
+        for (const [field, value] of Object.entries(part.params)) known[field] ??= value;
+        gradeParams.set(part.gradeKey, known);
+    }
+    const productParams = (acc: ProductAcc) => {
+        const result: Record<string, string> = {};
+        for (const field of PART_PARAM_FIELDS) {
+            const samples = acc.parts.map((part) => ({ value: part.params[field] ?? (acc.exported ? gradeParams.get(part.gradeKey)?.[field] : undefined), mass: part.mass })).filter((item): item is { value: string; mass: number } => Boolean(item.value));
+            if (samples.length === 0) continue;
+            const numbers = samples.map((item) => ({ value: partNumber(item.value), mass: item.mass }));
+            if (PART_NUMERIC_PARAMS.has(field) && numbers.every((item) => item.value !== undefined)) {
+                const total = numbers.reduce((sum, item) => sum + item.mass, 0);
+                result[field] = String(Math.round(numbers.reduce((sum, item) => sum + item.value! * item.mass, 0) / total * 1e6) / 1e6);
+            } else {
+                result[field] = Array.from(new Set(samples.map((item) => item.value))).join(' / ');
+            }
+        }
+        return result;
+    };
+
     const productRows: ActivityRow[] = [];
-    Array.from(products.values()).forEach((item, index) => {
+    const productNameByKey = new Map<string, string>();
+    Array.from(products.entries()).forEach(([productKey, acc], index) => {
         const rowNumber = PART_ROW_BASE + index;
-        origin.set(rowNumber, item.firstRow);
-        productRows.push({ row: rowNumber, values: { name: item.name, cn: item.cn, exported: item.exported, ...item.params } });
+        const name = productNameOf(acc);
+        productNameByKey.set(productKey, name);
+        origin.set(rowNumber, acc.firstRow);
+        productRows.push({ row: rowNumber, values: { name, cn: acc.cn, exported: acc.exported ? '예' : '아니오', ...productParams(acc) } });
     });
-    const processRows: ActivityRow[] = processOrder.map((processKey, index) => {
-        const item = processes.get(processKey)!;
+    const processes = new Map<string, { name: string; product: string; mass: number; scrap: number; firstRow: number }>();
+    for (const part of parts) {
+        const name = processNameOf(part);
+        const productName = productNameByKey.get(`${part.cn}|${part.exported ? 1 : 0}`)!;
+        const processKey = `${name.toLowerCase()}|${productName.toLowerCase()}`;
+        const acc = processes.get(processKey);
+        if (acc) { acc.mass += part.mass; acc.scrap += part.scrap; } else processes.set(processKey, { name, product: productName, mass: part.mass, scrap: part.scrap, firstRow: part.row });
+    }
+    const processRows: ActivityRow[] = Array.from(processes.values()).map((item, index) => {
         const rowNumber = PART_ROW_BASE + 500 + index;
         origin.set(rowNumber, item.firstRow);
         return { row: rowNumber, values: { name: item.name, product: item.product, mass: String(Math.round(item.mass * 1e6) / 1e6), scrap: item.scrap > 0 ? String(Math.round(item.scrap * 1e6) / 1e6) : '' } };
     });
+
+    // 재질 이름으로 공정을 가리킬 수 있게 한다(4_연료·5_구매강재의 「쓰는 공정」) — 그 재질이 한 공정에만 있을 때만.
+    const gradeProcesses = new Map<string, Set<string>>();
+    for (const part of parts) {
+        if (part.process) continue;
+        const set = gradeProcesses.get(part.gradeKey) ?? new Set<string>();
+        set.add(processNameOf(part));
+        gradeProcesses.set(part.gradeKey, set);
+    }
+    const aliases: Array<[string, string]> = [];
+    for (const [gKey, names] of gradeProcesses) {
+        if (names.size !== 1) continue;
+        for (const spelling of spellings.get(gKey) ?? []) aliases.push([spelling, [...names][0]], [`${spelling} 공정`, [...names][0]]); // 「SCM435 공정」(예전 판이 짓던 이름)도 같은 곳을 가리킨다
+    }
+
+    const notes: string[] = [];
+    const variants = Array.from(spellings.values()).filter((list) => list.length > 1);
+    for (const list of variants) notes.push(`재질 「${list.join('」, 「')}」은(는) 같은 재질로 보았습니다(띄어쓰기·하이픈 차이). 다른 재질이면 이름을 다르게 적어 주세요.`);
+    const merged = Array.from(componentGrades.values()).filter((grades) => grades.length > 1);
     const used = rows.length - problems.length;
-    const summary = rows.length > 0
-        ? `품번 ${used}개를 CN 코드·재질별로 합쳐 제품 ${productRows.length}개, 공정 ${new Set(processRows.map((row) => row.values.name.toLowerCase())).size}개로 만들었습니다.`
+    const processCount = new Set(processRows.map((row) => row.values.name.toLowerCase())).size;
+    let summary = rows.length > 0
+        ? `품번 ${used}개를 CN 코드별로 합쳐 제품 ${productRows.length}개, 공정 ${processCount}개로 만들었습니다(같은 CN은 재질이 달라도 한 제품·한 공정 — 2025/2547 제4조 2·6항).`
         : undefined;
-    return { products: productRows, processes: processRows, origin, problems, summary };
+    if (summary && merged.length > 0) summary += ` 같은 재질을 쓰는 CN은 한 공정으로 묶었습니다(${merged.map((grades) => `「${grades.join('·')} 공정」`).join(', ')} — 부속서 II A.4, 가이던스 No.3 4.3.1).`;
+    return { products: productRows, processes: processRows, origin, problems, summary, aliases, notes };
 }
 
 export function isActivityWorkbookV2(sheetNames: string[]): boolean {
