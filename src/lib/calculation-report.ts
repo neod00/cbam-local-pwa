@@ -1350,6 +1350,9 @@ function precursorSection(input: CalculationReportInput) {
         const vintageMismatch = isVintageMismatch(vintage, period);
         const detail: Array<[string, string]> = [
             ['공급사 / 원산지', `${precursor.supplier_installation || '-'} / ${precursor.supplier_country || PLACEHOLDER}`],
+            // 부속서 IV 항목 28 — 원산 운영자·사업장·식별자. 모르면 「미기재」로 남겨 검증인이 공급사에 확인하게 한다.
+            ['공급사 운영자(법인)', precursor.supplier_operator_name?.trim() || '미기재 — 공급사에 확인'],
+            ['공급사 CBAM Registry 식별자', precursor.supplier_registry_id?.trim() || '미기재 — 공급사에 확인'],
             ['데이터 구분', precursor.data_mode === 'DEFAULT' ? '기본값 (Default)' : precursor.data_mode === 'SEMI_ACTUAL' ? '혼합 (Measured + Default)' : '실측 (Measured)'],
             ['자료 대상기간 (vintage)', !vintage
                 ? '확인 필요(자료)'

@@ -462,6 +462,14 @@ for (const key of hostKeys(payload)) {
   assert.deepEqual(host(updated[key] ?? null), host(payload[key] ?? null), `수정이 ${key}에 공유 매핑을 적용하지 않는다`);
 }
 
+// ── [run35 항목 28] 공급사 운영자·Registry 식별자: 이 칸을 모르는 화면(질문 화면 등)이 저장된 값을 지우지 않는다 ──
+const withIdentity = { ...existingPrecursor, supplier_operator_name: '○○제철(주)', supplier_registry_id: 'KR-INST-0042' };
+const noField = G.buildPrecursorUpdate(withIdentity, precursorDraft);
+assert.deepEqual(host([noField.supplier_operator_name, noField.supplier_registry_id]), ['○○제철(주)', 'KR-INST-0042'], '초안이 이 칸을 말하지 않으면(undefined) 저장된 값을 그대로 둔다');
+const setField = G.buildPrecursorUpdate(withIdentity, { ...precursorDraft, supplierOperator: ' △△스틸 ', supplierRegistryId: '' });
+assert.deepEqual(host([setField.supplier_operator_name, setField.supplier_registry_id ?? null]), ['△△스틸', null], '이 칸을 다루는 화면은 값을 바꾸고 빈 칸으로 비울 수 있다');
+assert.deepEqual(host([G.buildPrecursorCreate(precursorDraft, link).supplier_operator_name ?? null]), [null], '모르는 채로 만들면 비어 있다');
+
 // ── [링크 보존] 수정은 전구물질을 다른 제품·공정으로 옮기지 않는다 ──
 // 이 패널에는 제품·기간 선택 칸이 없다. 상세 입력에서 부제품에 붙여둔 전구물질이
 // 이름 한 글자 고쳤다고 공정의 대표 제품으로 옮겨가면, EU goods category 매핑이 바뀐다

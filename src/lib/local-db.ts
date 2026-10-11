@@ -427,6 +427,12 @@ export interface PurchasedPrecursor extends LocalEntity {
   production_route: string;
   supplier_country: string;
   supplier_installation: string;
+  /**
+   * 원료를 만든 공급사의 운영자(법인)명과 CBAM Registry 식별자 — 부속서 IV 항목 28(전구물질 원산 운영자·사업장·식별자).
+   * EU Communication 엑셀 템플릿에는 이 칸이 없어 문서에는 나가지 않고, 산정보고서(검증인용)에 실린다. 선택 입력.
+   */
+  supplier_operator_name?: string;
+  supplier_registry_id?: string;
   supplier_reporting_period?: string;
   data_mode: "ACTUAL" | "SEMI_ACTUAL" | "DEFAULT";
   verification_status: "UNVERIFIED" | "SUPPLIER_CONFIRMED" | "VERIFIED";

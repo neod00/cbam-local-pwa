@@ -1802,6 +1802,8 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
     ]);
     const [detailOpen, setDetailOpen] = useState(false);
     const [supplierInstallation, setSupplierInstallation] = useState('');
+    const [supplierOperator, setSupplierOperator] = useState('');
+    const [supplierRegistryId, setSupplierRegistryId] = useState('');
     const [supplierRoute, setSupplierRoute] = useState('');
     const [supplierPeriod, setSupplierPeriod] = useState('');
     // 공급국가 — 기본값 조회·EU 문서 국가코드의 열쇠. 앱이 대신 정하지 않는다(빈 값으로 시작).
@@ -2032,6 +2034,8 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         setMixRows([{ supplier: '', mass: '', direct: '', indirect: '' }, { supplier: '', mass: '', direct: '', indirect: '' }]);
         setDetailOpen(false);
         setSupplierInstallation('');
+        setSupplierOperator('');
+        setSupplierRegistryId('');
         setSupplierRoute('');
         setSupplierPeriod('');
         setSupplierCountry('');
@@ -2060,10 +2064,12 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         setDataMode(precursor.data_mode);
         setJustification(precursor.default_value_justification);
         setSupplierInstallation(precursor.supplier_installation);
+        setSupplierOperator(precursor.supplier_operator_name ?? '');
+        setSupplierRegistryId(precursor.supplier_registry_id ?? '');
         setSupplierRoute(precursor.production_route);
         setSupplierPeriod(precursor.supplier_reporting_period ?? '');
         setSupplierCountry(precursor.supplier_country ?? '');
-        setDetailOpen(Boolean(precursor.supplier_installation || precursor.production_route || precursor.supplier_reporting_period));
+        setDetailOpen(Boolean(precursor.supplier_installation || precursor.supplier_operator_name || precursor.supplier_registry_id || precursor.production_route || precursor.supplier_reporting_period));
         const allocations = precursor.output_allocations ?? [];
         if (allocations.length > 0) {
             const masses: Record<string, string> = {};
@@ -2107,6 +2113,8 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
             dataMode,
             justification,
             supplierInstallation,
+            supplierOperator,
+            supplierRegistryId,
             supplierRoute,
             supplierPeriod,
             supplierCountry,
@@ -2563,8 +2571,14 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
                             <p className="text-xs leading-5 text-slate-500">
                                 제3자 검증·수입자 통신 단계에서 EU는 전구물질을 공급사(설비)별로 상세히 요구합니다. 초기 산정엔 선택이지만 채워두면 추적성이 강해집니다.
                             </p>
-                            <Field label="공급사 설비명·식별정보">
+                            <Field label="공급사 설비명(사업장)">
                                 <input className={fieldClass} value={supplierInstallation} onChange={(event) => setSupplierInstallation(event.target.value)} placeholder="예: OO제철 △△공장" />
+                            </Field>
+                            <Field label="공급사 운영자(법인)명" hint="공장을 운영하는 회사. 설비명과 다를 수 있습니다. 공급사 회신·CBAM 데이터 시트에 적혀 있습니다.">
+                                <input className={fieldClass} value={supplierOperator} onChange={(event) => setSupplierOperator(event.target.value)} placeholder="예: OO제철(주)" data-testid="precursor-supplier-operator" />
+                            </Field>
+                            <Field label="공급사 CBAM Registry 식별자" hint="EU CBAM 등록부에 공급사 설비가 등록되어 있으면 그 번호. 모르면 비워 두세요 — 산정보고서에는 「미기재」로 나갑니다(EU 엑셀에는 이 칸이 없습니다).">
+                                <input className={fieldClass} value={supplierRegistryId} onChange={(event) => setSupplierRegistryId(event.target.value)} placeholder="공급사에 확인" data-testid="precursor-supplier-registry" />
                             </Field>
                             <Field label="공급사 생산경로">
                                 <input className={fieldClass} value={supplierRoute} onChange={(event) => setSupplierRoute(event.target.value)} placeholder="예: BF-BOF / EAF / (C)" />

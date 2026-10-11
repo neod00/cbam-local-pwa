@@ -271,6 +271,8 @@ export const PRECURSOR_COLUMNS: ActivityField[] = [
     { key: 'defaultYear', label: '기본값 연도', list: 'defaultYear', width: 16, hint: '「없음(EU 기본값)」일 때 어느 연도의 기본값을 쓸지. 비우면 2026. 2027·2028년 이후는 EU가 정한 할증이 달라집니다', example: '' },
     { key: 'sefa', label: '공급사 SEFA (tCO₂e/t)', width: 20, hint: '공급사가 검증받은 무상할당 조정값(SEFA)을 줬을 때만. 인증서 비용 시나리오에서 기본 벤치마크 대신 쓰이며 「제3자 검증 완료」일 때만 반영됩니다. SEE와 다른 값입니다', example: '' },
     { key: 'sefaSource', label: 'SEFA 근거 문서', width: 28, hint: '예: 검증보고서 번호·발행일', example: '' },
+    { key: 'supplierOperator', label: '공급사 운영자(법인)명', width: 26, hint: '공장을 운영하는 회사. 위 「공급사·공장 이름」이 공장 이름이면 여기에는 회사 이름. 공급사 회신·데이터 시트에 있습니다', example: '' },
+    { key: 'supplierRegistry', label: '공급사 CBAM Registry 식별자', text: true, width: 26, hint: 'EU CBAM 등록부에 공급사 설비가 등록되어 있으면 그 번호. 모르면 비우세요(산정보고서에 「미기재」로 남습니다)', example: '' },
 ];
 
 /** 품번 목록 — 품번이 많은 업체가 생산실적을 그대로 붙여 넣는다. 앱이 CN 코드·재질별로 합쳐 제품·공정을 만든다. */
