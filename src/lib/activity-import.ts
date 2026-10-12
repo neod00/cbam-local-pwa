@@ -38,7 +38,7 @@ import {
 import { weightedAverageEf } from './electricity-ef-basis';
 import { describeCn, glossCn, shortCnText, strengthMpaFromText } from './cn-description';
 import { CN_MASTER } from './cn-master.generated';
-import { isImplausibleElectricityIntensity, sumReconciledSourceStreamEmissions } from './allocation-rules';
+import { isImplausibleElectricityIntensity, PRECURSOR_MIX_TOLERANCE, sumReconciledSourceStreamEmissions } from './allocation-rules';
 import { buildFuelStreamDraft, noImportedHeatDraft, type FuelAnswer } from './conversation-energy';
 import { buildPrecursorDraft, fillEuDefault } from './conversation-precursor';
 import { buildProcessCreation, PROCESS_PLACEHOLDER_EF, validateProcessAnswer, type ProcessAnswerDraft } from './conversation-process';
@@ -1258,6 +1258,16 @@ export async function importActivityWorkbook(
         };
         next.monitoring_plan = fill(current.monitoring_plan, { doc_no: text('monitoring_doc_no'), version: text('monitoring_version'), approved_at: parseWorkbookDate(text('monitoring_approved_at')) ?? text('monitoring_approved_at') });
         next.declaration = fill(current.declaration, { name: text('declaration_name'), position: text('declaration_position'), date: parseWorkbookDate(text('declaration_date')) ?? text('declaration_date') });
+        // 재질 구성이 다른 CN을 합칠지 나눌지 — 고를 것이 있었던 파일이면 고른 방식과 그때 보여 준 값을 남긴다(산정 보고서 제4장·모니터링 계획 4번).
+        if (expansion.choiceAvailable && fresh.size > 0) {
+            const shown = previewPartGrouping(data, deps.defaultValues);
+            next.process_grouping = {
+                choice: deps.partGrouping ?? 'MERGE',
+                chosen_at: new Date().toISOString(),
+                tolerance_pp: Math.round(PRECURSOR_MIX_TOLERANCE * 100),
+                groups: (shown?.rows ?? []).map((row) => ({ cns: row.cns, output_t: Math.round(row.outputT * 1e3) / 1e3, merged_see: Math.round(row.mergedSee * 1e6) / 1e6, split_see: Math.round(row.splitSee * 1e6) / 1e6, delta_pct: Math.round(row.deltaPct * 10) / 10 })),
+            };
+        }
         if (sectorRows.length > 0) next.sector_parameters = [...(current.sector_parameters ?? []), ...sectorRows];
         if (transpositionRows.length > 0) next.transpositions = [...(current.transpositions ?? []).filter((item) => !transpositionRows.some((row) => row.source_stream_id === item.source_stream_id)), ...transpositionRows];
         // 전력 계수의 출처(공표기관·문서·연도)는 공장 값이라 이번에 만든 공정 모두에 붙인다. 산정근거 유형은 5단계에서 고른 출처가 이어진다.
@@ -1299,7 +1309,6 @@ export async function importActivityWorkbook(
     return { created, issues: issues.map((issue, index) => ({ issue, index })).sort((a, b) => order[a.issue.level] - order[b.issue.level] || a.index - b.index).map((item) => item.issue) };
 }
 
-/** 「확인할 것」을 서식을 채운 사람에게 그대로 보낼 수 있는 글로 만든다. */
 /** EU 문서(Communication template)가 받는 생산공정의 수 */
 export const EU_PROCESS_LIMIT = 10;
 
@@ -1375,6 +1384,7 @@ export function previewPartGrouping(data: ActivityWorkbookData, defaultValues?: 
     return { rows, mergedProcessCount: new Set([...others, ...mergedInfo.keys()]).size, splitProcessCount, splitExceedsLimit: splitProcessCount > EU_PROCESS_LIMIT, unresolved };
 }
 
+/** 「확인할 것」을 서식을 채운 사람에게 그대로 보낼 수 있는 글로 만든다. */
 export function describeActivityImportIssues(issues: ActivityImportIssue[]): string {
     if (issues.length === 0) return '확인할 것이 없습니다.';
     return issues.map((issue) => `[${ISSUE_LEVEL_LABEL[issue.level]}] ${issue.sheet}${issue.row ? ` ${issue.row}번째 줄` : ''} — ${issue.message}`).join('\n');

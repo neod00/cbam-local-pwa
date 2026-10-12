@@ -373,7 +373,22 @@ export interface ReportDeclaration {
   date?: string;
 }
 
+/**
+ * 품번 목록에서 재질 구성(비율)이 다른 CN을 합칠지 나눌지 — 올릴 때 사용자가 고른 것과, 고를 때 보여 준 값.
+ * 규정은 둘 다 허용하므로(2025/2547 제4조 8항) 어느 쪽을 골랐고 왜 그런지가 보고서와 모니터링 계획에 남아야 한다.
+ */
+export interface ReportProcessGrouping {
+  choice: "MERGE" | "SPLIT";
+  chosen_at: string;
+  filename?: string;
+  /** 같은 구성으로 보는 재질 비율의 차(%p) — 앱의 기준이며 규정이 정한 값이 아니다 */
+  tolerance_pp: number;
+  /** 고를 때 보여 준 CN별 값(구매 강재가 싣는 직접 SEE, tCO₂e/t) */
+  groups: Array<{ cns: string[]; output_t: number; merged_see: number; split_see: number; delta_pct: number }>;
+}
+
 export interface ReportInputs {
+  process_grouping?: ReportProcessGrouping;
   monitoring_plan?: ReportMonitoringPlan;
   rnr?: ReportRnrRow[];
   carbon_price?: ReportCarbonPriceRow[];

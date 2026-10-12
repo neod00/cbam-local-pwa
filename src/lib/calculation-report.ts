@@ -6,7 +6,7 @@ import { getSectorParameters, SECTOR_PARAM_CITATION } from './sector-parameters'
 import { D43_EVIDENCE, ELECTRICITY_EF_BASIS_LABEL, ELECTRICITY_EF_CITATION, resolveElectricityEfBasis, weightedAverageEf } from './electricity-ef-basis';
 import { CN_MASTER_TEMPLATE_VERSION } from './cn-master.generated';
 import { isCbamReportingScope, getProductReportingScope } from './reporting-scope';
-import { ALLOCATION_RULES, DIRECT_EMISSIONS_INPUT_MODE_LABEL } from './allocation-rules';
+import { ALLOCATION_RULES, describeProcessGrouping, DIRECT_EMISSIONS_INPUT_MODE_LABEL } from './allocation-rules';
 import { SHARED_HEAT_RULE } from './measurable-heat';
 import { findDefaultValueReference, hasAmbiguousDefaultValueRoutes } from './reference-workbooks';
 import type { DefaultValueReferenceRow, ImportedDefaultValueReference } from './reference-workbooks';
@@ -841,6 +841,8 @@ function processSection(input: CalculationReportInput) {
         // 검증인이 「왜 All production routes냐」를 반드시 묻는다 — 규정 근거를 밝혀 그 여지를 없앤다.
         paragraph('생산경로가 「All production routes」인 것은 2025/2547 Art 4(6)에 따른다: 동일 기능단위(functional unit) 재화가 사업장 내 여러 생산경로로 생산되면 "a single production process shall be used encompassing all production routes"이며, 배출량은 전 경로의 가중평균이다(전례 7). 분모(총생산량)는 점 F에 따라 "the total mass of the goods leaving the production process"로, 판매되거나 다른 생산공정의 전구물질로 직접 쓰일 수 있는 재화만 포함한다.', 'Note'),
     ];
+
+    for (const text of describeProcessGrouping(input.reportInputs?.process_grouping)) body.push(paragraph(text));
 
     if (hasInternal) {
         body.push(paragraph(

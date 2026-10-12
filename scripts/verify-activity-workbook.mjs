@@ -703,9 +703,24 @@ assert.deepEqual(plain(preview.rows.map((row) => [row.cns.join(','), Math.round(
 ], '나누면 CN별 값, 합치면 가중평균 — 올린 뒤의 엔진 값과 같다');
 assert.equal(I.previewPartGrouping({ rnr: [], evidence: [], ...withParts([{ part: 'A', cn: '73181582', grade: 'SCM435', mass: '120' }, { part: 'B', cn: '73181699', grade: 'SCM435', mass: '80' }]) }, defaultValues), undefined, '재질 구성이 같으면 고를 것이 없다(A.4로 한 공정이 의무)');
 
+// 고른 방식은 보고서 입력(report:inputs)에 남고, 산정 보고서 제4장과 모니터링 계획 4번이 같은 글을 쓴다
+const A = load('src/lib/allocation-rules.ts');
+assert.deepEqual(plain([mergeRun.store.report.process_grouping.choice, mergeRun.store.report.process_grouping.tolerance_pp, mergeRun.store.report.process_grouping.groups.length]), ['MERGE', 5, 4], '합침을 골랐다는 사실과 그때 보여 준 CN별 값이 남는다');
+assert.deepEqual(plain(mergeRun.store.report.process_grouping.groups.map((group) => [group.cns.join(','), group.merged_see, group.split_see])), [['73181692', 1.5, 2.290909], ['73181660', 1.5, 1.083916], ['73181699', 1.5, 0.769231], ['73181595', 1.5, 1.818182]], '선택 시 보여 준 값');
+const mergeText = A.describeProcessGrouping(mergeRun.store.report.process_grouping).join(' ');
+assert.ok(mergeText.includes('한 다기능 생산공정으로 합쳐 질량(기능단위) 기준 가중평균으로 산정했다 — 2025/2547 제4조 8항, 부속서 III A.2'), '합침을 골랐다고 쓰고 근거 조항을 댄다');
+assert.ok(mergeText.includes('합친 값 대비 -48.7% ~ +52.7% 달라졌다'), '선택 시 비교한 차이의 범위');
+assert.ok(mergeText.includes('앱의 기준이며 규정이 정한 값이 아니다'), '허용 폭이 규정값이 아님을 보고서가 밝힌다');
+assert.equal(A.describeProcessGrouping(undefined).length, 0, '고른 적이 없으면 보고서에 아무것도 쓰지 않는다');
+assert.equal(partsRun.store.report.process_grouping, undefined, '고를 것이 없던 파일은 기록하지 않는다');
+
 // 「CN별 공정으로 나눔」을 고르면
 const mixRun = await importOf(withParts(mixParts, mixPrecursors), undefined, SPLIT);
 const mixData = mixRun.store.data;
+assert.equal(mixRun.store.report.process_grouping.choice, 'SPLIT');
+const splitText = A.describeProcessGrouping(mixRun.store.report.process_grouping).join(' ');
+assert.ok(splitText.includes('4개 생산공정으로 나누어 산정했다 — 2025/2547 제4조 8항, 부속서 III A.1'), '나눔을 골랐다고 쓰고 근거 조항을 댄다');
+assert.ok(splitText.includes('확인 필요(자료): 검증인이 CN별 재질 투입 기록을 물을 수 있다'), '나눔은 근거 자료가 필요하다는 것을 적는다');
 assert.deepEqual(plain(mixData.processes.map((process) => process.name).sort()), ['SWCH35K 공정', 'SWCH35K·SWCH10A 공정', 'SWCH35K·SWCH45K 공정', 'SWCH45K 공정'].sort(), '재질 구성이 다른 CN 넷은 각각 따로 선 공정이다(예전에는 SWCH35K를 공유해 한 덩어리가 됐다)');
 const mixSee = Object.fromEntries(resultsOf(mixRun.store).filter((item) => item.output_mass_t > 0).map((item) => [item.product_name, Math.round(item.see_direct_incl_precursor * 1e4) / 1e4]));
 assert.equal(mixSee['SWCH35K·SWCH10A · CN 73181692'], 2.2909, '(545.45×2 + 400×3) ÷ 1,000 — SWCH35K 1,000 t을 그 재질로 만든 양(600+300+200)의 비율로 나눈 값');
