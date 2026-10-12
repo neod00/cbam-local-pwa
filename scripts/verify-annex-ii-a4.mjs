@@ -52,7 +52,7 @@ const procB = makeProcess('B', bolt.id);
 const shared = run([screw, bolt], [procA, procB], [precursor('p1', 'A', '72139110'), precursor('p2', 'B', '72139110')]);
 const warnings = a4(shared);
 assert.equal(warnings.length, 2, '두 공정 모두에 알린다');
-assert.match(warnings[0], /확인 필요\(규정\): 공정 A과\(와\) 공정 B은\(는\) 둘 다 철강제품이고 같은 종류의 구매 원료\(CN 72139110\)를 씁니다/);
+assert.match(warnings[0], /확인 필요\(규정\): 공정 A과\(와\) 공정 B은\(는\) 둘 다 철강제품이고 같은 종류의 구매 원료\(CN 72139110\)를 같은 비율로 씁니다/);
 assert.match(warnings[0], /CN이 달라도 단일 다기능 생산공정/);
 assert.match(warnings[0], /공정을 하나로 합치고 제품을 생산라인으로 넣으세요/);
 assert.match(warnings[0], /재질이나 비율이 다르면 해당하지 않으니/);
@@ -75,6 +75,22 @@ assert.equal(a4(run([screw, scrapBolt], [procA, makeProcess('B', scrapBolt.id)],
 const boltLine = { id: 'l1', process_id: 'A', product_id: bolt.id, name: '볼트', output_mass_t: 500, allocation_basis: 'MASS', manual_allocation_percent: 100, note: '', reporting_scope: 'CBAM_GOOD', ...stamp };
 assert.equal(a4(run([screw, bolt], [procA], [precursor('p1', 'A', '72139110')], { productOutputLines: [boltLine] })).length, 0, '한 공정에 제품 라인으로 넣은 것이 규정이 요구하는 모양이다 — 알리지 않는다');
 assert.equal(a4(run([screw, bolt], [procA, procB], [precursor('p1', 'A', '123'), precursor('p2', 'B', '123')])).length, 0, '너무 짧은 CN은 같은 종류의 근거가 못 된다');
+
+// run36(풍강형): 종류(CN)가 같아도 투입 비율이나 공급사 값(강종)이 다르면 A.4의 의무가 아니다 — 공정을 나누는 것이 규정에 맞다
+const twoKinds = (a, b) => [
+  precursor('x1', 'A', '72171050', { supplier_installation: 'A사', direct_see_tco2e_per_t: 2, consumed_mass_t: 600 }),
+  precursor('x2', 'A', '72171039', { supplier_installation: 'B사', direct_see_tco2e_per_t: 3, consumed_mass_t: 400 }),
+  precursor('y1', 'B', '72171050', { supplier_installation: 'A사', direct_see_tco2e_per_t: 2, consumed_mass_t: a }),
+  precursor('y2', 'B', '72171039', { supplier_installation: 'B사', direct_see_tco2e_per_t: 3, consumed_mass_t: b }),
+];
+assert.equal(a4(run([screw, bolt], [procA, procB], twoKinds(600, 400))).length, 2, '종류와 비율이 같으면(60:40) 걸린다');
+assert.equal(a4(run([screw, bolt], [procA, procB], twoKinds(630, 370))).length, 2, '비율 차가 5%p 이내(63:37)이면 같은 것으로 본다');
+assert.equal(a4(run([screw, bolt], [procA, procB], twoKinds(300, 700))).length, 0, '같은 종류인데 비율이 다르면(60:40 대 30:70) 걸리지 않는다 — 공정을 나눌 수 있다');
+const sameCnOtherSee = [
+  precursor('p1', 'A', '72171050', { supplier_installation: 'A사', direct_see_tco2e_per_t: 2 }),
+  precursor('p2', 'B', '72171050', { supplier_installation: 'A사', direct_see_tco2e_per_t: 1 }),
+];
+assert.equal(a4(run([screw, bolt], [procA, procB], sameCnOtherSee)).length, 0, 'CN이 같아도 공급사 SEE가 다르면(강종이 다름) 다른 종류의 원료다');
 
 // ── 3) 셋 이상이면 모두 나열 ──────────────────────────────────────────
 const nut = product('nut', '73181699');

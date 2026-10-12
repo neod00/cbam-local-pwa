@@ -435,3 +435,10 @@ export const ELECTRICITY_INTENSITY_LIMIT_MWH_PER_T = 50;
 export function isImplausibleElectricityIntensity(mwh: number, outputMassT: number): boolean {
     return outputMassT > 0 && Number.isFinite(mwh) && mwh / outputMassT > ELECTRICITY_INTENSITY_LIMIT_MWH_PER_T;
 }
+
+/**
+ * 두 공정(또는 두 CN)이 쓰는 원료의 비율 차가 이 값(비율의 차) 이하이면 「같은 양·비율」로 본다.
+ * 규정(2025/2547 부속서 II A.4)은 「same precursors in types, quantities and proportions」라고만 하고 허용 오차를 정하지 않는다 —
+ * 앱의 기준이며, 어디까지를 같은 것으로 볼지는 검증인이 판단한다.
+ */
+export const PRECURSOR_MIX_TOLERANCE = 0.05;

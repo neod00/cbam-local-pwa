@@ -32,6 +32,7 @@ import {
     VERIFICATION_CHOICES,
     YES,
     type ActivityRow,
+    type PartGrouping,
     type ActivityWorkbookData,
 } from './activity-workbook';
 import { weightedAverageEf } from './electricity-ef-basis';
@@ -202,12 +203,12 @@ const fmt = (value: number) => new Intl.NumberFormat('ko-KR', { maximumFractionD
 
 export async function importActivityWorkbook(
     data: ActivityWorkbookData,
-    deps: { store: ActivityImportStore; defaultValues?: ImportedDefaultValueReference; reportInputs?: ActivityImportReportInputs },
+    deps: { store: ActivityImportStore; defaultValues?: ImportedDefaultValueReference; reportInputs?: ActivityImportReportInputs; /** 재질 구성이 다른 CN을 합칠지 나눌지 — 비우면 합침 */ partGrouping?: PartGrouping },
 ): Promise<ActivityImportResult> {
     const { store } = deps;
     const issues: ActivityImportIssue[] = [];
     // 품번 목록이 있으면 제품·공정 줄로 합쳐 2_제품·3_공정의 줄과 함께 쓴다(품번 줄의 번호는 1000부터 — 끝에서 품번 목록의 줄로 되돌린다).
-    const expansion = expandPartList(data.parts ?? []);
+    const expansion = expandPartList(data.parts ?? [], deps.partGrouping ?? 'MERGE');
     const plan = { products: [...data.products, ...expansion.products], processes: [...data.processes, ...expansion.processes] };
     const created: ActivityImportResult['created'] = { installation: 0, period: 0, products: 0, processes: 0, fuels: 0, precursors: 0, transfers: 0 };
     const note = (level: ActivityImportIssue['level'], sheet: string, message: string, row?: number) => issues.push({ level, sheet, row, message });
@@ -215,6 +216,7 @@ export async function importActivityWorkbook(
     for (const problem of expansion.problems) note('error', SHEET_PARTS, problem.message, problem.row);
     if (expansion.summary) note('info', SHEET_PARTS, expansion.summary);
     for (const message of expansion.notes) note('info', SHEET_PARTS, message);
+    for (const message of expansion.reviewNotes) note('warning', SHEET_PARTS, message);
 
     const [installations, periods, products, existingProcesses, existingStreams, existingPrecursors] = await Promise.all([
         store.list('installations'), store.list('periods'), store.list('products'), store.list('processes'), store.list('source_streams'), store.list('precursors'),
@@ -535,6 +537,32 @@ export async function importActivityWorkbook(
         const owner = processByName.get(key(processName));
         if (owner && fresh.has(owner.id) && !processByName.has(key(grade))) processByName.set(key(grade), owner);
     }
+    // 재질이 여러 공정(CN마다 재질 구성이 달라 나뉜 공정들)에 들어가면 그 재질 이름은 공정 하나를 가리키지 못한다.
+    //  · 5_구매강재: 줄을 공정마다 나눠 넣는다(투입량을 그 재질로 만든 양 — 생산량+스크랩 — 의 비율로).
+    //  · 4_연료: 그 공정들 전부로 푼다(열처리로처럼 일부 제품만 거치는 설비는 「쓰는 공정」에 재질을 적는다).
+    const gradeSplits = new Map<string, Array<{ process: ProductionProcess; tonnes: number }>>();
+    for (const split of expansion.splits) {
+        const shares = split.shares
+            .map((share) => ({ process: processByName.get(key(share.process)), tonnes: share.tonnes }))
+            .filter((share): share is { process: ProductionProcess; tonnes: number } => Boolean(share.process && fresh.has(share.process.id)));
+        if (shares.length < 2) continue;
+        for (const spelling of split.spellings) {
+            // 실제 공정 이름이면(이미 있던 공정이거나 「SWCH35K 공정」이라는 이름의 공정이 따로 있으면) 그 공정 하나를 가리킨다.
+            const owner = processByName.get(key(spelling));
+            if (owner && (!fresh.has(owner.id) || key(owner.name) === key(spelling))) continue;
+            gradeSplits.set(key(spelling), shares);
+            // 이름을 줄여 한 공정만 가리키던 별칭(「SWCH35K 공정」 → SWCH35K)은 걷는다 — 그 재질은 이제 공정 여럿에 걸쳐 있다.
+            processByName.delete(key(spelling));
+        }
+    }
+    /** 4_연료의 「쓰는 공정」 — 여러 공정에 걸친 재질 이름을 그 공정 이름들로 푼다 */
+    const expandSplitWhere = (value: string | undefined) => {
+        const names = namesOf(value);
+        if (!names.some((item) => gradeSplits.has(key(item)))) return value ?? '';
+        const out: string[] = [];
+        for (const item of names) for (const name of gradeSplits.get(key(item))?.map((share) => share.process.name) ?? [item]) if (!out.includes(name)) out.push(name);
+        return out.join(`${LIST_SEPARATOR} `);
+    };
     /** 공정을 못 찾았을 때 덧붙이는 말 — 이번 파일로 만든 공정 이름을 그대로 보여 준다. */
     const processHint = () => {
         const names = [...fresh.values()].map((process) => `「${process.name}」`);
@@ -722,7 +750,8 @@ export async function importActivityWorkbook(
     const fuelItems: FuelItem[] = [];
     {
         const groupedAt = new Map<string, number>();
-        for (const row of data.fuels) {
+        for (const fuelRow of data.fuels) {
+            const row: ActivityRow = { ...fuelRow, values: { ...fuelRow.values, where: expandSplitWhere(fuelRow.values.where) } };
             const nameKey = key(row.values.name);
             const basisValue = labelValue(SPLIT_BASIS_CHOICES, row.values.basis);
             const wheres = namesOf(row.values.where);
@@ -1026,7 +1055,33 @@ export async function importActivityWorkbook(
     /** 공정별로, 「쓰는 제품」을 적은 원료와 안 적은 원료 */
     const assigned = new Map<string, Array<{ name: string; heading: string }>>();
     const unassigned = new Map<string, Array<{ name: string; heading: string }>>();
+    const precursorRows: ActivityRow[] = [];
     for (const row of data.precursors) {
+        const shares = gradeSplits.get(key(row.values.where));
+        const consumed = numberOf(row.values.consumed);
+        if (!shares || !(consumed !== undefined && consumed > 0) || (row.values.products ?? '').trim()) { precursorRows.push(row); continue; }
+        const total = shares.reduce((sum, share) => sum + share.tonnes, 0);
+        const scaled = (value: string | undefined, index: number, parts: number[]) => {
+            const amount = numberOf(value);
+            if (amount === undefined || Number.isNaN(amount)) return value ?? '';
+            if (index === parts.length - 1) return String(Math.round((amount - parts.slice(0, index).reduce((sum, part) => sum + Math.round(amount * part * 1e6) / 1e6, 0)) * 1e6) / 1e6);
+            return String(Math.round(amount * parts[index] * 1e6) / 1e6);
+        };
+        const fractions = shares.map((share) => share.tonnes / total);
+        const baseName = (row.values.name ?? '').trim();
+        shares.forEach((share, index) => {
+            precursorRows.push({ row: row.row, values: {
+                ...row.values,
+                name: `${baseName} → ${share.process.name}`,
+                where: share.process.name,
+                consumed: scaled(row.values.consumed, index, fractions),
+                purchased: scaled(row.values.purchased, index, fractions),
+                nonCbam: scaled(row.values.nonCbam, index, fractions),
+            } });
+        });
+        note('warning', SHEET_PRECURSORS, `${baseName}: 「${(row.values.where ?? '').trim()}」을(를) 쓰는 공정이 ${shares.length}개라 투입량 ${fmt(consumed)} t을 그 재질로 만든 양(품번 목록의 생산량+스크랩)의 비율로 나눠 넣었습니다 — ${shares.map((share, index) => `${share.process.name} ${fmt(Math.round(consumed * fractions[index] * 1e3) / 1e3)} t`).join(', ')}. 투입이 생산량에 비례한다는 가정입니다 — 공정별 실제 투입 기록이 있으면 5_구매강재의 「쓰는 공정」에 공정 이름을 적어 줄을 나눠 올리세요.`, row.row);
+    }
+    for (const row of precursorRows) {
         const name = (row.values.name ?? '').trim();
         const tell = (level: ActivityImportIssue['level'], message: string) => note(level, SHEET_PRECURSORS, `${name || '(이름 없음)'}: ${message}`, row.row);
         const process = processByName.get(key(row.values.where));
@@ -1134,12 +1189,14 @@ export async function importActivityWorkbook(
     //  · 그 원료의 종류(CN 4자리)가 둘 이상이면 제품마다 원료가 다를 가능성이 크다 → 되묻는다.
     //  · 철강이 아닌 제품이 그 공정에 있으면 그 제품이 강재 배출의 몫을 가져간다 → 되묻는다.
     const productById = new Map(Array.from(productByName.values()).map((product) => [product.id, product]));
+    const fromParts = new Set(expansion.processes.map((row) => key(row.values.name)));
     for (const process of freshList()) {
         const lines = goodLines.get(process.id) ?? [];
         const loose = unassigned.get(process.id) ?? [];
         if (distinctGoods(lines) < 2 || loose.length === 0) continue;
         const headings = [...new Set(loose.map((item) => item.heading))];
-        if (headings.length >= 2) {
+        // 품번 목록이 만든 공정의 제품들은 재질 구성이 같다(같은 CN이거나 부속서 II A.4의 같은 종류·비율) — 원료를 질량으로 나누는 것이 규정의 귀속이다.
+        if (headings.length >= 2 && !fromParts.has(key(process.name))) {
             note('warning', SHEET_PRECURSORS, `공정 「${process.name}」에는 CN 코드가 ${distinctGoods(lines)}종 있고, 종류가 다른 원료 ${loose.map((item) => `「${item.name}」`).join(', ')}을(를) 「쓰는 제품」 없이 넣었습니다. 이대로면 모든 원료가 모든 제품에 생산량 비율로 섞입니다 — 제품마다 쓰는 원료(강종)가 다르면 「쓰는 제품」을 적어 다시 올리세요. 틀리면 제품별 배출량이 크게 달라집니다.`);
         }
         const foreign = lines.filter((line) => !/^7[23]/.test((productById.get(line.product_id ?? '')?.cn_code ?? '').replace(/\D/g, '')));
@@ -1243,6 +1300,81 @@ export async function importActivityWorkbook(
 }
 
 /** 「확인할 것」을 서식을 채운 사람에게 그대로 보낼 수 있는 글로 만든다. */
+/** EU 문서(Communication template)가 받는 생산공정의 수 */
+export const EU_PROCESS_LIMIT = 10;
+
+export interface PartGroupingPreview {
+    /** 「나눔」을 고르면 따로 서는 공정마다: 구매 강재가 싣는 직접 SEE(연료·열은 어느 쪽이든 생산량 비율이라 같다) */
+    rows: Array<{ process: string; cns: string[]; outputT: number; splitSee: number; mergedSee: number; deltaPct: number }>;
+    mergedProcessCount: number;
+    splitProcessCount: number;
+    /** 「나눔」이면 공정이 EU 문서의 한도를 넘는가 */
+    splitExceedsLimit: boolean;
+    /** 공정이나 값을 찾지 못해 비교에 넣지 못한 구매 강재 줄 수 */
+    unresolved: number;
+}
+
+/**
+ * 품번 목록에서 재질 구성이 다른 CN을 「한 공정으로 합침」과 「CN별 공정으로 나눔」 중 고를 수 있을 때, 두 방식의 값을 나란히 보여 줄 자료.
+ * 고를 것이 없으면(품번 목록이 없거나 구성이 다른 CN이 같은 재질로 이어져 있지 않으면) undefined.
+ * 저장하지 않는 미리 계산이다 — 구매 강재의 직접 SEE만 본다(올린 뒤의 결과 화면이 정본).
+ */
+export function previewPartGrouping(data: ActivityWorkbookData, defaultValues?: ImportedDefaultValueReference): PartGroupingPreview | undefined {
+    const parts = data.parts ?? [];
+    const merged = expandPartList(parts, 'MERGE');
+    if (!merged.choiceAvailable) return undefined;
+    const split = expandPartList(parts, 'SPLIT');
+    const knownCountries = Array.from(new Set((defaultValues?.rows ?? []).map((item) => item.country)));
+    let unresolved = 0;
+    const build = (expansion: ReturnType<typeof expandPartList>, count: boolean) => {
+        const cnOfProduct = new Map(expansion.products.map((row) => [key(row.values.name), (row.values.cn ?? '').replace(/\D/g, '')]));
+        const info = new Map<string, { name: string; output: number; cns: string[]; embedded: number }>();
+        for (const row of expansion.processes) {
+            const item = info.get(key(row.values.name)) ?? { name: row.values.name, output: 0, cns: [], embedded: 0 };
+            item.output += numberOf(row.values.mass) ?? 0;
+            const cn = cnOfProduct.get(key(row.values.product));
+            if (cn && !item.cns.includes(cn)) item.cns.push(cn);
+            info.set(key(row.values.name), item);
+        }
+        const targets = new Map<string, Array<{ process: string; fraction: number }>>();
+        for (const item of info.values()) targets.set(key(item.name), [{ process: key(item.name), fraction: 1 }]);
+        for (const [spelling, process] of expansion.aliases) if (!targets.has(key(spelling))) targets.set(key(spelling), [{ process: key(process), fraction: 1 }]);
+        for (const item of expansion.splits) {
+            const total = item.shares.reduce((sum, share) => sum + share.tonnes, 0);
+            for (const spelling of item.spellings) if (!targets.has(key(spelling))) targets.set(key(spelling), item.shares.map((share) => ({ process: key(share.process), fraction: total > 0 ? share.tonnes / total : 0 })));
+        }
+        for (const row of data.precursors) {
+            const consumed = numberOf(row.values.consumed);
+            const where = targets.get(key(row.values.where));
+            let direct = numberOf(row.values.direct);
+            const chosen = labelValue(SUPPLIER_VALUE_CHOICES, row.values.hasValue) ?? (direct !== undefined ? 'ACTUAL' : 'DEFAULT');
+            if (chosen === 'DEFAULT') {
+                const year = (labelValue(DEFAULT_YEAR_CHOICES, (row.values.defaultYear ?? '').trim()) || '2026') as PurchasedPrecursor['default_value_year'];
+                const filled = fillEuDefault({ reference: defaultValues, country: resolveSupplierCountry(row.values.country ?? '', knownCountries), cnDigits: (row.values.cn ?? '').replace(/\D/g, ''), year });
+                direct = filled.ok ? Number(filled.direct) : undefined;
+            }
+            if (!where || !(consumed !== undefined && consumed > 0) || direct === undefined || Number.isNaN(direct)) { if (count) unresolved += 1; continue; }
+            for (const target of where) { const item = info.get(target.process); if (item) item.embedded += consumed * target.fraction * direct; }
+        }
+        return info;
+    };
+    const mergedInfo = build(merged, true);
+    const splitInfo = build(split, false);
+    const rows: PartGroupingPreview['rows'] = [];
+    for (const item of splitInfo.values()) {
+        const whole = Array.from(mergedInfo.values()).find((other) => item.cns.some((cn) => other.cns.includes(cn)));
+        // 합쳐도 그대로인 공정(혼자 선 재질)은 고를 것이 없다.
+        if (!whole || whole.cns.length === item.cns.length || !(item.output > 0) || !(whole.output > 0)) continue;
+        const splitSee = item.embedded / item.output;
+        const mergedSee = whole.embedded / whole.output;
+        rows.push({ process: item.name, cns: item.cns, outputT: item.output, splitSee, mergedSee, deltaPct: mergedSee > 0 ? (splitSee - mergedSee) / mergedSee * 100 : 0 });
+    }
+    if (rows.length === 0) return undefined;
+    const others = new Set(data.processes.map((row) => key(row.values.name)).filter(Boolean));
+    const splitProcessCount = new Set([...others, ...splitInfo.keys()]).size;
+    return { rows, mergedProcessCount: new Set([...others, ...mergedInfo.keys()]).size, splitProcessCount, splitExceedsLimit: splitProcessCount > EU_PROCESS_LIMIT, unresolved };
+}
+
 export function describeActivityImportIssues(issues: ActivityImportIssue[]): string {
     if (issues.length === 0) return '확인할 것이 없습니다.';
     return issues.map((issue) => `[${ISSUE_LEVEL_LABEL[issue.level]}] ${issue.sheet}${issue.row ? ` ${issue.row}번째 줄` : ''} — ${issue.message}`).join('\n');

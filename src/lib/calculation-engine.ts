@@ -5,7 +5,7 @@ import type { IndirectEmissionsRelevance } from './cbam-product-rules';
 import { IMPORTED_HEAT_RULE, SHARED_HEAT_RULE, resolveImportedHeat, resolveProcessSharedHeat, resolveSharedHeatSystems } from './measurable-heat';
 import { isUnverifiedActualPrecursor, unverifiedActualPrecursorMessage } from './precursor-verification';
 import { getProductReportingScope, getProductReportingScopeLabel, isCbamReportingScope } from './reporting-scope';
-import { ALLOCATION_RULES, isImplausibleElectricityIntensity, MANUAL_ALLOCATION_SUM_TOLERANCE, RECONCILIATION_REVIEW_DEVIATION, checkElectricitySharedMeters, getDirectEmissionsInputMode, hasManualAllocationReason, isElectricitySplitStale, reconcileSourceStreams, resolveActivityLevelRole, sharedMeterBasisNeedsReview, SHARED_METER_BASIS_LABEL } from './allocation-rules';
+import { ALLOCATION_RULES, isImplausibleElectricityIntensity, MANUAL_ALLOCATION_SUM_TOLERANCE, PRECURSOR_MIX_TOLERANCE, RECONCILIATION_REVIEW_DEVIATION, checkElectricitySharedMeters, getDirectEmissionsInputMode, hasManualAllocationReason, isElectricitySplitStale, reconcileSourceStreams, resolveActivityLevelRole, sharedMeterBasisNeedsReview, SHARED_METER_BASIS_LABEL } from './allocation-rules';
 import type { ElectricityMeterGroup, ReconciliationGroup } from './allocation-rules';
 
 export type ActivityData = Record<string, number>;
@@ -610,10 +610,13 @@ function calculateOwnResults(input: {
     }
 
     // 부속서 II A.4: 철강제품에서 크기·형상만 다른 재화(CN이 달라도)를 종류·양·비율이 같은 전구물질로 만들면 단일 다기능 생산공정으로
-    // 정의해야 한다. 앱은 원료의 양·비율을 모르므로 「같은 종류의 구매 원료(CN)를 쓰는 철강제품 공정이 둘 이상」일 때 확인을 요구한다.
-    // 재질이 다르면(STS와 탄소강) 원료 CN이 달라 걸리지 않는다. 같은 CN 제품을 여러 공정으로 나눈 경우는 Art 4(6) 경고가 따로 다룬다.
+    // 정의해야 한다. 공정마다 구매 원료의 「종류(CN·공급사·SEE)」와 그 투입 비율을 비교해, 둘 다 같은 철강제품 공정이 둘 이상이면 확인을 요구한다.
+    // 종류가 다르거나(STS와 탄소강, 강종마다 다른 공급사 값) 비율이 다르면(PRECURSOR_MIX_TOLERANCE 초과) 걸리지 않는다 — 그때는 공정을 나누는 것이 규정에 맞다.
+    // 같은 CN 제품을 여러 공정으로 나눈 경우는 Art 4(6) 경고가 따로 다룬다.
     const steelProcessIds = new Set<string>();
     const precursorCnsByProcess = new Map<string, Set<string>>();
+    /** 공정별 원료의 종류 → 투입 비율. 투입량이 없으면 비교하지 않는다(빈 지도). */
+    const precursorMixByProcess = new Map<string, Map<string, { share: number; cn: string }>>();
     for (const process of input.processes) {
         const candidates = [process.product_id, ...(outputLinesByProcess.get(process.id) ?? []).map((line) => line.product_id)];
         if (candidates.some((productId) => {
@@ -626,7 +629,19 @@ function calculateOwnResults(input: {
             process.id,
             new Set((precursorsByProcess.get(process.id) ?? []).map((precursor) => (precursor.precursor_cn_code ?? '').replace(/\D/g, '')).filter((cn) => cn.length >= 4))
         );
+        const mass = new Map<string, { value: number; cn: string }>();
+        for (const precursor of precursorsByProcess.get(process.id) ?? []) {
+            const cn = (precursor.precursor_cn_code ?? '').replace(/\D/g, '');
+            if (cn.length < 4 || !(precursor.consumed_mass_t > 0)) continue;
+            const typeKey = [cn, (precursor.supplier_installation ?? '').trim().toLowerCase(), Math.round((precursor.direct_see_tco2e_per_t ?? 0) * 1e4), Math.round((precursor.indirect_see_tco2e_per_t ?? 0) * 1e4)].join('|');
+            mass.set(typeKey, { value: (mass.get(typeKey)?.value ?? 0) + precursor.consumed_mass_t, cn });
+        }
+        const total = Array.from(mass.values()).reduce((sum, item) => sum + item.value, 0);
+        precursorMixByProcess.set(process.id, new Map(Array.from(mass, ([typeKey, item]) => [typeKey, { share: total > 0 ? item.value / total : 0, cn: item.cn }])));
     }
+    const sameMix = (a: Map<string, { share: number }> | undefined, b: Map<string, { share: number }> | undefined) => Boolean(
+        a && b && a.size > 0 && a.size === b.size && Array.from(a).every(([typeKey, item]) => b.has(typeKey) && Math.abs(b.get(typeKey)!.share - item.share) <= PRECURSOR_MIX_TOLERANCE)
+    );
 
     return input.processes.flatMap<LocalCalculationResult>((process) => {
         const warnings: string[] = [];
@@ -679,12 +694,12 @@ function calculateOwnResults(input: {
             const partners = input.processes.filter((other) => {
                 if (other.id === process.id || !steelProcessIds.has(other.id) || (other.period_id ?? '') !== (process.period_id ?? '')) return false;
                 if ([...(processKeysById.get(other.id) ?? [])].some((key) => keys.has(key))) return false;
-                return [...(precursorCnsByProcess.get(other.id) ?? [])].some((cn) => own.has(cn));
+                return sameMix(precursorMixByProcess.get(process.id), precursorMixByProcess.get(other.id));
             });
             if (partners.length > 0) {
                 const sharedCns = [...new Set(partners.flatMap((other) => [...(precursorCnsByProcess.get(other.id) ?? [])].filter((cn) => own.has(cn))))];
                 addWarning(
-                    `확인 필요(규정): ${process.name}과(와) ${partners.map((other) => other.name).join(' · ')}은(는) 둘 다 철강제품이고 같은 종류의 구매 원료(CN ${sharedCns.join('·')})를 씁니다. `
+                    `확인 필요(규정): ${process.name}과(와) ${partners.map((other) => other.name).join(' · ')}은(는) 둘 다 철강제품이고 같은 종류의 구매 원료(CN ${sharedCns.join('·')})를 같은 비율로 씁니다. `
                     + `${ALLOCATION_RULES.SINGLE_MULTIFUNCTIONAL.anchor}: 크기·형상만 다른 재화를 종류·양·비율이 같은 전구물질로 만든다면 CN이 달라도 단일 다기능 생산공정으로 정의하고 질량(기능단위)으로 귀속해야 합니다 — `
                     + '공정을 하나로 합치고 제품을 생산라인으로 넣으세요. 원료 재질이나 비율이 다르면 해당하지 않으니 사유를 보고서에 남기세요.',
                     { type: 'process', id: process.id }, 'MULTIFUNCTIONAL'

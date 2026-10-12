@@ -18,7 +18,7 @@ import {
     type ActivityTemplateImportPlan,
     type ActivityTemplateImportSummary,
 } from '@/lib/activity-data-template';
-import { describeActivityImportIssues, importActivityWorkbook, ISSUE_LEVEL_LABEL, type ActivityImportIssue } from '@/lib/activity-import';
+import { describeActivityImportIssues, EU_PROCESS_LIMIT, importActivityWorkbook, ISSUE_LEVEL_LABEL, previewPartGrouping, type ActivityImportIssue, type PartGroupingPreview } from '@/lib/activity-import';
 import {
     ACTIVITY_WORKBOOK_FILENAME,
     ACTIVITY_WORKBOOK_SAMPLE,
@@ -27,6 +27,8 @@ import {
     isActivityWorkbookV2,
     parseActivityWorkbook,
     readActivityWorkbookSheetNames,
+    type ActivityWorkbookData,
+    type PartGrouping,
 } from '@/lib/activity-workbook';
 import { ensureBundledReferences } from '@/lib/bundled-references';
 import { downloadBlob } from '@/lib/eu-template-export';
@@ -372,6 +374,8 @@ export default function UploadPage() {
     const [issuesCopied, setIssuesCopied] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
     const [isActivityImporting, setIsActivityImporting] = useState(false);
+    // 품번 목록에서 재질 구성이 다른 CN을 합칠지 나눌지 — 고를 것이 있는 파일이면 넣기 전에 두 방식의 값을 보여 주고 묻는다.
+    const [groupingChoice, setGroupingChoice] = useState<{ data: ActivityWorkbookData; filename: string; preview: PartGroupingPreview } | null>(null);
 
     useEffect(() => {
         async function loadReferenceSummaries() {
@@ -473,6 +477,46 @@ export default function UploadPage() {
         }
     }
 
+    async function importWorkbook(data: ActivityWorkbookData, filename: string, partGrouping?: PartGrouping) {
+        const result = await importActivityWorkbook(data, {
+            store: { list: listLocalItems, create: createLocalItem, update: updateLocalItem },
+            defaultValues: await loadDefaultValues(),
+            // 서식의 보고서 항목(부문특정 파라미터·전력 계수 근거·역할책임·증빙·탄소가격·서명)은 「보고서 입력」과 같은 자리에 저장한다.
+            reportInputs: {
+                get: () => getLocalSetting<ReportInputs>(REPORT_INPUTS_SETTING_KEY),
+                set: async (value) => { await setLocalSetting(REPORT_INPUTS_SETTING_KEY, value); },
+            },
+            partGrouping,
+        });
+        const { created } = result;
+        // 넣지 못한 줄이 남았다는 사실을 제출 화면이 알도록 남긴다(깨끗이 올렸으면 비운다).
+        const unplaced = result.issues.filter((issue) => issue.level === 'error');
+        // 다른 해의 파일이라 거부됐으면 이 프로젝트의 자료는 그대로다 — 「넣지 못한 줄」 기록을 바꾸지 않는다.
+        if (!result.rejectedForYear) await setLocalSetting(ACTIVITY_IMPORT_RESULT_SETTING_KEY, {
+            imported_at: new Date().toISOString(),
+            filename,
+            unplaced_count: unplaced.length,
+            unplaced: unplaced.slice(0, 20).map((issue) => ({ sheet: issue.sheet, row: issue.row, message: issue.message })),
+        });
+        setActivitySummary({ products: created.products, processes: created.processes, sourceStreams: created.fuels, precursors: created.precursors, skipped: 0 });
+        setActivityIssues(result.issues);
+        setActivityMessage(`서식을 넣었습니다 — 사업장 ${created.installation} · 보고기간 ${created.period} · 제품 ${created.products} · 공정 ${created.processes} · 연료 ${created.fuels} · 구매 강재 ${created.precursors}건.`);
+    }
+
+    async function handleGroupingChoice(partGrouping: PartGrouping) {
+        if (!groupingChoice) return;
+        const { data, filename } = groupingChoice;
+        setGroupingChoice(null);
+        setIsActivityImporting(true);
+        try {
+            await importWorkbook(data, filename, partGrouping);
+        } catch (error) {
+            setActivityError(error instanceof Error ? error.message : '활동자료 템플릿을 가져오지 못했습니다.');
+        } finally {
+            setIsActivityImporting(false);
+        }
+    }
+
     async function handleActivityTemplateImport(event: ChangeEvent<HTMLInputElement>) {
         const file = event.target.files?.[0];
         event.target.value = '';
@@ -487,34 +531,20 @@ export default function UploadPage() {
         setActivitySummary(emptyImportSummary);
         setActivityIssues(null);
         setIssuesCopied(false);
+        setGroupingChoice(null);
         setIsActivityImporting(true);
 
         try {
             // 새 서식(한글 7시트)과 종전 서식(영문 4시트)을 시트 이름으로 가린다. 종전 서식은 종전 경로 그대로다.
             const bytes = file.name.toLowerCase().endsWith('.xlsx') ? new Uint8Array(await file.arrayBuffer()) : undefined;
             if (bytes && isActivityWorkbookV2(readActivityWorkbookSheetNames(bytes))) {
-                const result = await importActivityWorkbook(parseActivityWorkbook(bytes), {
-                    store: { list: listLocalItems, create: createLocalItem, update: updateLocalItem },
-                    defaultValues: await loadDefaultValues(),
-                    // 서식의 보고서 항목(부문특정 파라미터·전력 계수 근거·역할책임·증빙·탄소가격·서명)은 「보고서 입력」과 같은 자리에 저장한다.
-                    reportInputs: {
-                        get: () => getLocalSetting<ReportInputs>(REPORT_INPUTS_SETTING_KEY),
-                        set: async (value) => { await setLocalSetting(REPORT_INPUTS_SETTING_KEY, value); },
-                    },
-                });
-                const { created } = result;
-                // 넣지 못한 줄이 남았다는 사실을 제출 화면이 알도록 남긴다(깨끗이 올렸으면 비운다).
-                const unplaced = result.issues.filter((issue) => issue.level === 'error');
-                // 다른 해의 파일이라 거부됐으면 이 프로젝트의 자료는 그대로다 — 「넣지 못한 줄」 기록을 바꾸지 않는다.
-                if (!result.rejectedForYear) await setLocalSetting(ACTIVITY_IMPORT_RESULT_SETTING_KEY, {
-                    imported_at: new Date().toISOString(),
-                    filename: file.name,
-                    unplaced_count: unplaced.length,
-                    unplaced: unplaced.slice(0, 20).map((issue) => ({ sheet: issue.sheet, row: issue.row, message: issue.message })),
-                });
-                setActivitySummary({ products: created.products, processes: created.processes, sourceStreams: created.fuels, precursors: created.precursors, skipped: 0 });
-                setActivityIssues(result.issues);
-                setActivityMessage(`서식을 넣었습니다 — 사업장 ${created.installation} · 보고기간 ${created.period} · 제품 ${created.products} · 공정 ${created.processes} · 연료 ${created.fuels} · 구매 강재 ${created.precursors}건.`);
+                const data = parseActivityWorkbook(bytes);
+                const preview = previewPartGrouping(data, await loadDefaultValues());
+                if (preview) {
+                    setGroupingChoice({ data, filename: file.name, preview });
+                    return;
+                }
+                await importWorkbook(data, file.name);
                 return;
             }
             const plan = await parseActivityDataTemplate(file);
@@ -692,6 +722,62 @@ export default function UploadPage() {
                             올린 파일은 서버로 전송하지 않습니다. 빠지거나 틀린 칸은 넣지 않고 아래 「확인할 것」에 시트와 줄 번호로 알려 드립니다 — 그대로 복사해 서식을 채운 분께 보낼 수 있습니다.
                         </p>
                     </div>
+
+                    {groupingChoice && (
+                        <div className="mt-6 rounded-2xl border border-teal-200 bg-teal-50 px-5 py-4 text-sm text-slate-800" role="group" aria-label="공정 묶는 방식 고르기">
+                            <p className="font-semibold text-slate-900">재질 구성이 다른 CN이 있습니다 — 한 공정으로 합칠까요, CN별 공정으로 나눌까요?</p>
+                            <p className="mt-2 leading-6 text-slate-700">
+                                「{groupingChoice.filename}」의 품번 목록에는 같은 강종을 쓰지만 강종의 비율이 서로 다른 CN이 있습니다. 규정은 두 방식을 모두 허용합니다(2025/2547 제4조 8항).
+                                아래는 구매 강재가 싣는 직접 SEE입니다 — 연료·열·전력은 어느 쪽이든 생산량 비율이라 같습니다.
+                            </p>
+                            <div className="mt-3 overflow-x-auto">
+                                <table className="w-full min-w-[32rem] border-collapse text-left text-sm">
+                                    <thead>
+                                        <tr className="border-b border-teal-200 text-xs text-slate-600">
+                                            <th className="py-2 pr-3 font-semibold">CN 코드</th>
+                                            <th className="py-2 pr-3 text-right font-semibold">생산량 (t)</th>
+                                            <th className="py-2 pr-3 text-right font-semibold">합치면 (tCO₂e/t)</th>
+                                            <th className="py-2 pr-3 text-right font-semibold">나누면 (tCO₂e/t)</th>
+                                            <th className="py-2 text-right font-semibold">차이</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {groupingChoice.preview.rows.map((row) => (
+                                            <tr key={row.process} className="border-b border-teal-100 last:border-0">
+                                                <td className="py-2 pr-3">{row.cns.join(', ')}</td>
+                                                <td className="py-2 pr-3 text-right tabular-nums">{row.outputT.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}</td>
+                                                <td className="py-2 pr-3 text-right tabular-nums">{row.mergedSee.toFixed(4)}</td>
+                                                <td className="py-2 pr-3 text-right tabular-nums">{row.splitSee.toFixed(4)}</td>
+                                                <td className="py-2 text-right tabular-nums">{row.deltaPct > 0 ? '+' : ''}{row.deltaPct.toFixed(1)}%</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <ul className="mt-3 list-disc space-y-1 pl-5 leading-6 text-slate-700">
+                                <li><span className="font-semibold">합침</span> — 공정 {groupingChoice.preview.mergedProcessCount}개. 이 CN들의 SEE가 가중평균 하나가 됩니다. 차이가 작으면 이쪽이 단순하고, 검증인에게 설명할 것이 적습니다.</li>
+                                <li><span className="font-semibold">나눔</span> — 공정 {groupingChoice.preview.splitProcessCount}개. CN마다 쓴 원료가 그 CN의 값에 실립니다. 저탄소 원료를 쓴 제품을 따로 보여야 할 때 고릅니다. 총량은 같아 한 CN이 내려가면 다른 CN이 올라가고, CN별 투입 기록이 근거로 필요합니다(앱은 생산량 비율로 나눈 값을 넣습니다).</li>
+                                <li>고른 방식은 모니터링 계획에 적고 해마다 같게 적용하세요.</li>
+                            </ul>
+                            {groupingChoice.preview.splitExceedsLimit && (
+                                <p className="mt-2 font-semibold text-amber-800">나누면 공정이 {groupingChoice.preview.splitProcessCount}개가 되어 EU 문서가 받는 {EU_PROCESS_LIMIT}개를 넘습니다 — 나눌 수 없습니다.</p>
+                            )}
+                            {groupingChoice.preview.unresolved > 0 && (
+                                <p className="mt-2 text-slate-600">구매 강재 {groupingChoice.preview.unresolved}줄은 공정이나 값을 찾지 못해 위 비교에 넣지 못했습니다. 올린 뒤 「확인할 것」을 보세요.</p>
+                            )}
+                            <div className="mt-4 flex flex-wrap gap-2">
+                                <button type="button" onClick={() => handleGroupingChoice('MERGE')} className="inline-flex min-h-10 items-center justify-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-600">
+                                    한 공정으로 합침
+                                </button>
+                                <button type="button" onClick={() => handleGroupingChoice('SPLIT')} disabled={groupingChoice.preview.splitExceedsLimit} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+                                    CN별 공정으로 나눔
+                                </button>
+                                <button type="button" onClick={() => setGroupingChoice(null)} className="inline-flex min-h-10 items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-white">
+                                    올리지 않음
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {(activityMessage || activityError || activityWarnings.length > 0 || activityIssues) && (
                         <div className="mt-6 space-y-3">

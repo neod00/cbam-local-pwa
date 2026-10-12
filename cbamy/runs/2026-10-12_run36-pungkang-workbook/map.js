@@ -1,0 +1,1 @@
+return [...document.querySelectorAll('.guided-node')].map((n) => (n.getAttribute('aria-label') ?? n.textContent).replace(/\s+/g, ' ').trim()).join('\n') + '\n---\n' + document.querySelector('main').innerText.split('\n').filter((l) => /tCO|SEE|기본값|단계/.test(l)).slice(0, 25).join('\n');
