@@ -32,7 +32,7 @@ const load = (parts, exported) => {
 };
 const newEngineText = file('src/lib/calculation-engine.ts');
 // 기준 엔진 = 지금 엔진에서 태그 인자만 걷어낸 것(저장소 이력에 기대지 않아 머지 뒤에도 같은 뜻으로 돈다). 태그가 계산 흐름에 끼어들었다면 둘의 결과가 갈린다.
-const TAG_NAMES = ['SHARED_METER', 'HEAT', 'DUP_FUNCTIONAL_UNIT', 'MULTIFUNCTIONAL', 'ACTIVITY_LEVEL', 'ALLOCATION_SUM', 'MANUAL_ALLOCATION', 'PRECURSOR_COMPLETENESS'];
+const TAG_NAMES = ['SHARED_METER', 'HEAT', 'DUP_FUNCTIONAL_UNIT', 'MULTIFUNCTIONAL', 'ACTIVITY_LEVEL', 'ALLOCATION_SUM', 'MANUAL_ALLOCATION', 'PRECURSOR_COMPLETENESS', 'PRODUCT_SHARE'];
 const oldEngineText = TAG_NAMES.reduce((text, tag) => text.split(", '" + tag + "'").join(''), newEngineText);
 const oldEngine = load(base(oldEngineText), 'calculateLocalResults');
 const renameFmt = (text, name) => text.split('fmt').join(name); // 합친 한 파일로 돌리는 시험 틀에서 같은 이름(fmt)이 겹치는 것을 피한다
@@ -85,7 +85,7 @@ for (const [name, scenario] of [['clean', clean], ['messy', messy]]) {
   assert.deepEqual(plain(withoutCheck(after)), before, `${name}: 점검 태그를 붙여도 결과(숫자·경고 문장)가 이전 엔진과 같다`);
 }
 // 태그 수: 이 개수가 바뀌면 점검표가 달라진다 — 의도한 변경인지 사람이 보게 한다.
-const expectedTags = { SHARED_METER: 5, HEAT: 3, DUP_FUNCTIONAL_UNIT: 1, MULTIFUNCTIONAL: 1, ACTIVITY_LEVEL: 1, ALLOCATION_SUM: 3, MANUAL_ALLOCATION: 2, PRECURSOR_COMPLETENESS: 2 };
+const expectedTags = { SHARED_METER: 5, HEAT: 3, DUP_FUNCTIONAL_UNIT: 1, MULTIFUNCTIONAL: 1, ACTIVITY_LEVEL: 1, ALLOCATION_SUM: 3, MANUAL_ALLOCATION: 2, PRECURSOR_COMPLETENESS: 2, PRODUCT_SHARE: 1 };
 for (const [check, count] of Object.entries(expectedTags)) {
   const found = newEngineText.split(`, '${check}'`).length - 1; // 태그는 addWarning의 세 번째 인자 자리에만 쓴다(타입 선언의 `| 'X'`는 따옴표 앞이 `|`)
   assert.equal(found, count, `엔진의 ${check} 태그 ${count}개`);
@@ -106,7 +106,7 @@ const cleanStatus = build(clean);
 assert.deepEqual(plain(cleanStatus.rows.map((row) => [row.id, row.status])), [['ACTIVITY_LEVEL', 'ok'], ['ALLOCATION_SUM', 'ok'], ['PRECURSOR_COMPLETENESS', 'ok']], '깨끗한 단일 공정: 해당하는 점검만 ✓');
 assert.equal(cleanStatus.counts.fix + cleanStatus.counts.review, 0);
 assert.ok(cleanStatus.notApplicable.some((name) => name.startsWith('V01')) && cleanStatus.notApplicable.some((name) => name.startsWith('V05')), '공용 계량기·열은 해당 없음으로 접힌다');
-assert.ok(cleanStatus.notApplicable.length === 5);
+assert.ok(cleanStatus.notApplicable.length === 6, "공용 계량기·열·다기능·사용자 지정·같은 재화 분리·제품별 원료 몫은 해당 없음");
 assert.ok(cleanStatus.rows.every((row) => row.detail && row.title));
 
 const messyStatus = build(messy);
@@ -123,6 +123,31 @@ assert.equal(messyStatus.counts.ok + messyStatus.counts.review + messyStatus.cou
 assert.ok(rowOf(messyStatus, 'PRECURSOR_COMPLETENESS').href.startsWith('/precursors?edit='), '고칠 화면으로 가는 링크');
 assert.ok(/^\/(source-streams|processes)\?edit=/.test(rowOf(messyStatus, 'SHARED_METER').href), '공용 계량기 점검도 지도 첫 화면이 아니라 고칠 행으로 바로 간다');
 assert.ok(rowOf(messyStatus, 'ALLOCATION_SUM').items.length <= 3, '걸린 항목은 3줄까지');
+// V09 제품별 구매 강재 몫 — 한 공정 안의 제품은 질량으로 귀속하고 EU 엑셀은 공정당 SEE 하나다(run36). 「쓰는 제품」으로 제품별로 나눈 값이 어긋나면 알린다.
+{
+  const share = (id, lineId, mass, direct, extra = {}) => precursor(id, 'p', { consumed_mass_t: mass, purchased_mass_t: mass, direct_see_tco2e_per_t: direct, output_allocations: [{ product_output_line_id: lineId, allocated_mass_t: mass, allocation_percent: 100 }], ...extra });
+  const base2 = (products, lines, precursors, procExtra = {}) => ({ products, periods: [period], processes: [proc('p', products[0].id, { output_mass_t: 1000, electricity_mwh: 0, ...procExtra })], productOutputLines: lines, precursors, sourceStreams: [] });
+  const shareChecks = (scenario) => app.calculateLocalResults(scenario).flatMap((result) => result.warningDetails).filter((warning) => warning.check === 'PRODUCT_SHARE');
+  // 서로 다른 CN 둘, 원료를 제품마다 따로 귀속 → 공정 값이 CN별로 갈린다
+  const crossCn = base2([A, B], [line('lA', 'p', 'a', 600), line('lB', 'p', 'b', 400)], [share('r1', 'lA', 600, 1.5), share('r2', 'lB', 400, 3)]);
+  const crossWarnings = shareChecks(crossCn);
+  assert.ok(crossWarnings.length > 0 && crossWarnings.every((warning) => warning.message.startsWith('확인 필요(규정):') && warning.target.type === 'process'), '제품마다 원료 몫이 다르면 확인 필요(규정)');
+  assert.ok(crossWarnings[0].message.includes('CN 72139110 1.50') && crossWarnings[0].message.includes('CN 72139190 3.00') && crossWarnings[0].message.includes('부속서 III A.2'), '값과 근거를 문장에 담는다');
+  const crossStatus = build(crossCn);
+  assert.equal(rowOf(crossStatus, 'PRODUCT_SHARE').status, 'review', '점검표에 V09가 「확인 필요」로 선다');
+  // 같은 CN의 두 줄(수출 · 비수출)이 다른 몫을 가지면 규정 위반에 가깝다 — 자료 수정 필요
+  const sameCn = base2([A, A2], [line('lA', 'p', 'a', 600), line('lA2', 'p', 'a2', 400)], [share('r1', 'lA', 600, 1.5), share('r2', 'lA2', 400, 3)]);
+  const sameWarnings = shareChecks(sameCn);
+  assert.ok(sameWarnings.some((warning) => warning.message.startsWith('확인 필요(자료):') && warning.message.includes('같은 CN(72139110)')), '같은 CN의 SEE가 둘이면 확인 필요(자료)');
+  assert.equal(rowOf(build(sameCn), 'PRODUCT_SHARE').status, 'fix', '같은 CN의 SEE가 둘이면 수정 필요');
+  // 걸리지 않아야 하는 것
+  const evenly = base2([A, B], [line('lA', 'p', 'a', 600), line('lB', 'p', 'b', 400)], [precursor('r1', 'p', { consumed_mass_t: 1000, purchased_mass_t: 1000 })]);
+  assert.equal(shareChecks(evenly).length, 0, '「쓰는 제품」 없이 질량으로 나누면 걸리지 않는다');
+  const sameShare = base2([A, B], [line('lA', 'p', 'a', 600), line('lB', 'p', 'b', 400)], [share('r1', 'lA', 600, 1.5), share('r2', 'lB', 400, 1.5)]);
+  assert.equal(shareChecks(sameShare).length, 0, '제품마다 몫이 달라도 1 t당 SEE가 같으면 어긋나지 않는다');
+  const manual = base2([A, B], [line('lA', 'p', 'a', 600, { allocation_basis: 'MANUAL', manual_allocation_percent: 60 }), line('lB', 'p', 'b', 400, { allocation_basis: 'MANUAL', manual_allocation_percent: 40 })], [share('r1', 'lA', 600, 1.5), share('r2', 'lB', 400, 3)]);
+  assert.equal(shareChecks(manual).length, 0, '사용자 지정 배분(규정 예외)은 제품별 값이 다른 것이 의도다 — 이 점검이 아니라 예외 점검이 다룬다');
+}
 // 폐가스
 const wasteStatus = build(messy, { installation: { waste_gases: 'YES' } });
 assert.equal(rowOf(wasteStatus, 'WASTE_GAS').status, 'review');
@@ -156,4 +181,4 @@ const lib = file('src/lib/attribution-status.ts');
 assert.ok(!/createLocalItem|updateLocalItem|deleteLocalItem|indexedDB/.test(lib), '점검표는 저장하지 않는다');
 assert.ok(!/calculateLocalResults\(/.test(lib), '점검표는 엔진을 다시 돌리지 않는다(받은 결과를 모을 뿐)');
 
-console.log('Attribution status verified (계산 불변 — 이전 엔진과 결과 동일 · 태그 18개 · 통과 ✓/해당 없음 접힘 · 수정/확인 필요 규칙 · 폐가스 안내 · 저장 없음).');
+console.log('Attribution status verified (계산 불변 — 이전 엔진과 결과 동일 · 태그 19개 · 통과 ✓/해당 없음 접힘 · 수정/확인 필요 규칙 · 폐가스 안내 · 저장 없음).');

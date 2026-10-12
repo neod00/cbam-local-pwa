@@ -64,6 +64,7 @@ const SPECS: CheckSpec[] = [
     { id: 'ALLOCATION_SUM', code: 'V08', title: '배분 합계 = 100% (사용자 지정 배분·구매 강재의 제품별 귀속)', okText: '배분 합계가 100%(소비량)와 맞습니다.', applicable: (ctx) => ctx.processes.length > 0 },
     { id: 'MANUAL_ALLOCATION', code: '예외', title: '사용자 지정 배분은 규정 예외 — 사유·증빙이 있음', okText: '사용자 지정 배분이 없거나, 사유·증빙이 적혀 있습니다.', applicable: (ctx) => ctx.lines.some((line) => line.allocation_basis === 'MANUAL') },
     { id: 'PRECURSOR_COMPLETENESS', code: 'V06', title: '구매 강재의 제품별 귀속이 배출에서 빠지지 않음', okText: '구매 강재의 귀속이 지워진 생산라인·활동수준 제외 라인을 가리키지 않습니다.', applicable: (ctx) => ctx.precursorCount > 0 },
+    { id: 'PRODUCT_SHARE', code: 'V09', title: '한 공정 안의 제품은 같은 구매 강재 몫(질량 귀속) — EU 엑셀과 어긋나지 않음', okText: '한 공정 안의 제품별 구매 강재 몫이 같아 화면·보고서의 CN별 값과 EU 엑셀의 공정 값이 같습니다.', applicable: (ctx) => ctx.precursorCount > 0 && ctx.lines.length >= 2 },
 ];
 
 export interface AttributionStatusResult {

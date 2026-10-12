@@ -257,7 +257,7 @@ export const PRECURSOR_COLUMNS: ActivityField[] = [
     { key: 'purchased', label: '구매량 (t)', width: 16, hint: '비우면 투입량과 같게 봅니다', example: 2980 },
     { key: 'country', label: '원료를 만든 나라', required: true, list: 'country', width: 20, hint: '파는 회사의 나라가 아니라 **만든 공장**의 나라. 목록에서 고르세요', example: 'South Korea' },
     { key: 'where', label: '쓰는 공정', required: true, list: 'process', width: 30, hint: '3_공정 시트의 공정 이름. 2b_품번목록으로 채웠다면 그 원료로 만드는 재질(예: SCM435)을 적으세요', example: 'STS 나사 공정' },
-    { key: 'products', label: '쓰는 제품', list: 'product', width: 34, hint: '이 원료로 만드는 제품(2_제품의 이름). 비우면 그 공정의 모든 제품이 생산량 비율로 나눠 쓴 것으로 봅니다. 제품마다 강종이 다르면 꼭 적으세요 — 여러 개면 ; 로 이어 적습니다', example: '' },
+    { key: 'products', label: '쓰는 제품', list: 'product', width: 34, hint: '이 원료로 만드는 제품(2_제품의 이름). 비우면 그 공정의 모든 제품이 생산량 비율로 나눠 쓴 것으로 봅니다(규정이 정한 질량 귀속). 한 공정 안에서 제품마다 다르게 적으면 화면·산정 보고서의 CN별 값이 EU 엑셀(공정당 값 하나)과 어긋나니, 제품마다 강종이 다르면 공정을 나누세요 — 여러 개면 ; 로 이어 적습니다', example: '' },
     { key: 'hasValue', label: '공급사 배출량 값이 있나요?', required: true, list: 'supplierValue', width: 28, hint: '없으면 앱이 EU 기본값을 찾아 넣습니다(직접·간접 칸은 비워 두세요)', example: SUPPLIER_VALUE_CHOICES[0].label },
     { key: 'direct', label: '직접 SEE (tCO₂e/t)', width: 18, hint: '공급사가 준 값. 「있음」일 때만', example: 1.86 },
     { key: 'indirect', label: '간접 SEE (tCO₂e/t)', width: 18, hint: '공급사가 준 값. 「있음」일 때만', example: 0.94 },
