@@ -138,7 +138,8 @@ export interface LocalCalculationResult {
 /**
  * 귀속·할당 점검 종류 — 경고를 만든 자리에서 붙인다(귀속 점검 화면이 문장을 해석하지 않고 모으게). 계산에는 쓰이지 않는다.
  *  SHARED_METER 공용 계량기 합계·정합계수 · HEAT 열 귀속 · DUP_FUNCTIONAL_UNIT 같은 재화의 공정 분리(복수 경로 포함) · MULTIFUNCTIONAL 다기능 공정 ·
- *  ACTIVITY_LEVEL 활동수준 제외 · ALLOCATION_SUM 배분 합계 100% · MANUAL_ALLOCATION 사용자 지정 배분(예외) · PRECURSOR_COMPLETENESS 전구물질 귀속 누락
+ *  ACTIVITY_LEVEL 활동수준 제외 · ALLOCATION_SUM 배분 합계 100% · MANUAL_ALLOCATION 사용자 지정 배분(예외) · PRECURSOR_COMPLETENESS 전구물질 귀속 누락 ·
+ *  PRODUCT_SHARE 한 공정 안에서 제품별 구매 강재 몫이 달라 EU 엑셀(공정당 SEE 하나)과 어긋남
  */
 export type AttributionCheckId =
     | 'SHARED_METER'
@@ -148,7 +149,8 @@ export type AttributionCheckId =
     | 'ACTIVITY_LEVEL'
     | 'ALLOCATION_SUM'
     | 'MANUAL_ALLOCATION'
-    | 'PRECURSOR_COMPLETENESS';
+    | 'PRECURSOR_COMPLETENESS'
+    | 'PRODUCT_SHARE';
 
 export type LocalCalculationWarning = {
     message: string;
@@ -1196,6 +1198,46 @@ function calculateOwnResults(input: {
                 total_see: lineSeeInformationalTotal,
             };
         });
+
+        // 한 공정 안의 제품은 질량(기능단위)으로 귀속한다(부속서 III A.2). EU 엑셀도 공정당 SEE 하나를 계산하므로, 구매 강재를 「쓰는 제품」으로
+        // 제품마다 다르게 나눈 값은 화면·산정 보고서에만 있고 EU 문서에는 공정 평균으로 나간다 — 같은 패키지의 두 문서가 어긋난다(run36).
+        // 사용자 지정 배분(규정 예외)이 있으면 제품별 값이 다른 것이 의도이므로 따로 다룬다(MANUAL_ALLOCATION).
+        if (processPrecursors.some((precursor) => (precursor.output_allocations?.length ?? 0) > 0) && !lineResults.some((result) => result.allocation_basis === 'MANUAL')) {
+            const goods = lineResults.filter((result) => result.allocation_basis !== 'ACTIVITY_LEVEL_EXCLUDED' && result.output_mass_t > 0);
+            const differs = (a: number, b: number) => Math.abs(a - b) > Math.max(0.001, 0.005 * Math.max(a, b));
+            const byCn = new Map<string, LocalCalculationResult[]>();
+            for (const result of goods) {
+                const cn = (result.cn_code ?? '').replace(/\D/g, '') || result.product_id || result.id;
+                byCn.set(cn, [...(byCn.get(cn) ?? []), result]);
+            }
+            const sameCn = Array.from(byCn).filter(([, list]) => list.length > 1 && list.some((item) => differs(item.precursor_direct_see, list[0].precursor_direct_see)));
+            const perCn = Array.from(byCn).map(([cn, list]) => {
+                const mass = list.reduce((sum, item) => sum + item.output_mass_t, 0);
+                return { cn, see: mass > 0 ? list.reduce((sum, item) => sum + item.precursor_direct_see * item.output_mass_t, 0) / mass : 0 };
+            });
+            const crossCn = perCn.length >= 2 && perCn.some((item) => differs(item.see, perCn[0].see));
+            const found: string[] = [];
+            if (sameCn.length > 0) {
+                found.push(
+                    `확인 필요(자료): 공정 「${process.name}」에서 같은 CN(${sameCn.map(([cn]) => cn).join(', ')})의 제품 줄마다 구매 강재 몫이 달라 SEE가 둘 이상입니다. `
+                    + `${ALLOCATION_RULES.SINGLE_PROCESS.anchor}: 같은 CN은 단일 생산공정이고 기능단위(CN별 톤)당 SEE는 하나입니다 — 수출분·비수출분을 같은 CN의 한 몫으로 귀속하세요.`
+                );
+            }
+            if (crossCn) {
+                found.push(
+                    `확인 필요(규정): 공정 「${process.name}」에서 구매 강재를 「쓰는 제품」으로 제품별로 나눠 CN별 구매 강재 SEE가 서로 다릅니다(${perCn.map((item) => `CN ${item.cn} ${item.see.toFixed(2)}`).join(' · ')}). `
+                    + '규정은 한 공정 안의 제품을 질량(기능단위)으로 귀속하고(부속서 III A.2) EU 엑셀도 공정당 SEE 하나를 계산하므로, 화면·산정 보고서의 CN별 값과 EU 문서의 값이 어긋납니다. '
+                    + '같은 값으로 두려면 「쓰는 제품」을 비워 질량으로 나누고, CN별 값이 필요하면 원료 구성이 다른 CN을 별도 공정으로 나누세요(2025/2547 제4조 8항 · 부속서 II A.4).'
+                );
+            }
+            const addToLines = (message: string, check?: AttributionCheckId) => {
+                for (const result of lineResults) {
+                    result.warnings = [...result.warnings, message];
+                    result.warningDetails = [...result.warningDetails, check ? { message, target: { type: 'process' as const, id: process.id }, check } : { message, target: { type: 'process' as const, id: process.id } }];
+                }
+            };
+            for (const message of found) addToLines(message, 'PRODUCT_SHARE');
+        }
 
         if (outputLineSummary.needsOutputReview) {
             for (const result of lineResults) {
