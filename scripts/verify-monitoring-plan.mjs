@@ -68,6 +68,16 @@ const section = (no) => plan.sections.find((item) => item.no === no);
 const text = (item) => JSON.stringify([item.paragraphs, item.tables]);
 assert.match(text(section(2)), /Daeil Industrial Co\., Ltd\. Ansan Plant/, '사업장 이름');
 assert.match(text(section(2)), /STS 나사 공정/, '공정 목록');
+{
+  // 고른 공정 구분 방식은 4번(생산공정)에 적힌다 — 고른 적이 없으면 한 줄도 더하지 않는다
+  assert.doesNotMatch(text(section(4)), /공정 구분 방식/);
+  const grouping = { choice: 'MERGE', chosen_at: '2026-10-12T00:00:00.000Z', tolerance_pp: 5, groups: [
+    { cns: ['73181692'], output_t: 100, merged_see: 1.5, split_see: 2.0, delta_pct: -25 },
+    { cns: ['73181660'], output_t: 50, merged_see: 1.5, split_see: 1.0, delta_pct: 50 },
+  ] };
+  const grouped = P.buildMonitoringPlan({ ...input, reportInputs: { ...report, process_grouping: grouping } });
+  assert.match(text(grouped.sections.find((item) => item.no === 4)), /공정 구분 방식\(2026-10-12 선택\).*한 다기능 생산공정으로 합쳐/, '모니터링 계획 4번에 고른 방식');
+}
 assert.match(text(section(3)), /73181552/, 'CN 코드별 재화');
 assert.match(text(section(4)), /탄소강 나사 공정/);
 assert.match(text(section(9)), /지게차 경유/, '배출원 목록');

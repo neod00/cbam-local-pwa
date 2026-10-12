@@ -431,6 +431,19 @@ const latePlan = reportModule.createCalculationReport({
 });
 assertTrue(latePlan.issues.some((issue) => issue.gate === 'G2' && /승인일/.test(issue.message)), '모니터링 계획 승인일 지연 경고');
 
+// 올릴 때 고른 공정 구분 방식(합침/나눔)은 제4장에 적힌다 — 고른 적이 없으면 한 줄도 더하지 않는다
+const groupedXml = async (grouping) => {
+    const built = reportModule.createCalculationReport({ ...baseInput(), reportInputs: grouping ? { process_grouping: grouping } : {} });
+    return fflate.strFromU8(fflate.unzipSync(new Uint8Array(await built.blob.arrayBuffer()))['word/document.xml']);
+};
+assertTrue(!(await groupedXml(undefined)).includes('공정 구분 방식'), '고른 적이 없으면 제4장에 공정 구분 방식을 쓰지 않는다');
+const groupedDoc = await groupedXml({ choice: 'SPLIT', chosen_at: '2026-10-12T00:00:00.000Z', tolerance_pp: 5, groups: [
+    { cns: ['73181692'], output_t: 100, merged_see: 1.5, split_see: 2.0, delta_pct: 33.3 },
+    { cns: ['73181660'], output_t: 50, merged_see: 1.5, split_see: 1.0, delta_pct: -33.3 },
+] });
+assertTrue(groupedDoc.includes('공정 구분 방식(2026-10-12 선택)') && groupedDoc.includes('2개 생산공정으로 나누어 산정했다'), '제4장에 고른 방식(나눔)과 공정 수');
+assertTrue(groupedDoc.includes('확인 필요(자료)') && groupedDoc.includes('앱의 기준이며 규정이 정한 값이 아니다'), '나눔의 근거 필요 사항과 허용 폭의 성격을 적는다');
+
 // ---------------- 씨밤이 재감사(앱 산출물) 회귀 — 해피패스 밖 좌표 ----------------
 // 기존 픽스처는 제품1·공정1·기간1·간접제외 하나뿐이었다. 그 좌표를 벗어나면 보고서가 차단도 경고도
 // 없이 틀린 숫자를 인쇄한다는 것이 재감사에서 드러났다. 아래는 그 좌표들을 고정한다.

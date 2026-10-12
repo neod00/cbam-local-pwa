@@ -1,3 +1,4 @@
+import { describeProcessGrouping } from './allocation-rules';
 import { createDocx, paragraph, table } from './docx-builder';
 import { D43_EVIDENCE, ELECTRICITY_EF_BASIS_LABEL, resolveElectricityEfBasis } from './electricity-ef-basis';
 import type {
@@ -159,7 +160,7 @@ export function buildMonitoringPlan(input: MonitoringPlanInput): MonitoringPlan 
         no: 4,
         title: 'CBAM 생산공정과 생산 경로, 공정별 산출 재화',
         status: input.processes.length > 0 ? 'AUTO' : 'TODO',
-        paragraphs: ['같은 CN 코드를 여러 경로로 만들어도 하나의 생산공정으로 정의합니다(2025/2547 제4조 6항).'],
+        paragraphs: ['같은 CN 코드를 여러 경로로 만들어도 하나의 생산공정으로 정의합니다(2025/2547 제4조 6항).', ...describeProcessGrouping(input.reportInputs?.process_grouping)],
         tables: [{ headers: ['생산공정', '생산 경로', '산출 재화', '양 (t)'], rows: input.processes.flatMap((process) => {
             const lines = linesOf(process.id).filter((line) => line.activity_level_role !== ROLE_EXCLUDED);
             if (lines.length === 0) return [[process.name, process.production_route || PLAN_TODO, PLAN_TODO, fmt(process.output_mass_t)]];

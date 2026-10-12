@@ -1,4 +1,4 @@
-import type { ActivityLevelRole, DirectEmissionsInputMode, ProductOutputLine, ProductReportingScope, ProductionProcess, SourceStream } from './local-db';
+import type { ActivityLevelRole, DirectEmissionsInputMode, ProductOutputLine, ProductReportingScope, ProductionProcess, ReportProcessGrouping, SourceStream } from './local-db';
 import { calculateSourceStreamEmissions } from './source-stream-calculation';
 
 /**
@@ -434,4 +434,35 @@ export const ELECTRICITY_INTENSITY_LIMIT_MWH_PER_T = 50;
 
 export function isImplausibleElectricityIntensity(mwh: number, outputMassT: number): boolean {
     return outputMassT > 0 && Number.isFinite(mwh) && mwh / outputMassT > ELECTRICITY_INTENSITY_LIMIT_MWH_PER_T;
+}
+
+/**
+ * 두 공정(또는 두 CN)이 쓰는 원료의 비율 차가 이 값(비율의 차) 이하이면 「같은 양·비율」로 본다.
+ * 규정(2025/2547 부속서 II A.4)은 「same precursors in types, quantities and proportions」라고만 하고 허용 오차를 정하지 않는다 —
+ * 앱의 기준이며, 어디까지를 같은 것으로 볼지는 검증인이 판단한다.
+ */
+export const PRECURSOR_MIX_TOLERANCE = 0.05;
+
+/**
+ * 올릴 때 고른 공정 구분 방식을 보고서·모니터링 계획에 적는 글. 고른 적이 없으면(고를 것이 없었거나 손으로 입력) 빈 목록.
+ * 규정은 구성이 다른 CN을 합치는 것도 나누는 것도 허용한다 — 그래서 고른 방식과 그 근거, 선택 시 보여 준 값을 함께 적는다.
+ */
+export function describeProcessGrouping(grouping: ReportProcessGrouping | undefined): string[] {
+    if (!grouping || grouping.groups.length === 0) return [];
+    const cns = grouping.groups.flatMap((group) => group.cns).join('·');
+    const deltas = grouping.groups.map((group) => group.delta_pct);
+    const range = `${Math.min(...deltas).toFixed(1)}% ~ ${Math.max(...deltas) > 0 ? '+' : ''}${Math.max(...deltas).toFixed(1)}%`;
+    const date = grouping.chosen_at.slice(0, 10);
+    const tolerance = `재질 비율의 차가 ${grouping.tolerance_pp}%p 이내이면 같은 구성으로 본다(앱의 기준이며 규정이 정한 값이 아니다 — 검증인이 판단한다).`;
+    const consistency = '고른 방식은 모니터링 계획에 적고 보고기간마다 같게 적용한다.';
+    if (grouping.choice === 'MERGE') {
+        return [
+            `공정 구분 방식(${date} 선택): 같은 재질을 쓰지만 재질 구성(비율)이 서로 다른 CN(${cns})을 한 다기능 생산공정으로 합쳐 질량(기능단위) 기준 가중평균으로 산정했다 — 2025/2547 제4조 8항, 부속서 III A.2. 이 CN들의 SEE는 같은 값이다.`,
+            `선택 시 비교한 값: CN별로 나누면 구매 강재가 싣는 직접 SEE가 합친 값 대비 ${range} 달라졌다. ${tolerance} ${consistency}`,
+        ];
+    }
+    return [
+        `공정 구분 방식(${date} 선택): 같은 재질을 쓰지만 재질 구성(비율)이 서로 다른 CN(${cns})을 ${grouping.groups.length}개 생산공정으로 나누어 산정했다 — 2025/2547 제4조 8항, 부속서 III A.1. CN마다 쓴 원료가 그 CN의 SEE에 실린다.`,
+        `선택 시 비교한 값: 합쳤을 때 대비 구매 강재가 싣는 직접 SEE가 ${range}. 원료 투입은 CN별 투입 기록이 없어 그 재질로 만든 양(생산량+스크랩)의 비율로 나누었다 — 확인 필요(자료): 검증인이 CN별 재질 투입 기록을 물을 수 있다. ${tolerance} ${consistency}`,
+    ];
 }
