@@ -106,6 +106,18 @@ export async function restoreProjectFromBackup(parsed: CbamBackupFile): Promise<
     window.localStorage.setItem(CBAM_LAST_BACKUP_AT_KEY, parsed.manifest.exported_at);
 }
 
+/**
+ * 지금 프로젝트를 .cbam 파일로 내려받은 **뒤에** 비우고 새 프로젝트로 시작한다 — 고친 서식을 같은 프로젝트에 다시 올릴 때(바꿔 넣기) 쓴다.
+ * 백업을 만들지 못하면(exportBackup이 던지면) 아무것도 지우지 않는다. 내려받은 파일 이름을 돌려준다.
+ */
+export async function backupAndStartNewProject(deps: ProjectFileDeps<CbamBackupFile> = createBrowserProjectFileDeps()): Promise<string> {
+    const backup = await deps.exportBackup();
+    const filename = `cbam-backup-${backup.manifest.exported_at.slice(0, 10)}${PROJECT_FILE_EXTENSION}`;
+    deps.download(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }), filename);
+    await startNewProjectAndDetach(deps);
+    return filename;
+}
+
 /** 새 프로젝트를 시작한다(입력 자료만 비움 — 라이선스·EU 기본값·벤치마크·비용 가정은 유지). 연결된 파일도 끊는다. */
 export async function startNewProjectAndDetach(deps: ProjectFileDeps<CbamBackupFile>): Promise<void> {
     await startNewProject();

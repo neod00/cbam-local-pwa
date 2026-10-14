@@ -222,7 +222,7 @@ export async function importActivityWorkbook(
         store.list('installations'), store.list('periods'), store.list('products'), store.list('processes'), store.list('source_streams'), store.list('precursors'),
     ]);
     if (existingProcesses.length > 0) {
-        note('warning', '파일', `이 프로젝트에는 이미 공정이 ${existingProcesses.length}개 있습니다. 같은 이름의 제품·공정은 건너뛰고 새 것만 더했습니다 — 한 업체의 자료를 처음 넣을 때는 「새 프로젝트」에서 올리세요.`);
+        note('warning', '파일', `이 프로젝트에는 이미 공정이 ${existingProcesses.length}개 있습니다. 같은 이름의 제품·공정은 건너뛰고 새 것만 더했습니다 — 고친 서식을 다시 올리는 것이면 올릴 때 나오는 「바꿔 넣기」를 고르세요(지금 자료는 백업 후 지웁니다). 다른 업체의 자료는 「새 프로젝트」에서 올리세요.`);
     }
 
     // ── 1) 사업장 ────────────────────────────────────────────────────
