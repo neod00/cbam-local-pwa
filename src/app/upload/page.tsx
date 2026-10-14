@@ -6,6 +6,7 @@ import {
     getLocalSetting,
     listLocalItems,
     ACTIVITY_IMPORT_RESULT_SETTING_KEY,
+    NEW_PROJECT_CLEARED_SETTINGS,
     REPORT_INPUTS_SETTING_KEY,
     setLocalSetting,
     type ReportInputs,
@@ -32,6 +33,7 @@ import {
 } from '@/lib/activity-workbook';
 import { ensureBundledReferences } from '@/lib/bundled-references';
 import { downloadBlob } from '@/lib/eu-template-export';
+import { backupAndStartNewProject } from '@/lib/project-file-browser';
 import {
     displayReferenceCountry,
     findDefaultValueReference,
@@ -375,7 +377,10 @@ export default function UploadPage() {
     const [isImporting, setIsImporting] = useState(false);
     const [isActivityImporting, setIsActivityImporting] = useState(false);
     // 품번 목록에서 재질 구성이 다른 CN을 합칠지 나눌지 — 고를 것이 있는 파일이면 넣기 전에 두 방식의 값을 보여 주고 묻는다.
-    const [groupingChoice, setGroupingChoice] = useState<{ data: ActivityWorkbookData; filename: string; preview: PartGroupingPreview } | null>(null);
+    const [groupingChoice, setGroupingChoice] = useState<{ data: ActivityWorkbookData; filename: string; preview: PartGroupingPreview; replace: boolean } | null>(null);
+    // 이 프로젝트에 이미 자료가 있을 때 — 고친 서식을 다시 올리는 것인지(바꿔 넣기) 묻는다. 지우는 일은 맨 마지막(넣기 직전)에 한다.
+    const [replaceChoice, setReplaceChoice] = useState<{ data: ActivityWorkbookData; filename: string; counts: { products: number; processes: number; fuels: number; precursors: number } } | null>(null);
+    const [replacedBackup, setReplacedBackup] = useState('');
 
     useEffect(() => {
         async function loadReferenceSummaries() {
@@ -477,7 +482,9 @@ export default function UploadPage() {
         }
     }
 
-    async function importWorkbook(data: ActivityWorkbookData, filename: string, partGrouping?: PartGrouping) {
+    async function importWorkbook(data: ActivityWorkbookData, filename: string, partGrouping?: PartGrouping, replace = false) {
+        // 바꿔 넣기: 지금 자료를 .cbam으로 내려받은 뒤 비운다. 백업이 실패하면 여기서 던져 아무것도 지우지 않는다.
+        if (replace) setReplacedBackup(await backupAndStartNewProject());
         const result = await importActivityWorkbook(data, {
             store: { list: listLocalItems, create: createLocalItem, update: updateLocalItem },
             defaultValues: await loadDefaultValues(),
@@ -503,13 +510,37 @@ export default function UploadPage() {
         setActivityMessage(`서식을 넣었습니다 — 사업장 ${created.installation} · 보고기간 ${created.period} · 제품 ${created.products} · 공정 ${created.processes} · 연료 ${created.fuels} · 구매 강재 ${created.precursors}건.`);
     }
 
+    /** 합침·나눔을 고를 것이 있으면 카드를 띄우고, 없으면 바로 넣는다 */
+    async function continueImport(data: ActivityWorkbookData, filename: string, replace: boolean) {
+        const preview = previewPartGrouping(data, await loadDefaultValues());
+        if (preview) {
+            setGroupingChoice({ data, filename, preview, replace });
+            return;
+        }
+        await importWorkbook(data, filename, undefined, replace);
+    }
+
+    async function handleReplaceChoice(replace: boolean) {
+        if (!replaceChoice) return;
+        const { data, filename } = replaceChoice;
+        setReplaceChoice(null);
+        setIsActivityImporting(true);
+        try {
+            await continueImport(data, filename, replace);
+        } catch (error) {
+            setActivityError(error instanceof Error ? error.message : '활동자료 템플릿을 가져오지 못했습니다.');
+        } finally {
+            setIsActivityImporting(false);
+        }
+    }
+
     async function handleGroupingChoice(partGrouping: PartGrouping) {
         if (!groupingChoice) return;
-        const { data, filename } = groupingChoice;
+        const { data, filename, replace } = groupingChoice;
         setGroupingChoice(null);
         setIsActivityImporting(true);
         try {
-            await importWorkbook(data, filename, partGrouping);
+            await importWorkbook(data, filename, partGrouping, replace);
         } catch (error) {
             setActivityError(error instanceof Error ? error.message : '활동자료 템플릿을 가져오지 못했습니다.');
         } finally {
@@ -532,6 +563,8 @@ export default function UploadPage() {
         setActivityIssues(null);
         setIssuesCopied(false);
         setGroupingChoice(null);
+        setReplaceChoice(null);
+        setReplacedBackup('');
         setIsActivityImporting(true);
 
         try {
@@ -539,12 +572,13 @@ export default function UploadPage() {
             const bytes = file.name.toLowerCase().endsWith('.xlsx') ? new Uint8Array(await file.arrayBuffer()) : undefined;
             if (bytes && isActivityWorkbookV2(readActivityWorkbookSheetNames(bytes))) {
                 const data = parseActivityWorkbook(bytes);
-                const preview = previewPartGrouping(data, await loadDefaultValues());
-                if (preview) {
-                    setGroupingChoice({ data, filename: file.name, preview });
+                // 이미 자료가 있는 프로젝트에 올리면 같은 이름은 건너뛰어 고친 줄이 들어가지 않는다(run36 P1-02) — 먼저 묻는다.
+                const [products, processes, streams, precursors] = await Promise.all([listLocalItems('products'), listLocalItems('processes'), listLocalItems('source_streams'), listLocalItems('precursors')]);
+                if (products.length + processes.length + streams.length + precursors.length > 0) {
+                    setReplaceChoice({ data, filename: file.name, counts: { products: products.length, processes: processes.length, fuels: streams.length, precursors: precursors.length } });
                     return;
                 }
-                await importWorkbook(data, file.name);
+                await continueImport(data, file.name, false);
                 return;
             }
             const plan = await parseActivityDataTemplate(file);
@@ -722,6 +756,38 @@ export default function UploadPage() {
                             올린 파일은 서버로 전송하지 않습니다. 빠지거나 틀린 칸은 넣지 않고 아래 「확인할 것」에 시트와 줄 번호로 알려 드립니다 — 그대로 복사해 서식을 채운 분께 보낼 수 있습니다.
                         </p>
                     </div>
+
+                    {replaceChoice && (
+                        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-slate-800" role="group" aria-label="이미 있는 자료 처리 고르기">
+                            <p className="font-semibold text-slate-900">이 프로젝트에는 이미 자료가 있습니다 — 고친 서식을 다시 올리는 것이면 「바꿔 넣기」를 고르세요.</p>
+                            <p className="mt-2 leading-6 text-slate-700">
+                                지금 들어 있는 자료: 제품 {replaceChoice.counts.products} · 공정 {replaceChoice.counts.processes} · 연료 {replaceChoice.counts.fuels} · 구매 강재 {replaceChoice.counts.precursors}건.
+                                「{replaceChoice.filename}」을 그냥 더하면 같은 이름의 제품·공정은 건너뛰어 고친 줄이 들어가지 않습니다.
+                            </p>
+                            <ul className="mt-3 list-disc space-y-1 pl-5 leading-6 text-slate-700">
+                                <li><span className="font-semibold">바꿔 넣기</span> — 지금 자료를 .cbam 파일로 먼저 내려받은 뒤 지우고, 이 파일로 새로 채웁니다. 앱에서 손으로 고친 값과 {Object.values(NEW_PROJECT_CLEARED_SETTINGS).join(', ')}도 함께 지워집니다(라이선스·EU 기본값·벤치마크·비용 가정은 남습니다). 한 프로젝트는 한 해 자료입니다.</li>
+                                <li><span className="font-semibold">새 것만 더하기</span> — 이미 있는 제품·공정은 두고 새 것만 더합니다(고친 값은 바뀌지 않습니다).</li>
+                            </ul>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                                <button type="button" onClick={() => handleReplaceChoice(true)} className="inline-flex min-h-10 items-center justify-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-600">
+                                    바꿔 넣기 (지금 자료는 백업 후 지움)
+                                </button>
+                                <button type="button" onClick={() => handleReplaceChoice(false)} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50">
+                                    새 것만 더하기
+                                </button>
+                                <button type="button" onClick={() => setReplaceChoice(null)} className="inline-flex min-h-10 items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-white">
+                                    올리지 않음
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {replacedBackup && (
+                        <div className="mt-6 flex gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none" />
+                            <span>이전 자료는 「{replacedBackup}」로 내려받았습니다. 되돌리려면 파일 메뉴의 「열기」로 이 파일을 여세요.</span>
+                        </div>
+                    )}
 
                     {groupingChoice && (
                         <div className="mt-6 rounded-2xl border border-teal-200 bg-teal-50 px-5 py-4 text-sm text-slate-800" role="group" aria-label="공정 묶는 방식 고르기">

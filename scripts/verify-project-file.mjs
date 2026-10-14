@@ -184,3 +184,19 @@ assert.ok(read('package.json').includes('"verify:project-file"'));
 void path;
 
 console.log('Project file verified (저장 · 다른 이름으로 저장 · 덮어쓰기 실패 시 다시 고름 · 취소 · 내려받기 대체 · 열기는 읽기만 · 별도 핸들 저장소 · 서버 전송 없음 · 배선).');
+
+// ── 고친 서식을 같은 프로젝트에 다시 올리기(바꿔 넣기, run36 P1-02) ──
+{
+  const uploadPage = read('src/app/upload/page.tsx');
+  const browserText = read('src/lib/project-file-browser.ts');
+  // 백업 → 비움의 순서: 백업을 만들지 못하면 지우지 않는다
+  const fn = browserText.slice(browserText.indexOf('export async function backupAndStartNewProject'));
+  assert.ok(fn.indexOf('deps.exportBackup()') > 0 && fn.indexOf('deps.exportBackup()') < fn.indexOf('deps.download(') && fn.indexOf('deps.download(') < fn.indexOf('startNewProjectAndDetach(deps)'), '내보내기 → 내려받기 → 비움 순서');
+  assert.ok(uploadPage.includes("from '@/lib/project-file-browser'") && uploadPage.includes('backupAndStartNewProject()'), '업로드 화면이 같은 백업→비움 함수를 쓴다');
+  // 지우는 일은 넣기 직전에 — 합침·나눔 카드에서 「올리지 않음」을 눌러도 자료가 사라지지 않는다
+  assert.ok(uploadPage.indexOf('if (replace) setReplacedBackup(await backupAndStartNewProject())') > 0
+    && uploadPage.indexOf('if (replace) setReplacedBackup(await backupAndStartNewProject())') < uploadPage.indexOf('await importActivityWorkbook(data, {'), '바꿔 넣기는 넣기 직전에 백업하고 비운다');
+  assert.ok(/aria-label="이미 있는 자료 처리 고르기"/.test(uploadPage) && uploadPage.includes('바꿔 넣기 (지금 자료는 백업 후 지움)') && uploadPage.includes('새 것만 더하기'), '이미 자료가 있으면 먼저 묻는다');
+  assert.ok(uploadPage.includes('Object.values(NEW_PROJECT_CLEARED_SETTINGS)'), '함께 지워지는 설정을 새 프로젝트와 같은 표에서 보여 준다');
+  assert.ok(!/\bfetch\(|XMLHttpRequest|sendBeacon/.test(uploadPage.replace(/fetch\(['"`]\/reference[^)]*\)/g, '')), '업로드 화면: 서버로 보내지 않는다');
+}
