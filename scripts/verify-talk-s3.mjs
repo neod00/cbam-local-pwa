@@ -62,6 +62,22 @@ assert.match(app.fillEuDefault({ reference: dv, country: 'Narnia', cnDigits: '72
 assert.match(app.fillEuDefault({ reference: dv, country: 'Taiwan', cnDigits: '' }).reason, /CN 미입력/);
 assert.match(app.fillEuDefault({ reference: undefined, country: 'Taiwan', cnDigits: '72230019' }).reason, /EU 기본값 자료를 아직 불러오지 못했습니다/);
 
+// 4~7자리 CN(run36 P1-05): 표는 8자리 CN마다 값이 있어 짧은 코드는 정확히 맞는 줄이 없다.
+// 그 숫자로 시작하는 CN들의 값이 모두 같으면 그 값을 쓰고(8자리 확인을 알림), 다르면 앱이 고르지 않고 후보를 보여 준다.
+const family = app.fillEuDefault({ reference: dv, country: 'South Korea', cnDigits: '7217' });
+assert.equal(family.ok, true, '7217로 시작하는 한국 CN의 값이 모두 같다 → 채운다');
+close(family.direct, 2.330324, '그 값');
+assert.deepEqual(JSON.parse(JSON.stringify(family.prefixMatch)), { digits: '7217', count: 4 });
+assert.match(family.message, /8자리가 아니지만 그 숫자로 시작하는 4개 CN의 EU 기본값이 모두 같아 채웠습니다.*EU 문서에는 8자리 CN을 적어야/);
+assert.match(family.source, /South Korea \/ 7217\* \(CN 4개, 값 동일\)/, 'SEE 출처에 자리수를 모르는 채 채웠다고 남긴다');
+const split = app.fillEuDefault({ reference: dv, country: 'South Korea', cnDigits: '7220' });
+assert.equal(split.ok, false, '7220으로 시작하는 CN의 값이 갈린다 → 앱이 고르지 않는다');
+assert.ok(split.reason.includes('CN 7220로 시작하는 기본값이 4개이고 값이 서로 다릅니다 — 8자리 CN을 확인하세요. 직접 3.993: 72201100, 72201200 (Flat-rolled')
+  && split.reason.includes(' / 직접 4.015: 722020, 722090 ('), '값별로 묶어 후보 코드를 보여 준다');
+assert.equal(app.fillEuDefault({ reference: dv, country: 'South Korea', cnDigits: '722' }).ok, false, '3자리 이하는 가족을 찾지 않는다');
+assert.match(app.fillEuDefault({ reference: dv, country: 'South Korea', cnDigits: '722' }).reason, /CN 722에 맞는 기본값을 찾지 못했습니다/);
+assert.equal(app.fillEuDefault({ reference: dv, country: 'South Korea', cnDigits: '72230019' }).prefixMatch, undefined, '8자리 정확 일치는 이전과 같다(prefixMatch 없음)');
+
 // ── 2) 지도 6단계 패널과 문장·호출 대조 ──────────────────────────────────
 const panels = readFileSync('src/components/guided/panels.tsx', 'utf8');
 const lib = readFileSync('src/lib/conversation-precursor.ts', 'utf8');

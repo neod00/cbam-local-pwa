@@ -1,4 +1,4 @@
-import { findDefaultValueReference, resolveDefaultSeeForYear, type ImportedDefaultValueReference } from './reference-workbooks';
+import { findDefaultValueReference, findDefaultValueReferencesByPrefix, resolveDefaultSeeForYear, type DefaultValueReferenceRow, type ImportedDefaultValueReference } from './reference-workbooks';
 import type { PrecursorDraft } from './guided-edit';
 import type { PurchasedPrecursor } from './local-db';
 
@@ -25,6 +25,8 @@ export type DefaultFill =
         justification: string;
         /** 담당자에게 보일 안내 */
         message: string;
+        /** 8자리가 아닌 CN을 적어, 그 숫자로 시작하는 CN들의 값이 모두 같아 채운 경우 — EU 문서에는 정확한 8자리를 적어야 한다 */
+        prefixMatch?: { digits: string; count: number };
     }
     | { ok: false; reason: string };
 
@@ -50,6 +52,41 @@ export function fillEuDefault(input: {
     }
     const match = findDefaultValueReference(input.reference, input.country, input.cnDigits, year);
     if (!match) {
+        // 4~7자리: 표는 8자리 CN마다 값이 있어 정확히 맞는 줄이 없다. 그 숫자로 시작하는 CN들의 값이 모두 같으면 그 값을 쓰고,
+        // 다르면 앱이 고르지 않고 후보를 보여 준다(run36 P1-05).
+        const digits = input.cnDigits.replace(/\D/g, '');
+        const family = digits.length >= 4 && digits.length < 8 ? findDefaultValueReferencesByPrefix(input.reference, input.country, digits, year) : [];
+        if (family.length > 0) {
+            const resolved = family.map((row) => resolveDefaultSeeForYear(row, year));
+            const first = resolved[0];
+            const same = resolved.every((item) => item.direct === first.direct && item.indirect === first.indirect && item.hasIndirect === first.hasIndirect);
+            if (same) {
+                return {
+                    ok: true,
+                    direct: first.direct,
+                    indirect: first.indirect,
+                    hasIndirect: first.hasIndirect,
+                    source: `${input.reference.summary.filename} / ${family[0].country} / ${digits}* (CN ${family.length}개, 값 동일)`,
+                    justification:
+                        `공급사 measured SEE 미입수 — EU 국가/CN 기본값(${yearLabel}, markup 포함) 적용. 직접 ${first.direct}`
+                        + (first.hasIndirect ? ` · 간접 ${first.indirect}` : ' · 이 CN의 공식 DV는 간접값 미제공(간접 0)')
+                        + ` · CN ${digits}로 시작하는 ${family.length}개 CN의 기본값이 같아 그 값을 적용`,
+                    message: `CN ${digits}는 8자리가 아니지만 그 숫자로 시작하는 ${family.length}개 CN의 EU 기본값이 모두 같아 채웠습니다. EU 문서에는 8자리 CN을 적어야 하니 수입신고서·공급사 서류에서 확인하세요.`,
+                    prefixMatch: { digits, count: family.length },
+                };
+            }
+            // 값별로 묶어 코드를 나열한다 — 설명은 앞부분이 모두 같아 잘라 보이면 구분이 안 된다.
+            const byValue = new Map<number, DefaultValueReferenceRow[]>();
+            family.forEach((row, index) => {
+                const value = resolved[index].direct;
+                byValue.set(value, [...(byValue.get(value) ?? []), row]);
+            });
+            const groups = Array.from(byValue, ([value, rows]) => `직접 ${value}: ${rows.slice(0, 5).map((row) => row.cn_code).join(', ')}${rows.length > 5 ? ` 외 ${rows.length - 5}개` : ''} (${rows[0].description.slice(0, 60)}${rows[0].description.length > 60 ? '…' : ''})`).join(' / ');
+            return {
+                ok: false,
+                reason: `${input.country} · CN ${digits}로 시작하는 기본값이 ${family.length}개이고 값이 서로 다릅니다 — 8자리 CN을 확인하세요. ${groups}`,
+            };
+        }
         return { ok: false, reason: `${input.country} · CN ${input.cnDigits || '미입력'}에 맞는 기본값을 찾지 못했습니다. 공급국가와 CN 코드를 확인하세요.` };
     }
     const { direct, indirect, hasIndirect } = resolveDefaultSeeForYear(match, year);
