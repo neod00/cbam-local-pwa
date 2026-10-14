@@ -736,6 +736,22 @@ assert.ok(mergeText.includes('앱의 기준이며 규정이 정한 값이 아니
 assert.equal(A.describeProcessGrouping(undefined).length, 0, '고른 적이 없으면 보고서에 아무것도 쓰지 않는다');
 assert.equal(partsRun.store.report.process_grouping, undefined, '고를 것이 없던 파일은 기록하지 않는다');
 
+// run36 P1-05: 구매 강재 CN을 4자리로 적으면 — 그 숫자로 시작하는 CN의 기본값이 모두 같으면 채우고, 다르면 후보를 보여 준다
+{
+  const shortCn = (cn) => importOf(withParts([{ part: 'S', cn: '73181582', grade: 'SCM435', mass: '100' }], { precursors: [{ row: 5, values: { name: '와이어', cn, consumed: '100', country: 'South Korea', where: 'SCM435', hasValue: '없음 (EU 기본값 사용)' } }] }));
+  const same = await shortCn('7217');
+  assert.equal(same.result.created.precursors, 1, '값이 같은 가족(7217)은 들어간다');
+  assert.equal(same.store.data.precursors[0].direct_see_tco2e_per_t, 2.330324);
+  assert.match(I.describeActivityImportIssues(same.result.issues), /\[확인 필요\] 5_구매강재 5번째 줄 — 와이어: CN 7217는 8자리가 아니지만 그 숫자로 시작하는 4개 CN의 EU 기본값이 모두 같아 채웠습니다/);
+  const differ = await shortCn('7220');
+  assert.equal(differ.result.created.precursors, 0, '값이 갈리는 가족(7220)은 앱이 고르지 않는다');
+  assert.match(I.describeActivityImportIssues(differ.result.issues), /\[넣지 못함\] 5_구매강재 5번째 줄 — 와이어: EU 기본값을 넣지 못했습니다: South Korea · CN 7220로 시작하는 기본값이 4개이고 값이 서로 다릅니다 — 8자리 CN을 확인하세요. 직접 3.993: 72201100/);
+  const exact = await shortCn('72202049');
+  assert.equal(exact.result.created.precursors, 1, '8자리는 이전처럼 표의 6자리 행(722020)으로 맞는다 — 가족 탐색은 정확히 안 맞는 4~7자리에만');
+assert.equal(exact.store.data.precursors[0].direct_see_tco2e_per_t, 4.015);
+assert.ok(!/8자리가 아니지만/.test(I.describeActivityImportIssues(exact.result.issues)), '정확히 맞으면 8자리 안내를 하지 않는다');
+}
+
 // 「CN별 공정으로 나눔」을 고르면
 const mixRun = await importOf(withParts(mixParts, mixPrecursors), undefined, SPLIT);
 const mixData = mixRun.store.data;

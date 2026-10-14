@@ -252,7 +252,7 @@ export const FUEL_COLUMNS: ActivityField[] = [
 
 export const PRECURSOR_COLUMNS: ActivityField[] = [
     { key: 'name', label: '원료 이름', required: true, width: 34, hint: '사 온 강재(선재·와이어·코일 등). 공급사마다 한 줄', example: `${EXAMPLE_PREFIX} STS 304 와이어 (A사)` },
-    { key: 'cn', label: 'CN 코드', required: true, text: true, width: 16, hint: '원료의 HS 코드 4~8자리', example: '72230019' },
+    { key: 'cn', label: 'CN 코드', required: true, text: true, width: 16, hint: '원료의 CN 코드 — 8자리를 적으세요(EU 문서가 8자리를 받습니다). 4~7자리만 알면 그 숫자로 시작하는 CN의 EU 기본값이 모두 같을 때만 기본값을 넣고, 값이 갈리면 후보를 알려 드립니다', example: '72230019' },
     { key: 'consumed', label: '투입량 (t)', required: true, width: 20, hint: '보고기간에 이 공정에 실제로 넣은 양(구매량이 아닙니다)', example: 2910 },
     { key: 'purchased', label: '구매량 (t)', width: 16, hint: '비우면 투입량과 같게 봅니다', example: 2980 },
     { key: 'country', label: '원료를 만든 나라', required: true, list: 'country', width: 20, hint: '파는 회사의 나라가 아니라 **만든 공장**의 나라. 목록에서 고르세요', example: 'South Korea' },

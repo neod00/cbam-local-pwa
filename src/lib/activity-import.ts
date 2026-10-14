@@ -1136,6 +1136,7 @@ export async function importActivityWorkbook(
             const filled = fillEuDefault({ reference: deps.defaultValues, country, cnDigits: cn, year: defaultYear });
             if (!filled.ok) { tell('error', `EU 기본값을 넣지 못했습니다: ${filled.reason}`); continue; }
             if (defaultYear !== '2026') tell('info', `${defaultYear === '2028_ONWARDS' ? '2028년 이후' : `${defaultYear}년`} 기준 EU 기본값을 넣었습니다. 보고기간이 그 해의 것인지 확인하세요.`);
+            if (filled.prefixMatch) tell('warning', filled.message);
             answer = { mode: 'DEFAULT' as const, directSee: String(filled.direct), indirectSee: String(filled.indirect), source: filled.source, justification: evidence ? `${filled.justification} · ${evidence}` : filled.justification };
         }
         const draft = {

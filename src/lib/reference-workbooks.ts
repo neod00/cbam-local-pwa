@@ -446,6 +446,30 @@ export function findDefaultValueReference(
     return ordered.find((row) => valueForYear(row) !== undefined) ?? ordered[0];
 }
 
+/**
+ * 적은 CN이 표의 코드(8자리)보다 짧을 때(4~7자리) — 그 숫자로 시작하는 CN마다 `findDefaultValueReference`가 고르는 행.
+ * 표는 8자리 CN마다 값이 붙어 있어 짧은 코드는 정확히 맞는 줄이 없다(run36 P1-05). 값을 고르는 일은 부르는 쪽이 한다.
+ */
+export function findDefaultValueReferencesByPrefix(
+    reference: ImportedDefaultValueReference | undefined,
+    country: string,
+    prefix: string,
+    year: '2026' | '2027' | '2028_ONWARDS'
+): DefaultValueReferenceRow[] {
+    if (!reference) return [];
+    const digits = normalizeCode(prefix);
+    if (digits.length < 4) return [];
+    const normalizedCountry = normalizeReferenceCountry(country);
+    const codes = Array.from(new Set(
+        reference.rows
+            .filter((row) => normalizeReferenceCountry(row.country) === normalizedCountry && row.cn_code.length > digits.length && row.cn_code.startsWith(digits))
+            .map((row) => row.cn_code)
+    )).sort();
+    return codes
+        .map((code) => findDefaultValueReference(reference, country, code, year))
+        .filter((row): row is DefaultValueReferenceRow => Boolean(row));
+}
+
 export function getDefaultValueTotalForYear(
     row: DefaultValueReferenceRow,
     year: '2026' | '2027' | '2028_ONWARDS'
