@@ -917,7 +917,13 @@ export async function importActivityWorkbook(
                 const basis = labelValue(HEAT_BASIS_CHOICES, row.values.basis) ?? 'METERED';
                 if (Number.isNaN(quantity)) { tellSystem(`쓴 열의 양 「${row.values.quantity}」을(를) 숫자로 적어 주세요.`, row.row); failed = true; continue; }
                 if (where === OUTSIDE_PROCESS_LABEL || where.startsWith('(공정 밖')) {
-                    if (quantity === undefined) { tellSystem('공정 밖의 열 사용량은 비울 수 없습니다 — 양을 적어 주세요.', row.row); failed = true; continue; }
+                    if (quantity === undefined) {
+                        // 몫을 모르면 0으로 둔다 — 그 연료 줄을 통째로 빼면 직접배출의 대부분이 사라진다(run36 P1-04). 공정으로 귀속되는 열이 커져
+                        // SEE는 실제보다 크게 나오므로(보수적) 값을 받아 적도록 확인 필요로 남긴다.
+                        outsideNote = (row.values.note ?? '').trim();
+                        note('warning', SHEET_BOILER_HEAT, `${system}: 「${where}」의 열 사용량이 비어 0으로 넣었습니다 — 사무동·식당 등 공정 밖에서 쓴 몫이 공정에 모두 귀속되어 SEE가 실제보다 크게 나옵니다(보수적). 열량계 값이나 추정 근거가 있으면 양을 적어 주세요.`, row.row);
+                        continue;
+                    }
                     outsideQuantity += quantity;
                     outsideUnit = unit;
                     outsideNote = (row.values.note ?? '').trim();

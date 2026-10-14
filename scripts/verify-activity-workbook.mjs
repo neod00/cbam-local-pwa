@@ -425,6 +425,28 @@ heatWith.boilerHeat = [];
 const heatProvisional = await importOf(heatWith);
 assert.deepEqual(plain(heatProvisional.store.data.processes.map((process) => [process.heat_consumption[0].unit, process.heat_consumption[0].basis, process.heat_consumption[0].note.startsWith('[임시]')])), [['TJ', 'EFFICIENCY_PROXY', true], ['TJ', 'EFFICIENCY_PROXY', true]], '열 사용량을 모르면 임시 값(표시됨)');
 assert.match(I.describeActivityImportIssues(heatProvisional.result.issues), /\[확인 필요\] 4_연료 5번째 줄 — 열 공급원 「온수 보일러」: 공정별 열 사용량이 없어 임시 값/); // 줄은 연료의 줄이다 — 시트 이름도 4_연료(run35 P2-02)
+// run36 P1-04: 「공정 밖」 줄을 비워도 그 열 공급원의 연료 줄이 통째로 빠지지 않는다 — 몫은 0으로 두고 확인 필요로 알린다(보수적)
+{
+  const blankOutside = multi(twoProcess, [boilerFuel], []);
+  blankOutside.boilerHeat = [
+    { row: 5, values: { system: '온수 보일러', process: '볼트 공정', quantity: '30', unit: 'Gcal', basis: '계량기로 쟀다' } },
+    { row: 6, values: { system: '온수 보일러', process: '너트 공정', quantity: '70', unit: 'Gcal' } },
+    { row: 7, values: { system: '온수 보일러', process: W.OUTSIDE_PROCESS_LABEL, note: '사무동·식당 몫 모름' } },
+  ];
+  const outsideRun = await importOf(blankOutside);
+  const outsideReport = I.describeActivityImportIssues(outsideRun.result.issues);
+  assert.equal(outsideRun.result.created.fuels, 1, '공정 밖 줄을 비워도 연료는 들어간다');
+  assert.ok(!/넣지 못함\]/.test(outsideReport), '넣지 못한 줄이 없다');
+  assert.match(outsideReport, /\[확인 필요\] 9_보일러열 7번째 줄 — 온수 보일러: 「\(공정 밖 — 사무동 난방 등\)」의 열 사용량이 비어 0으로 넣었습니다/, '비워 둔 사실을 줄 번호와 함께 알린다');
+  assert.equal(outsideRun.store.data.source_streams[0].heat_system.outside_quantity ?? 0, 0, '공정 밖 몫은 0(적지 않음)');
+  assert.ok(Math.abs(resultsOf(outsideRun.store).filter((item) => item.output_mass_t > 0).reduce((sum, item) => sum + item.direct_emissions_tco2e, 0) - 10000 * 0.037 * 56.1 / 1000) < 1e-6, '공정 밖 몫이 0이면 연료 배출 전부가 공정에 귀속된다(보수적)');
+  // 공정 줄도 모두 비우고 공정 밖만 적은 경우 — 임시 값(연료 에너지 × 70%)으로 채우고 연료는 살린다
+  const onlyOutsideBlank = multi(twoProcess, [boilerFuel], []);
+  onlyOutsideBlank.boilerHeat = [{ row: 5, values: { system: '온수 보일러', process: W.OUTSIDE_PROCESS_LABEL } }];
+  const onlyRun = await importOf(onlyOutsideBlank);
+  assert.equal(onlyRun.result.created.fuels, 1);
+  assert.match(I.describeActivityImportIssues(onlyRun.result.issues), /공정별 열 사용량이 없어 임시 값/);
+}
 const heatSingle = await importOf(multi([twoProcess[0]], [boilerFuel], []));
 assert.equal(heatSingle.store.data.source_streams.length, 0, '열 공급원을 못 만들면 그 연료를 조용히 한 공정에 넣지 않는다');
 assert.match(I.describeActivityImportIssues(heatSingle.result.issues), /열 공급원 「온수 보일러」을\(를\) 만들지 못해 그 연료를 넣지 않았습니다: 한 공정만 쓰는 열이면/);

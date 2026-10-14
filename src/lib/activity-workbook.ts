@@ -309,7 +309,7 @@ export const IMPORTED_HEAT_COLUMNS: ActivityField[] = [
 export const BOILER_HEAT_COLUMNS: ActivityField[] = [
     { key: 'system', label: '열 공급원', required: true, width: 30, hint: '4_연료에서 「용도」를 보일러로 적은 연료의 「열 공급원 이름」(비웠으면 그 연료 이름)', example: `${EXAMPLE_PREFIX} 세척수 온수 보일러` },
     { key: 'process', label: '열을 받는 곳', required: true, list: 'processOrOutside', width: 30, hint: '공정 이름. 사무동 난방처럼 공정이 아니면 「(공정 밖 …)」을 고르세요', example: 'STS 나사 공정' },
-    { key: 'quantity', label: '쓴 열의 양', width: 16, hint: '보고기간 합계. 모르면 비우세요 — 비워 두면 앱이 연료 에너지 × 70%를 생산량 비율로 나눈 「임시」 값을 넣고 「확인할 것」에 남깁니다', example: 800 },
+    { key: 'quantity', label: '쓴 열의 양', width: 16, hint: '보고기간 합계. 모르면 비우세요 — 공정 줄을 비우면 앱이 연료 에너지 × 70%를 생산량 비율로 나눈 「임시」 값을 넣고, 「(공정 밖 …)」 줄을 비우면 공정 밖 몫을 0으로 두며(그만큼 공정의 SEE가 크게 나옴) 둘 다 「확인할 것」에 남깁니다', example: 800 },
     { key: 'unit', label: '단위', list: 'heatUnit', width: 12, hint: '위 열의 양 단위. 비우면 Gcal로 봅니다', example: 'Gcal' },
     { key: 'basis', label: '열 사용량을 안 방법', list: 'heatBasis', width: 26, hint: '비우면 「계량기로 쟀다」. 추정이면 근거를 아래 칸에', example: HEAT_BASIS_CHOICES[0].label },
     { key: 'note', label: '근거', width: 34, hint: '예: 공정별 열량계 검침. 「간접 추정」이면 계량이 불가능한 사유와 추정 근거 필수', example: '열량계 검침 합계' },
