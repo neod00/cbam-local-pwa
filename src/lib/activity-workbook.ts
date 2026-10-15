@@ -850,6 +850,11 @@ export interface PartListExpansion {
     reviewNotes: string[];
     /** 재질 구성이 다른 CN이 같은 재질로 이어져 있어 「합침」과 「나눔」이 다른 결과를 내는가 — 그럴 때만 고를 것이 있다 */
     choiceAvailable: boolean;
+    /**
+     * 「합침」일 때 여러 CN이 한 공정으로 이어 붙은 곳마다, 그것을 이어 준 재질(둘 이상의 구성에 들어간 재질)과 CN.
+     * 어느 재질이 공정을 하나로 만들었는지 고르는 사람이 볼 수 있게 한다(KPF형 run39 O-1).
+     */
+    mergeLinks: Array<{ process: string; cns: string[]; linkGrades: string[] }>;
 }
 
 /**
@@ -1087,7 +1092,22 @@ export function expandPartList(rows: ActivityRow[], grouping: PartGrouping = 'ME
                 + '이 CN들의 SEE는 같은 값이 됩니다. 저탄소 원료를 쓴 제품을 따로 보여야 하는 등 CN별 값이 필요하면 「새 프로젝트」에서 다시 올리며 「CN별 공정으로 나눔」을 고르세요.');
         }
     }
-    return { products: productRows, processes: processRows, origin, problems, summary, aliases, splits, notes, reviewNotes, choiceAvailable };
+    const mergeLinks: PartListExpansion['mergeLinks'] = [];
+    if (grouping === 'MERGE') {
+        for (const bucket of linked) {
+            if (bucket.length < 2) continue;
+            const usedBy = new Map<string, number>();
+            for (const group of bucket) for (const grade of group.mix.keys()) usedBy.set(grade, (usedBy.get(grade) ?? 0) + 1);
+            const process = groupOfCn.get(bucket[0].cns[0])?.name;
+            if (!process) continue;
+            mergeLinks.push({
+                process,
+                cns: bucket.flatMap((group) => group.cns),
+                linkGrades: Array.from(usedBy).filter(([, count]) => count >= 2).map(([grade]) => spellings.get(grade)?.[0] ?? grade),
+            });
+        }
+    }
+    return { products: productRows, processes: processRows, origin, problems, summary, aliases, splits, notes, reviewNotes, choiceAvailable, mergeLinks };
 }
 
 export function isActivityWorkbookV2(sheetNames: string[]): boolean {

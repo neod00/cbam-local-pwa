@@ -822,6 +822,16 @@ export default function UploadPage() {
                             </div>
                             <ul className="mt-3 list-disc space-y-1 pl-5 leading-6 text-slate-700">
                                 <li><span className="font-semibold">합침</span> — 공정 {groupingChoice.preview.mergedProcessCount}개. 이 CN들의 SEE가 가중평균 하나가 됩니다. 차이가 작으면 이쪽이 단순하고, 검증인에게 설명할 것이 적습니다.</li>
+                                {(groupingChoice.preview.mergeLinks ?? []).length > 0 && (
+                                    <li data-testid="grouping-merge-links">
+                                        <span className="font-semibold">합쳐지는 이유</span> — 같은 재질이 여러 CN에 쓰여 이어 붙습니다:{' '}
+                                        {(groupingChoice.preview.mergeLinks ?? []).slice(0, 4).map((link, index) => (
+                                            <span key={link.process}>{index > 0 ? ' / ' : ''}「{link.process}」은(는) 재질 {link.linkGrades.join('·') || '(같은 재질)'}이(가) CN {link.cns.join('·')}에 걸쳐 있어 하나가 됩니다</span>
+                                        ))}
+                                        {(groupingChoice.preview.mergeLinks ?? []).length > 4 ? ` 외 ${(groupingChoice.preview.mergeLinks ?? []).length - 4}곳` : ''}.
+                                        한 재질만 따로 보고 싶으면 「나눔」을 고르세요.
+                                    </li>
+                                )}
                                 <li><span className="font-semibold">나눔</span> — 공정 {groupingChoice.preview.splitProcessCount}개. CN마다 쓴 원료가 그 CN의 값에 실립니다. 저탄소 원료를 쓴 제품을 따로 보여야 할 때 고릅니다. 총량은 같아 한 CN이 내려가면 다른 CN이 올라가고, CN별 투입 기록이 근거로 필요합니다(앱은 생산량 비율로 나눈 값을 넣습니다).</li>
                                 <li>고른 방식은 모니터링 계획에 적고 해마다 같게 적용하세요.</li>
                             </ul>
