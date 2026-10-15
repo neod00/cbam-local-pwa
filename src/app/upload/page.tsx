@@ -575,7 +575,7 @@ export default function UploadPage() {
                 // 이미 자료가 있는 프로젝트에 올리면 같은 이름은 건너뛰어 고친 줄이 들어가지 않는다(run36 P1-02) — 먼저 묻는다.
                 const [products, processes, streams, precursors] = await Promise.all([listLocalItems('products'), listLocalItems('processes'), listLocalItems('source_streams'), listLocalItems('precursors')]);
                 if (products.length + processes.length + streams.length + precursors.length > 0) {
-                    setReplaceChoice({ data, filename: file.name, counts: { products: products.length, processes: processes.length, fuels: streams.length, precursors: precursors.length } });
+                    setReplaceChoice({ data, filename: file.name, counts: { products: products.length, processes: processes.length, fuels: new Set(streams.map((stream) => stream.shared_meter?.group?.trim() || stream.heat_system?.name?.trim() || stream.name)).size, precursors: precursors.length } });
                     return;
                 }
                 await continueImport(data, file.name, false);

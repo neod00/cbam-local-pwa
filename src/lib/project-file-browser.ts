@@ -10,7 +10,7 @@ import {
     startNewProject,
     type CbamBackupFile,
 } from './local-db';
-import { PROJECT_FILE_EXTENSION, type FileHandleLike, type FilePickerOptions, type ProjectFileDeps } from './project-file';
+import { backupFilename, PROJECT_FILE_EXTENSION, type FileHandleLike, type FilePickerOptions, type ProjectFileDeps } from './project-file';
 
 /**
  * 프로젝트 파일 기능의 브라우저 쪽 연결 — 파일 선택창·내려받기·핸들 보관.
@@ -112,7 +112,7 @@ export async function restoreProjectFromBackup(parsed: CbamBackupFile): Promise<
  */
 export async function backupAndStartNewProject(deps: ProjectFileDeps<CbamBackupFile> = createBrowserProjectFileDeps()): Promise<string> {
     const backup = await deps.exportBackup();
-    const filename = `cbam-backup-${backup.manifest.exported_at.slice(0, 10)}${PROJECT_FILE_EXTENSION}`;
+    const filename = backupFilename(backup.manifest.exported_at);
     deps.download(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }), filename);
     await startNewProjectAndDetach(deps);
     return filename;

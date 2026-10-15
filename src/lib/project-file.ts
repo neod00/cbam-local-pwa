@@ -12,6 +12,17 @@
  */
 
 export const PROJECT_FILE_EXTENSION = '.cbam';
+
+/**
+ * 백업 파일 이름 — 날짜와 시각(분)까지 넣는다. 날짜만 있으면 같은 날 두 번째 백업부터 이름이 겹쳐
+ * 어느 것이 먼저의 것인지 알 수 없다(run37 P2-03). 시각은 이 컴퓨터의 시각이다. 파일 이름에 쓸 수 없는 「:」는 쓰지 않는다.
+ */
+export function backupFilename(exportedAtIso: string): string {
+    const at = new Date(exportedAtIso);
+    const date = Number.isNaN(at.getTime()) ? new Date() : at;
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `cbam-backup-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}${PROJECT_FILE_EXTENSION}`;
+}
 export const PROJECT_FILE_DESCRIPTION = 'CBAM 프로젝트 파일';
 
 export interface WritableLike {
