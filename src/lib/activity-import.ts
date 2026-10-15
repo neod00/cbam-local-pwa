@@ -741,7 +741,12 @@ export async function importActivityWorkbook(
             applied = applied || ok;
         }
         if (applied && !factorOk) {
-            note('warning', SHEET_INSTALLATION, `전력 배출계수가 비어 있어 임시값 ${PROCESS_PLACEHOLDER_EF}을(를) 출처 없이 넣었습니다. 계수와 출처를 확인해 지도 5단계에서 바꾸세요.`);
+            // 출처만 고르고 값을 비운 경우: 앱은 나라별 계통 평균 값을 갖고 있지 않다. 자리값에 고른 출처를 붙이면 그 나라의 공표값처럼 보이므로 출처는 비워 둔다 —
+            // 그 사실을 말해 주어야 「출처를 골랐는데 출처 없이」라는 모순으로 읽히지 않는다(run35 P2-04 · run36 P2-03 · run37).
+            const chosenLabel = ELECTRICITY_SOURCE_CHOICES.find((item) => item.value === source)?.label;
+            note('warning', SHEET_INSTALLATION, chosenLabel
+                ? `전력 배출계수 칸이 비어 있습니다 — 출처로 「${chosenLabel}」을(를) 고르셨지만 계수 값이 없어 앱의 자리값 ${PROCESS_PLACEHOLDER_EF}을(를) 넣었고, 자리값이 공표값처럼 보이지 않게 출처는 비워 두었습니다. 그 나라의 공표 계수(${text('electricity_ef_publisher') || '기관'}·문서·연도)를 「전력 배출계수」 칸에 적어 다시 올리거나 지도 5단계에서 바꾸세요.`
+                : `전력 배출계수가 비어 있어 임시값 ${PROCESS_PLACEHOLDER_EF}을(를) 출처 없이 넣었습니다. 계수와 출처를 확인해 지도 5단계에서 바꾸세요.`);
         } else if (applied && !source) {
             note('warning', SHEET_INSTALLATION, '전력 배출계수의 출처가 비어 있습니다. 목록에서 골라 주세요(지도 5단계에서도 고를 수 있습니다).');
         }

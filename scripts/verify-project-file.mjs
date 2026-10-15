@@ -200,3 +200,22 @@ console.log('Project file verified (저장 · 다른 이름으로 저장 · 덮�
   assert.ok(uploadPage.includes('Object.values(NEW_PROJECT_CLEARED_SETTINGS)'), '함께 지워지는 설정을 새 프로젝트와 같은 표에서 보여 준다');
   assert.ok(!/\bfetch\(|XMLHttpRequest|sendBeacon/.test(uploadPage.replace(/fetch\(['"`]\/reference[^)]*\)/g, '')), '업로드 화면: 서버로 보내지 않는다');
 }
+
+// ── 백업 파일 이름은 시각(분)까지(run37 P2-03) — 날짜만이면 같은 날 두 번째부터 겹친다 ──
+{
+  const first = P.backupFilename('2026-10-15T06:15:00.000Z');
+  const second = P.backupFilename('2026-10-15T07:40:00.000Z');
+  assert.match(first, /^cbam-backup-\d{4}-\d{2}-\d{2}_\d{4}\.cbam$/, '날짜_시분.cbam');
+  assert.notEqual(first, second, '같은 날 두 번째 백업은 다른 이름이다');
+  assert.ok(!/[:\/]/.test(first), '파일 이름에 쓸 수 없는 글자가 없다');
+  assert.match(P.backupFilename('not a date'), /^cbam-backup-\d{4}-\d{2}-\d{2}_\d{4}\.cbam$/, '읽을 수 없는 시각이어도 이름은 만든다');
+  const guided = read('src/components/guided/GuidedWorkspace.tsx');
+  assert.ok(/backupFilename\(backup\.manifest\.exported_at\)/.test(guided) && !/exported_at\.slice\(0, 10\)/.test(guided), '새 프로젝트의 백업도 같은 이름 규칙');
+  assert.ok(/backupFilename\(backup\.manifest\.exported_at\)/.test(browser) && !/exported_at\.slice\(0, 10\)/.test(browser), '바꿔 넣기의 백업도 같은 이름 규칙');
+}
+
+// ── 바꿔 넣기 카드의 연료 수는 입력한 연료의 가짓수(run37 P2-01) — 공용 연료가 공정마다 쪼개진 줄 수가 아니다 ──
+{
+  const page = read('src/app/upload/page.tsx');
+  assert.ok(/new Set\(streams\.map\(\(stream\) => stream\.shared_meter\?\.group\?\.trim\(\) \|\| stream\.heat_system\?\.name\?\.trim\(\) \|\| stream\.name\)\)\.size/.test(page), '연료 수 = 공용 계량기·열 공급원·연료 이름의 가짓수');
+}

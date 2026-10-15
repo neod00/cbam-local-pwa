@@ -539,7 +539,8 @@ const report = I.describeActivityImportIssues(brokenRun.result.issues);
 const has = (pattern) => assert.match(report, pattern);
 assert.equal(brokenRun.store.data.periods[0].start_date, '2025-01-01', '엑셀 날짜 일련번호도 읽는다');
 has(/\[확인 필요\] 1_사업장 — 비어 있습니다: 법인\/사업자 등록번호/);
-has(/\[확인 필요\] 1_사업장 — 전력 배출계수가 비어 있어 임시값 0\.47/);
+// 출처(국가 전력망 평균)는 골랐는데 값이 빈 경우 — 「출처 없이」라는 모순 대신 무엇을 했는지 말한다(run35 P2-04 · run37)
+has(/\[확인 필요\] 1_사업장 — 전력 배출계수 칸이 비어 있습니다 — 출처로 「국가 전력망 평균」을\(를\) 고르셨지만 계수 값이 없어 앱의 자리값 0\.47을\(를\) 넣었고, 자리값이 공표값처럼 보이지 않게 출처는 비워 두었습니다/);
 has(/\[참고\] 1_사업장 — 「밖에서 사 오는 스팀·온수가 있나요\?」가 비어 있습니다/);
 has(/\[넣지 못함\] 2_제품 7번째 줄 — 코드가 짧은 제품: CN 코드는 8자리/);
 has(/\[넣지 못함\] 3_공정 7번째 줄 — 없는 제품 공정: 만드는 제품 「서식에 없는 제품」/);
@@ -738,11 +739,12 @@ assert.equal(I.previewPartGrouping({ rnr: [], evidence: [], ...withParts([{ part
     { part: 'L1', pname: '락 너트 M10', cn: '73181660', grade: 'SWCH35K', mass: '200' },
     { part: 'B1', cn: '73269098', grade: 'SCM435', mass: '50' },
     { part: 'D1', pname: '락 너트 M10', cn: '73181699', grade: 'SWCH45K', mass: '70' },
+    { part: 'D2', pname: '샤프트', cn: '87089997', grade: 'S45C', mass: '30', exported: '아니오' },
   ]));
   assert.deepEqual(plain(named.store.data.products.map((product) => product.name)), [
-    '휠 너트 M14 외 2종', '휠 너트 M14 (내수) (비수출)', '락 너트 M10', 'SCM435 · CN 73269098', '락 너트 M10 · CN 73181699',
-  ], '가장 많이 만든 품명 + 외 N종, 비수출 표시, 품명이 없으면 예전 이름, 같은 이름이면 CN을 덧붙여 구별');
-  assert.deepEqual(plain(named.store.data.products.map((product) => product.cn_code)), ['73181692', '73181692', '73181660', '73269098', '73181699'], 'CN은 그대로(이름과 별개)');
+    '휠 너트 M14 외 2종', '휠 너트 M14 (내수)', '락 너트 M10', 'SCM435 · CN 73269098', '락 너트 M10 · CN 73181699', '샤프트 (비수출)',
+  ], '가장 많이 만든 품명 + 외 N종, 비수출 표시(품명에 내수가 이미 있으면 겹치지 않는다 — run37 P2-02), 품명이 없으면 예전 이름, 같은 이름이면 CN을 덧붙여 구별');
+  assert.deepEqual(plain(named.store.data.products.map((product) => product.cn_code)), ['73181692', '73181692', '73181660', '73269098', '73181699', '87089997'], 'CN은 그대로(이름과 별개)');
 }
 
 // 고른 방식은 보고서 입력(report:inputs)에 남고, 산정 보고서 제4장과 모니터링 계획 4번이 같은 글을 쓴다

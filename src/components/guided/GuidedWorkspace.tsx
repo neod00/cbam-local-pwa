@@ -6,6 +6,7 @@ import { GuidedStepPanel, type GuidedData } from '@/components/guided/panels';
 import { calculateLocalResults } from '@/lib/calculation-engine';
 import { evaluateEuExportReadiness, scopeRecordsToExportPeriod } from '@/lib/eu-template-export';
 import { deriveGuidedSteps, getGuidedProgress, type GuidedStepId } from '@/lib/guided-map';
+import { backupFilename } from '@/lib/project-file';
 import { CBAM_LAST_BACKUP_AT_KEY, describeNewProjectEffects, EXPORT_PERIOD_SETTING_KEY, exportLocalBackup, getLocalSetting, listLocalItems, setLocalSetting, startNewProject } from '@/lib/local-db';
 import { getProductReportingScope, isCbamReportingScope } from '@/lib/reporting-scope';
 import { buildSeeFlowBinding } from '@/lib/see-flow';
@@ -136,7 +137,7 @@ function GuidedWorkspaceInner() {
                 const url = URL.createObjectURL(blob);
                 const anchor = document.createElement('a');
                 anchor.href = url;
-                anchor.download = `cbam-backup-${backup.manifest.exported_at.slice(0, 10)}.cbam`;
+                anchor.download = backupFilename(backup.manifest.exported_at);
                 document.body.appendChild(anchor);
                 anchor.click();
                 anchor.remove();
