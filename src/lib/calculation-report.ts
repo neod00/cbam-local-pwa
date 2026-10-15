@@ -3,7 +3,7 @@ import { productWithCn } from './product-label';
 import { checkDisplaySum, formatForReport, formatIntegerForReport, formatPercentForReport, formatRawForReport, roundForReport } from './report-format';
 import { getCbamGoodsMetadata, getIndirectEmissionsApplicability } from './cbam-product-rules';
 import { getSectorParameters, SECTOR_PARAM_CITATION } from './sector-parameters';
-import { D43_EVIDENCE, ELECTRICITY_EF_BASIS_LABEL, ELECTRICITY_EF_CITATION, resolveElectricityEfBasis, weightedAverageEf } from './electricity-ef-basis';
+import { D43_EVIDENCE, ELECTRICITY_EF_BASIS_LABEL, ELECTRICITY_EF_CITATION, ELECTRICITY_GRID_FACTOR_SOURCE, resolveElectricityEfBasis, weightedAverageEf } from './electricity-ef-basis';
 import { CN_MASTER_TEMPLATE_VERSION } from './cn-master.generated';
 import { isCbamReportingScope, getProductReportingScope } from './reporting-scope';
 import { ALLOCATION_RULES, describeProcessGrouping, DIRECT_EMISSIONS_INPUT_MODE_LABEL } from './allocation-rules';
@@ -1246,7 +1246,7 @@ function electricitySection(input: CalculationReportInput) {
 
         // 계통 평균 — 검증이 가장 쉽다. 출처 한 줄이면 D.4 첫 근거로 곧바로 대조된다.
         if (basis === 'GRID_AVERAGE') {
-            body.push(paragraph(`${process.name}: 원산지국 계통 평균 계수를 적용했다(D.4). 공표기관·문서명·공표연도를 계수 출처에 기재하면 검증인이 대조한다.`, 'Note'));
+            body.push(paragraph(`${process.name}: 원산지국 계통 평균 계수를 적용했다(D.4). 공표기관·문서명·공표연도를 계수 출처에 기재하면 검증인이 대조한다. 국가 기본계수의 공식 표는 ${ELECTRICITY_GRID_FACTOR_SOURCE}이다.`, 'Note'));
         }
 
         // 자가발전 — D.4.1·D.4.2 산정 경로 안내.

@@ -23,7 +23,7 @@ export const ELECTRICITY_PLACEHOLDER_EF = 0.47;
 export const ELECTRICITY_DEFAULT_EF_SOURCE = 'COUNTRY_GRID_DEFAULT';
 /** 지도 5단계의 계수 출처 선택지(panels.tsx와 같은 값·글자 — 게이트가 대조한다) */
 export const ELECTRICITY_EF_SOURCE_OPTIONS = [
-    { value: 'COUNTRY_GRID_DEFAULT', label: '원산지국 계통 평균 (국가 공표값·IEA 등 — 출처를 적어 두세요)' },
+    { value: 'COUNTRY_GRID_DEFAULT', label: '원산지국 계통 평균 (2025/2621 부속서 II 표의 값 — 출처를 적어 두세요)' },
     { value: 'DIRECT_TECHNICAL_LINK', label: '발전설비 직접 기술적 연결 (실측)' },
     { value: 'PPA', label: '전력구매계약(PPA) (실측)' },
     { value: 'INSTALLATION_OWN', label: '설비 내 자가발전' },

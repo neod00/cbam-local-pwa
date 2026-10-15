@@ -18,6 +18,14 @@ import type { ElectricityEfBasis, ReportElectricitySourceRow } from './local-db'
 
 export const ELECTRICITY_EF_CITATION = 'Commission Implementing Regulation (EU) 2025/2547 point D.4 / Article 9';
 
+/**
+ * 설비 전력의 국가 기본계수(계통 평균)의 공식 출처. 값은 IEA 자료라 비상업 라이선스(CC BY-NC-SA)이므로 앱은 표를 내장하지 않고
+ * 사용자가 표에서 찾아 직접 넣게 한다. 부속서 III(EU로 수입되는 전력용)과 혼동하지 않는다 — 설비 전력은 부속서 II.
+ */
+export const ELECTRICITY_GRID_FACTOR_SOURCE = 'Commission Implementing Regulation (EU) 2025/2621 Annex II';
+export const ELECTRICITY_GRID_FACTOR_GUIDE =
+    '국가 기본계수는 Implementing Regulation (EU) 2025/2621 부속서 II의 「Country or territory / Emission factor」 표에서 찾습니다 — 목록에 없는 나라는 「Other countries and territories」 행입니다. 앱은 이 표를 내장하지 않으니 해당 국가의 값을 직접 넣으세요.';
+
 export const ELECTRICITY_EF_BASIS_LABEL: Record<ElectricityEfBasis, string> = {
     GRID_AVERAGE: '원산지국 계통 평균 (default)',
     DIRECT_LINK: '직접 기술연결 (actual)',
