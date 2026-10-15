@@ -1,4 +1,4 @@
-const CACHE_NAME = "cbam-local-v11";
+const CACHE_NAME = "cbam-local-v12";
 const APP_SHELL = [
   "/",
   "/announcement",

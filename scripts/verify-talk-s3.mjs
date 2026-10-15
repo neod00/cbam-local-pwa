@@ -49,11 +49,13 @@ const dv = app.expandBundledDefaultValues(JSON.parse(readFileSync('public/refere
 // ── 1) EU 기본값 채우기 ──────────────────────────────────────────────
 const tw = app.fillEuDefault({ reference: dv, country: 'Taiwan', cnDigits: '72230019' });
 assert.equal(tw.ok, true);
-assert.equal(tw.direct, 11, '대만 7223 00: 파일 10 → 2026 mark-up 포함 11');
+// 정정판(2026/1740)에서 대만 7223 00은 「-」다 → 규정에 따라 「기타 국가·지역」 4.82, 2026년 마크업 10% 포함 5.302(종전 판은 10 → 11).
+close(tw.direct, 5.302, '대만 7223 00: 값이 없어 기타 국가·지역 4.82 → 2026 mark-up 포함 5.302');
+assert.equal(tw.usedOtherCountries, true, '기타 국가 값을 썼음을 알린다');
 assert.equal(tw.indirect, 0, '간접 N/A면 0 — 없는 간접을 만들어내지 않는다');
 assert.equal(tw.hasIndirect, false);
-assert.equal(tw.source, 'DVs as adopted_v20260204 .xlsx / Taiwan / 722300');
-assert.equal(tw.justification, '공급사 measured SEE 미입수 — EU 국가/CN 기본값(2026, markup 포함) 적용. 직접 11 · 이 CN의 공식 DV는 간접값 미제공(간접 0)');
+assert.equal(tw.source, 'DV correcting act_final update_06.08.xlsx / _Other Countries and Territories / 722300');
+assert.equal(tw.justification, '공급사 measured SEE 미입수 — EU 국가/CN 기본값(2026, markup 포함) 적용 · Taiwan의 값이 없어(「-」) 「기타 국가·지역」 값을 적용(2025/2621 부속서 I 서문). 직접 5.302 · 이 CN의 공식 DV는 간접값 미제공(간접 0)');
 assert.match(tw.message, /간접값을 제공하지 않아 간접을 0으로/);
 const kr = app.fillEuDefault({ reference: dv, country: 'South Korea', cnDigits: '72230019' });
 close(kr.direct, 4.015, '같은 CN이 한국이면 4.015 — 나라가 값을 바꾼다');
@@ -66,7 +68,7 @@ assert.match(app.fillEuDefault({ reference: undefined, country: 'Taiwan', cnDigi
 // 그 숫자로 시작하는 CN들의 값이 모두 같으면 그 값을 쓰고(8자리 확인을 알림), 다르면 앱이 고르지 않고 후보를 보여 준다.
 const family = app.fillEuDefault({ reference: dv, country: 'South Korea', cnDigits: '7217' });
 assert.equal(family.ok, true, '7217로 시작하는 한국 CN의 값이 모두 같다 → 채운다');
-close(family.direct, 2.330324, '그 값');
+close(family.direct, 2.3298, '그 값(정정판은 총 2,118 × 1.10 — 종전 판의 마크업 열은 2.330324였다)');
 assert.deepEqual(JSON.parse(JSON.stringify(family.prefixMatch)), { digits: '7217', count: 4 });
 assert.match(family.message, /8자리가 아니지만 그 숫자로 시작하는 4개 CN의 EU 기본값이 모두 같아 채웠습니다.*EU 문서에는 8자리 CN을 적어야/);
 assert.match(family.source, /South Korea \/ 7217\* \(CN 4개, 값 동일\)/, 'SEE 출처에 자리수를 모르는 채 채웠다고 남긴다');
@@ -82,13 +84,13 @@ assert.equal(app.fillEuDefault({ reference: dv, country: 'South Korea', cnDigits
 const panels = readFileSync('src/components/guided/panels.tsx', 'utf8');
 const lib = readFileSync('src/lib/conversation-precursor.ts', 'utf8');
 for (const fragment of [
-  '공급사 measured SEE 미입수 — EU 국가/CN 기본값(2026, markup 포함) 적용. 직접 ${direct}',
+  '공급사 measured SEE 미입수 — EU 국가/CN 기본값(2026, markup 포함) 적용',
   "' · 이 CN의 공식 DV는 간접값 미제공(간접 0)'",
   '` · 간접 ${indirect}`',
   '`${reference.summary.filename} / ${match.country} / ${match.cn_code}`',
   "'EU 기본값을 채웠습니다. 공급사 실측자료를 받으면 교체하세요.'",
   '이 CN의 공식 DV는 간접값을 제공하지 않아 간접을 0으로 두었습니다(직접값은 2026 markup 포함). 공급사 실측자료를 받으면 교체하세요.',
-  '」를 고르세요. EU 기본값은 원료를 만든 나라마다 다릅니다(예: 같은 STS 와이어가 한국 4.015 · 대만 11).',
+  '」를 고르세요. EU 기본값은 원료를 만든 나라마다 다릅니다(예: 같은 STS 와이어가 한국 4.015 · 대만 5.302).',
   '에 맞는 기본값을 찾지 못했습니다. 공급국가와 CN 코드를 확인하세요.',
   "findDefaultValueReference(reference, supplierCountry, cnDigits, '2026')",
   "resolveDefaultSeeForYear(match, '2026')",

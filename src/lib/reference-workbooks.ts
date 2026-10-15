@@ -94,6 +94,7 @@ function normalizeReferenceCountry(value: string) {
 
     if ([
         'south korea',
+        'korea republic of south korea',
         'korea republic of',
         'republic of korea',
         'korea south',
@@ -103,6 +104,50 @@ function normalizeReferenceCountry(value: string) {
     }
 
     return normalized;
+}
+
+/**
+ * 공식 기본값 워크북의 국가 이름 → 앱이 쓰는 이름. 2026년 8월 정정판(2026/1740)은 시트 이름·제목이 바뀌었다
+ * (예: 「Korea, Republic of (South Korea)」). 앱의 국가 목록·저장된 자료·화면은 예전 이름(South Korea …)을 쓰므로
+ * 읽는 자리에서 한 번 맞춘다. 키는 소문자·아포스트로피 통일 형태다.
+ */
+const DEFAULT_VALUE_COUNTRY_ALIASES: Record<string, string> = {
+    'congo, democratic republic of': 'Democratic Republic of the Congo',
+    'iran, islamic republic of': 'Iran',
+    'ivory coast': "Côte d'Ivoire",
+    'korea, republic of (south korea)': 'South Korea',
+    'moldova, republic of': 'Moldova',
+    'myanmar': 'Myanmar_Burma',
+    "north korea (democratic people's republic of korea)": 'North Korea',
+    'russian federation': 'Russia',
+    'tanzania, united republic of': 'Tanzania',
+    'viet nam': 'Vietnam',
+    'other countries and territories': '_Other Countries and Territories',
+};
+
+/** 별칭표에 있는 이름이면 앱의 이름, 아니면 undefined. */
+function aliasedDefaultValueCountry(text: string): string | undefined {
+    const key = text.replace(/[‘’]/g, "'").replace(/\s+/g, ' ').trim().toLowerCase();
+    return DEFAULT_VALUE_COUNTRY_ALIASES[key];
+}
+
+/**
+ * 법정 마크업(2025/2621 부속서 I 서문, 2026/1740으로 정정): 시멘트·철강·알루미늄·수소는 2026년 10%, 2027년 20%, 2028년부터 30%,
+ * 비료는 2026년부터 1%. 정정판 워크북은 마크업 포함 열을 삭제하고 「레지스트리가 총 배출 기본값에 마크업을 더해 계산한다」고 했다.
+ * 레지스트리의 반올림 규칙은 전문에 없다 — 앱은 반올림하지 않고 곱한다.
+ */
+function defaultValueMarkups(sector: string) {
+    return /fertili[sz]er/i.test(sector) ? { y2026: 0.01, y2027: 0.01, y2028: 0.01 } : { y2026: 0.1, y2027: 0.2, y2028: 0.3 };
+}
+
+/** 쉼표 소수점(「2,118」)과 「-」·「N/A」·「see below」(값 없음)를 읽는다. 값이 없으면 undefined. */
+function toDecimalCell(value: string): number | undefined {
+    const text = value.trim();
+    if (text === '' || !/^[-+]?\d+([.,]\d+)?$/.test(text)) {
+        return undefined;
+    }
+    const parsed = Number(text.replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function toNumber(value: string): number | undefined {
@@ -301,7 +346,8 @@ export async function parseDefaultValueWorkbook(file: File): Promise<ImportedDef
     const zip = unzipSync(new Uint8Array(await file.arrayBuffer()));
     const sheets = parseWorkbookSheets(zip);
     const sharedStrings = parseSharedStrings(zip);
-    const countrySheets = sheets.filter((sheet) => !['overview', 'version history'].includes(sheet.name.toLowerCase()));
+    // 국가별 시트만 읽는다. 「Annex IV」(출처 국가를 알 수 없는 전구물질의 최고 기본값)는 국가 시트가 아니다.
+    const countrySheets = sheets.filter((sheet) => !['overview', 'version history', 'annex iv'].includes(sheet.name.toLowerCase()));
     const rows: DefaultValueReferenceRow[] = [];
 
     for (const sheet of countrySheets) {
@@ -311,29 +357,76 @@ export async function parseDefaultValueWorkbook(file: File): Promise<ImportedDef
             continue;
         }
 
-        for (const row of parseRows(strFromU8(sheetBytes), sharedStrings)) {
-            if (row.rowNumber < 5) {
+        const sheetRows = parseRows(strFromU8(sheetBytes), sharedStrings);
+        // 열은 머리글 글자로 찾는다 — 정정판은 마크업 열이 없고 머리글에 단위가 붙는다. 머리글을 못 찾으면 종전 판의 고정 위치.
+        const headerRow = sheetRows.find((row) => row.rowNumber <= 8 && /product cn code/i.test(row.valuesByColumn.get('A') ?? ''));
+        const columns: Record<'direct' | 'indirect' | 'total' | 'm2026' | 'm2027' | 'm2028' | 'route', string | undefined> = headerRow
+            ? { direct: undefined, indirect: undefined, total: undefined, m2026: undefined, m2027: undefined, m2028: undefined, route: undefined }
+            : { direct: 'C', indirect: 'D', total: 'E', m2026: 'F', m2027: 'G', m2028: 'H', route: 'I' };
+        if (headerRow) {
+            for (const [column, raw] of headerRow.valuesByColumn) {
+                const text = raw.replace(/\s+/g, ' ').trim().toLowerCase();
+                if (/^2026\b/.test(text)) columns.m2026 = column;
+                else if (/^2027\b/.test(text)) columns.m2027 = column;
+                else if (/^2028\b/.test(text)) columns.m2028 = column;
+                else if (/production route/.test(text)) columns.route = column;
+                else if (/indirect/.test(text)) columns.indirect = column;
+                else if (/direct/.test(text)) columns.direct = column;
+                else if (/total/.test(text)) columns.total = column;
+            }
+        }
+        if (!columns.total) {
+            continue;
+        }
+        const firstDataRow = headerRow ? headerRow.rowNumber + 1 : 5;
+        const titleCell = sheetRows.find((row) => row.rowNumber === 1)?.valuesByColumn.get('A') ?? '';
+        // 국가 이름: 별칭표에 있으면(시트 이름이든 제목이든) 앱의 이름, 시트 이름이 31자에서 잘렸으면 제목의 전체 이름, 아니면 시트 이름 —
+        // 종전 판의 「Myanmar_Burma」처럼 제목의 「/」를 시트 이름이 「_」로 바꾼 것을 그대로 지킨다.
+        const sheetName = sheet.name.trim();
+        const title = titleCell.trim();
+        const country = aliasedDefaultValueCountry(title)
+            ?? aliasedDefaultValueCountry(sheetName)
+            ?? (sheetName.length >= 31 && title.startsWith(sheetName) ? title : sheetName);
+        let sector = '';
+
+        for (const row of sheetRows) {
+            if (row.rowNumber < firstDataRow) {
                 continue;
             }
 
-            const cnCode = normalizeCode(row.valuesByColumn.get('A') ?? '');
-            const totalDefault = toNumber(row.valuesByColumn.get('E') ?? '');
+            const at = (column: string | undefined) => (column ? row.valuesByColumn.get(column) ?? '' : '');
+            const codeText = at('A');
+            const cnCodeFull = normalizeCode(codeText);
+
+            // 「Cement」「Iron and steel」 같은 분류 행 — 마크업 비율이 분류마다 다르다.
+            if (!/^\d/.test(codeText) && codeText !== '' && toDecimalCell(at(columns.total)) === undefined && at(columns.total).trim().toLowerCase() !== 'see below') {
+                sector = codeText;
+                continue;
+            }
+
+            // 10자리 TARIC(예: 2523 10 00 10)은 8자리 CN으로 둔다 — 종전 판도 같은 8자리 CN을 흰 클링커·회색 클링커 두 행으로 가졌다.
+            const cnCode = cnCodeFull.length === 10 ? cnCodeFull.slice(0, 8) : cnCodeFull;
+            const totalDefault = toDecimalCell(at(columns.total)) ?? toNumber(at(columns.total));
 
             if (!cnCode || totalDefault === undefined) {
                 continue;
             }
 
+            const rate = defaultValueMarkups(sector);
+            const fromFile = (column: string | undefined) => (column ? toDecimalCell(at(column)) ?? toNumber(at(column)) : undefined);
+            const withMarkup = (rateOfYear: number) => Math.round(totalDefault * (1 + rateOfYear) * 1e6) / 1e6;
+
             rows.push({
-                country: sheet.name,
+                country,
                 cn_code: cnCode,
                 description: row.valuesByColumn.get('B') ?? '',
-                direct_default: toNumber(row.valuesByColumn.get('C') ?? ''),
-                indirect_default: toNumber(row.valuesByColumn.get('D') ?? ''),
+                direct_default: fromFile(columns.direct),
+                indirect_default: fromFile(columns.indirect),
                 total_default: totalDefault,
-                markup_2026: toNumber(row.valuesByColumn.get('F') ?? ''),
-                markup_2027: toNumber(row.valuesByColumn.get('G') ?? ''),
-                markup_2028_onwards: toNumber(row.valuesByColumn.get('H') ?? ''),
-                production_route: row.valuesByColumn.get('I') ?? '',
+                markup_2026: columns.m2026 ? fromFile(columns.m2026) : withMarkup(rate.y2026),
+                markup_2027: columns.m2027 ? fromFile(columns.m2027) : withMarkup(rate.y2027),
+                markup_2028_onwards: columns.m2028 ? fromFile(columns.m2028) : withMarkup(rate.y2028),
+                production_route: at(columns.route),
             });
         }
     }
@@ -390,6 +483,21 @@ export function hasAmbiguousDefaultValueRoutes(
     return routes.size > 1;
 }
 
+/** 「기타 국가·지역」 시트의 이름 — 정정판에서는 `Other Countries and Territories`, 앱 안에서는 `_Other Countries and Territories`. */
+const OTHER_COUNTRIES_KEY = 'other countries and territories';
+
+/** 이 워크북에 그 나라의 시트가 있는가 — 값이 하나도 없는 나라(모든 칸이 「-」)도 「나열된 나라」다. */
+function isListedDefaultValueCountry(reference: ImportedDefaultValueReference, normalizedCountry: string) {
+    if (reference.rows.some((row) => normalizeReferenceCountry(row.country) === normalizedCountry)) {
+        return true;
+    }
+
+    return (reference.summary.sheet_names ?? []).some((name) => {
+        const canonical = DEFAULT_VALUE_COUNTRY_ALIASES[name.replace(/\s+/g, ' ').trim().replace(/[‘’]/g, "'").toLowerCase()] ?? name;
+        return normalizeReferenceCountry(canonical) === normalizedCountry;
+    });
+}
+
 function defaultValueCandidates(
     reference: ImportedDefaultValueReference | undefined,
     country: string,
@@ -401,14 +509,24 @@ function defaultValueCandidates(
 
     const normalizedCountry = normalizeReferenceCountry(country);
     const normalizedCnCode = normalizeCode(cnCode);
+    const matching = (countryKey: string) =>
+        reference.rows
+            .filter(
+                (row) =>
+                    normalizeReferenceCountry(row.country) === countryKey &&
+                    (row.cn_code === normalizedCnCode || normalizedCnCode.startsWith(row.cn_code))
+            )
+            .sort((a, b) => b.cn_code.length - a.cn_code.length);
 
-    return reference.rows
-        .filter(
-            (row) =>
-                normalizeReferenceCountry(row.country) === normalizedCountry &&
-                (row.cn_code === normalizedCnCode || normalizedCnCode.startsWith(row.cn_code))
-        )
-        .sort((a, b) => b.cn_code.length - a.cn_code.length);
+    const own = matching(normalizedCountry);
+
+    // 정정판(2026/1740) 부속서 I 서문: 「나라가 명시되어 있어도 값이 없거나 「–」이면 「기타 국가·지역」 표의 값을 쓴다」.
+    // 나라가 워크북에 아예 없으면(철자 실수일 수 있다) 조용히 대신하지 않는다 — 호출부가 「못 찾음」을 알린다.
+    if (own.length === 0 && normalizedCountry !== OTHER_COUNTRIES_KEY && isListedDefaultValueCountry(reference, normalizedCountry)) {
+        return matching(OTHER_COUNTRIES_KEY);
+    }
+
+    return own;
 }
 
 export function findDefaultValueReference(

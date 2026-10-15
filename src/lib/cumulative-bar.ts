@@ -61,7 +61,7 @@ const relativelyEqual = (a: number, b: number) => Math.abs(a - b) <= Math.max(SU
 const REFERENCE_COUNTRY_BY_ISO: Record<string, string> = {
     AL: 'Albania', DZ: 'Algeria', AO: 'Angola', AR: 'Argentina', AM: 'Armenia', AU: 'Australia', AZ: 'Azerbaijan', BD: 'Bangladesh', BH: 'Bahrain',
     BY: 'Belarus', BJ: 'Benin', BO: 'Bolivia', BA: 'Bosnia and Herzegovina', BR: 'Brazil', BN: 'Brunei', KH: 'Cambodia', CM: 'Cameroon', CA: 'Canada',
-    CL: 'Chile', CN: 'China', CO: 'Colombia', CG: 'Congo', CR: 'Costa Rica', CI: "Côte d'Ivoire", CU: 'Cuba', CD: 'Democratic Republic of the Cong',
+    CL: 'Chile', CN: 'China', CO: 'Colombia', CG: 'Congo', CR: 'Costa Rica', CI: "Côte d'Ivoire", CU: 'Cuba', CD: 'Democratic Republic of the Congo', CW: 'Curaçao', GQ: 'Equatorial Guinea', LA: 'Laos', LR: 'Liberia', NC: 'New Caledonia and dependencies', PG: 'Papua New Guinea', SL: 'Sierra Leone',
     DO: 'Dominican Republic', EC: 'Ecuador', EG: 'Egypt', SV: 'El Salvador', ER: 'Eritrea', SZ: 'Eswatini', ET: 'Ethiopia', GA: 'Gabon', GE: 'Georgia',
     GH: 'Ghana', GT: 'Guatemala', HT: 'Haiti', HN: 'Honduras', HK: 'Hong Kong', IN: 'India', ID: 'Indonesia', IR: 'Iran', IQ: 'Iraq', IL: 'Israel',
     JM: 'Jamaica', JP: 'Japan', JO: 'Jordan', KZ: 'Kazakhstan', KE: 'Kenya', KW: 'Kuwait', KG: 'Kyrgyzstan', LB: 'Lebanon', LY: 'Libya',

@@ -1986,7 +1986,7 @@ function PrecursorPanel({ data, steps, selectedProcessId, onSaved, onSelectStep 
         // 기본값은 **원료를 만든 나라** 기준이다. 나라를 고르기 전에는 채우지 않는다 —
         // 종전에는 'South Korea'로 고정 조회해 대만 원료에 한국 값(4.015)이 들어갔다(run11 P0-04).
         if (!supplierCountry.trim()) {
-            setMessage('먼저 위의 「공급국가」를 고르세요. EU 기본값은 원료를 만든 나라마다 다릅니다(예: 같은 STS 와이어가 한국 4.015 · 대만 11).');
+            setMessage('먼저 위의 「공급국가」를 고르세요. EU 기본값은 원료를 만든 나라마다 다릅니다(예: 같은 STS 와이어가 한국 4.015 · 대만 5.302).');
             return;
         }
         const match = findDefaultValueReference(reference, supplierCountry, cnDigits, '2026');
