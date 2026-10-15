@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, EmptyState, FormSection, PageHeader, SectionCard, StatusBadge } from '@/components/ui';
-import { createLocalItem, Installation, listLocalItems, updateLocalItem } from '@/lib/local-db';
+import { createLocalItem, Installation, listLocalItems, sortInstallations, updateLocalItem } from '@/lib/local-db';
 import { Building2, Mail, MapPin, Pencil, Phone, Plus, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -130,7 +130,7 @@ export default function InstallationsPage() {
     useEffect(() => {
         async function fetchInstallations() {
             const data = await listLocalItems('installations');
-            setItems(data.sort((a, b) => b.created_at.localeCompare(a.created_at)));
+            setItems(sortInstallations(data));
             // 점검 경고의 링크(/installations?edit=…)로 들어오면 그 사업장의 수정 폼을 바로 연다.
             const editId = new URLSearchParams(window.location.search).get('edit');
             const editTarget = editId ? data.find((item) => item.id === editId) : undefined;
@@ -443,6 +443,13 @@ export default function InstallationsPage() {
                 </SectionCard>
             )}
 
+            {items.length > 1 && (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900" data-testid="installations-multi-notice">
+                    사업장이 {items.length}곳 입력되어 있습니다. <span className="font-semibold">EU 파일·제출·산정에는 가장 먼저 만든 「{items[0].local_name || items[0].name}」 한 곳만 쓰입니다</span> —
+                    EU Communication 엑셀은 사업장마다 파일이 하나이므로, 한 프로젝트는 사업장 1곳 단위입니다. 다른 사업장은 사업장마다 새 프로젝트로 따로 만드세요(지난 자료는 .cbam 백업으로 보관).
+                </p>
+            )}
+
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 {items.length === 0 && (
                     <div className="lg:col-span-3">
@@ -458,11 +465,16 @@ export default function InstallationsPage() {
                         />
                     </div>
                 )}
-                {items.map((item) => (
+                {items.map((item, index) => (
                     <SectionCard key={item.id} className="p-5">
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                                 <StatusBadge tone="success">{item.country}</StatusBadge>
+                                {items.length > 1 && (
+                                    <span className="ml-2 align-middle">
+                                        <StatusBadge tone={index === 0 ? 'success' : 'neutral'}>{index === 0 ? 'EU 파일에 나가는 사업장' : 'EU 파일에 안 나감'}</StatusBadge>
+                                    </span>
+                                )}
                                 <h2 className="mt-3 truncate text-base font-semibold text-slate-950">{item.local_name || item.name}</h2>
                                 {item.local_name && <p className="mt-1 truncate text-sm text-slate-500">{item.name}</p>}
                                 <div className="mt-3 space-y-2 text-sm text-slate-600">

@@ -1,0 +1,1 @@
+return JSON.stringify([...document.querySelectorAll('input[type=file]')].map((el, i) => ({ i, accept: el.accept, text: (el.closest('section,div[class*=card],article,div')?.innerText ?? '').slice(0, 80).replace(/\s+/g, ' ') })));
