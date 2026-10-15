@@ -95,6 +95,13 @@ assert.doesNotMatch(panels, /국가\/지역 계통 평균 기본값 \(Commission
   assert.match(readFileSync('src/lib/activity-import.ts', 'utf8'), /\$\{ELECTRICITY_GRID_FACTOR_GUIDE\}/, '업로드 경고에도 같은 안내가 있다');
   assert.doesNotMatch(panels, /환경부 공표 국가 전력배출계수처럼/, '한국 정부 공표값을 EU 기본계수처럼 안내하지 않는다');
 }
+// 사업장이 둘 이상이면 사업장 화면이 어느 것이 EU 파일에 나가는지 말하고, 화면과 내보내기가 같은 순서를 쓴다(씨밤이 run38 P1-01).
+{
+  const page = readFileSync('src/app/installations/page.tsx', 'utf8');
+  assert.match(page, /sortInstallations\(data\)/, '사업장 화면이 내보내기와 같은 정렬을 쓴다(최신순 따로 정렬하지 않는다)');
+  assert.match(page, /installations-multi-notice/, '사업장이 둘 이상이면 안내가 뜬다');
+  assert.match(page, /EU 파일에 나가는 사업장/, '나가는 사업장에 표시가 붙는다');
+}
 assert.match(panels, /공용 계량기에서 나눈 값이면 — 배분 근거/, '전력 배분 근거 칸이 없다 (P1-10)');
 assert.match(panels, /line\.activity_level_role !== 'EXCLUDED'/, '활동수준 제외 라인에 원료를 배분한다 (P1-11)');
 assert.match(panels, /useState\(String\(GUIDED_STREAM_KINDS\[0\]\.defaults\.emission_factor_tco2e_per_unit\)\)/, '4단계 첫 화면의 자리값이 비어 있다 (P1-06)');
@@ -109,7 +116,7 @@ assert.match(panels, /const changeSupplierCountry = \(next: string\) => \{[\s\S]
 assert.equal((panels.match(/changeSupplierCountry\(event\.target\.value\)/g) ?? []).length, 2, '공급국가 입력(선택·직접입력) 둘 다 같은 처리를 거쳐야 한다');
 assert.doesNotMatch(readFileSync('src/lib/source-stream-input.ts', 'utf8'), /Hint: '[^']*\*\*/, '도움말은 일반 텍스트다 — 마크다운 별표가 그대로 보인다 (run12 P2-02)');
 const exporter = readFileSync('src/lib/eu-template-export.ts', 'utf8');
-assert.equal((exporter.match(/target: \{ type: 'installation', id: installationForCheck\.id \}/g) ?? []).length, 2, '사업장 경고에 수정 화면 링크가 없다 (run12 P2-03)');
+assert.equal((exporter.match(/target: \{ type: 'installation', id: installationForCheck\.id \}/g) ?? []).length, 3, '사업장 경고(필수 항목·UN/LOCODE·사업장 여럿)에 수정 화면 링크가 없다 (run12 P2-03 · run38 P1-01)');
 assert.match(readFileSync('src/app/installations/page.tsx', 'utf8'), /get\('edit'\)/, '/installations가 ?edit= 링크를 열지 않는다');
 assert.match(reportSource, /본 산정 \(실측 \+ 일부 공식 기본값\)/, '기본값을 섞어 쓴 본 산정을 「실측 채택」이라 부른다 (run12 P2-04)');
 assert.doesNotMatch(readFileSync('src/app/scenarios/page.tsx', 'utf8'), /Math\.round\(percent \* 10000\)/, '톤 입력을 비율로 반올림해 620 t이 620.136 t로 돌아온다 (run12 P2-05)');

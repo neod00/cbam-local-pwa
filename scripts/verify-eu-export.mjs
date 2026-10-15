@@ -573,6 +573,35 @@ assertEqual(String(validation.cnCodeCount), '1', 'synthetic CN code count');
 const readiness = euExport.evaluateEuExportReadiness(data, validation.cnCodeMap);
 assertEqual(String(readiness.errorCount), '0', 'readiness error count');
 
+// ── 사업장이 둘 이상이면: 어느 사업장이 나가는지 알린다(씨밤이 run38 P1-01) ──
+{
+  const [first] = data.installations;
+  const second = { ...first, id: 'installation_second', name: 'Second Plant', local_name: '둘째 공장', created_at: '2099-01-01T00:00:00.000Z' };
+  const one = euExport.evaluateEuExportReadiness(data, validation.cnCodeMap);
+  assertEqual(String(one.issues.some((issue) => /사업장이 \d+곳 입력되어 있습니다/.test(issue.message))), 'false', '사업장이 하나면 말하지 않는다');
+  const two = euExport.evaluateEuExportReadiness({ ...data, installations: [first, second] }, validation.cnCodeMap);
+  const multi = two.issues.find((issue) => /사업장이 2곳 입력되어 있습니다/.test(issue.message));
+  assertEqual(String(Boolean(multi)), 'true', '사업장이 둘이면 경고');
+  assertEqual(multi.severity, 'warning', '막지 않고 알린다');
+  assertEqual(String(multi.message.includes(first.local_name || first.name)), 'true', '나가는 사업장(첫째)의 이름을 말한다');
+  assertEqual(String(multi.target.id === first.id), 'true', '경고는 나가는 사업장을 가리킨다');
+  // 순서: 만든 순(같으면 id). getAll()의 키(UUID) 순서로 정하지 않는다.
+  const localDb = readFileSync('src/lib/local-db.ts', 'utf8');
+  const start = localDb.indexOf('export function sortInstallations');
+  const sorter = localDb.slice(start, localDb.indexOf('\n}\n', start) + 3).replace('export ', '');
+  const ctx = vm.createContext({});
+  // 타입은 ts가 지운다(형식 매개변수 포함).
+  vm.runInContext(ts.transpileModule(sorter + '\nglobalThis.sortInstallations = sortInstallations;', { compilerOptions: { module: ts.ModuleKind.None, target: ts.ScriptTarget.ES2022 } }).outputText, ctx);
+  const rows = [
+    { id: 'installation_ffff', created_at: '2026-10-15T11:50:00.000Z' },
+    { id: 'installation_0000', created_at: '2026-10-15T11:59:13.000Z' },
+    { id: 'installation_8888', created_at: '2026-10-15T11:57:09.000Z' },
+  ];
+  assertEqual(ctx.sortInstallations(rows).map((row) => row.id).join(','), 'installation_ffff,installation_8888,installation_0000', '만든 순으로 정렬(키 순서가 아니다)');
+  assertEqual(rows[0].id, 'installation_ffff', '원본 배열을 바꾸지 않는다');
+  assertEqual(String(/if \(storeName === "installations"\)\s*\{\s*return sortInstallations/.test(localDb)), 'true', 'listLocalItems가 사업장을 정렬한다');
+}
+
 // ── in-plant transfer guard (docs/internal-precursor-design.md §7-6) ──
 // Until the engine chains processes, a transfer makes the document wrong either way: the receiving good is
 // understated in the app, or doubled in the template when the transfer was also entered as a purchased precursor.

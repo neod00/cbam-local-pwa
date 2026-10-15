@@ -1273,6 +1273,15 @@ export function evaluateEuExportReadiness(
     // 산정보고서는 같은 항목을 「기재 필요」로 세는데 Export 점검은 「오류 0 · 경고 0」이었다(run11 P1-15·16).
     // 사업장 자료를 넘겨받았을 때만 검사한다(넘기지 않는 호출부의 결과를 바꾸지 않는다).
     const installationForCheck = (data.installations ?? [])[0];
+    // 사업장이 둘 이상이어도 EU 파일·제출·산정은 첫 사업장 하나만 쓴다(EU 엑셀은 사업장마다 한 파일). 어느 것이 나가는지 말해 준다(run38 P1-01).
+    if (installationForCheck && (data.installations?.length ?? 0) > 1) {
+        issues.push({
+            severity: 'warning',
+            area: '사업장',
+            target: { type: 'installation', id: installationForCheck.id },
+            message: `사업장이 ${data.installations?.length}곳 입력되어 있습니다 — 이 파일에는 가장 먼저 만든 「${installationForCheck.local_name || installationForCheck.name}」만 나갑니다. 한 프로젝트는 사업장 1곳 단위입니다. 다른 사업장은 사업장마다 새 프로젝트로 따로 만드세요(지난 자료는 .cbam 백업).`,
+        });
+    }
     if (installationForCheck) {
         const missingOperatorFields = [
             !installationForCheck.operator_name?.trim() ? 'operator_name' as const : undefined,

@@ -650,6 +650,15 @@ export function sortReportingPeriods<T extends Pick<ReportingPeriod, "start_date
   );
 }
 
+/**
+ * 사업장의 순서: 만든 순(오래된 것이 먼저), 같으면 id. 앱의 모든 화면·내보내기·제출은 첫 사업장(`installations[0]`) 하나를 쓴다 —
+ * IndexedDB의 getAll()은 키(UUID) 순이라 정렬하지 않으면 어느 사업장이 EU 파일에 나가는지 임의였다(씨밤이 run38 P1-01).
+ * 처음 만든 사업장(보통 본사·서식으로 들어온 사업장)이 계속 첫 사업장으로 남는다.
+ */
+export function sortInstallations<T extends Pick<Installation, "created_at" | "id">>(installations: T[]): T[] {
+  return [...installations].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+}
+
 export async function listLocalItems<TStoreName extends StoreName>(
   storeName: TStoreName
 ): Promise<StoreEntityMap[TStoreName][]> {
@@ -663,6 +672,10 @@ export async function listLocalItems<TStoreName extends StoreName>(
   // 고르는 순서가 갈라지는데, 그 둘이 갈라지면 화면의 「맨 위 기간이 나갑니다」가 거짓이 된다.
   if (storeName === "periods") {
     return sortReportingPeriods(rows as ReportingPeriod[]) as StoreEntityMap[TStoreName][];
+  }
+
+  if (storeName === "installations") {
+    return sortInstallations(rows as Installation[]) as StoreEntityMap[TStoreName][];
   }
 
   return rows;
