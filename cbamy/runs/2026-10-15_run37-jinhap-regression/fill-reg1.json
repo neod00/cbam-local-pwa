@@ -1,0 +1,73 @@
+{
+  "_note": "run35 1차 — 씨밤이(컨설턴트)가 서식의 안내만 보고 채운 그대로. 회사·수치는 모두 가상(진합의 실제 자료 아님). 공개된 제품군(엔진·섀시 볼트, 탭타이트 스크류, STS 볼트, 블라인드 리벳 너트, 샤프트류)만 참고했다.",
+  "installation": {
+    "name": "JH-type Fastener Co., Ltd. Daejeon Plant (virtual)",
+    "local_name": "가상 진합형 체결부품 대전공장",
+    "country": "KR",
+    "street": "00 Daedeok-daero (virtual)",
+    "city": "Daejeon",
+    "postcode": "34300",
+    "latitude": "36.44",
+    "longitude": "127.41",
+    "economic_activity": "Manufacture of steel bolts, screws and nuts for automotive use",
+    "operator_name": "JH-type Fastener Co., Ltd. (virtual)",
+    "operator_reg_number": "000-00-00000",
+    "operator_address": "00 Daedeok-daero, Daejeon, Republic of Korea (virtual)",
+    "authorized_representative_name": "Lee Seo-jin",
+    "email": "cbam@example.invalid",
+    "telephone": "+82-42-000-0000",
+    "period_start": "2025-01-01",
+    "period_end": "2025-12-31",
+    "electricity_total_mwh": "21500000",
+    "electricity_ef_source": "국가 전력망 평균",
+    "imported_heat": "아니오",
+    "waste_gases": "아니오",
+    "carbon_price_applicable": "아직 모름",
+    "declaration_name": "Lee Seo-jin",
+    "declaration_position": "품질환경팀장"
+  },
+  "parts": [
+    { "part": "EB-1001", "pname": "엔진 플랜지 볼트 M10", "cn": "73181582", "grade": "SCM435", "mass": "1200", "exported": "예", "scrap": "18", "alloy_mn_cr_ni": "2.0", "reducing_agent": "모름 — 공급사 문의 중", "scrap_per_t": "0", "preconsumer_scrap_pct": "0" },
+    { "part": "EB-1002", "pname": "엔진 헤드 볼트 M12", "cn": "73181582", "grade": "SCM435", "mass": "900", "exported": "예", "scrap": "14" },
+    { "part": "EB-1003", "pname": "커넥팅로드 볼트 M8", "cn": "73181582", "grade": "SCM 435", "mass": "300", "exported": "예", "scrap": "6" },
+    { "part": "EB-1101", "pname": "엔진 볼트 (내수)", "cn": "73181582", "grade": "SCM435", "mass": "2000", "exported": "아니오", "scrap": "30" },
+    { "part": "CB-2001", "pname": "섀시 볼트 M14", "cn": "73181582", "grade": "SWCH35K", "mass": "1500", "exported": "예", "scrap": "20", "alloy_mn_cr_ni": "0.75", "reducing_agent": "모름 — 공급사 문의 중", "scrap_per_t": "0", "preconsumer_scrap_pct": "0" },
+    { "part": "CB-2101", "pname": "섀시 볼트 (내수)", "cn": "73181582", "grade": "SWCH35K", "mass": "2500", "exported": "아니오", "scrap": "34" },
+    { "part": "GB-3001", "pname": "일반 볼트 M6 (4.8)", "cn": "73181575", "grade": "SWCH18A", "qty": "40000000", "unitWeight": "12.5", "exported": "예", "alloy_mn_cr_ni": "0.75", "reducing_agent": "모름 — 공급사 문의 중", "scrap_per_t": "0", "preconsumer_scrap_pct": "0" },
+    { "part": "GB-3101", "pname": "일반 볼트 (내수)", "cn": "73181575", "grade": "SWCH18A", "mass": "1800", "exported": "아니오", "scrap": "22" },
+    { "part": "TS-4001", "pname": "TAPTITE 스크류 M5", "cn": "73181499", "grade": "SWCH18A", "mass": "400", "exported": "예", "scrap": "5" },
+    { "part": "TS-4101", "pname": "TAPTITE 스크류 (내수)", "cn": "73181499", "grade": "SWCH18A", "mass": "600", "exported": "아니오", "scrap": "8" },
+    { "part": "SB-5001", "pname": "STS 볼트 M8", "cn": "73181535", "grade": "STS304", "mass": "120", "exported": "예", "scrap": "3", "alloy_mn_cr_ni": "27.5", "reducing_agent": "모름 — 공급사 문의 중", "scrap_per_t": "0", "preconsumer_scrap_pct": "0" },
+    { "part": "SB-5101", "pname": "STS 볼트 (내수)", "cn": "73181535", "grade": "STS304", "mass": "80", "exported": "아니오", "scrap": "2" },
+    { "part": "RN-6001", "pname": "블라인드 리벳 너트 (내수)", "cn": "73181631", "grade": "SWCH10A", "mass": "300", "exported": "아니오", "scrap": "6" },
+    { "part": "SH-7001", "pname": "중공 샤프트 (내수)", "cn": "87089997", "grade": "S45C", "mass": "700", "exported": "아니오", "scrap": "45" }
+  ],
+  "fuels": [
+    { "name": "연속 열처리로(소입·소려) 도시가스", "kind": "도시가스 (Nm³)", "amount": "1450000", "where": "SCM435;SWCH35K", "evidence": "도시가스 고지서 2025년 12장 (열처리동 계량기)", "method": "도시가스사 정산용 계량기" },
+    { "name": "열처리 분위기가스용 LPG", "kind": "유류·기타 (t)", "amount": "62", "where": "SCM435;SWCH35K", "evidence": "LPG 납품 전표 2025 합계", "method": "납품 전표 합산" },
+    { "name": "세척기 온수 보일러 도시가스", "kind": "도시가스 (Nm³)", "amount": "85000", "where": "공장 전체(공용)", "evidence": "도시가스 고지서 2025년 12장 (본동 계량기)", "use": "보일러·스팀·온수 (여러 공정이 나눠 씀)", "method": "도시가스사 정산용 계량기" },
+    { "name": "지오메트 코팅 건조로 도시가스", "kind": "도시가스 (Nm³)", "amount": "120000", "where": "공장 전체(공용)", "evidence": "도시가스 고지서 2025년 12장 (코팅동 계량기)", "method": "도시가스사 정산용 계량기" },
+    { "name": "지게차 경유", "kind": "경유 (L)", "amount": "38000", "where": "공장 전체(공용)", "evidence": "주유 전표 2025 합계", "method": "주유 전표 합산" },
+    { "name": "출하·포장동 난방 등유", "kind": "등유 (L)", "amount": "6000", "where": "공장 전체(공용)", "evidence": "등유 구매 전표 2025", "method": "구매 전표 합산" }
+  ],
+  "precursors": [
+    { "name": "SCM435 CHQ 와이어 (가상 선재가공 A사)", "cn": "72299090", "consumed": "4530", "purchased": "4600", "country": "South Korea", "where": "SCM435", "hasValue": "없음 (EU 기본값 사용)", "supplier": "가상 선재가공 A사 (원소재: 국내 고로사)", "evidence": "원자재 수불부 2025" },
+    { "name": "SWCH35K 와이어 (가상 선재가공 A사)", "cn": "72171050", "consumed": "4120", "purchased": "4150", "country": "South Korea", "where": "SWCH35K", "hasValue": "없음 (EU 기본값 사용)", "supplier": "가상 선재가공 A사", "evidence": "원자재 수불부 2025" },
+    { "name": "SWCH18A 와이어 (가상 신선 B사)", "cn": "72171039", "consumed": "3400", "purchased": "3420", "country": "South Korea", "where": "SWCH18A", "hasValue": "있음 (공급사가 준 값)", "direct": "2.05", "indirect": "0.21", "supplier": "가상 신선 B사 포항공장", "verification": "공급사 확인", "period": "2025-01-01 ~ 2025-12-31", "evidence": "공급사 CBAM 데이터 시트(가상), 2026-08 회신" },
+    { "name": "STS304 와이어 (국산)", "cn": "72230019", "consumed": "150", "country": "South Korea", "where": "STS304", "hasValue": "없음 (EU 기본값 사용)", "supplier": "가상 STS 선재 C사", "evidence": "원자재 수불부 2025" },
+    { "name": "STS304 와이어 (중국산)", "cn": "72230019", "consumed": "56", "country": "China", "where": "STS304", "hasValue": "없음 (EU 기본값 사용)", "supplier": "가상 무역상 D사 경유 (제조공장 미확인)", "evidence": "수입신고필증 2025" },
+    { "name": "SWCH10A 와이어", "cn": "72171039", "consumed": "310", "country": "South Korea", "where": "SWCH10A", "hasValue": "없음 (EU 기본값 사용)", "supplier": "가상 신선 B사 포항공장", "evidence": "원자재 수불부 2025" },
+    { "name": "S45C 봉강 (샤프트용)", "cn": "72149971", "consumed": "760", "country": "South Korea", "where": "S45C", "hasValue": "없음 (EU 기본값 사용)", "supplier": "가상 특수강 E사", "evidence": "원자재 수불부 2025" }
+  ],
+  "rnr": [
+    { "data": "생산량 (품번별)", "collector": "생산관리팀", "transposer": "품질환경팀 이OO", "approver": "품질환경팀장", "system": "ERP 생산실적" },
+    { "data": "도시가스·전력 사용량", "collector": "총무팀", "transposer": "품질환경팀 이OO", "approver": "품질환경팀장", "system": "고지서 철 + 엑셀 집계표" },
+    { "data": "구매 강재 투입량", "collector": "자재팀", "transposer": "품질환경팀 이OO", "approver": "품질환경팀장", "system": "ERP 원자재 수불부" }
+  ],
+  "evidence": [
+    { "item": "도시가스 고지서 2025년 (계량기 3개 × 12장)", "proves": "4_연료의 도시가스 사용량", "custodian": "총무팀 문서고", "status": "확보" },
+    { "item": "한전 고지서 2025년 12장", "proves": "1_사업장의 공장 전체 전력", "custodian": "총무팀 문서고", "status": "확보" },
+    { "item": "ERP 생산실적 (품번별 중량)", "proves": "2b_품번목록의 생산량", "custodian": "생산관리팀", "status": "확보" },
+    { "item": "공급사 CBAM 데이터 시트 (B사)", "proves": "5_구매강재의 공급사 값", "custodian": "자재팀", "status": "A·C·E사는 요청 중" }
+  ]
+}
