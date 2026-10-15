@@ -883,7 +883,7 @@ const PART_NUMERIC_PARAMS = new Set<string>(['alloy_mn_cr_ni', 'scrap_per_t', 'p
 export function expandPartList(rows: ActivityRow[], grouping: PartGrouping = 'MERGE'): PartListExpansion {
     const problems: PartListExpansion['problems'] = [];
     const origin = new Map<number, number>();
-    type Part = { row: number; cn: string; grade: string; gradeKey: string; exported: boolean; process: string; mass: number; scrap: number; params: Record<string, string> };
+    type Part = { row: number; pname: string; cn: string; grade: string; gradeKey: string; exported: boolean; process: string; mass: number; scrap: number; params: Record<string, string> };
     const parts: Part[] = [];
     const spellings = new Map<string, string[]>(); // 재질 키 → 적힌 모양들(처음 것이 대표)
     for (const row of rows) {
@@ -911,7 +911,7 @@ export function expandPartList(rows: ActivityRow[], grouping: PartGrouping = 'ME
             if (value) params[field] = value;
         }
         const notExported = ['아니오', '아니요', 'n', 'no'].includes((v.exported ?? '').trim().toLowerCase());
-        parts.push({ row: row.row, cn, grade, gradeKey: gKey, exported: !notExported, process: (v.process ?? '').trim(), mass, scrap, params });
+        parts.push({ row: row.row, pname: (v.pname ?? '').trim(), cn, grade, gradeKey: gKey, exported: !notExported, process: (v.process ?? '').trim(), mass, scrap, params });
     }
     const displayGrade = (part: Part) => spellings.get(part.gradeKey)![0];
 
@@ -976,7 +976,16 @@ export function expandPartList(rows: ActivityRow[], grouping: PartGrouping = 'ME
         acc.parts.push(part);
         products.set(productKey, acc);
     }
-    const productNameOf = (acc: ProductAcc) => `${acc.grades.join('·')} · CN ${acc.cn}${acc.exported ? '' : ' (비수출)'}`;
+    // 품명을 적었으면 그 CN에서 가장 많이 만든 품번의 품명 「… 외 N종」을 제품 이름으로 쓴다 — EU 문서의 Product name은 수입업자와 소통하는 칸이라
+    // 재질 약어와 코드 나열(「SWCH35K·SWCH10A · CN 73181692」)은 상대에게 뜻이 없다(run36 P2-02). 품명을 안 적었으면 예전 이름이다.
+    const legacyNameOf = (acc: ProductAcc) => `${acc.grades.join('·')} · CN ${acc.cn}${acc.exported ? '' : ' (비수출)'}`;
+    const productNameOf = (acc: ProductAcc) => {
+        const named = acc.parts.filter((part) => part.pname);
+        if (named.length === 0) return legacyNameOf(acc);
+        const biggest = named.reduce((best, part) => (part.mass > best.mass ? part : best), named[0]);
+        const kinds = new Set(named.map((part) => part.pname.replace(/s+/g, ' ').toLowerCase())).size;
+        return `${biggest.pname}${kinds > 1 ? ` 외 ${kinds - 1}종` : ''}${acc.exported ? '' : ' (비수출)'}`;
+    };
 
     // 부문 파라미터: 같은 재질의 다른 줄 값을 물려받고(재질의 첫 값), 한 제품 안에서는 생산량 가중평균
     const gradeParams = new Map<string, Record<string, string>>();
@@ -1003,9 +1012,12 @@ export function expandPartList(rows: ActivityRow[], grouping: PartGrouping = 'ME
 
     const productRows: ActivityRow[] = [];
     const productNameByKey = new Map<string, string>();
+    const usedNames = new Set<string>();
     Array.from(products.entries()).forEach(([productKey, acc], index) => {
         const rowNumber = PART_ROW_BASE + index;
-        const name = productNameOf(acc);
+        let name = productNameOf(acc);
+        if (usedNames.has(name.toLowerCase())) name = `${name} · CN ${acc.cn}`;
+        usedNames.add(name.toLowerCase());
         productNameByKey.set(productKey, name);
         origin.set(rowNumber, acc.firstRow);
         productRows.push({ row: rowNumber, values: { name, cn: acc.cn, exported: acc.exported ? '예' : '아니오', ...productParams(acc) } });
