@@ -102,6 +102,8 @@ assert.doesNotMatch(panels, /국가\/지역 계통 평균 기본값 \(Commission
   assert.match(page, /installations-multi-notice/, '사업장이 둘 이상이면 안내가 뜬다');
   assert.match(page, /EU 파일에 나가는 사업장/, '나가는 사업장에 표시가 붙는다');
 }
+// 합침/나눔 카드가 어느 재질이 CN을 한 공정으로 이어 붙였는지 보여 준다(KPF형 run39 O-1).
+assert.match(readFileSync('src/app/upload/page.tsx', 'utf8'), /grouping-merge-links[\s\S]*합쳐지는 이유/, '카드에 합쳐지는 이유가 있다');
 assert.match(panels, /공용 계량기에서 나눈 값이면 — 배분 근거/, '전력 배분 근거 칸이 없다 (P1-10)');
 assert.match(panels, /line\.activity_level_role !== 'EXCLUDED'/, '활동수준 제외 라인에 원료를 배분한다 (P1-11)');
 assert.match(panels, /useState\(String\(GUIDED_STREAM_KINDS\[0\]\.defaults\.emission_factor_tco2e_per_unit\)\)/, '4단계 첫 화면의 자리값이 비어 있다 (P1-06)');

@@ -1072,6 +1072,7 @@ export async function importActivityWorkbook(
     const assigned = new Map<string, Array<{ name: string; heading: string }>>();
     const unassigned = new Map<string, Array<{ name: string; heading: string }>>();
     const precursorRows: ActivityRow[] = [];
+    const splitNotes: Array<{ row: number; grade: string; message: string }> = [];
     for (const row of data.precursors) {
         const shares = gradeSplits.get(key(row.values.where));
         const consumed = numberOf(row.values.consumed);
@@ -1095,7 +1096,15 @@ export async function importActivityWorkbook(
                 nonCbam: scaled(row.values.nonCbam, index, fractions),
             } });
         });
-        note('warning', SHEET_PRECURSORS, `${baseName}: 「${(row.values.where ?? '').trim()}」을(를) 쓰는 공정이 ${shares.length}개라 투입량 ${fmt(consumed)} t을 그 재질로 만든 양(품번 목록의 생산량+스크랩)의 비율로 나눠 넣었습니다 — ${shares.map((share, index) => `${share.process.name} ${fmt(Math.round(consumed * fractions[index] * 1e3) / 1e3)} t`).join(', ')}. 투입이 생산량에 비례한다는 가정입니다 — 공정별 실제 투입 기록이 있으면 5_구매강재의 「쓰는 공정」에 공정 이름을 적어 줄을 나눠 올리세요.`, row.row);
+        splitNotes.push({ row: row.row, grade: (row.values.where ?? '').trim(), message: `${baseName}: 「${(row.values.where ?? '').trim()}」을(를) 쓰는 공정이 ${shares.length}개라 투입량 ${fmt(consumed)} t을 그 재질로 만든 양(품번 목록의 생산량+스크랩)의 비율로 나눠 넣었습니다 — ${shares.map((share, index) => `${share.process.name} ${fmt(Math.round(consumed * fractions[index] * 1e3) / 1e3)} t`).join(', ')}. 투입이 생산량에 비례한다는 가정입니다 — 공정별 실제 투입 기록이 있으면 5_구매강재의 「쓰는 공정」에 공정 이름을 적어 줄을 나눠 올리세요.` });
+    }
+    // 셋 이상이면 「확인 필요」 한 건으로 묶고 줄별 내용은 참고로 둔다 — 같은 가정을 줄마다 되풀이해 확인 필요가 늘지 않게 한다(KPF형 run39 O-2).
+    if (splitNotes.length >= 3) {
+        const grades = Array.from(new Set(splitNotes.map((item) => item.grade)));
+        note('warning', SHEET_PRECURSORS, `구매 강재 ${splitNotes.length}줄(재질 ${grades.join('·')})이 같은 재질을 쓰는 공정 둘 이상에 걸쳐 있어, 투입량을 그 재질로 만든 양(품번 목록의 생산량+스크랩)의 비율로 나눠 넣었습니다. 투입이 생산량에 비례한다는 가정입니다 — 공정별 실제 투입 기록이 있으면 5_구매강재의 「쓰는 공정」에 공정 이름을 적어 줄을 나눠 올리세요. 줄별로 나눈 양은 아래 「참고」에 있습니다.`);
+        for (const item of splitNotes) note('info', SHEET_PRECURSORS, item.message, item.row);
+    } else {
+        for (const item of splitNotes) note('warning', SHEET_PRECURSORS, item.message, item.row);
     }
     for (const row of precursorRows) {
         const name = (row.values.name ?? '').trim();
@@ -1338,6 +1347,8 @@ export interface PartGroupingPreview {
     splitExceedsLimit: boolean;
     /** 공정이나 값을 찾지 못해 비교에 넣지 못한 구매 강재 줄 수 */
     unresolved: number;
+    /** 「합침」에서 여러 CN을 한 공정으로 이어 붙인 재질(둘 이상의 구성에 들어간 재질)과 CN — 어느 재질이 고리인지 */
+    mergeLinks: Array<{ process: string; cns: string[]; linkGrades: string[] }>;
 }
 
 /**
@@ -1398,7 +1409,7 @@ export function previewPartGrouping(data: ActivityWorkbookData, defaultValues?: 
     if (rows.length === 0) return undefined;
     const others = new Set(data.processes.map((row) => key(row.values.name)).filter(Boolean));
     const splitProcessCount = new Set([...others, ...splitInfo.keys()]).size;
-    return { rows, mergedProcessCount: new Set([...others, ...mergedInfo.keys()]).size, splitProcessCount, splitExceedsLimit: splitProcessCount > EU_PROCESS_LIMIT, unresolved };
+    return { rows, mergedProcessCount: new Set([...others, ...mergedInfo.keys()]).size, splitProcessCount, splitExceedsLimit: splitProcessCount > EU_PROCESS_LIMIT, unresolved, mergeLinks: merged.mergeLinks };
 }
 
 /** 「확인할 것」을 서식을 채운 사람에게 그대로 보낼 수 있는 글로 만든다. */

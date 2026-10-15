@@ -728,6 +728,24 @@ assert.deepEqual(plain([preview.mergedProcessCount, preview.splitProcessCount, p
 assert.deepEqual(plain(preview.rows.map((row) => [row.cns.join(','), Math.round(row.splitSee * 1e4) / 1e4, Math.round(row.mergedSee * 1e4) / 1e4, Math.round(row.deltaPct * 10) / 10])), [
   ['73181692', 2.2909, 1.5, 52.7], ['73181660', 1.0839, 1.5, -27.7], ['73181699', 0.7692, 1.5, -48.7], ['73181595', 1.8182, 1.5, 21.2],
 ], '나누면 CN별 값, 합치면 가중평균 — 올린 뒤의 엔진 값과 같다');
+// 어느 재질이 CN들을 한 공정으로 이어 붙였는지(카드의 「합쳐지는 이유」, KPF형 run39 O-1)
+assert.deepEqual(plain(preview.mergeLinks), [{ process: 'SWCH35K·SWCH10A·SWCH45K 공정', cns: ['73181692', '73181660', '73181699', '73181595'], linkGrades: ['SWCH35K', 'SWCH45K'] }], '둘 이상의 구성에 들어간 재질이 고리다');
+// 같은 가정으로 나눈 구매 강재 줄이 셋 이상이면 「확인 필요」 한 건 + 줄별 「참고」(run39 O-2)
+{
+  const manyLines = { precursors: [
+    ...mixPrecursors.precursors,
+    { row: 8, values: { name: 'SWCH35K 와이어 B', cn: '72171050', consumed: '200', country: 'South Korea', where: 'SWCH35K', hasValue: '있음 (공급사가 준 값)', direct: '2', indirect: '0', evidence: '공급사 회신' } },
+  ] };
+  const grouped = await importOf(withParts(mixParts, manyLines), undefined, SPLIT);
+  const text = I.describeActivityImportIssues(grouped.result.issues);
+  assert.equal((text.match(/\[확인 필요\] 5_구매강재 — 구매 강재 3줄\(재질 /g) ?? []).length, 1, '나눈 줄이 셋이면 확인 필요는 한 건');
+  assert.equal((text.match(/\[참고\] 5_구매강재 \d+번째 줄 — [^\n]*을\(를\) 쓰는 공정이 \d+개라/g) ?? []).length, 3, '줄별 내용은 참고로 남는다');
+  assert.ok(!/\[확인 필요\] 5_구매강재 \d+번째 줄 — [^\n]*을\(를\) 쓰는 공정이 \d+개라/.test(text), '줄별 확인 필요는 되풀이하지 않는다');
+  // 둘 이하이면 종전처럼 줄마다 확인 필요
+  const two = await importOf(withParts(mixParts, mixPrecursors), undefined, SPLIT);
+  const twoText = I.describeActivityImportIssues(two.result.issues);
+  assert.equal((twoText.match(/\[확인 필요\] 5_구매강재 \d+번째 줄 — [^\n]*을\(를\) 쓰는 공정이 \d+개라/g) ?? []).length, 2, '둘 이하이면 줄마다 확인 필요');
+}
 assert.equal(I.previewPartGrouping({ rnr: [], evidence: [], ...withParts([{ part: 'A', cn: '73181582', grade: 'SCM435', mass: '120' }, { part: 'B', cn: '73181699', grade: 'SCM435', mass: '80' }]) }, defaultValues), undefined, '재질 구성이 같으면 고를 것이 없다(A.4로 한 공정이 의무)');
 
 // run36 P2-02: 품명을 적었으면 제품 이름은 그 CN에서 가장 많이 만든 품번의 품명 「… 외 N종」 — EU 문서의 Product name은 수입업자와 소통하는 칸이다
