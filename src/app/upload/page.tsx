@@ -810,7 +810,7 @@ export default function UploadPage() {
                                     <tbody>
                                         {groupingChoice.preview.rows.map((row) => (
                                             <tr key={row.process} className="border-b border-teal-100 last:border-0">
-                                                <td className="py-2 pr-3">{row.cns.join(', ')}</td>
+                                                <td className="py-2 pr-3">{row.cns.map((cn) => (/^7[23]/.test(cn) ? cn : `${cn} (CBAM 철강 제품 아님)`)).join(', ')}</td>
                                                 <td className="py-2 pr-3 text-right tabular-nums">{row.outputT.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}</td>
                                                 <td className="py-2 pr-3 text-right tabular-nums">{row.mergedSee.toFixed(4)}</td>
                                                 <td className="py-2 pr-3 text-right tabular-nums">{row.splitSee.toFixed(4)}</td>
