@@ -370,7 +370,12 @@ export async function importActivityWorkbook(
             const description = describeCn(cn);
             const names = Array.from(new Set(entry.names.filter(Boolean))).slice(0, 3).map((item) => `「${item}」`).join(', ');
             if (!description) {
-                if (CN_MASTER[cn]) continue; // 철강이 아닌 CBAM 품목은 지원 범위 안내가 따로 있다.
+                if (CN_MASTER[cn]) {
+                    // 철강이 아닌 CBAM 품목(알루미늄 등) — 결과 화면에서야 「범위 밖」이라고 나오던 것을 올릴 때 알린다(run36 P2-01).
+                    // 이 제품도 같은 설비의 연료·전력을 생산량 비율로 나눠 가지므로, 컨설턴트가 업체에 바로 물을 수 있게 영향을 말한다.
+                    note(entry.exported ? 'warning' : 'info', SHEET_PRODUCTS, `CN ${cn}(${names})은(는) 철강이 아닌 CBAM 품목(${CN_MASTER[cn].trim()})입니다 — 이 앱은 철강만 산정하므로 산정 결과와 EU 문서에 넣지 않습니다. 같은 설비의 공용 연료·전력은 이 제품도 생산량 비율로 나눠 가지므로, 그 몫만큼 철강 제품에 귀속되는 양이 줄어듭니다. ${entry.exported ? '이 품목을 EU로 수출한다면 별도로 산정해야 합니다.' : '수출하지 않는 제품이면 그대로 두어도 됩니다.'}`);
+                    continue;
+                }
                 note(entry.exported ? 'warning' : 'info', SHEET_PRODUCTS, `CN ${cn}은(는) CBAM 대상 목록(EU 템플릿 20241213)에 없는 코드입니다(${names}). 수출신고필증의 HS 코드 앞 8자리를 다시 확인하세요. CBAM 대상이 아니면 신고하지 않지만, 같은 설비·연료를 쓰면 연료·전력의 몫은 나눠 갖습니다.`, entry.row);
                 continue;
             }

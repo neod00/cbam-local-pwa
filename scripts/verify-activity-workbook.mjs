@@ -210,14 +210,17 @@ const alloyRecord = assignedRun.store.data.precursors.find((item) => item.name =
 const boltLine = assignedRun.store.data.product_output_lines.find((line) => line.output_mass_t === 1000);
 assert.deepEqual(plain(alloyRecord.output_allocations), [{ product_output_line_id: boltLine.id, product_id: boltLine.product_id, allocated_mass_t: 1040, allocation_percent: 100 }]);
 assert.ok(Math.abs(seeOf(assignedRun, '73181582') - 2.08) < 1e-9 && Math.abs(seeOf(assignedRun, '73181699') - 1.04) < 1e-9, '합금강은 볼트에만(1,040 × 2 ÷ 1,000), 탄소강은 너트에만(2,080 × 1 ÷ 2,000)');
-assert.equal(assignedRun.result.issues.filter((issue) => issue.level !== 'info').length, 0);
+// 시험 틀의 「알루미늄 캡」은 철강이 아닌 CBAM 품목이라 올릴 때 알린다(run36 P2-01) — 그 한 줄을 빼면 깨끗하다
+assert.equal(assignedRun.result.issues.filter((issue) => issue.level !== 'info' && !/철강이 아닌 CBAM 품목/.test(issue.message)).length, 0);
+const aluNote = assignedRun.result.issues.find((issue) => /철강이 아닌 CBAM 품목/.test(issue.message));
+assert.ok(aluNote && aluNote.sheet === W.SHEET_PRODUCTS && aluNote.message.includes('CN 76169990') && aluNote.message.includes('Aluminium products') && aluNote.message.includes('공용 연료·전력은 이 제품도 생산량 비율로 나눠 가지므로, 그 몫만큼 철강 제품에 귀속되는 양이 줄어듭니다'), '철강이 아닌 CBAM 품목은 올릴 때 알린다(영향 포함)');
 // (b) 같은 자료를 「쓰는 제품」 없이: 값이 섞이고(둘 다 1.3867) — 이제 그 사실을 알린다.
 const mixedRun = await importOf(multi(oneProcess, [], [{ ...alloyWire, where: '라인' }, { ...carbonWire, where: '라인' }]));
 assert.ok(Math.abs(seeOf(mixedRun, '73181582') - (1040 * 2 + 2080 * 1) / 3000) < 1e-9, '안 적으면 생산량 비율로 섞인다');
 assert.match(I.describeActivityImportIssues(mixedRun.result.issues), /\[확인 필요\] 5_구매강재 — 공정 「라인」에는 CN 코드가 2종 있고, 종류가 다른 원료 「합금강 선재」, 「탄소강 선재」을\(를\) 「쓰는 제품」 없이 넣었습니다/);
 // 종류(CN 4자리)가 같은 원료만 있으면 묻지 않는다 — 같은 원료로 만드는 제품은 한 공정이 규정이다(부속서 II A.4).
 const sameSteel = await importOf(multi(oneProcess, [], [{ ...carbonWire, where: '라인' }, { ...carbonWire, name: '탄소강 선재 B', where: '라인' }]));
-assert.equal(sameSteel.result.issues.filter((issue) => issue.level === 'warning').length, 0);
+assert.equal(sameSteel.result.issues.filter((issue) => issue.level === 'warning' && !/철강이 아닌 CBAM 품목/.test(issue.message)).length, 0);
 // 한 원료를 제품 둘이 쓰면 ; 로 잇고, 그 둘의 생산량 비율로 나뉜다. 그 공정의 제품이 아니면 넣지 않는다.
 const twoUsers = await importOf(multi([...oneProcess, { name: '라인', product: '휠너트', mass: '1000' }], [], [{ ...carbonWire, where: '라인', products: '합금강 볼트; 탄소강 너트' }]));
 assert.deepEqual(plain(twoUsers.store.data.precursors[0].output_allocations.map((item) => item.allocated_mass_t)), [693.333333, 1386.666667]);
@@ -725,6 +728,23 @@ assert.deepEqual(plain(preview.rows.map((row) => [row.cns.join(','), Math.round(
 ], '나누면 CN별 값, 합치면 가중평균 — 올린 뒤의 엔진 값과 같다');
 assert.equal(I.previewPartGrouping({ rnr: [], evidence: [], ...withParts([{ part: 'A', cn: '73181582', grade: 'SCM435', mass: '120' }, { part: 'B', cn: '73181699', grade: 'SCM435', mass: '80' }]) }, defaultValues), undefined, '재질 구성이 같으면 고를 것이 없다(A.4로 한 공정이 의무)');
 
+// run36 P2-02: 품명을 적었으면 제품 이름은 그 CN에서 가장 많이 만든 품번의 품명 「… 외 N종」 — EU 문서의 Product name은 수입업자와 소통하는 칸이다
+{
+  const named = await importOf(withParts([
+    { part: 'W1', pname: '휠 너트 M12', cn: '73181692', grade: 'SWCH35K', mass: '300' },
+    { part: 'W2', pname: '휠 너트 M14', cn: '73181692', grade: 'SWCH35K', mass: '900' },
+    { part: 'W3', pname: '휠 너트 M16', cn: '73181692', grade: 'SWCH35K', mass: '100' },
+    { part: 'W4', pname: '휠 너트 M14 (내수)', cn: '73181692', grade: 'SWCH35K', mass: '500', exported: '아니오' },
+    { part: 'L1', pname: '락 너트 M10', cn: '73181660', grade: 'SWCH35K', mass: '200' },
+    { part: 'B1', cn: '73269098', grade: 'SCM435', mass: '50' },
+    { part: 'D1', pname: '락 너트 M10', cn: '73181699', grade: 'SWCH45K', mass: '70' },
+  ]));
+  assert.deepEqual(plain(named.store.data.products.map((product) => product.name)), [
+    '휠 너트 M14 외 2종', '휠 너트 M14 (내수) (비수출)', '락 너트 M10', 'SCM435 · CN 73269098', '락 너트 M10 · CN 73181699',
+  ], '가장 많이 만든 품명 + 외 N종, 비수출 표시, 품명이 없으면 예전 이름, 같은 이름이면 CN을 덧붙여 구별');
+  assert.deepEqual(plain(named.store.data.products.map((product) => product.cn_code)), ['73181692', '73181692', '73181660', '73269098', '73181699'], 'CN은 그대로(이름과 별개)');
+}
+
 // 고른 방식은 보고서 입력(report:inputs)에 남고, 산정 보고서 제4장과 모니터링 계획 4번이 같은 글을 쓴다
 const A = load('src/lib/allocation-rules.ts');
 assert.deepEqual(plain([mergeRun.store.report.process_grouping.choice, mergeRun.store.report.process_grouping.tolerance_pp, mergeRun.store.report.process_grouping.groups.length]), ['MERGE', 5, 4], '합침을 골랐다는 사실과 그때 보여 준 CN별 값이 남는다');
@@ -963,7 +983,7 @@ const echoRun = await importOf(withParts([
   { row: 7, values: { name: 'SCM 와이어', cn: '72299090', consumed: '200', country: 'South Korea', where: 'SCM435', hasValue: '없음 (EU 기본값 사용)' } },
 ] }));
 const echoText = I.describeActivityImportIssues(echoRun.result.issues);
-assert.match(echoText, /CN 73181575 = Hexagon screws and bolts, of stainless steel.*읽는 법: 스테인리스강.*적은 제품: 「SWCH18A · CN 73181575」/, '적은 CN의 공식 품명과 읽는 법을 그대로 보여 준다');
+assert.match(echoText, /CN 73181575 = Hexagon screws and bolts, of stainless steel.*읽는 법: 스테인리스강.*적은 제품: 「일반 볼트 4.8」/, '적은 CN의 공식 품명과 읽는 법을 그대로 보여 준다');
 assert.match(echoText, /CN 73181582 = .*읽는 법: 스테인리스가 아닌 철강 · 인장강도 800 MPa 미만/);
 assert.match(echoText, /\[확인 필요\] 5_구매강재 — 공정 「SWCH18A 공정」: 제품 CN 73181575은\(는\) 스테인리스강인데 쓴 원료\(CN 72171039\)는 스테인리스가 아닙니다/, '스테인리스 제품 CN에 비스테인리스 선재 — 어느 한쪽 CN이 틀렸다');
 assert.ok(!/공정 「STS304 공정」: 제품 CN/.test(echoText) && !/공정 「SCM435 공정」: 제품 CN/.test(echoText), '재질이 맞는 공정(STS 볼트 + STS 선재, 탄소강 볼트 + 합금강 선재)에는 말하지 않는다');
