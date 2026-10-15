@@ -231,7 +231,7 @@ assert.equal(wrongProduct.store.data.precursors.length, 0);
 assert.match(I.describeActivityImportIssues(wrongProduct.result.issues), /\[넣지 못함\] 5_구매강재 5번째 줄 — 합금강 선재: 쓰는 제품 「휠너트」이\(가\) 공정 「라인」의 제품이 아닙니다/);
 // 철강이 아닌 제품이 같은 공정에 있으면 강재 배출의 몫을 가져간다 — 알린다.
 const withAluminium = await importOf(multi([...oneProcess, { name: '라인', product: '알루미늄 캡', mass: '100' }], [], [{ ...carbonWire, where: '라인' }]));
-assert.match(I.describeActivityImportIssues(withAluminium.result.issues), /공정 「라인」에 철강이 아닌 제품 「알루미늄 캡」이\(가\) 같이 있습니다/);
+assert.match(I.describeActivityImportIssues(withAluminium.result.issues), /공정 「라인」에 CBAM 철강 제품\(CN 72·73장\)이 아닌 제품 「알루미늄 캡」(\(CN \d+\))?이\(가\) 같이 있습니다/);
 // (c) 연료를 일부 공정만 쓰면 그 공정 이름들을 ; 로 잇는다 — 그 공정들끼리만 생산량 비율로 나뉘고 공용 계량기 기록이 남는다.
 const three = [{ name: '볼트 공정', product: '합금강 볼트', mass: '1000' }, { name: '너트 공정', product: '탄소강 너트', mass: '2000' }, { name: '휠너트 공정', product: '휠너트', mass: '3000' }];
 const partial = await importOf(multi(three, [{ name: '열처리로 가스', amount: '40000', where: '볼트 공정; 휠너트 공정' }], []));

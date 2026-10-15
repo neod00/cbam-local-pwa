@@ -1218,7 +1218,7 @@ export async function importActivityWorkbook(
         }
         const foreign = lines.filter((line) => !/^7[23]/.test((productById.get(line.product_id ?? '')?.cn_code ?? '').replace(/\D/g, '')));
         if (foreign.length > 0) {
-            note('warning', SHEET_PRECURSORS, `공정 「${process.name}」에 철강이 아닌 제품 ${foreign.map((line) => `「${line.name}」`).join(', ')}이(가) 같이 있습니다. 「쓰는 제품」 없이 넣은 강재의 배출이 이 제품에도 나뉘어 철강 제품의 값이 낮아집니다 — 강재마다 「쓰는 제품」을 적거나 이 제품을 다른 공정으로 적어 주세요.`);
+            note('warning', SHEET_PRECURSORS, `공정 「${process.name}」에 CBAM 철강 제품(CN 72·73장)이 아닌 제품 ${foreign.map((line) => { const cn = (productById.get(line.product_id ?? '')?.cn_code ?? '').replace(/\D/g, ''); return `「${line.name}」${cn ? `(CN ${cn})` : ''}`; }).join(', ')}이(가) 같이 있습니다. 「쓰는 제품」 없이 넣은 강재의 배출이 이 제품에도 나뉘어 철강 제품의 값이 낮아집니다 — 강재마다 「쓰는 제품」을 적거나 이 제품을 다른 공정으로 적어 주세요.`);
         }
     }
 
