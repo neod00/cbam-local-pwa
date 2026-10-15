@@ -9,6 +9,7 @@ import { Button } from '@/components/ui';
 import { calculateLocalResults } from '@/lib/calculation-engine';
 import { summarizeEnergySplits } from '@/lib/energy-split-summary';
 import { evaluateEuExportReadiness, getEuExportIssueEditHref } from '@/lib/eu-template-export';
+import { ELECTRICITY_GRID_FACTOR_GUIDE } from '@/lib/electricity-ef-basis';
 import { describeFuelEditBlock, ELECTRICITY_DEFAULT_EF_SOURCE, ELECTRICITY_EF_SOURCE_OPTIONS, ELECTRICITY_PLACEHOLDER_EF, TALK_FUEL_KINDS } from '@/lib/conversation-energy';
 import { describePrecursorEditBlock, fillEuDefault, precursorAnswerFromExisting, type DefaultFill } from '@/lib/conversation-precursor';
 import { defaultProcessName, describeOutputEditBlock } from '@/lib/conversation-process';
@@ -946,7 +947,7 @@ export function TalkWorkspace() {
                         <span className="block text-xs font-normal text-slate-500">국가 기본계수 또는 PPA·직접연결 실측만 인정됩니다. 녹색프리미엄으로 낮출 수 없습니다.</span>
                     </label>
                     <p className="mt-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-                        {Number(elecEf) === ELECTRICITY_PLACEHOLDER_EF ? '미리 채워진 0.47은 임시 자리값입니다. ' : ''}<span className="font-semibold">앱은 한국 계통 평균값을 갖고 있지 않습니다</span> — 근거가 되는 값을 직접 확인해 넣으세요. EU가 인정하는 값인지는 수입자·검증인에게 확인이 필요합니다.
+                        {Number(elecEf) === ELECTRICITY_PLACEHOLDER_EF ? '미리 채워진 0.47은 임시 자리값입니다. ' : ''}<span className="font-semibold">앱은 한국 계통 평균값을 갖고 있지 않습니다</span> — {ELECTRICITY_GRID_FACTOR_GUIDE} EU가 인정하는 값인지는 수입자·검증인에게 확인이 필요합니다.
                     </p>
                     <label className="mt-3 block text-sm font-semibold text-slate-700">
                         계수 출처

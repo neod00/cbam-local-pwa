@@ -4,6 +4,7 @@ import { Button, StatusBadge } from '@/components/ui';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
 import { IRON_STEEL_PRODUCTS_BOUNDARY, getCbamCoverage, isIronOrSteelProductsGood } from '@/lib/cbam-product-rules';
 import { CN_CODE_OPTIONS } from '@/lib/cn-code-options';
+import { ELECTRICITY_GRID_FACTOR_GUIDE } from '@/lib/electricity-ef-basis';
 import {
     createEuExportFilename,
     createEuTemplateExportCopyResult,
@@ -1632,7 +1633,7 @@ function PurchasedHeatForm({ process, onSaved }: { process: ProductionProcess; o
 
 // ── 5단계: ② 전력 ────────────────────────────────────────────────────
 const ELECTRICITY_EF_SOURCES = [
-    { value: 'COUNTRY_GRID_DEFAULT', label: '원산지국 계통 평균 (국가 공표값·IEA 등 — 출처를 적어 두세요)' },
+    { value: 'COUNTRY_GRID_DEFAULT', label: '원산지국 계통 평균 (2025/2621 부속서 II 표의 값 — 출처를 적어 두세요)' },
     { value: 'DIRECT_TECHNICAL_LINK', label: '발전설비 직접 기술적 연결 (실측)' },
     { value: 'PPA', label: '전력구매계약(PPA) (실측)' },
     { value: 'INSTALLATION_OWN', label: '설비 내 자가발전' },
@@ -1746,7 +1747,7 @@ function ElectricityForm({
                     <input className={fieldClass} inputMode="decimal" value={ef} onChange={(event) => setEf(event.target.value)} />
                 </Field>
                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-                    {num(ef) === 0.47 ? '미리 채워진 0.47은 임시 자리값입니다. ' : ''}<span className="font-semibold">앱은 한국 계통 평균값을 갖고 있지 않습니다</span> — 업로드하는 EU 기본값 파일(DVs)에도 전력 행은 없습니다. 환경부 공표 국가 전력배출계수처럼 출처를 댈 수 있는 값을 넣고, 발행기관·문서·공표연도를{' '}
+                    {num(ef) === 0.47 ? '미리 채워진 0.47은 임시 자리값입니다. ' : ''}<span className="font-semibold">앱은 한국 계통 평균값을 갖고 있지 않습니다</span> — 업로드하는 EU 기본값 파일(DVs)에도 전력 행은 없습니다. {ELECTRICITY_GRID_FACTOR_GUIDE} 발행기관·문서·공표연도를{' '}
                     <Link href="/report-inputs" className="font-semibold underline">보고서 입력(제7장)</Link>에 적어 두세요. EU가 인정하는 값인지는 수입자·검증인에게 확인이 필요합니다.
                 </p>
                 <Field label="계수 출처">

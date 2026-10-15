@@ -334,7 +334,7 @@ export default function ReportInputsPage() {
                                             <option key={value} value={value}>{ELECTRICITY_EF_BASIS_LABEL[value]}</option>
                                         ))}
                                     </select>
-                                    <p className="mt-1 text-xs text-slate-500">기본은 계통 평균입니다. 실측(직접연결·PPA)은 D.4.3 증빙이 있을 때만. 모르면 「미분류」로 두세요 — 앱이 대신 정하지 않습니다.</p>
+                                    <p className="mt-1 text-xs text-slate-500">기본은 계통 평균입니다(국가 기본계수 표: 2025/2621 부속서 II). 실측(직접연결·PPA)은 D.4.3 증빙이 있을 때만. 모르면 「미분류」로 두세요 — 앱이 대신 정하지 않습니다.</p>
                                 </div>
 
                                 <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
