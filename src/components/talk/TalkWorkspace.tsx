@@ -787,7 +787,7 @@ export function TalkWorkspace() {
                                 ) : (
                                     <input className={fieldClass} value={pCountry} onChange={(event) => { setPCountry(event.target.value); setPFill(null); }} placeholder="영문 국가명 (예: South Korea, Taiwan)" />
                                 )}
-                                <span className="block text-xs font-normal text-slate-500">앱이 대신 고르지 않습니다 — EU 기본값은 나라마다 다릅니다(같은 STS 와이어가 한국 4.015 · 대만 11).</span>
+                                <span className="block text-xs font-normal text-slate-500">앱이 대신 고르지 않습니다 — EU 기본값은 나라마다 다릅니다(같은 STS 와이어가 한국 4.015 · 대만 5.302).</span>
                             </label>
 
                             <div>

@@ -65,10 +65,10 @@ const precursor = { id: 'p1', process_id: 'pr', period_id: 'per', product_id: 'g
 const engine = { products: [product], periods: [period], processes: [process], precursors: [precursor], productOutputLines: [], sourceStreams: [] };
 
 // ── 1) 영향 상자: 손계산과 같다 ─────────────────────────────────────────
-// 지금: (직접 100 + 구매 강재 100 t × 2.0) ÷ 1,000 t = 0.3. Taiwan 72230019 EU 기본값은 11(간접 없음)이라 바꾸면 (100 + 100 × 11) ÷ 1,000 = 1.2.
+// 지금: (직접 100 + 구매 강재 100 t × 2.0) ÷ 1,000 t = 0.3. Taiwan 72230019 EU 기본값은 정정판에서 「-」라 기타 국가·지역 5.302(간접 없음)를 쓴다 — 바꾸면 (100 + 100 × 5.302) ÷ 1,000 = 0.6302.
 const impact = app.computeDefaultSubstitutionImpact({ engine, precursorId: 'p1', defaultValues: dv });
 close(impact.fromSee, 0.3, '지금 기준 SEE');
-close(impact.toSee, 1.2, '이 원료만 EU 기본값(대만 72230019 = 11)으로 바꾸면');
+close(impact.toSee, 0.6302, '이 원료만 EU 기본값(대만 72230019 → 기타 국가·지역 5.302)으로 바꾸면');
 assert.equal(impact.reason, undefined);
 assert.equal(app.computeDefaultSubstitutionImpact({ engine, precursorId: 'none', defaultValues: dv }).toSee, null);
 const noDv = app.computeDefaultSubstitutionImpact({ engine, precursorId: 'p1', defaultValues: undefined });
@@ -78,7 +78,7 @@ assert.equal(noDv.fromSee !== null, true, '지금 값은 그대로 보인다');
 const noCountry = app.computeDefaultSubstitutionImpact({ engine: { ...engine, precursors: [{ ...precursor, supplier_country: '' }] }, precursorId: 'p1', defaultValues: dv });
 assert.equal(noCountry.toSee, null, '공급국가가 없으면 채우지 않는다(「EU 기본값 채우기」와 같다)');
 const other = app.computeDefaultSubstitutionImpact({ engine: { ...engine, periods: [period, { ...period, id: 'per2' }] }, periodId: 'per', precursorId: 'p1', defaultValues: dv });
-close(other.toSee, 1.2, '기간을 고르면 그 기간 결과만 본다');
+close(other.toSee, 0.6302, '기간을 고르면 그 기간 결과만 본다');
 // 저장하지 않는다: 입력 자료가 바뀌지 않는다.
 assert.equal(engine.precursors[0].direct_see_tco2e_per_t, 2);
 assert.equal(engine.precursors[0].data_mode, 'ACTUAL');
@@ -198,7 +198,7 @@ assert.match(prov.title, /「STS 와이어」의 실측값은 아직 「잠정�
 assert.match(prov.detail, /공급사가 확인한 값이지만 제3자 검증보고서가 없습니다/);
 assert.match(prov.evidence, /2025\/2547 ANNEX II, point A\.1\(4\)–\(5\)/);
 close(prov.impact.fromSee, 0.3, '영향 상자 전');
-close(prov.impact.toSee, 1.2, '영향 상자 후');
+close(prov.impact.toSee, 0.6302, '영향 상자 후');
 const gas = regs.find((item) => item.id !== 'p:p1');
 assert.equal(gas.title, '폐가스 이전 보정은 지원하지 않습니다');
 assert.equal(gas.href, '/processes?edit=pr');
@@ -322,4 +322,4 @@ assert.ok(ui2.includes('savePrecursorTexts(precursor, draft)'));
 assert.ok(ui2.includes('FACTOR_SOURCE_CHOICES.map'), '「분류 전」은 고르는 칸에 없다');
 assert.ok(ui2.includes('INSTALLATION_FIELD_SPECS[field].hint'), '무엇을 적는지 칸마다 설명한다');
 
-console.log('Todo verified (세 칸 가르기 · 질문과 중복 없음 · 영향 상자 = 기본값 채우기+엔진(손계산 0.3 → 1.2) · 입력칸 = 점검이 낸 fix + 기존 레코드를 펼쳐 칸만 덮음 · 저장 코드는 todo-writes.ts 한 곳 · 머리글·서비스 워커·경로 배선).');
+console.log('Todo verified (세 칸 가르기 · 질문과 중복 없음 · 영향 상자 = 기본값 채우기+엔진(손계산 0.3 → 0.6302) · 입력칸 = 점검이 낸 fix + 기존 레코드를 펼쳐 칸만 덮음 · 저장 코드는 todo-writes.ts 한 곳 · 머리글·서비스 워커·경로 배선).');

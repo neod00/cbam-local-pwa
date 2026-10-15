@@ -1,6 +1,6 @@
 // EU 공식 기준값(기본값 DV · 벤치마크) 워크북을 앱에 내장할 JSON으로 변환한다.
 //
-// 사용: npm run generate:bundled-references -- "<DVs as adopted_*.xlsx>" "<CBAM Benchmarks_*.xlsx>"
+// 사용: npm run generate:bundled-references -- "<DVs as adopted_*.xlsx 또는 DV correcting act_*.xlsx>" "<CBAM Benchmarks_*.xlsx>"
 // 결과: public/reference/cbam-default-values.json, public/reference/cbam-benchmarks.json
 //
 // 파서는 앱이 쓰는 src/lib/reference-workbooks.ts 그대로 쓴다 — 사용자가 같은 파일을 올렸을 때와 숫자가 다를 수 없다.
@@ -16,7 +16,7 @@ const fflate = require('fflate');
 
 const [dvPath, benchmarkPath] = process.argv.slice(2);
 if (!dvPath || !benchmarkPath) {
-  console.error('Usage: npm run generate:bundled-references -- "<DVs as adopted_*.xlsx>" "<CBAM Benchmarks_*.xlsx>"');
+  console.error('Usage: npm run generate:bundled-references -- "<DVs as adopted_*.xlsx 또는 DV correcting act_*.xlsx>" "<CBAM Benchmarks_*.xlsx>"');
   process.exit(1);
 }
 

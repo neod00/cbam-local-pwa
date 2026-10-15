@@ -157,13 +157,14 @@ assert.deepEqual(plain([attribution.counts.fix, attribution.counts.review]), [0,
 const [korean, taiwan] = store.data.precursors;
 assert.deepEqual(plain([korean.data_mode, korean.direct_see_tco2e_per_t, korean.indirect_see_tco2e_per_t, korean.verification_status, korean.supplier_country, korean.purchased_mass_t]), ['ACTUAL', 1.86, 0.94, 'SUPPLIER_CONFIRMED', 'South Korea', 2980]);
 assert.deepEqual(plain([taiwan.data_mode, taiwan.supplier_country, taiwan.verification_status]), ['DEFAULT', 'Taiwan', 'UNVERIFIED']);
-assert.ok(taiwan.direct_see_tco2e_per_t > 0 && /Taiwan/.test(taiwan.source) && taiwan.default_value_justification.includes('3회 요청했으나 미회신'));
+assert.ok(taiwan.direct_see_tco2e_per_t > 0 && /Taiwan|Other Countries/i.test(taiwan.source) && taiwan.default_value_justification.includes('3회 요청했으나 미회신'));
 
-// 엔진: 손으로 넣은 기준선(run14 대일기업)의 3.764 / 5.112와 같다.
+// 엔진: 손계산과 같다. 대만 7223 00의 공식 값은 정정판(2026/1740)에서 「-」가 되어 「기타 국가·지역」 5.302를 쓴다 —
+// 예전 기준선(run14)의 3.764 / 5.112는 대만 11을 쓴 값이다. 간접(1.348)은 그대로다.
 const stsResult = resultsOf(store).find((item) => item.process_id === sts.id && item.is_cbam_reportable);
 const handBasis = (71.729 + 2910 * 1.86 + 610 * taiwan.direct_see_tco2e_per_t) / 3240;
 assert.ok(Math.abs(stsResult.see_cbam_basis - handBasis) < 1e-4, `기준 SEE 손계산 ${handBasis}: ${stsResult.see_cbam_basis}`);
-assert.ok(Math.abs(stsResult.see_cbam_basis - 3.7637) < 0.001 && Math.abs(stsResult.total_see - 5.1117) < 0.001, `기준선과 같다: ${stsResult.see_cbam_basis} / ${stsResult.total_see}`);
+assert.ok(Math.abs(taiwan.direct_see_tco2e_per_t - 5.302) < 1e-6 && Math.abs(stsResult.see_cbam_basis - 2.691) < 0.001 && Math.abs(stsResult.total_see - 4.039) < 0.001, `기준선과 같다: ${stsResult.see_cbam_basis} / ${stsResult.total_see}`);
 // 화면의 에너지 나누기 현황이 이 자료를 문제 없이 읽는다(전력 1 · 연료 2).
 const splits = split.summarizeEnergySplits({ processes: store.data.processes, sourceStreams: store.data.source_streams });
 assert.deepEqual(plain(splits.items.map((item) => [item.kind, item.problem ?? null])), [['ELECTRICITY', null], ['FUEL', null], ['FUEL', null]]);
@@ -763,7 +764,7 @@ assert.equal(partsRun.store.report.process_grouping, undefined, '고를 것이 �
   const shortCn = (cn) => importOf(withParts([{ part: 'S', cn: '73181582', grade: 'SCM435', mass: '100' }], { precursors: [{ row: 5, values: { name: '와이어', cn, consumed: '100', country: 'South Korea', where: 'SCM435', hasValue: '없음 (EU 기본값 사용)' } }] }));
   const same = await shortCn('7217');
   assert.equal(same.result.created.precursors, 1, '값이 같은 가족(7217)은 들어간다');
-  assert.equal(same.store.data.precursors[0].direct_see_tco2e_per_t, 2.330324);
+  assert.equal(same.store.data.precursors[0].direct_see_tco2e_per_t, 2.3298); // 정정판: 총 2,118 × 1.10
   assert.match(I.describeActivityImportIssues(same.result.issues), /\[확인 필요\] 5_구매강재 5번째 줄 — 와이어: CN 7217는 8자리가 아니지만 그 숫자로 시작하는 4개 CN의 EU 기본값이 모두 같아 채웠습니다/);
   const differ = await shortCn('7220');
   assert.equal(differ.result.created.precursors, 0, '값이 갈리는 가족(7220)은 앱이 고르지 않는다');

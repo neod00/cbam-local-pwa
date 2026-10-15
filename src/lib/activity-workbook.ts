@@ -983,7 +983,7 @@ export function expandPartList(rows: ActivityRow[], grouping: PartGrouping = 'ME
         const named = acc.parts.filter((part) => part.pname);
         if (named.length === 0) return legacyNameOf(acc);
         const biggest = named.reduce((best, part) => (part.mass > best.mass ? part : best), named[0]);
-        const kinds = new Set(named.map((part) => part.pname.replace(/s+/g, ' ').toLowerCase())).size;
+        const kinds = new Set(named.map((part) => part.pname.replace(/\s+/g, ' ').trim().toLowerCase())).size;
         const saysDomestic = /내수|비수출|국내/.test(biggest.pname);
         return `${biggest.pname}${kinds > 1 ? ` 외 ${kinds - 1}종` : ''}${acc.exported || saysDomestic ? '' : ' (비수출)'}`;
     };

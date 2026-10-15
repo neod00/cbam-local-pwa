@@ -27,6 +27,8 @@ export type DefaultFill =
         message: string;
         /** 8자리가 아닌 CN을 적어, 그 숫자로 시작하는 CN들의 값이 모두 같아 채운 경우 — EU 문서에는 정확한 8자리를 적어야 한다 */
         prefixMatch?: { digits: string; count: number };
+        /** 그 나라의 값이 없어(「-」) 규정에 따라 「기타 국가·지역」 값을 넣은 경우 */
+        usedOtherCountries?: boolean;
     }
     | { ok: false; reason: string };
 
@@ -48,7 +50,7 @@ export function fillEuDefault(input: {
         return { ok: false, reason: 'EU 기본값 자료를 아직 불러오지 못했습니다. 앱을 다시 열거나, 자료 업로드 화면에서 EU 기본값(DVs) 파일을 직접 가져오세요.' };
     }
     if (!input.country.trim()) {
-        return { ok: false, reason: '먼저 「공급국가」를 고르세요. EU 기본값은 원료를 만든 나라마다 다릅니다(예: 같은 STS 와이어가 한국 4.015 · 대만 11).' };
+        return { ok: false, reason: '먼저 「공급국가」를 고르세요. EU 기본값은 원료를 만든 나라마다 다릅니다(예: 같은 STS 와이어가 한국 4.015 · 대만 5.302).' };
     }
     const match = findDefaultValueReference(input.reference, input.country, input.cnDigits, year);
     if (!match) {
@@ -90,14 +92,16 @@ export function fillEuDefault(input: {
         return { ok: false, reason: `${input.country} · CN ${input.cnDigits || '미입력'}에 맞는 기본값을 찾지 못했습니다. 공급국가와 CN 코드를 확인하세요.` };
     }
     const { direct, indirect, hasIndirect } = resolveDefaultSeeForYear(match, year);
+    const usedOtherCountries = /^_?other countries and territories$/i.test(match.country.replace(/\s+/g, ' ').trim());
     return {
         ok: true,
         direct,
         indirect,
         hasIndirect,
+        usedOtherCountries,
         source: `${input.reference.summary.filename} / ${match.country} / ${match.cn_code}`,
         justification:
-            `공급사 measured SEE 미입수 — EU 국가/CN 기본값(${yearLabel}, markup 포함) 적용. 직접 ${direct}`
+            `공급사 measured SEE 미입수 — EU 국가/CN 기본값(${yearLabel}, markup 포함) 적용${usedOtherCountries ? ` · ${input.country}의 값이 없어(「-」) 「기타 국가·지역」 값을 적용(2025/2621 부속서 I 서문)` : ''}. 직접 ${direct}`
             + (hasIndirect ? ` · 간접 ${indirect}` : ' · 이 CN의 공식 DV는 간접값 미제공(간접 0)'),
         message: hasIndirect
             ? 'EU 기본값을 채웠습니다. 공급사 실측자료를 받으면 교체하세요.'
