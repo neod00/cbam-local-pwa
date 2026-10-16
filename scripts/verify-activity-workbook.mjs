@@ -1013,4 +1013,97 @@ assert.ok(!/품번 A-3: 이름에 강도 구분/.test(echoText) && !/품번 A-1:
 assert.match(echoText, /\[확인 필요\] 2b_품번목록 .*CN 87089997은\(는\) CBAM 대상 목록.*에 없는 코드/, '수출 품번의 목록 밖 CN은 확인 필요');
 assert.equal(echoRun.result.issues.filter((issue) => /CN 87089997/.test(issue.message) && issue.level === 'warning').length, 1, '같은 CN은 한 번만 알린다(수출분이 있으면 확인 필요)');
 
+// ── 13_외주공정 (EC CBAM Q&A 4.31: 외주 열처리·코팅의 연료 몫을 우리 공정의 연료로) ─────────────────────────────
+{
+  const procs = [{ name: '볼트 공정', product: '합금강 볼트', mass: '1000' }, { name: '너트 공정', product: '탄소강 너트', mass: '3000' }];
+  const ownFuel = [{ name: '자체 열처리 도시가스', amount: '100000', where: '볼트 공정' }, { name: '너트 자체 가스', amount: '50000', where: '너트 공정' }];
+  const outsourcedRow = (values) => ({ row: 5, values: { subcontractor: '가상 코팅 B사', technique: W.OUTSOURCED_TECHNIQUE_CHOICES[1].label, where: '볼트 공정', fuelKind: '도시가스 (Nm³)', evidence: '외주처 가스 고지서 2025', techniqueEvidence: '정류기 없음, ISO 10683', ...values } });
+  const withOutsourced = (rows, fuels = ownFuel) => ({ ...multi(procs, fuels, []), outsourced: rows });
+  const outsourcedStreams = (run) => run.store.data.source_streams.filter((stream) => stream.outsourced);
+  const textOf = (run) => I.describeActivityImportIssues(run.result.issues);
+  const reconstructed = { basis: W.OUTSOURCED_BASIS_CHOICES[1].label, companyTotal: '120000', ourEquipment: '코팅라인1:600:50', otherEquipment: '타사코팅라인:900:50; 기타 가스공정:1000:25', note: '사례 A' };
+  const byMass = { basis: W.OUTSOURCED_BASIS_CHOICES[2].label, lineQuantity: '60000', ourThroughput: '300', lineThroughput: '1000', note: '사례 B' };
+
+  // 사례 A(재구성 → 고지서 총량): 36,000 Nm³가 볼트 공정의 연료로 들어가고 직접배출에 더해진다
+  const caseA = await importOf(withOutsourced([outsourcedRow(reconstructed)]));
+  assert.equal(outsourcedStreams(caseA).length, 1);
+  assert.equal(outsourcedStreams(caseA)[0].activity_data, 36000);
+  assert.equal(outsourcedStreams(caseA)[0].outsourced.basis, 'RECONSTRUCTED');
+  assert.equal(outsourcedStreams(caseA)[0].outsourced.total_share, 36000);
+  const withoutRows = await importOf(withOutsourced([]));
+  const directOf = (run) => resultsOf(run.store).find((item) => item.process_name === '볼트 공정').direct_emissions_tco2e;
+  const extra = 36000 * 0.037 * 56.1 / 1000;
+  assert.ok(Math.abs(directOf(caseA) - directOf(withoutRows) - extra) < 0.01, `우리 공정의 직접배출에 외주 몫이 더해진다(+${extra.toFixed(3)} t): ${directOf(caseA)} vs ${directOf(withoutRows)}`);
+  assert.equal(caseA.result.created.fuels, withoutRows.result.created.fuels + 1, '외주 몫 한 줄은 연료 한 건으로 센다');
+  assert.match(textOf(caseA), /\[참고\] 13_외주공정 5번째 줄 — 가상 코팅 B사: 우리 몫 36,000 Nm3을\(를\) 「볼트 공정」의 연료로 넣었습니다/);
+  assert.ok(!/\[넣지 못함\] 13_외주공정/.test(textOf(caseA)), '갖춰진 줄은 오류가 없다');
+
+  // 사례 B(처리 중량 비율): 60,000 × 300 ÷ 1,000 = 18,000. 공정이 둘이면 생산량 비율(1,000 : 3,000)로 나눈다
+  const caseB = await importOf(withOutsourced([outsourcedRow({ ...byMass, where: '볼트 공정; 너트 공정' })]));
+  assert.deepEqual(plain(outsourcedStreams(caseB).map((stream) => stream.activity_data).sort((a, b) => a - b)), [4500, 13500]);
+  assert.equal(outsourcedStreams(caseB).reduce((sum, stream) => sum + stream.activity_data, 0), 18000, '공정별 몫의 합 = 총 몫');
+
+  // 전기도금은 경계 밖 — 넣지 않는다
+  const plating = await importOf(withOutsourced([outsourcedRow({ ...byMass, technique: W.OUTSOURCED_TECHNIQUE_CHOICES[4].label })]));
+  assert.equal(outsourcedStreams(plating).length, 0);
+  assert.match(textOf(plating), /\[넣지 못함\] 13_외주공정 5번째 줄 — 가상 코팅 B사: 전기도금\(plating\)은 철강 제품의 시스템 경계 밖/);
+
+  // 보수적 추정: 근거 없으면 거부, 있으면 넣고 확인 필요로 남긴다
+  const noNote = await importOf(withOutsourced([outsourcedRow({ basis: W.OUTSOURCED_BASIS_CHOICES[3].label, estimate: '280', note: '' })]));
+  assert.equal(outsourcedStreams(noNote).length, 0);
+  assert.match(textOf(noNote), /\[넣지 못함\] 13_외주공정 .*보수적 추정은 근거/);
+  const estimated = await importOf(withOutsourced([outsourcedRow({ basis: W.OUTSOURCED_BASIS_CHOICES[3].label, estimate: '280', note: '400 kW × 1,000 h × 70%' })]));
+  assert.equal(outsourcedStreams(estimated)[0].activity_data, 280);
+  assert.match(textOf(estimated), /\[확인 필요\] 13_외주공정 .*보수적 추정입니다/);
+
+  // 코팅인데 분류 근거가 없으면 확인 필요, 증빙이 비면 기본 문구를 넣고 알린다
+  const noClass = await importOf(withOutsourced([outsourcedRow({ ...byMass, techniqueEvidence: '', evidence: '' })]));
+  assert.equal(outsourcedStreams(noClass).length, 1);
+  assert.match(textOf(noClass), /\[확인 필요\] 13_외주공정 .*비전해 방식이라는 분류 근거/);
+  assert.match(textOf(noClass), /\[확인 필요\] 13_외주공정 .*증빙이 비어 있습니다/);
+
+  // 잘못된 칸은 이유와 함께 넣지 않는다
+  for (const [name, patch, pattern] of [
+    ['외주처 없음', { subcontractor: '' }, /외주처 이름이 비어/],
+    ['공정 종류 모름', { technique: '아무거나' }, /어떤 공정인지/],
+    ['방법 모름', { basis: '' }, /우리 몫을 정한 방법/],
+    ['없는 공정', { ...byMass, where: '없는 공정' }, /공정 「없는 공정」을\(를\) 찾지 못했습니다/],
+    ['리터 연료', { ...byMass, fuelKind: '경유 (L)' }, /리터 단위 연료는 외주 공정 몫으로 받지 않습니다/],
+    ['설비 칸 모양', { ...reconstructed, ourEquipment: '코팅라인1-600-50' }, /이름:가동시간:소비율/],
+    ['총량 없음', { ...reconstructed, companyTotal: '' }, /외주처 전체 연료량/],
+    ['처리량 초과', { ...byMass, ourThroughput: '5000' }, /클 수 없습니다/],
+    ['숫자 아님', { ...byMass, lineQuantity: '많이' }, /숫자로 적거나 비워/],
+  ]) {
+    const bad = await importOf(withOutsourced([outsourcedRow(patch)]));
+    assert.equal(outsourcedStreams(bad).length, 0, `${name}: 넣지 않는다`);
+    assert.match(textOf(bad), pattern, name);
+  }
+
+  // 같은 줄을 한 번 더 올리면(이미 있는 몫) 두 번 들어가지 않는다
+  const again = await importOf(withOutsourced([outsourcedRow(byMass), outsourcedRow(byMass)]));
+  assert.equal(outsourcedStreams(again).length, 1, '같은 외주 몫은 한 번만');
+
+  // 외주 시트가 없는 옛 서식은 그대로 — 외주 몫이 하나도 없다
+  assert.equal(outsourcedStreams(withoutRows).length, 0);
+  assert.equal(W.parseActivityWorkbook(blankBytes).outsourced.length, 0, '빈 서식에는 외주 줄이 없다(예시 줄은 건너뛴다)');
+
+  // 서식에 채워 엑셀로 쓰고 다시 읽는다(왕복) — 칸 이름·선택 목록 글자가 가져오기와 맞는다
+  const roundTrip = W.parseActivityWorkbook(await bytesOf(W.createActivityWorkbook({ countries, fill: {
+    ...W.ACTIVITY_WORKBOOK_SAMPLE,
+    outsourced: [{ subcontractor: '가상 코팅 B사', technique: W.OUTSOURCED_TECHNIQUE_CHOICES[1].label, where: 'STS 나사 공정', fuelKind: '도시가스 (Nm³)', basis: W.OUTSOURCED_BASIS_CHOICES[1].label, companyTotal: 120000, ourEquipment: '코팅라인1:600:50', otherEquipment: '타사코팅라인:900:50; 기타 가스공정:1000:25', techniqueEvidence: '정류기 없음', note: '사례 A', evidence: '고지서' }],
+  } })));
+  assert.equal(roundTrip.outsourced.length, 1);
+  assert.deepEqual(plain([roundTrip.outsourced[0].values.subcontractor, roundTrip.outsourced[0].values.companyTotal, roundTrip.outsourced[0].values.ourEquipment]), ['가상 코팅 B사', '120000', '코팅라인1:600:50']);
+  const roundTripImport = await importOf({ rnr: [], evidence: [], ...roundTrip });
+  assert.equal(outsourcedStreams(roundTripImport)[0]?.activity_data, 36000, '채워 쓴 서식을 읽어 가져오면 사례 A의 36,000이 나온다');
+  assert.ok(W.createActivityWorkbook, '서식 생성');
+
+  // 설비 칸 읽기
+  const O = load('src/lib/outsourced-process.ts');
+  assert.deepEqual(plain(O.parseOutsourcedEquipment('A:600:50; B:900:50.5', true)), { items: [{ name: 'A', hours: 600, rate_per_h: 50, ours: true }, { name: 'B', hours: 900, rate_per_h: 50.5, ours: true }] });
+  assert.deepEqual(plain(O.parseOutsourcedEquipment('', false)), { items: [] });
+  assert.match(O.parseOutsourcedEquipment('A:600', false).error, /이름:가동시간:소비율/);
+  assert.match(O.parseOutsourcedEquipment('A:-1:5', false).error, /이름:가동시간:소비율/);
+}
+
 console.log('Activity workbook v2 verified (서식 모양·선택 목록 · 빈 서식 0건 · 작성 예시 = 기준선 3.764/5.112 · 공용 나누기·배출원 합계·생산라인 · 원료의 쓰는 제품·연료의 쓰는 공정 여럿·섞임 경고 · 「확인할 것」 · 종전 서식 유지).');
