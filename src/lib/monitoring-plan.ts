@@ -14,6 +14,7 @@ import type {
 } from './local-db';
 import { findBenchmarkReference, type ImportedBenchmarkReference } from './reference-workbooks';
 import { STEEL_BOUNDARY_NOTE } from './steel-boundary';
+import { groupOutsourcedStreams, OUTSOURCED_BASIS_ANCHOR, OUTSOURCED_BASIS_LABEL, OUTSOURCED_TECHNIQUE_LABEL } from './outsourced-process';
 
 /**
  * 모니터링 계획 초안 — 2025/2547 부속서 II A.5가 정한 22개 항목의 틀에, 앱에 이미 입력된 자료를 옮겨 적는다.
@@ -67,6 +68,17 @@ export interface MonitoringPlan {
 
 /** 값이 없을 때 쓰는 말 — 빈 칸을 0이나 「없음」으로 오해하지 않게 한다. */
 export const PLAN_TODO = '작성 필요';
+/** 외주 공정 몫이 있으면 모니터링 계획 제9항에 방법·근거와 통제(부속서 II A.5 22(g))를 적는다 — 없으면 아무것도 더하지 않는다. */
+function outsourcedPlanParagraphs(streams: SourceStream[]): string[] {
+    const groups = groupOutsourcedStreams(streams);
+    if (groups.length === 0) return [];
+    return [
+        '외주 공정: 철강제품 경계 안의 공정을 외주사에서 하고 물건이 돌아오면 우리 사업장에서 일어난 것으로 다루며(EC CBAM Q&A 2026-05-27, 4.31), 외주처가 우리 부품에 쓴 연료의 몫을 해당 생산공정의 연료 배출원으로 넣습니다. 돌아온 부품은 구매 전구물질로 넣지 않습니다.',
+        ...groups.map((group) => `· ${group.subcontractor} — ${OUTSOURCED_TECHNIQUE_LABEL[group.technique]}: 우리 몫 ${fmt(group.total)} ${group.unit}, 방법 「${OUTSOURCED_BASIS_LABEL[group.basis]}」(${OUTSOURCED_BASIS_ANCHOR[group.basis]}). 근거: ${group.info.note?.trim() || PLAN_TODO}. 증빙: ${group.info.evidence?.trim() || PLAN_TODO}.`),
+        '외주 공정의 통제(2025/2547 부속서 II A.5 22(g)): 외주처에서 받은 연료·가동 자료의 출처와 계산(재구성·처리 중량 비율·추정)을 산정 근거와 함께 보관하고, 외주처 고지서와 우리 몫의 합계가 맞는지 해마다 대사합니다.',
+    ];
+}
+
 const dash = (value: string | undefined | null) => (value && value.trim() ? value.trim() : PLAN_TODO);
 const fmt = (value: number, digits = 3) => new Intl.NumberFormat('ko-KR', { maximumFractionDigits: digits }).format(Number.isFinite(value) ? value : 0);
 
@@ -254,7 +266,10 @@ export function buildMonitoringPlan(input: MonitoringPlanInput): MonitoringPlan 
         no: 9,
         title: '공정별 배출원(source stream)·배출시설의 목록',
         status: input.sourceStreams.length > 0 ? 'AUTO' : 'TODO',
-        paragraphs: ['전기도금(plating)·절단·용접·마무리 설비는 철강 제품의 시스템 경계 밖이라 배출원에 넣지 않습니다. 용융아연도금(galvanizing)·코팅·열처리·단조는 경계 안입니다.'],
+        paragraphs: [
+            '전기도금(plating)·절단·용접·마무리 설비는 철강 제품의 시스템 경계 밖이라 배출원에 넣지 않습니다. 용융아연도금(galvanizing)·코팅·열처리·단조는 경계 안입니다.',
+            ...outsourcedPlanParagraphs(input.sourceStreams),
+        ],
         tables: [{ headers: ['공정', '배출원', '유형', '활동자료', '근거 자료'], rows: input.sourceStreams.map((stream) => [
             processName(stream.process_id) + (stream.heat_system ? ` (열 공급원 「${stream.heat_system.name}」)` : ''),
             stream.name,

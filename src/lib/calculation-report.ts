@@ -11,6 +11,7 @@ import { SHARED_HEAT_RULE } from './measurable-heat';
 import { findDefaultValueReference, hasAmbiguousDefaultValueRoutes } from './reference-workbooks';
 import type { DefaultValueReferenceRow, ImportedDefaultValueReference } from './reference-workbooks';
 import { getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
+import { checkOutsourcedStreams, groupOutsourcedStreams, OUTSOURCED_BASIS_ANCHOR, OUTSOURCED_BASIS_LABEL, OUTSOURCED_TECHNIQUE_LABEL } from './outsourced-process';
 import { calculateLocalResults } from './calculation-engine';
 import type { InternalTransferInput, LocalCalculationResult } from './calculation-engine';
 import type {
@@ -1100,6 +1101,41 @@ function activityDataSection(input: CalculationReportInput) {
         }
     }
 
+    return { xml: body.join(''), gateIssues };
+}
+
+/**
+ * 6.6 외주 공정 몫 — EC CBAM Q&A 2026-05-27 4.31: 철강제품 경계 안의 공정을 외주사에서 하고 물건이 돌아오면 우리 사업장에서 일어난 것처럼 다룬다.
+ * 외주 몫 행이 없으면 아무것도 인쇄하지 않는다(문서가 종전과 같다). 있으면 외주처·방법·근거·우리 몫과 확인 필요를 보인다.
+ */
+function outsourcedProcessSection(input: CalculationReportInput) {
+    const streams = cbamSourceStreams(input).filter((stream) => stream.outsourced);
+    const gateIssues: ReportGateIssue[] = [];
+    if (streams.length === 0) return { xml: '', gateIssues };
+    const processName = (id: string | undefined) => input.processes.find((process) => process.id === id)?.name ?? '(공정 미상)';
+    const issues = checkOutsourcedStreams(streams);
+    const rows = groupOutsourcedStreams(streams).map((group) => {
+        const mine = issues.filter((issue) => group.members.some((stream) => stream.id === issue.streamId));
+        const info = group.info;
+        return [
+            group.subcontractor,
+            OUTSOURCED_TECHNIQUE_LABEL[group.technique],
+            group.members.map((stream) => processName(stream.process_id)).join(' · '),
+            `${OUTSOURCED_BASIS_LABEL[group.basis]} (${OUTSOURCED_BASIS_ANCHOR[group.basis]})`,
+            `${formatRawForReport(group.total)} ${group.unit}`,
+            [info.note?.trim(), info.evidence?.trim() ? `증빙: ${info.evidence.trim()}` : '', info.technique_evidence?.trim() ? `분류 근거: ${info.technique_evidence.trim()}` : ''].filter(Boolean).join(' / ') || PLACEHOLDER,
+            mine.length === 0 ? '근거 갖춤' : '확인 필요',
+        ];
+    });
+    for (const issue of issues) gateIssues.push({ gate: 'G5', severity: 'warn', message: `제6.6장: ${issue.message}` });
+    const body = [
+        paragraph('6.6 외주 공정 몫   Outsourced Processes', 'Heading2'),
+        paragraph('열처리·코팅·용융아연도금처럼 철강제품 시스템 경계 안의 공정(2025/2547 부속서 I 3.16.2)을 외주사에서 하고 물건이 돌아오면, 그 공정은 우리 사업장에서 일어난 것으로 다룬다(EC CBAM Questions and Answers, 2026-05-27, 4.31). 외주처가 우리 부품에 쓴 연료의 몫을 우리 생산공정의 연료 배출원으로 넣었으며, 돌아온 부품은 구매 전구물질로 넣지 않았다(이중계산 방지). 전기도금(plating)·절단·용접·마무리는 경계 밖이라 넣지 않았다.'),
+        table(['외주처', '공정', '우리 공정', '우리 몫을 정한 방법(근거)', '우리 몫', '근거·증빙', '상태'], rows, {
+            widths: [1100, 1300, 1300, 2000, 1000, 1700, 600], headerShade: SOFT, headerBold: true, repeatHeader: true,
+        }),
+        paragraph('우리 몫은 배출원 표(제6.2장)에 「(외주)」로 시작하는 연료 행으로 들어 있고, 공정의 직접배출(제4장)에 그대로 합산된다. 보수적 추정은 설비 사양·가동기록 같은 객관적 근거가 있을 때만 쓰며(2025/2547 부속서 II A.1 5항) 검증에서 확인해야 한다.'),
+    ];
     return { xml: body.join(''), gateIssues };
 }
 
@@ -2362,6 +2398,7 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
     const processes = processSection(input);
     const activity = activityDataSection(input);
     const sectorParams = sectorParameterSection(input);
+    const outsourcedProcesses = outsourcedProcessSection(input);
     const electricity = electricitySection(input);
     const precursors = precursorSection(input);
     const defaultValues = defaultValueSection(input);
@@ -2383,6 +2420,7 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
         ...processes.gateIssues,
         ...activity.gateIssues,
         ...sectorParams.gateIssues,
+        ...outsourcedProcesses.gateIssues,
         ...electricity.gateIssues,
         ...precursors.gateIssues,
         ...defaultValues.gateIssues,
@@ -2402,6 +2440,7 @@ export function createCalculationReport(input: CalculationReportInput): Calculat
         methodologySection(input),
         activity.xml,
         sectorParams.xml,
+        outsourcedProcesses.xml,
         electricity.xml,
         precursors.xml,
         defaultValues.xml,

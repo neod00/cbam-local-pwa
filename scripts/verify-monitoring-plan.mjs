@@ -120,4 +120,25 @@ const exportPage = readFileSync('src/app/export/page.tsx', 'utf8');
 assert.ok(exportPage.includes('createMonitoringPlanDocument({') && exportPage.includes('monitoringPlanBlob: monitoringPlan.blob'), '상세 Export 화면의 패키지에도 같은 계획 초안');
 assert.ok(readFileSync('src/lib/delivery-package.ts', 'utf8').includes('monitoringPlanBlob?: Blob'), '패키지 입력은 선택 항목(없으면 예전 구조 그대로)');
 
+// ── 외주 공정 몫(EC CBAM Q&A 4.31): 제9항에 방법·근거와 통제 문단 — 외주 행이 없으면 문서가 종전과 같다 ──
+{
+  const plainText = text(section(9));
+  assert.ok(!/외주 공정:/.test(plainText), '외주 행이 없으면 외주 문단이 없다');
+  const firstProcess = store.processes[0];
+  const row = {
+    id: 'out-1', process_id: firstProcess.id, period_id: firstProcess.period_id, name: '(외주) 가상 코팅 B사 — 아연 플레이크 코팅 · 도시가스', stream_type: 'FUEL', method: 'Combustion',
+    activity_data: 36000, activity_unit: 'Nm3', ncv_gj_per_unit: 0.0385, emission_factor_tco2e_per_unit: 56.1, emission_factor_basis: 'PER_TJ', oxidation_factor: 1, conversion_factor: 1,
+    fossil_fraction: 1, biomass_fraction: 0, factor_source_type: 'EU_OR_IPCC_DEFAULT', source: '외주처 가스 고지서 · 외주 공정 몫', created_at: 't', updated_at: 't',
+    outsourced: { subcontractor: '가상 코팅 B사', technique: 'ZINC_FLAKE_COATING', technique_evidence: '정류기 없음', basis: 'RECONSTRUCTED', company_total: 120000, note: '사례 A', evidence: '외주처 가스 고지서 2025', total_share: 36000 },
+  };
+  const withOutsourced = P.buildMonitoringPlan({ ...input, sourceStreams: [...store.source_streams, row] });
+  const outsourcedText = text(withOutsourced.sections.find((item) => item.no === 9));
+  assert.match(outsourcedText, /외주 공정: 철강제품 경계 안의 공정을 외주사에서 하고 물건이 돌아오면 우리 사업장에서 일어난 것으로 다루며\(EC CBAM Q&A 2026-05-27, 4\.31\)/);
+  assert.match(outsourcedText, /가상 코팅 B사 — 아연 플레이크 코팅\(다크로·지오메트 등, 비전해\): 우리 몫 36,000 Nm3, 방법 「설비 소비율 × 가동시간으로 재구성 \(고지서 총량에 맞춤\)」/);
+  assert.match(outsourcedText, /근거: 사례 A\. 증빙: 외주처 가스 고지서 2025\./);
+  assert.match(outsourcedText, /부속서 II A\.5 22\(g\)/, '외주 공정의 통제 문장');
+  const noEvidence = P.buildMonitoringPlan({ ...input, sourceStreams: [...store.source_streams, { ...row, outsourced: { ...row.outsourced, evidence: '' } }] });
+  assert.match(text(noEvidence.sections.find((item) => item.no === 9)), /증빙: .*작성 필요/, '비어 있는 증빙은 지어내지 않고 작성 필요');
+}
+
 console.log('Monitoring plan verified (22개 항목 · 입력값만 옮김 · 직접 쓰는 항목은 작성 필요+물음 · 초안 문구 · 읽기 전용 · 배선).');

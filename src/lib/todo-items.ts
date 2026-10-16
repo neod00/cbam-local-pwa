@@ -4,6 +4,7 @@ import type { EuExportIssueFix } from './eu-template-export';
 import type { InternalTransfer, Installation, Product, ProductOutputLine, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import { isUnverifiedActualPrecursor, PRECURSOR_ACTUAL_VALUE_RULE } from './precursor-verification';
 import { groupPrecursorsBySupplier } from './supplier-request';
+import { checkOutsourcedStreams, groupOutsourcedStreams, OUTSOURCED_BASIS_LABEL, OUTSOURCED_DATA_REQUEST, outsourcedGroupNeedsData } from './outsourced-process';
 import type { InstallationFieldKey } from './todo-edits';
 import { deriveTalkState, linkProcessesByOutputLines, pickFocusProcess, type TalkQuestionId } from './talk-flow';
 
@@ -257,6 +258,27 @@ export function buildTodoItems(input: TodoInput): TodoResult {
             hrefLabel: '지도 6단계에서 확인',
             impact: input.impactOf?.(precursor.id),
             evidence: `${PRECURSOR_ACTUAL_VALUE_RULE.anchor} — 제3국 전구물질의 실측값은 그 생산기간을 다룬 공인 검증기관의 검증보고서가 있을 때만 쓸 수 있습니다.`,
+        });
+    }
+
+    // ── 4b) 외주 공정 몫의 근거 → 외주처에게 받을 것(EC Q&A 4.31) ──────────────────
+    const outsourcedIssues = checkOutsourcedStreams(input.sourceStreams, input.precursors);
+    for (const group of groupOutsourcedStreams(input.sourceStreams)) {
+        const mine = outsourcedIssues.filter((issue) => group.members.some((stream) => stream.id === issue.streamId));
+        const broken = mine.some((issue) => issue.level === 'fix');
+        if (!broken && !outsourcedGroupNeedsData(group)) continue;
+        add({
+            id: `o:${group.key}`,
+            owner: broken ? 'company' : 'supplier',
+            severity: broken ? 'error' : 'notice',
+            area: '외주 공정',
+            title: broken ? `외주 몫 숫자 고치기 — 「${group.subcontractor}」` : `외주처 자료 받기 — 「${group.subcontractor}」`,
+            detail: broken
+                ? `${mine.filter((issue) => issue.level === 'fix').map((issue) => issue.message).join(' ')}`
+                : `「${group.subcontractor}」 몫은 ${OUTSOURCED_BASIS_LABEL[group.basis]}으로 정했는데 근거·증빙이 부족합니다. 외주처에 받을 것: ${OUTSOURCED_DATA_REQUEST.join(' · ')}.`,
+            href: '/',
+            hrefLabel: '지도 4단계에서 외주 공정 고치기',
+            evidence: '2026-05-27 CBAM Q&A 4.31 · 2025/2547 부속서 II A.1 5항 · 부속서 III A.1·A.2',
         });
     }
 
