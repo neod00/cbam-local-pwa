@@ -249,7 +249,9 @@ export interface OutsourcedGroup {
 /** 외주 몫 행들을 한 건(같은 외주처·공정 종류·방법·총 몫·기간)으로 묶는다 — 산정보고서·모니터링 계획·할 일이 같은 묶음을 쓴다. */
 export function groupOutsourcedStreams(streams: SourceStream[]): OutsourcedGroup[] {
     const groups = new Map<string, OutsourcedGroup>();
-    for (const stream of streams) {
+    // 저장소는 키(UUID) 순으로 돌려준다 — 입력한 순서(만든 순)로 정렬해 문서의 표가 입력 순서를 따르게 한다.
+    const ordered = [...streams].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id.localeCompare(b.id));
+    for (const stream of ordered) {
         const info = stream.outsourced;
         if (!info) continue;
         const key = [info.subcontractor.trim(), info.technique, info.basis, info.total_share ?? '', stream.period_id ?? ''].join('|');
@@ -263,6 +265,9 @@ export function groupOutsourcedStreams(streams: SourceStream[]): OutsourcedGroup
     }
     return Array.from(groups.values());
 }
+
+/** 외주 공정 입력이 받지 않는 것 — 화면·서식·보고서·모니터링 계획이 같은 문장을 쓴다(씨밤이 run40 P2-02). */
+export const OUTSOURCED_ELECTRICITY_NOTICE = '외주처가 쓴 전기(간접배출)는 이 입력에 포함되지 않습니다. 외주처 전력 사용량이 있으면 간접배출 처리 방식을 검증인과 따로 정하세요(후속 기능).';
 
 /** 외주처에 요청할 최소 증빙자료(검증에서 근거로 쓴다) */
 export const OUTSOURCED_DATA_REQUEST = [

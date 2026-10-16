@@ -1,6 +1,7 @@
 import { createCalculationReport } from '@/lib/calculation-report';
 import { createDeliveryPackage } from '@/lib/delivery-package';
 import { createMonitoringPlanDocument } from '@/lib/monitoring-plan';
+import { localDateTimeStamp } from '@/lib/file-stamp';
 import { createEuExportFilename, createEuTemplateExportCopyResult, downloadBlob, scopeRecordsToExportPeriod } from '@/lib/eu-template-export';
 import { ACTIVITY_IMPORT_RESULT_SETTING_KEY, CBAM_LAST_BACKUP_AT_KEY, exportLocalBackup, setLocalSetting } from '@/lib/local-db';
 import { buildSubmitChecklist, type SubmitData } from './submit-data';
@@ -167,7 +168,7 @@ export async function dismissUploadNotice() {
 /** 백업(.cbam)만 받는다 — 설정 화면의 「백업 내보내기」와 같은 파일 형식·이름 규칙. */
 export async function downloadBackupOnly() {
     const backup = await exportLocalBackup();
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
+    const stamp = localDateTimeStamp(new Date());
     const filename = `cbam-local-backup-${stamp}.cbam`;
     downloadBlob(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }), filename);
     window.localStorage.setItem(CBAM_LAST_BACKUP_AT_KEY, backup.manifest.exported_at);

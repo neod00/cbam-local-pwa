@@ -30,7 +30,7 @@ const compile = (parts, expose, extra = {}) => {
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 const lib = compile(
-  [withFflate('src/lib/reference-workbooks.ts'), strip('src/lib/supplier-reply.ts'), withFflate('src/lib/docx-builder.ts'), strip('src/lib/supplier-request.ts')],
+  [withFflate('src/lib/reference-workbooks.ts'), strip('src/lib/supplier-reply.ts'), withFflate('src/lib/docx-builder.ts'), strip('src/lib/file-stamp.ts'), strip('src/lib/supplier-request.ts')],
   ['readWorkbookSheetRows', 'parseSupplierReply', 'matchReplyToPrecursors', 'buildReplyUpdate', 'excelDateToIso', 'groupPrecursorsBySupplier', 'buildSupplierRequestDocx', 'supplierRequestFilename']
 );
 

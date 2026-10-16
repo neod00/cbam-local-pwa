@@ -1,6 +1,7 @@
 'use client';
 
 import { ContactDialog } from '@/components/ContactDialog';
+import { localDateTimeStamp } from '@/lib/file-stamp';
 import { ScenarioAssumptionSummary } from '@/components/ScenarioAssumptionSummary';
 import { Button, PageHeader, SectionCard, StatCard, StatusBadge } from '@/components/ui';
 import {
@@ -59,7 +60,7 @@ function formatDateTime(value?: string) {
 }
 
 function createBackupFilename() {
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
+    const stamp = localDateTimeStamp(new Date());
     return `cbam-local-backup-${stamp}.cbam`;
 }
 
