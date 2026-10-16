@@ -30,6 +30,8 @@ const source = [
   strip('src/lib/fuel-allocation.ts'),
   strip('src/lib/source-stream-input.ts'),
   strip('src/lib/precursor-verification.ts'),
+  strip('src/lib/steel-boundary.ts'),
+  strip('src/lib/outsourced-process.ts'),
   strip('src/lib/calculation-engine.ts'),
   referenceSource,
   strip('src/lib/guided-edit.ts'),
@@ -321,5 +323,29 @@ assert.ok(ui2.includes('saveStreamFactorSource(stream,'));
 assert.ok(ui2.includes('savePrecursorTexts(precursor, draft)'));
 assert.ok(ui2.includes('FACTOR_SOURCE_CHOICES.map'), '「분류 전」은 고르는 칸에 없다');
 assert.ok(ui2.includes('INSTALLATION_FIELD_SPECS[field].hint'), '무엇을 적는지 칸마다 설명한다');
+
+// ── 외주 공정 몫(EC CBAM Q&A 4.31): 근거가 부족하면 외주처에게 받을 것, 숫자가 어긋나면 우리가 고칠 것 ──
+{
+  const outsourcedStream = (patch = {}, infoPatch = {}) => ({
+    id: 'out1', process_id: 'pr', period_id: 'per', name: '(외주) 가상 코팅 B사 — 아연 플레이크 코팅 · 도시가스', stream_type: 'FUEL', method: 'Combustion', activity_data: 36000, activity_unit: 'Nm3',
+    ncv_gj_per_unit: 0.0385, emission_factor_tco2e_per_unit: 56.1, emission_factor_basis: 'PER_TJ', oxidation_factor: 1, conversion_factor: 1, fossil_fraction: 1, biomass_fraction: 0, source: 'x', ...stamp, ...patch,
+    outsourced: { subcontractor: '가상 코팅 B사', technique: 'ZINC_FLAKE_COATING', technique_evidence: '정류기 없음', basis: 'RECONSTRUCTED', company_total: 120000, note: '사례 A', evidence: '고지서', total_share: 36000, ...infoPatch },
+  });
+  const outsourcedItems = (streams, precursors = []) => app.buildTodoItems({ ...base, sourceStreams: streams, precursors }).items.filter((item) => item.id.startsWith('o:'));
+  assert.deepEqual(plain(outsourcedItems([outsourcedStream()])), [], '근거가 갖춰진 외주 몫은 할 일이 없다');
+  assert.deepEqual(plain(outsourcedItems([])), [], '외주 몫이 없으면 항목이 없다');
+  const needs = outsourcedItems([outsourcedStream({}, { basis: 'CONSERVATIVE_ESTIMATE', note: '400 kW × 1,000 h × 70%', evidence: '' })]);
+  assert.equal(needs.length, 1);
+  assert.deepEqual(plain([needs[0].owner, needs[0].severity, needs[0].area]), ['supplier', 'notice', '외주 공정'], '추정·증빙 없음은 외주처에게 받을 것');
+  assert.match(needs[0].title, /외주처 자료 받기 — 「가상 코팅 B사」/);
+  assert.match(needs[0].detail, /연간·월별 가스\(연료\) 고지서/);
+  assert.match(needs[0].detail, /배분 계산서와 총량 대사표/);
+  const broken = outsourcedItems([outsourcedStream({ activity_data: 130000 })]);
+  assert.deepEqual(plain([broken[0].owner, broken[0].severity]), ['company', 'error'], '우리 몫이 총량보다 크면 우리가 고칠 것');
+  assert.match(broken[0].title, /외주 몫 숫자 고치기 — 「가상 코팅 B사」/);
+  assert.equal(outsourcedItems([outsourcedStream({}, { technique_evidence: '' })]).length, 1, '코팅의 분류 근거가 비면 받을 것');
+  // 같은 외주처 몫의 행이 둘이어도(공정 둘) 항목은 한 건
+  assert.equal(outsourcedItems([outsourcedStream({ id: 'a', activity_data: 18000 }, { evidence: '' }), outsourcedStream({ id: 'b', activity_data: 18000 }, { evidence: '' })]).length, 1);
+}
 
 console.log('Todo verified (세 칸 가르기 · 질문과 중복 없음 · 영향 상자 = 기본값 채우기+엔진(손계산 0.3 → 0.6302) · 입력칸 = 점검이 낸 fix + 기존 레코드를 펼쳐 칸만 덮음 · 저장 코드는 todo-writes.ts 한 곳 · 머리글·서비스 워커·경로 배선).');

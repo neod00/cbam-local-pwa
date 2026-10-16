@@ -159,6 +159,8 @@ const prelude = ['const { strToU8, zipSync, strFromU8, unzipSync } = fflate;'].c
     'src/lib/allocation-rules.ts',
     'src/lib/measurable-heat.ts',
     'src/lib/precursor-verification.ts',
+    'src/lib/steel-boundary.ts',
+    'src/lib/outsourced-process.ts',
     'src/lib/calculation-engine.ts',
     'src/lib/product-label.ts',
 ]
@@ -1304,5 +1306,34 @@ const nonSteelCite = reportModule.createCalculationReport({
 const nonSteelCiteXml = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await nonSteelCite.blob.arrayBuffer()))['word/document.xml']);
 assertTrue(!nonSteelCiteXml.includes('ANNEX I Table 1이 철강계 품목군'), '비철강 섞이면 철강 GHG=CO2 확정을 쓰지 않음');
 assertTrue(nonSteelCiteXml.includes('N2O·PFC 등 다른 대상 GHG'), '비철강 미확정 분기는 GHG 확인 필요를 유지');
+
+// ── 외주 공정 몫(EC CBAM Q&A 4.31): 제6.6장 — 외주 행이 있을 때만 나오고, 없으면 문서가 종전과 같다 ──
+{
+    const outsourcedRow = (patch = {}, infoPatch = {}) => at({
+        id: 'out1', process_id: 'proc1', name: '(외주) 가상 코팅 B사 — 아연 플레이크 코팅 · 도시가스', stream_type: 'FUEL', method: 'Combustion', activity_data: 36000, activity_unit: 'Nm3',
+        ncv_gj_per_unit: 0.0385, emission_factor_tco2e_per_unit: 56.1, emission_factor_basis: 'PER_TJ', oxidation_factor: 1, conversion_factor: 1, fossil_fraction: 1, biomass_fraction: 0,
+        factor_source_type: 'EU_OR_IPCC_DEFAULT', source: '외주처 가스 고지서 2025 · 외주 공정 몫(EC Q&A 4.31)', ...patch,
+        outsourced: { subcontractor: '가상 코팅 B사', technique: 'ZINC_FLAKE_COATING', technique_evidence: '정류기 없음, ISO 10683', basis: 'RECONSTRUCTED', company_total: 120000, note: '사례 A 재구성', evidence: '외주처 가스 고지서 2025', total_share: 36000, ...infoPatch },
+    });
+    const xmlOf = async (input) => fflate.strFromU8(fflate.unzipSync(new Uint8Array(await reportModule.createCalculationReport(input).blob.arrayBuffer()))['word/document.xml']);
+    const plainXml = await xmlOf(baseInput());
+    assertTrue(!plainXml.includes('6.6 외주 공정 몫'), '외주 행이 없으면 제6.6장이 없다(문서가 종전과 같다)');
+    const withRow = { ...baseInput(), sourceStreams: [baseStream, outsourcedRow()] };
+    const xml = await xmlOf(withRow);
+    assertTrue(xml.includes('6.6 외주 공정 몫'), '외주 행이 있으면 제6.6장');
+    assertTrue(xml.includes('가상 코팅 B사') && xml.includes('아연 플레이크 코팅') && xml.includes('2025/2547 부속서 II A.3(2)(b)'), '외주처·공정 종류·방법의 근거 조항');
+    assertTrue(xml.includes('36,000') && xml.includes('Nm3'), '우리 몫과 단위');
+    assertTrue(xml.includes('EC CBAM Questions and Answers, 2026-05-27, 4.31'), 'Q&A 4.31 근거');
+    assertTrue(xml.includes('근거 갖춤'), '근거가 갖춰지면 상태');
+    assertTrue(withRow.sourceStreams.length === 2 && reportModule.createCalculationReport(withRow).issues.filter((issue) => /제6\.6장/.test(issue.message)).length === 0, '갖춰진 외주 몫은 게이트 경고가 없다');
+    const estimated = { ...baseInput(), sourceStreams: [baseStream, outsourcedRow({}, { basis: 'CONSERVATIVE_ESTIMATE', note: '400 kW × 1,000 h × 70%' })] };
+    assertTrue((await xmlOf(estimated)).includes('확인 필요'), '보수적 추정은 확인 필요');
+    assertTrue(reportModule.createCalculationReport(estimated).issues.some((issue) => issue.gate === 'G5' && /제6\.6장: .*보수적 추정입니다/.test(issue.message)), '보수적 추정은 G5 경고');
+    const tooBig = { ...baseInput(), sourceStreams: [baseStream, outsourcedRow({ activity_data: 130000 })] };
+    assertTrue(reportModule.createCalculationReport(tooBig).issues.some((issue) => /제6\.6장: .*외주처 전체 연료량 120,000보다 큽니다/.test(issue.message)), '우리 몫이 총량을 넘으면 경고');
+    // 비CBAM 공정의 외주 행은 이 보고서에 싣지 않는다(CBAM 공정의 배출원만)
+    const foreign = { ...baseInput(), sourceStreams: [baseStream, outsourcedRow({ process_id: 'other-process' })] };
+    assertTrue(!(await xmlOf(foreign)).includes('6.6 외주 공정 몫'), 'CBAM 공정이 아닌 외주 행은 싣지 않는다');
+}
 
 console.log('Calculation report verification passed (docx-builder + report-format + P2 gates + P3 DV + P4 사용자 입력/G5 + 재감사 R1·R2·R3·R4·R5·R6 회귀 + 부문특정 파라미터 + 전력 EF 산정근거 + 운영자 식별·폐가스 + 확인 필요→확정).');

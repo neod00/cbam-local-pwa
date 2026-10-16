@@ -39,9 +39,9 @@ const NEEDS_TECHNIQUE_EVIDENCE: OutsourcedTechnique[] = ['ZINC_FLAKE_COATING', '
 /** 재구성 합계가 고지서 총량과 이만큼 이상 어긋나면 설비 목록을 점검하라고 알린다(임시 기준 — 사례가 쌓이면 조정). */
 export const RECONSTRUCTION_TOLERANCE = 0.2;
 
-const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
-const round = (value: number, digits = 6) => Math.round(value * 10 ** digits) / 10 ** digits;
-const fmt = (value: number) => round(value, 3).toLocaleString('ko-KR', { maximumFractionDigits: 3 });
+const isFiniteOut = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+const roundOut = (value: number, digits = 6) => Math.round(value * 10 ** digits) / 10 ** digits;
+const fmtOut = (value: number) => roundOut(value, 3).toLocaleString('ko-KR', { maximumFractionDigits: 3 });
 
 export type OutsourcedShareResult =
     | { ok: true; share: number; formula: string; reconciliationFactor?: number; warnings: string[] }
@@ -51,33 +51,33 @@ export type OutsourcedShareResult =
 export function computeOutsourcedShare(info: Pick<OutsourcedProcessInfo,
     'basis' | 'company_total' | 'line_quantity' | 'our_throughput_t' | 'line_throughput_t' | 'equipment' | 'estimate_quantity'>): OutsourcedShareResult {
     const warnings: string[] = [];
-    const positive = (value: number | undefined) => isNumber(value) && value > 0;
+    const isPositiveOut = (value: number | undefined) => isFiniteOut(value) && value > 0;
 
     if (info.basis === 'CONSERVATIVE_ESTIMATE') {
-        if (!positive(info.estimate_quantity)) return { ok: false, reason: '보수적 추정은 추정한 활동량(0보다 큰 값)을 적어야 합니다.' };
-        return { ok: true, share: round(info.estimate_quantity!), formula: `보수적 추정 ${fmt(info.estimate_quantity!)}`, warnings };
+        if (!isPositiveOut(info.estimate_quantity)) return { ok: false, reason: '보수적 추정은 추정한 활동량(0보다 큰 값)을 적어야 합니다.' };
+        return { ok: true, share: roundOut(info.estimate_quantity!), formula: `보수적 추정 ${fmtOut(info.estimate_quantity!)}`, warnings };
     }
 
     if (info.basis === 'METERED_LINE' || info.basis === 'OUTPUT_MASS') {
-        if (!positive(info.line_quantity)) return { ok: false, reason: '그 공정 설비의 연료량(0보다 큰 값)을 적어야 합니다.' };
-        const hasThroughput = isNumber(info.our_throughput_t) || isNumber(info.line_throughput_t);
+        if (!isPositiveOut(info.line_quantity)) return { ok: false, reason: '그 공정 설비의 연료량(0보다 큰 값)을 적어야 합니다.' };
+        const hasThroughput = isFiniteOut(info.our_throughput_t) || isFiniteOut(info.line_throughput_t);
         if (info.basis === 'OUTPUT_MASS' && !hasThroughput) return { ok: false, reason: '처리 중량 비율로 나누려면 우리 처리량과 설비 전체 처리량을 적어야 합니다.' };
         if (!hasThroughput) {
             // 우리만 쓰는 전용 설비·전용 계량 — 설비 연료량이 곧 우리 몫이다.
-            return { ok: true, share: round(info.line_quantity!), formula: `우리 전용 설비의 연료량 ${fmt(info.line_quantity!)}`, warnings };
+            return { ok: true, share: roundOut(info.line_quantity!), formula: `우리 전용 설비의 연료량 ${fmtOut(info.line_quantity!)}`, warnings };
         }
-        if (!positive(info.our_throughput_t) || !positive(info.line_throughput_t)) return { ok: false, reason: '우리 처리량과 설비 전체 처리량을 모두 0보다 큰 값으로 적어야 합니다.' };
+        if (!isPositiveOut(info.our_throughput_t) || !isPositiveOut(info.line_throughput_t)) return { ok: false, reason: '우리 처리량과 설비 전체 처리량을 모두 0보다 큰 값으로 적어야 합니다.' };
         if (info.our_throughput_t! > info.line_throughput_t!) return { ok: false, reason: '우리 처리량이 설비 전체 처리량보다 클 수 없습니다.' };
         const share = info.line_quantity! * (info.our_throughput_t! / info.line_throughput_t!);
-        return { ok: true, share: round(share), formula: `${fmt(info.line_quantity!)} × (${fmt(info.our_throughput_t!)} ÷ ${fmt(info.line_throughput_t!)} t) = ${fmt(share)}`, warnings };
+        return { ok: true, share: roundOut(share), formula: `${fmtOut(info.line_quantity!)} × (${fmtOut(info.our_throughput_t!)} ÷ ${fmtOut(info.line_throughput_t!)} t) = ${fmtOut(share)}`, warnings };
     }
 
     // RECONSTRUCTED
     const equipment = info.equipment ?? [];
     if (equipment.length === 0) return { ok: false, reason: '재구성하려면 설비 목록(이름·가동시간·소비율)을 적어야 합니다.' };
-    if (!positive(info.company_total)) return { ok: false, reason: '재구성한 값을 고지서 총량에 맞추려면 외주처 전체 연료량(0보다 큰 값)이 필요합니다.' };
+    if (!isPositiveOut(info.company_total)) return { ok: false, reason: '재구성한 값을 고지서 총량에 맞추려면 외주처 전체 연료량(0보다 큰 값)이 필요합니다.' };
     for (const item of equipment) {
-        if (!isNumber(item.hours) || item.hours < 0 || !isNumber(item.rate_per_h) || item.rate_per_h < 0) return { ok: false, reason: `설비 「${item.name}」의 가동시간·소비율은 0 이상의 숫자여야 합니다.` };
+        if (!isFiniteOut(item.hours) || item.hours < 0 || !isFiniteOut(item.rate_per_h) || item.rate_per_h < 0) return { ok: false, reason: `설비 「${item.name}」의 가동시간·소비율은 0 이상의 숫자여야 합니다.` };
     }
     const ours = equipment.filter((item) => item.ours);
     if (ours.length === 0) return { ok: false, reason: '우리 부품을 처리하는 설비를 하나 이상 표시해 주세요.' };
@@ -87,13 +87,13 @@ export function computeOutsourcedShare(info: Pick<OutsourcedProcessInfo,
     const factor = info.company_total! / reconstructed;
     const share = ourReconstructed * factor;
     if (Math.abs(factor - 1) > RECONSTRUCTION_TOLERANCE) {
-        warnings.push(`재구성 합계 ${fmt(reconstructed)}가 고지서 총량 ${fmt(info.company_total!)}과 ${round(Math.abs(factor - 1) * 100, 1)}% 어긋납니다 — 설비 목록에 빠진 가스 사용처가 없는지, 소비율·가동시간이 맞는지 확인하세요.`);
+        warnings.push(`재구성 합계 ${fmtOut(reconstructed)}가 고지서 총량 ${fmtOut(info.company_total!)}과 ${roundOut(Math.abs(factor - 1) * 100, 1)}% 어긋납니다 — 설비 목록에 빠진 가스 사용처가 없는지, 소비율·가동시간이 맞는지 확인하세요.`);
     }
     return {
         ok: true,
-        share: round(share),
-        formula: `재구성 합계 ${fmt(reconstructed)} → 보정계수 ${round(factor, 4)} (= 총량 ${fmt(info.company_total!)} ÷ 합계), 우리 설비 ${fmt(ourReconstructed)} × ${round(factor, 4)} = ${fmt(share)}`,
-        reconciliationFactor: round(factor, 6),
+        share: roundOut(share),
+        formula: `재구성 합계 ${fmtOut(reconstructed)} → 보정계수 ${roundOut(factor, 4)} (= 총량 ${fmtOut(info.company_total!)} ÷ 합계), 우리 설비 ${fmtOut(ourReconstructed)} × ${roundOut(factor, 4)} = ${fmtOut(share)}`,
+        reconciliationFactor: roundOut(factor, 6),
         warnings,
     };
 }
@@ -141,11 +141,11 @@ export function validateOutsourcedInfo(info: OutsourcedProcessInfo): OutsourcedV
 
 /** 우리 몫을 공정별로 나눈다(합계 = total). fractions는 합이 1이어야 하고 마지막 공정이 반올림 차이를 받는다. */
 export function splitOutsourcedShare(total: number, fractions: number[]): number[] | undefined {
-    if (fractions.length === 0 || fractions.some((value) => !isNumber(value) || value < 0)) return undefined;
+    if (fractions.length === 0 || fractions.some((value) => !isFiniteOut(value) || value < 0)) return undefined;
     const sum = fractions.reduce((acc, value) => acc + value, 0);
     if (Math.abs(sum - 1) > 1e-6) return undefined;
-    const parts = fractions.map((value) => round(total * value));
-    const rest = round(total - parts.slice(0, -1).reduce((acc, value) => acc + value, 0));
+    const parts = fractions.map((value) => roundOut(total * value));
+    const rest = roundOut(total - parts.slice(0, -1).reduce((acc, value) => acc + value, 0));
     return [...parts.slice(0, -1), rest];
 }
 
@@ -199,12 +199,12 @@ export function checkOutsourcedStreams(streams: SourceStream[], precursors: Arra
         if (info.basis === 'CONSERVATIVE_ESTIMATE' || !info.note?.trim()) {
             issues.push({ code: 'OUT01', level: 'review', streamId: stream.id, message: `${label(stream)}: ${info.basis === 'CONSERVATIVE_ESTIMATE' ? '보수적 추정입니다' : '근거(note)가 비어 있습니다'} — 설비 사양·가동기록·외주처 자료로 확인하세요(${OUTSOURCED_BASIS_ANCHOR.CONSERVATIVE_ESTIMATE}).` });
         }
-        const limit = isNumber(info.line_quantity) ? info.line_quantity : info.company_total;
-        if (isNumber(limit) && stream.activity_data > limit + 1e-9) {
-            issues.push({ code: 'OUT02', level: 'fix', streamId: stream.id, message: `${label(stream)}: 우리 몫 ${fmt(stream.activity_data)}이(가) 외주처 ${isNumber(info.line_quantity) ? '설비' : '전체'} 연료량 ${fmt(limit)}보다 큽니다.` });
+        const limit = isFiniteOut(info.line_quantity) ? info.line_quantity : info.company_total;
+        if (isFiniteOut(limit) && stream.activity_data > limit + 1e-9) {
+            issues.push({ code: 'OUT02', level: 'fix', streamId: stream.id, message: `${label(stream)}: 우리 몫 ${fmtOut(stream.activity_data)}이(가) 외주처 ${isFiniteOut(info.line_quantity) ? '설비' : '전체'} 연료량 ${fmtOut(limit)}보다 큽니다.` });
         }
-        if (isNumber(info.our_throughput_t) && isNumber(info.line_throughput_t) && info.our_throughput_t > info.line_throughput_t) {
-            issues.push({ code: 'OUT02', level: 'fix', streamId: stream.id, message: `${label(stream)}: 우리 처리량 ${fmt(info.our_throughput_t)} t이(가) 설비 전체 처리량 ${fmt(info.line_throughput_t)} t보다 큽니다.` });
+        if (isFiniteOut(info.our_throughput_t) && isFiniteOut(info.line_throughput_t) && info.our_throughput_t > info.line_throughput_t) {
+            issues.push({ code: 'OUT02', level: 'fix', streamId: stream.id, message: `${label(stream)}: 우리 처리량 ${fmtOut(info.our_throughput_t)} t이(가) 설비 전체 처리량 ${fmtOut(info.line_throughput_t)} t보다 큽니다.` });
         }
         if (NEEDS_TECHNIQUE_EVIDENCE.includes(info.technique) && !info.technique_evidence?.trim()) {
             issues.push({ code: 'OUT03', level: 'review', streamId: stream.id, message: `${label(stream)}: 코팅의 분류 근거(비전해 방식)가 비어 있습니다 — 전해식이면 plating이라 경계 밖입니다.` });
@@ -219,7 +219,7 @@ export function checkOutsourcedStreams(streams: SourceStream[], precursors: Arra
     const groups = new Map<string, SourceStream[]>();
     for (const stream of rows) {
         const info = stream.outsourced!;
-        if (!isNumber(info.total_share)) continue;
+        if (!isFiniteOut(info.total_share)) continue;
         const key = [info.subcontractor.trim(), info.technique, info.basis, stream.activity_unit, stream.period_id ?? '', info.total_share].join('|');
         groups.set(key, [...(groups.get(key) ?? []), stream]);
     }
@@ -227,8 +227,60 @@ export function checkOutsourcedStreams(streams: SourceStream[], precursors: Arra
         const total = group[0].outsourced!.total_share!;
         const sum = group.reduce((acc, stream) => acc + stream.activity_data, 0);
         if (sum > total + 1e-6) {
-            issues.push({ code: 'OUT05', level: 'fix', streamId: group[0].id, message: `「${group[0].outsourced!.subcontractor.trim()}」 외주 몫의 공정별 합계 ${fmt(sum)}이(가) 총 몫 ${fmt(total)}보다 큽니다 — 같은 연료가 둘 이상의 공정에 겹쳐 들어갔을 수 있습니다.` });
+            issues.push({ code: 'OUT05', level: 'fix', streamId: group[0].id, message: `「${group[0].outsourced!.subcontractor.trim()}」 외주 몫의 공정별 합계 ${fmtOut(sum)}이(가) 총 몫 ${fmtOut(total)}보다 큽니다 — 같은 연료가 둘 이상의 공정에 겹쳐 들어갔을 수 있습니다.` });
         }
     }
     return issues;
+}
+
+export interface OutsourcedGroup {
+    key: string;
+    subcontractor: string;
+    technique: OutsourcedTechnique;
+    basis: OutsourcedBasis;
+    unit: string;
+    periodId?: string;
+    /** 이 외주 몫의 우리 공정별 행들의 합 */
+    total: number;
+    members: SourceStream[];
+    info: OutsourcedProcessInfo;
+}
+
+/** 외주 몫 행들을 한 건(같은 외주처·공정 종류·방법·총 몫·기간)으로 묶는다 — 산정보고서·모니터링 계획·할 일이 같은 묶음을 쓴다. */
+export function groupOutsourcedStreams(streams: SourceStream[]): OutsourcedGroup[] {
+    const groups = new Map<string, OutsourcedGroup>();
+    for (const stream of streams) {
+        const info = stream.outsourced;
+        if (!info) continue;
+        const key = [info.subcontractor.trim(), info.technique, info.basis, info.total_share ?? '', stream.period_id ?? ''].join('|');
+        const found = groups.get(key);
+        if (found) {
+            found.members.push(stream);
+            found.total += stream.activity_data;
+        } else {
+            groups.set(key, { key, subcontractor: info.subcontractor.trim(), technique: info.technique, basis: info.basis, unit: stream.activity_unit, periodId: stream.period_id, total: stream.activity_data, members: [stream], info });
+        }
+    }
+    return Array.from(groups.values());
+}
+
+/** 외주처에 요청할 최소 증빙자료(검증에서 근거로 쓴다) */
+export const OUTSOURCED_DATA_REQUEST = [
+    '연간·월별 가스(연료) 고지서',
+    '연료 사용 설비 목록과 계량기 계통도',
+    '설비별 정격 연료소비율·설비 사양서',
+    '설비별 월별·배치별 가동시간',
+    '우리 제품과 타사 제품의 처리량',
+    '소성·경화 온도, 체류시간, 코팅 횟수',
+    '설비 시험자료 또는 일시적 실측자료',
+    '배분 계산서와 총량 대사표',
+];
+
+/** 이 외주 몫에 외주처에서 더 받아야 할 자료가 있는가(추정이거나 근거·증빙·분류 근거가 비었다) */
+export function outsourcedGroupNeedsData(group: OutsourcedGroup): boolean {
+    const info = group.info;
+    return info.basis === 'CONSERVATIVE_ESTIMATE'
+        || !info.note?.trim()
+        || !info.evidence?.trim()
+        || (NEEDS_TECHNIQUE_EVIDENCE.includes(info.technique) && !info.technique_evidence?.trim());
 }
