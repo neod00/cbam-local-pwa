@@ -1,6 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { PRECURSOR_MIX_TOLERANCE } from './allocation-rules';
 import { HEAT_STANDARD_FUELS } from './measurable-heat';
+import { OUTSOURCED_BASIS_LABEL, OUTSOURCED_TECHNIQUE_LABEL } from './outsourced-process';
 import { columnName, escapeXml, getColumnName, parseAttributes, parseSharedStrings, parseWorkbookSheets, readCellValue } from './activity-data-template';
 
 /**
@@ -29,6 +30,7 @@ export const SHEET_BOILER_HEAT = '9_보일러열';
 export const SHEET_PROCESS_EMISSIONS = '10_공정배출';
 export const SHEET_TRANSFERS = '11_사내이송';
 export const SHEET_ELECTRICITY_SOURCES = '12_전력공급원';
+export const SHEET_OUTSOURCED = '13_외주공정';
 export const SHEET_RNR = '6_역할책임';
 export const SHEET_EVIDENCE = '7_증빙목록';
 export const SHEET_LISTS = '선택목록';
@@ -133,7 +135,7 @@ export const VERIFICATION_CHOICES = [
     { label: '제3자 검증 완료', value: 'VERIFIED' },
 ] as const;
 
-type ListName = 'yesNo' | 'fuelKind' | 'fuelFactorSource' | 'electricitySource' | 'supplierValue' | 'verification' | 'country' | 'processOrShared' | 'process' | 'product' | 'carbonPrice' | 'splitBasis' | 'fuelUse' | 'heatUnit' | 'heatBasis' | 'efBasis' | 'standardFuel' | 'emissionKind' | 'processOrOutside' | 'defaultYear';
+type ListName = 'yesNo' | 'fuelKind' | 'fuelFactorSource' | 'electricitySource' | 'supplierValue' | 'verification' | 'country' | 'processOrShared' | 'process' | 'product' | 'carbonPrice' | 'splitBasis' | 'fuelUse' | 'heatUnit' | 'heatBasis' | 'efBasis' | 'standardFuel' | 'emissionKind' | 'processOrOutside' | 'defaultYear' | 'outsourcedTechnique' | 'outsourcedBasis';
 
 export interface ActivityField {
     key: string;
@@ -356,12 +358,38 @@ export const ELECTRICITY_SOURCE_COLUMNS: ActivityField[] = [
     { key: 'ef', label: '배출계수 (tCO₂e/MWh)', required: true, width: 22, hint: '그 공급원의 계수. 실측(PPA·직접 연결)이면 증빙(D.4.3)이 있어야 인정됩니다', example: 0.4594 },
 ];
 
+/** 외주 공정의 종류·우리 몫을 정한 방법 — 값은 local-db.ts의 OutsourcedTechnique·OutsourcedBasis, 글자는 outsourced-process.ts의 것과 같다. */
+export const OUTSOURCED_TECHNIQUE_CHOICES = (Object.entries(OUTSOURCED_TECHNIQUE_LABEL) as Array<[keyof typeof OUTSOURCED_TECHNIQUE_LABEL, string]>).map(([value, label]) => ({ label, value }));
+export const OUTSOURCED_BASIS_CHOICES = (Object.entries(OUTSOURCED_BASIS_LABEL) as Array<[keyof typeof OUTSOURCED_BASIS_LABEL, string]>).map(([value, label]) => ({ label, value }));
+
+/** 열처리·코팅·용융아연도금을 외주사에서 하고 돌려받을 때 — 외주처가 우리 부품에 쓴 연료의 몫(EC CBAM Q&A 2026-05-27 4.31: 우리 공정에서 한 것처럼 센다) */
+export const OUTSOURCED_COLUMNS: ActivityField[] = [
+    { key: 'subcontractor', label: '외주처', required: true, width: 26, hint: '열처리·코팅을 해 주는 회사 이름', example: `${EXAMPLE_PREFIX} ○○코팅(주)` },
+    { key: 'technique', label: '어떤 공정인가', required: true, list: 'outsourcedTechnique', width: 36, hint: '목록에서 고르세요. 전기도금·절단·용접·마무리는 경계 밖이라 적지 않습니다', example: OUTSOURCED_TECHNIQUE_CHOICES[1].label },
+    { key: 'where', label: '외주를 거친 제품이 속한 공정', required: true, list: 'process', width: 30, hint: '3_공정의 공정 이름. 여럿이면 ; 로 이어 적으면 그 공정들의 생산량 비율로 나눕니다', example: '볼트 공정' },
+    { key: 'fuelKind', label: '외주처가 쓰는 연료', required: true, list: 'fuelKind', width: 22, hint: '외주처 고지서의 연료. 리터 단위(경유 등)는 받지 않습니다 — Nm³·t 단위 연료를 고르세요', example: FUEL_KIND_CHOICES[0].label },
+    { key: 'basis', label: '우리 몫을 정한 방법', required: true, list: 'outsourcedBasis', width: 40, hint: '설비 계량값 / 설비 소비율×가동시간으로 재구성 / 처리 중량 비율 / 보수적 추정 중 고르세요. 아래 칸 중 그 방법에 필요한 것만 적습니다', example: OUTSOURCED_BASIS_CHOICES[1].label },
+    { key: 'lineQuantity', label: '그 공정 설비의 연료량', width: 20, hint: '「설비 계량값」·「처리 중량 비율」일 때. 외주처 고지서·계량값, 활동량 단위(Nm³ 또는 t)', example: '' },
+    { key: 'ourThroughput', label: '우리 부품 처리량 (t)', width: 20, hint: '「처리 중량 비율」일 때(「설비 계량값」은 우리 전용 설비면 비움)', example: '' },
+    { key: 'lineThroughput', label: '그 설비 전체 처리량 (t)', width: 22, hint: '같은 설비가 처리한 모든 고객 제품의 무게', example: '' },
+    { key: 'companyTotal', label: '외주처 전체 연료량', width: 22, hint: '「재구성」일 때: 외주처 고지서의 연간 총량(활동량 단위). 설비 재구성 합계를 이 총량에 맞춥니다', example: 120000 },
+    { key: 'ourEquipment', label: '우리 부품을 처리하는 설비', width: 38, hint: '「재구성」일 때 「이름:가동시간(h):소비율(양/h)」을 ; 로 잇기. 이름에는 : 와 ; 를 쓰지 않습니다', example: '코팅라인1:600:50' },
+    { key: 'otherEquipment', label: '그 밖의 가스 사용 설비', width: 38, hint: '「재구성」일 때 타사 제품 설비·기타 공정을 같은 모양으로. 빠뜨리면 우리 몫이 부풀려집니다', example: '타사코팅라인:900:50; 기타 가스공정:1000:25' },
+    { key: 'estimate', label: '추정한 우리 몫', width: 20, hint: '「보수적 추정」일 때 정격×가동시간×부하율 등으로 직접 계산한 연료량(활동량 단위). 근거는 아래 칸에 필수', example: '' },
+    { key: 'techniqueEvidence', label: '공정 분류 근거', width: 38, hint: '코팅이면 필수: 전류를 쓰지 않는 방식(정류기·도금조 없음, ISO 10683 등). 전해식이면 전기도금이라 경계 밖입니다', example: '정류기 없음, 아연 플레이크 도포 후 소성(ISO 10683)' },
+    { key: 'note', label: '근거·가정', width: 36, hint: '계산 근거. 「보수적 추정」이면 필수', example: '외주처 설비 사양서의 정격 소비율' },
+    { key: 'evidence', label: '근거 자료', width: 32, hint: '예: 외주처 가스 고지서 2025, 임가공 계약서, 가동기록', example: '외주처 가스 고지서 2025' },
+    { key: 'ncv', label: '순발열량 (GJ/단위)', width: 18, hint: '비우면 연료 종류의 기본값(4_연료와 같음)', example: '' },
+    { key: 'factor', label: '배출계수 (tCO₂e/단위)', width: 20, hint: '비우면 연료 종류의 기본값', example: '' },
+    { key: 'factorSource', label: '계수 출처', list: 'fuelFactorSource', width: 26, hint: '순발열량·배출계수를 적었을 때만', example: '' },
+];
+
 const TABLE_SHEETS = [
     { name: SHEET_PRODUCTS, title: '2. 제품 — 이 공장에서 만드는 제품을 한 줄에 하나씩', columns: PRODUCT_COLUMNS },
     { name: SHEET_PARTS, title: '2b. 품번 목록(선택) — 품번이 많으면 생산실적을 붙여 넣으세요. 앱이 CN 코드별로 합쳐 제품(2_제품)과 공정(3_공정)을 만듭니다 — 같은 CN은 재질이 달라도 한 제품·한 공정입니다. 재질의 비율이 CN마다 다르면 올릴 때 한 공정으로 합칠지(가중평균) CN별 공정으로 나눌지 고릅니다. 공정 이름은 쓴 재질로 지어지고(예: SCM435 공정), 4_연료·5_구매강재의 「쓰는 공정」에는 재질만 적어도 됩니다. 2_제품·3_공정에 이미 적었다면 비워 두세요', columns: PART_COLUMNS },
     { name: SHEET_PROCESSES, title: '3. 공정 — 제품을 만드는 생산 라인과 생산량', columns: PROCESS_COLUMNS },
     { name: SHEET_FUELS, title: '4. 연료 — 공장에서 태우는 연료(가스·경유·등유 등). 전기는 1_사업장에. 전기도금·절단·용접·마무리 설비 전용 연료는 적지 않습니다(용융아연도금·코팅은 적습니다)', columns: FUEL_COLUMNS },
-    { name: SHEET_PRECURSORS, title: '5. 구매 강재 — 사 와서 가공하는 철강 원료와 그 원료의 배출량', columns: PRECURSOR_COLUMNS },
+    { name: SHEET_PRECURSORS, title: '5. 구매 강재 — 사 와서 가공하는 철강 원료와 그 원료의 배출량. 열처리·코팅을 외주로 맡겼다 돌려받은 부품은 여기에 적지 말고 13_외주공정에 적습니다', columns: PRECURSOR_COLUMNS },
     { name: SHEET_RNR, title: '6. 역할·책임 — 자료를 누가 모으고 옮기고 확인하는지 (산정보고서에 실립니다. 아는 만큼만)', columns: RNR_COLUMNS },
     { name: SHEET_EVIDENCE, title: '7. 증빙 목록 — 검증인에게 보여 줄 자료와 보관하는 곳 (산정보고서에 실립니다. 아는 만큼만)', columns: EVIDENCE_COLUMNS },
     { name: SHEET_IMPORTED_HEAT, title: '8. 사 온 열(해당할 때만) — 다른 회사에서 스팀·온수를 사 오면 공정별로 적습니다', columns: IMPORTED_HEAT_COLUMNS },
@@ -369,6 +397,7 @@ const TABLE_SHEETS = [
     { name: SHEET_PROCESS_EMISSIONS, title: '10. 공정배출·물질수지(해당할 때만) — 석회석 같은 부원료, 전극·고철·슬래그의 탄소', columns: PROCESS_EMISSION_COLUMNS },
     { name: SHEET_TRANSFERS, title: '11. 사내 이송(해당할 때만) — 한 공정에서 만든 것을 다른 공정이 원료로 쓸 때', columns: TRANSFER_COLUMNS },
     { name: SHEET_ELECTRICITY_SOURCES, title: '12. 전력 공급원(해당할 때만) — 한전 외에 PPA·직접 연결·자가발전으로도 전력을 받을 때 공급원별로 적습니다. 계수는 전력량 가중평균으로 정해집니다', columns: ELECTRICITY_SOURCE_COLUMNS },
+    { name: SHEET_OUTSOURCED, title: '13. 외주 공정(해당할 때만) — 열처리·코팅·용융아연도금을 외주사에 맡겼다 돌려받으면, 외주처가 우리 부품에 쓴 연료의 우리 몫을 적습니다(EU Q&A 4.31: 우리 공장에서 한 것으로 셉니다)', columns: OUTSOURCED_COLUMNS },
 ] as const;
 
 /** 표 시트의 줄 배치: 1 제목 · 2 머리글 · 3 설명 · 4 예시 · 5~ 입력 */
@@ -404,6 +433,7 @@ export interface ActivityWorkbookFill {
     processEmissions?: ActivityRowValues[];
     transfers?: ActivityRowValues[];
     electricitySources?: ActivityRowValues[];
+    outsourced?: ActivityRowValues[];
 }
 
 /** 작성 예시 — 가상의 나사 공장(대일기업). 공용 가스·경유·전력은 공장 전체 값만 적어 앱이 나누게 한 모습이다. */
@@ -574,12 +604,14 @@ function buildLists(countries: string[]) {
         ['standardFuel', HEAT_STANDARD_FUELS.map((item) => item.label)],
         ['emissionKind', PROCESS_EMISSION_KIND_CHOICES.map((item) => item.label)],
         ['defaultYear', DEFAULT_YEAR_CHOICES.map((item) => item.label)],
+        ['outsourcedTechnique', OUTSOURCED_TECHNIQUE_CHOICES.map((item) => item.label)],
+        ['outsourcedBasis', OUTSOURCED_BASIS_CHOICES.map((item) => item.label)],
         ['country', countries],
     ];
     const titles: Record<ListName, string> = {
         yesNo: '예/아니오', carbonPrice: '탄소가격', fuelKind: '연료 종류', fuelFactorSource: '계수 출처', electricitySource: '전력 계수 출처', supplierValue: '공급사 값', verification: '검증 여부',
         country: '국가', processOrShared: '쓰는 공정(연료)', process: '쓰는 공정(구매 강재)', product: '제품',
-        splitBasis: '나누는 기준', fuelUse: '연료의 용도', heatUnit: '열 단위', heatBasis: '열 사용량을 안 방법', efBasis: '열 계수 기준', standardFuel: '표준값 연료', emissionKind: '공정배출 종류', defaultYear: '기본값 연도', processOrOutside: '열을 받는 곳',
+        splitBasis: '나누는 기준', fuelUse: '연료의 용도', heatUnit: '열 단위', heatBasis: '열 사용량을 안 방법', efBasis: '열 계수 기준', standardFuel: '표준값 연료', emissionKind: '공정배출 종류', defaultYear: '기본값 연도', processOrOutside: '열을 받는 곳', outsourcedTechnique: '외주 공정 종류', outsourcedBasis: '외주 몫을 정한 방법',
     };
     const sheetRef = (name: string, cell: string) => `'${name}'!${cell}`;
     // 공정·제품 이름은 다른 시트에 적은 값을 수식으로 비춘다 — 적는 대로 목록에 나타난다.
@@ -621,7 +653,7 @@ function guideSheet(): SheetSpec {
         ['4_연료 — 가스·경유·등유 등 공장에서 태우는 연료', STYLE.wrap],
         ['5_구매강재 — 사 와서 가공하는 철강 원료와 공급사가 준 배출량 값', STYLE.wrap],
         ['2b_품번목록(선택) — 품번이 많으면 생산실적을 붙여 넣습니다. 앱이 CN 코드별로 합쳐 제품과 공정을 만듭니다', STYLE.wrap],
-        ['8_사온열 · 9_보일러열 · 10_공정배출 · 11_사내이송 · 12_전력공급원 — 해당하는 업체만 적습니다(아래 「해당할 때만 적는 시트」 참고)', STYLE.wrap],
+        ['8_사온열 · 9_보일러열 · 10_공정배출 · 11_사내이송 · 12_전력공급원 · 13_외주공정 — 해당하는 업체만 적습니다(아래 「해당할 때만 적는 시트」 참고)', STYLE.wrap],
         ['6_역할책임 · 7_증빙목록 — 자료를 누가 다루고 어디에 보관하는지(아는 만큼만. 산정보고서에 실립니다)', STYLE.wrap],
         ['', STYLE.plain],
         ['적는 방법', STYLE.section],
@@ -639,7 +671,7 @@ function guideSheet(): SheetSpec {
         ['· 같은 CN은 만드는 경로(열처리 유무 등)가 달라도 한 공정입니다(제4조 6항). 서로 다른 CN이라도 크기·모양만 다르고 같은 종류의 원료를 같은 비율로 쓰면 한 공정으로 묶어야 합니다(부속서 II A.4). 쓰는 원료(강종)의 구성이 CN마다 다르면 한 공정으로 합쳐 가중평균으로 낼 수도, CN별 공정으로 나눠 CN별 SEE를 낼 수도 있습니다 — 품번 목록으로 채우면 올릴 때 두 방식의 값을 나란히 보고 고릅니다.', STYLE.wrap],
         ['· 공정은 「같은 원료로 만드는 제품끼리」 묶습니다. 합금강 볼트와 탄소강 너트처럼 원료가 다른 제품을 한 공정에 적었다면, 5_구매강재의 「쓰는 제품」에 어느 제품의 원료인지 적어야 합니다 — 안 적으면 원료 배출이 모든 제품에 섞입니다.', STYLE.wrap],
         ['· 열처리로·가열로처럼 일부 제품만 거치는 설비의 연료는 「공장 전체(공용)」가 아니라 그 공정 이름을 적습니다(여러 공정이면 ; 로 이어서).', STYLE.wrap],
-        ['· 도금(전기도금)·절단·태핑·용접·선별·포장 같은 마무리 설비 전용 연료는 적지 않습니다 — 규정이 철강 제품의 배출에서 빼는 공정입니다. 단조·열처리·소둔·산세·신선·코팅·용융아연도금의 연료는 적습니다. 열처리나 코팅을 다른 회사에 맡긴다면 알려 주세요(그 회사의 배출 자료가 필요할 수 있습니다).', STYLE.wrap],
+        ['· 도금(전기도금)·절단·태핑·용접·선별·포장 같은 마무리 설비 전용 연료는 적지 않습니다 — 규정이 철강 제품의 배출에서 빼는 공정입니다. 단조·열처리·소둔·산세·신선·코팅·용융아연도금의 연료는 적습니다. 열처리나 코팅을 다른 회사에 맡긴다면 그 연료를 여기 적지 말고 13_외주공정에 적습니다.', STYLE.wrap],
         ['· 생산량에는 합격품만. 불량·스크랩은 옆 칸에 따로 적습니다.', STYLE.wrap],
         ['· 구매 강재의 「투입량」은 사 온 양이 아니라 그 기간에 실제로 쓴 양입니다.', STYLE.wrap],
         ['· 공급사 배출량 값이 없으면 「없음」을 고르세요. EU가 정한 기본값이 들어갑니다(보통 실제보다 큽니다).', STYLE.wrap],
@@ -651,6 +683,7 @@ function guideSheet(): SheetSpec {
         ['· 10_공정배출 — 석회석처럼 가열하면 CO₂가 나오는 부원료, 전극·고철·슬래그의 탄소를 따지는 경우.', STYLE.wrap],
         ['· 11_사내이송 — 한 공정에서 만든 것(예: 신선 와이어)을 다른 공정이 원료로 쓰는 경우.', STYLE.wrap],
         ['· 12_전력공급원 — 한전 외에 PPA·직접 연결·자가발전으로도 전력을 받는 경우. 공급원별 전력량과 계수를 적으면 앱이 가중평균 계수를 정합니다.', STYLE.wrap],
+        ['· 13_외주공정 — 열처리·코팅·용융아연도금을 외주사에 맡겼다 돌려받는 경우. 외주처가 우리 부품에 쓴 연료의 우리 몫을 적으면 앱이 우리 공정의 연료로 더합니다(EU CBAM Q&A 4.31: 돌아온 부품은 구매 강재가 아니라 우리 공장에서 한 것으로 셉니다). 우리 몫은 설비 계량값 · 설비 소비율×가동시간 재구성 · 처리 중량 비율 · 보수적 추정 중 하나로 정합니다. 전기도금·절단·용접·마무리는 경계 밖이라 적지 않습니다.', STYLE.wrap],
         ['· 직접배출을 연료 줄이 아니라 다른 방법(연속측정 등)으로 산정했다면 3_공정의 「직접배출 합계」와 근거를 적습니다. 공급사가 실측과 기본값을 섞어 준 원료는 5_구매강재의 「일부만 있음」, 기본값 연도·SEFA도 같은 시트에 있습니다.', STYLE.wrap],
         ['', STYLE.plain],
         ['이 서식이 받지 않는 것', STYLE.section],
@@ -720,6 +753,7 @@ export function createActivityWorkbook(options: { countries: string[]; fill?: Ac
         [SHEET_PRODUCTS]: fill?.products, [SHEET_PROCESSES]: fill?.processes, [SHEET_FUELS]: fill?.fuels, [SHEET_PRECURSORS]: fill?.precursors, [SHEET_RNR]: fill?.rnr, [SHEET_EVIDENCE]: fill?.evidence,
         [SHEET_PARTS]: fill?.parts, [SHEET_IMPORTED_HEAT]: fill?.importedHeat, [SHEET_BOILER_HEAT]: fill?.boilerHeat, [SHEET_PROCESS_EMISSIONS]: fill?.processEmissions, [SHEET_TRANSFERS]: fill?.transfers,
         [SHEET_ELECTRICITY_SOURCES]: fill?.electricitySources,
+        [SHEET_OUTSOURCED]: fill?.outsourced,
     };
     const sheets: SheetSpec[] = [
         guideSheet(),
@@ -767,6 +801,8 @@ export interface ActivityWorkbookData {
     transfers: ActivityRow[];
     /** 12_전력공급원 — 없는 서식도 그대로 읽는다 */
     electricitySources: ActivityRow[];
+    /** 13_외주공정 — 없는 서식도 그대로 읽는다 */
+    outsourced: ActivityRow[];
     /** 읽으면서 알게 된 문제(머리글을 못 찾은 시트 등) */
     notes: string[];
 }
@@ -1160,6 +1196,7 @@ export function parseActivityWorkbook(bytes: Uint8Array): ActivityWorkbookData {
         processEmissions: optionalTable(SHEET_PROCESS_EMISSIONS, PROCESS_EMISSION_COLUMNS),
         transfers: optionalTable(SHEET_TRANSFERS, TRANSFER_COLUMNS),
         electricitySources: optionalTable(SHEET_ELECTRICITY_SOURCES, ELECTRICITY_SOURCE_COLUMNS),
+        outsourced: optionalTable(SHEET_OUTSOURCED, OUTSOURCED_COLUMNS),
         notes,
     };
 }

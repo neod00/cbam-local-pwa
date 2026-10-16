@@ -50,13 +50,13 @@ const bytesOf = async (blob) => new Uint8Array(await blob.arrayBuffer());
 const blankBytes = await bytesOf(W.createActivityWorkbook({ countries }));
 const blankZip = fflate.unzipSync(blankBytes);
 const names = W.readActivityWorkbookSheetNames(blankBytes);
-assert.deepEqual(plain(names), ['안내', '1_사업장', '2_제품', '2b_품번목록', '3_공정', '4_연료', '5_구매강재', '6_역할책임', '7_증빙목록', '8_사온열', '9_보일러열', '10_공정배출', '11_사내이송', '12_전력공급원', '선택목록']);
+assert.deepEqual(plain(names), ['안내', '1_사업장', '2_제품', '2b_품번목록', '3_공정', '4_연료', '5_구매강재', '6_역할책임', '7_증빙목록', '8_사온열', '9_보일러열', '10_공정배출', '11_사내이송', '12_전력공급원', '13_외주공정', '선택목록']);
 assert.ok(W.isActivityWorkbookV2(names) && !W.isActivityWorkbookV2(['README', 'Products', 'Processes']), '시트 이름으로 새 서식과 종전 서식을 가린다');
 assert.ok(blankZip['xl/styles.xml'], '머리글 색·입력 칸을 꾸미는 styles.xml이 있다');
 const sheetText = (index) => fflate.strFromU8(blankZip[`xl/worksheets/sheet${index}.xml`]).replaceAll('&apos;', "'").replaceAll('&quot;', '"');
 const lists = sheetText(names.length);
 const sheetIndex = (name) => names.indexOf(name) + 1;
-for (const [sheetName, columns] of [['2_제품', W.PRODUCT_COLUMNS], ['2b_품번목록', W.PART_COLUMNS], ['3_공정', W.PROCESS_COLUMNS], ['4_연료', W.FUEL_COLUMNS], ['5_구매강재', W.PRECURSOR_COLUMNS], ['6_역할책임', W.RNR_COLUMNS], ['7_증빙목록', W.EVIDENCE_COLUMNS], ['8_사온열', W.IMPORTED_HEAT_COLUMNS], ['9_보일러열', W.BOILER_HEAT_COLUMNS], ['10_공정배출', W.PROCESS_EMISSION_COLUMNS], ['11_사내이송', W.TRANSFER_COLUMNS], ['12_전력공급원', W.ELECTRICITY_SOURCE_COLUMNS]]) {
+for (const [sheetName, columns] of [['2_제품', W.PRODUCT_COLUMNS], ['2b_품번목록', W.PART_COLUMNS], ['3_공정', W.PROCESS_COLUMNS], ['4_연료', W.FUEL_COLUMNS], ['5_구매강재', W.PRECURSOR_COLUMNS], ['6_역할책임', W.RNR_COLUMNS], ['7_증빙목록', W.EVIDENCE_COLUMNS], ['8_사온열', W.IMPORTED_HEAT_COLUMNS], ['9_보일러열', W.BOILER_HEAT_COLUMNS], ['10_공정배출', W.PROCESS_EMISSION_COLUMNS], ['11_사내이송', W.TRANSFER_COLUMNS], ['12_전력공급원', W.ELECTRICITY_SOURCE_COLUMNS], ['13_외주공정', W.OUTSOURCED_COLUMNS]]) {
   const xml = sheetText(sheetIndex(sheetName));
   const labels = columns.map((field) => field.label);
   assert.equal(new Set(labels).size, labels.length, '머리글은 겹치지 않는다(머리글 글자로 칸을 찾는다)');
@@ -511,7 +511,7 @@ assert.match(I.describeActivityImportIssues(twoProducts.result.issues), /\[넣�
 // 이 시트들이 없는 서식(앞 판)도 읽힌다 — 새 시트 다섯이 빠져 있어도 오류가 아니다.
 const noExtraSheets = fflate.unzipSync(sampleBytes);
 let strippedWorkbook = fflate.strFromU8(noExtraSheets['xl/workbook.xml']);
-for (const sheetName of ['2b_품번목록', '8_사온열', '9_보일러열', '10_공정배출', '11_사내이송', '12_전력공급원']) strippedWorkbook = strippedWorkbook.replace(new RegExp('<sheet name="' + sheetName + '"[^>]*/>'), '');
+for (const sheetName of ['2b_품번목록', '8_사온열', '9_보일러열', '10_공정배출', '11_사내이송', '12_전력공급원', '13_외주공정']) strippedWorkbook = strippedWorkbook.replace(new RegExp('<sheet name="' + sheetName + '"[^>]*/>'), '');
 const strippedData = W.parseActivityWorkbook(fflate.zipSync({ ...noExtraSheets, 'xl/workbook.xml': fflate.strToU8(strippedWorkbook) }));
 assert.deepEqual(plain([strippedData.parts.length, strippedData.importedHeat.length, strippedData.boilerHeat.length, strippedData.processEmissions.length, strippedData.transfers.length, strippedData.notes.length]), [0, 0, 0, 0, 0, 0]);
 
