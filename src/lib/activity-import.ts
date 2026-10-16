@@ -29,6 +29,9 @@ import {
     SUPPLIER_VALUE_CHOICES,
     DEFAULT_YEAR_CHOICES,
     SHEET_ELECTRICITY_SOURCES,
+    SHEET_OUTSOURCED,
+    OUTSOURCED_BASIS_CHOICES,
+    OUTSOURCED_TECHNIQUE_CHOICES,
     VERIFICATION_CHOICES,
     YES,
     type ActivityRow,
@@ -58,7 +61,7 @@ import {
     validateProductDraft,
 } from './guided-edit';
 import { getIndirectEmissionsApplicability } from './cbam-product-rules';
-import type { LocalEntity, Product, ProductionProcess, ProductOutputLine, PurchasedPrecursor, ReportInputs, ReportTranspositionRow, SourceStream, StoreEntityMap, StoreName } from './local-db';
+import type { LocalEntity, OutsourcedProcessInfo, Product, ProductionProcess, ProductOutputLine, PurchasedPrecursor, ReportInputs, ReportTranspositionRow, SourceStream, StoreEntityMap, StoreName } from './local-db';
 import {
     buildImportedHeatUpdate,
     buildProvisionalHeatQuantities,
@@ -74,8 +77,9 @@ import { calculateSourceStreamEnergyBreakdown } from './source-stream-calculatio
 import type { ElectricitySplitBasis } from './allocation-rules';
 import type { ImportedDefaultValueReference } from './reference-workbooks';
 import { getSectorParameters } from './sector-parameters';
-import { createSourceStreamValidationErrors, firstSourceStreamError, GUIDED_STREAM_KINDS } from './source-stream-input';
+import { createSourceStreamValidationErrors, firstSourceStreamError, GUIDED_STREAM_KINDS, type GuidedStreamKind } from './source-stream-input';
 import { looksLikeExcludedStepFuel, STEEL_BOUNDARY_ANCHOR } from './steel-boundary';
+import { buildOutsourcedStreamDrafts, computeOutsourcedShare, parseOutsourcedEquipment, validateOutsourcedInfo } from './outsourced-process';
 
 export { STEEL_BOUNDARY_ANCHOR };
 
@@ -193,6 +197,7 @@ const yesNo = (input: string | undefined): 'YES' | 'NO' | undefined => {
     return undefined;
 };
 
+const ncvMissingForGas = (kind: GuidedStreamKind, ncv: number | undefined) => ncv === undefined && kind.key === 'fuel-gas';
 /** 한 칸에 ; 로 이어 적은 이름들 */
 const namesOf = (value: string | undefined) => (value ?? '').split(LIST_SEPARATOR).map((item) => item.trim()).filter(Boolean);
 /** 일부 제품만 거치는 설비의 연료로 보이는 이름 — 「공장 전체」로 적혀 있으면 되묻는다. */
@@ -999,6 +1004,88 @@ export async function importActivityWorkbook(
         streams.push(saved);
         touched.add(found.id);
         created.fuels += 1;
+    }
+
+    // ── 7c2) 외주 공정 — 열처리·코팅·용융아연도금을 외주사에서 하고 돌려받으면 외주처 연료의 우리 몫을 우리 공정의 연료로 넣는다(EC CBAM Q&A 4.31, 지도 4단계 「외주 공정」과 같은 계산·검사·빌더) ──
+    for (const row of data.outsourced ?? []) {
+        const subcontractor = (row.values.subcontractor ?? '').trim();
+        const tell = (level: ActivityImportIssue['level'], message: string) => note(level, SHEET_OUTSOURCED, `${subcontractor || '(외주처 이름 없음)'}: ${message}`, row.row);
+        const technique = labelValue(OUTSOURCED_TECHNIQUE_CHOICES, row.values.technique);
+        const basis = labelValue(OUTSOURCED_BASIS_CHOICES, row.values.basis);
+        const choice = FUEL_KIND_CHOICES.find((item) => key(item.label) === key(row.values.fuelKind) || key(item.label.split(' (')[0]) === key(row.values.fuelKind));
+        const kind = GUIDED_STREAM_KINDS.find((item) => item.key === choice?.key);
+        if (!subcontractor) { tell('error', '외주처 이름이 비어 있어 넣지 못했습니다.'); continue; }
+        if (!technique) { tell('error', `어떤 공정인지 「${row.values.technique ?? '빈 칸'}」을(를) 목록에서 찾지 못했습니다. 목록에서 골라 주세요.`); continue; }
+        if (!basis) { tell('error', `우리 몫을 정한 방법 「${row.values.basis ?? '빈 칸'}」을(를) 목록에서 찾지 못했습니다. 목록에서 골라 주세요.`); continue; }
+        if (!kind || !choice) { tell('error', `외주처가 쓰는 연료 「${row.values.fuelKind ?? '빈 칸'}」을(를) 목록에서 찾지 못했습니다. 목록에서 골라 주세요.`); continue; }
+        if (kind.litres) { tell('error', '리터 단위 연료는 외주 공정 몫으로 받지 않습니다 — 외주처 고지서의 Nm³·t 단위 연료를 고르세요.'); continue; }
+        const numbers = {
+            line_quantity: numberOf(row.values.lineQuantity),
+            our_throughput_t: numberOf(row.values.ourThroughput),
+            line_throughput_t: numberOf(row.values.lineThroughput),
+            company_total: numberOf(row.values.companyTotal),
+            estimate_quantity: numberOf(row.values.estimate),
+            ncv: numberOf(row.values.ncv),
+            factor: numberOf(row.values.factor),
+        };
+        const badNumber = Object.entries(numbers).find(([, value]) => value !== undefined && Number.isNaN(value));
+        if (badNumber) { tell('error', '양·처리량·발열량·배출계수는 숫자로 적거나 비워 주세요(단위 글자 없이).'); continue; }
+        const own = numbers.ncv !== undefined || numbers.factor !== undefined;
+        const factorSource = labelValue(FUEL_FACTOR_SOURCE_CHOICES, row.values.factorSource);
+        if (own && !factorSource) { tell('error', '순발열량·배출계수를 직접 적었으면 「계수 출처」도 목록에서 골라 주세요. 기본값을 쓰려면 두 칸을 비우세요.'); continue; }
+        const ourEquipment = parseOutsourcedEquipment(row.values.ourEquipment, true);
+        const otherEquipment = parseOutsourcedEquipment(row.values.otherEquipment, false);
+        if (ourEquipment.error || otherEquipment.error) { tell('error', ourEquipment.error ?? otherEquipment.error ?? ''); continue; }
+        // 외주를 거친 제품이 속한 공정 — 3_공정(또는 품번 목록이 만든 공정)의 이름. 같은 공정을 두 이름으로 적어도 한 번만 센다.
+        const whereNames = namesOf(row.values.where);
+        if (whereNames.length === 0) { tell('error', '「외주를 거친 제품이 속한 공정」이 비어 있습니다. 공정 이름을 적어 주세요.'); continue; }
+        const unknownProcesses = whereNames.filter((item) => { const found = processByName.get(key(item)); return !found || !fresh.has(found.id); });
+        if (unknownProcesses.length > 0) { tell('error', `공정 ${unknownProcesses.map((item) => `「${item}」`).join(', ')}을(를) 찾지 못했습니다. 이름을 똑같이 적고 ${LIST_SEPARATOR} 로 구분해 주세요.${processHint()}`); continue; }
+        const targets = whereNames.map((item) => processByName.get(key(item))).filter((item): item is ProductionProcess => Boolean(item)).map((item) => fresh.get(item.id) ?? item)
+            .filter((item, index, list) => list.findIndex((other) => other.id === item.id) === index);
+        const evidence = (row.values.evidence ?? '').trim();
+        const info: OutsourcedProcessInfo = {
+            subcontractor,
+            technique,
+            technique_evidence: (row.values.techniqueEvidence ?? '').trim() || undefined,
+            basis,
+            company_total: numbers.company_total,
+            line_quantity: numbers.line_quantity,
+            our_throughput_t: numbers.our_throughput_t,
+            line_throughput_t: numbers.line_throughput_t,
+            equipment: basis === 'RECONSTRUCTED' ? [...ourEquipment.items, ...otherEquipment.items] : undefined,
+            estimate_quantity: numbers.estimate_quantity,
+            note: (row.values.note ?? '').trim(),
+            evidence: evidence || undefined,
+        };
+        const validation = validateOutsourcedInfo(info);
+        if (validation.errors.length > 0) { tell('error', validation.errors[0]); continue; }
+        const result = computeOutsourcedShare(info);
+        if (!result.ok) { tell('error', result.reason); continue; }
+        const weights = targets.map((item) => Math.max(item.output_mass_t, 0));
+        const weightSum = weights.reduce((sum, value) => sum + value, 0);
+        const built = buildOutsourcedStreamDrafts({
+            info,
+            total: result.share,
+            processes: targets.map((item, index) => ({ id: item.id, name: item.name, period_id: item.period_id, fraction: weightSum > 0 ? weights[index] / weightSum : 1 / targets.length })),
+            template: { ...kind.defaults, ncv_gj_per_unit: numbers.ncv ?? kind.defaults.ncv_gj_per_unit, emission_factor_tco2e_per_unit: numbers.factor ?? kind.defaults.emission_factor_tco2e_per_unit, factor_source_type: own && factorSource ? factorSource : kind.defaults.factor_source_type },
+            fuelName: choice.label.split(' (')[0],
+            source: evidence || MISSING_EVIDENCE_TEXT,
+        });
+        if (!built.ok) { tell('error', built.reason); continue; }
+        const invalid = built.drafts.map((draft) => firstSourceStreamError(createSourceStreamValidationErrors(draft))).find(Boolean);
+        if (invalid) { tell('error', invalid); continue; }
+        if (built.drafts.some((draft) => streams.some((stream) => stream.process_id === draft.process_id && key(stream.name) === key(draft.name)))) { tell('info', '같은 외주 공정 몫이 이 공정에 이미 있어 건너뛰었습니다.'); continue; }
+        for (const text of result.warnings) tell('warning', text);
+        for (const text of validation.reviews) tell('warning', text);
+        if (ncvMissingForGas(kind, numbers.ncv)) tell('info', `도시가스 순발열량은 기본 자리값 ${kind.defaults.ncv_gj_per_unit} GJ/Nm³로 넣었습니다. 외주처 도시가스 고지서의 값을 확인하면 더 정확합니다.`);
+        for (const draft of built.drafts) {
+            const saved = await store.create('source_streams', draft);
+            streams.push(saved);
+            if (saved.process_id) touched.add(saved.process_id);
+        }
+        created.fuels += 1;
+        tell('info', `우리 몫 ${fmt(result.share)} ${kind.defaults.activity_unit}을(를) ${targets.map((item) => `「${item.name}」`).join(', ')}의 연료로 넣었습니다(${result.formula}).`);
     }
 
     // 연료를 넣은 공정의 직접배출을 「배출원 합계」로 맞춘다(지도 4단계·연료 나누기와 같다) — 안 맞추면 연료가 계산에 들어가지 않는다.

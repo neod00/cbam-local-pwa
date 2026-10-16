@@ -1,4 +1,4 @@
-import type { OutsourcedBasis, OutsourcedProcessInfo, OutsourcedTechnique, SourceStream } from './local-db';
+import type { OutsourcedBasis, OutsourcedEquipment, OutsourcedProcessInfo, OutsourcedTechnique, SourceStream } from './local-db';
 import { STEEL_BOUNDARY_ANCHOR } from './steel-boundary';
 
 /**
@@ -96,6 +96,24 @@ export function computeOutsourcedShare(info: Pick<OutsourcedProcessInfo,
         reconciliationFactor: round(factor, 6),
         warnings,
     };
+}
+
+/**
+ * 서식의 설비 칸 「이름:가동시간:소비율; 이름:가동시간:소비율」을 읽는다. 이름에는 : 와 ; 를 쓰지 않는다.
+ * 빈 칸은 설비 없음. 형식이 틀린 항목이 있으면 error를 돌려준다(일부만 읽지 않는다).
+ */
+export function parseOutsourcedEquipment(text: string | undefined, ours: boolean): { items: OutsourcedEquipment[]; error?: string } {
+    const items: OutsourcedEquipment[] = [];
+    for (const part of (text ?? '').split(';').map((item) => item.trim()).filter(Boolean)) {
+        const pieces = part.split(':').map((item) => item.trim());
+        const hours = Number(pieces[1]?.replace(/,/g, ''));
+        const rate = Number(pieces[2]?.replace(/,/g, ''));
+        if (pieces.length !== 3 || !pieces[0] || pieces[1] === '' || pieces[2] === '' || !Number.isFinite(hours) || !Number.isFinite(rate) || hours < 0 || rate < 0) {
+            return { items: [], error: `설비 「${part}」는 「이름:가동시간:소비율」 모양으로 적어 주세요(예: 코팅라인1:600:50; 이름에는 : 와 ; 를 쓰지 않습니다).` };
+        }
+        items.push({ name: pieces[0], hours, rate_per_h: rate, ...(ours ? { ours: true } : {}) });
+    }
+    return { items };
 }
 
 export interface OutsourcedValidation {
