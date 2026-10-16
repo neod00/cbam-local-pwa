@@ -1,61 +1,74 @@
 # 외주·관계사 공정의 규정 근거 (2026-10-16)
 
-체결부품 업체(풍강·진합·S&W·KPF형)는 열처리·코팅·도금 일부를 외주·관계사·소사장에 맡긴다. 앱과 서식에는 이 공정을 받을 자리가 없다. 이 문서는 그 처리를 정하기 전에 규정 원문에서 확인한 근거를 모은 것이다.
+체결부품 업체(풍강·진합·S&W·KPF형)는 열처리·코팅·도금 일부를 외주·관계사·소사장에 맡긴다. 앱과 서식에는 이 공정을 받을 자리가 없다. 이 문서는 그 처리를 정하기 전에 확인한 근거를 모은 것이다.
 
-읽은 원문: Implementing Regulation (EU) 2025/2547(산정 방법, OJ L 22.12.2025), CBAM Guidance for installation operators(2023-11-21, 전환기간판 — 개념만 참고), CBAM Q&A, Delegated Regulation 2025/2551(검증).
+읽은 자료: Implementing Regulation (EU) 2025/2547(산정 방법, OJ L 22.12.2025 — `EU Verification/OJ_L_202502547_EN_TXT.pdf`, `CBAM이행규정(EU) 2025_2547.pdf`와 같은 파일), **European Commission CBAM Questions and Answers, 2026-05-27 갱신판**(확정기간판), CBAM Guidance(2023-11-21, 전환기간판 — 개념만 참고), 예전 Q&A(전환기간판).
+
+> **정정 (같은 날)**: 처음 판에서는 「외주처 배출은 돌아온 부품을 통해 전구물질로 들어간다」고 결론 냈다. 2026-05-27 Q&A 4.31이 이 경우를 직접 다루며 **「1차 사업장에서 일어난 것처럼 다룬다」**고 답한다. 전구물질 경로는 틀렸다. 이 판은 그 답을 기준으로 다시 썼다. (사용자가 준 검토 메모가 이 Q&A를 근거로 들어 확인하게 되었다.)
 
 ## 1. 결론 요약
 
 | 질문 | 근거 | 답 |
 |---|---|---|
-| 외주로 보낸 공정이 철강제품의 경계 안인가 | 2547 부속서 I 3.16.2 | 공정 종류로 정한다. **열처리(재가열·소둔)·코팅·용융아연도금·선재 인발은 경계 안**, **전기도금(plating)·절단·용접·마무리는 경계 밖**. 누가 하든 같다. |
-| 경계 안 공정을 다른 사업장이 하면 그 배출을 우리 직접배출에 더하나 | 2547 제4조 1항 | **아니다.** 생산공정은 「사업장의 시스템 경계 안에서」 정한다. 다른 사업장의 연료·전력은 우리 직접·간접배출이 아니다. |
-| 그러면 그 배출은 어디로 들어가나 | 2547 제2조 (7) · 부속서 II E(2) · 제14조 · Q&A 91 | **전구물질로 들어간다.** 외주처에서 돌아온 부품(예: 열처리된 볼트, CN 7318)은 부속서 I 품목이라 「전구물질」이고, 「다른 사업장에서 받은 전구물질」의 자료(나라·사업장·내재배출)를 갖춰야 한다. Q&A 91: 사업장을 나눠도 최종 내재배출은 달라지지 않아야 한다 — 전구물질이 빠짐없이 반영되기 때문. |
-| 일부는 자체, 일부는 외주로 처리하면 | 2547 제14조 2·3항 | 같은 CN 전구물질을 여러 사업장에서 받으면 기본은 가중평균. 어느 공정에 어느 사업장 것만 썼는지 증빙하면 그것만 쓴다. |
-| 같은 부지 안 협력업체(소사장) | 2547 제4조 7항 · 2023/956의 「사업장」 정의(고정된 기술 단위) | 판단이 필요하다. 사업장을 나누는 것은 상업적 이유가 있을 때만 허용된다(우회 목적 금지). 우리 부지·우리 설비에서 하는 공정이면 같은 사업장으로 보고 연료·전력을 포함하는 쪽이 안전하다. |
-| 부속서 II A.5 22(g) 「control of outsourced processes」 | 2547 부속서 II A.5 point 22 | **생산 외주가 아니다.** 자료 품질 관리 체계(측정기 관리·위험평가·IT·직무 분리…) 중 「외주로 맡긴 자료 처리·관리 활동」의 통제다. 근거로 잘못 쓰지 않는다. |
-
-명시된 답이 없는 것: 소유권이 넘어가지 않는 임가공(toll processing)을 다른 사업장의 「생산」으로 보는지, 그때 돌아온 부품의 기본값을 무엇으로 하는지는 원문·가이던스·Q&A 어디에도 직접 나오지 않는다. 아래 3장의 해석은 일반 규칙에서 끌어낸 것이다.
+| 1. 외주로 맡겼다가 돌려받은 공정(임가공) | **Q&A 4.31** | 경계 안 공정(열처리·코팅·용융아연도금 등)을 다른 사업장·다른 회사에서 하고 물건이 1차 사업장으로 돌아오면 **1차 사업장에서 일어난 것처럼 다룬다.** 돌아온 부품을 전구물질로 보지 않고, 외주처의 그 공정 배출을 우리 공정의 배출로 넣는다. 소유권 이전 여부는 기준이 아니다. |
+| 2. 외주처가 자료를 안 줄 때 | 2547 부속서 II A.1 5항(정확성 원칙) · 부속서 II A.1 2항 · Q&A 4.31 | 우리 공정의 자료 결측과 같다 — **보수적 추정값으로 대체**한다(설비 정격·가동시간 같은 객관적 근거). 돌아온 부품이 전구물질이 아니므로 **완제품 CN 기본값을 쓰고 우리 몫을 빼는 계산은 근거가 없다.** 실측 산정을 포기하면 제품 전체에 공식 기본값을 쓰는 길은 따로 있다(A.1 2항: 실측·기본값·혼용 중 선택). |
+| 3. 같은 부지 협력업체(소사장) | **Q&A 4.3** · 2547 제4조 7항 · Q&A 4.31 | 사업장은 법인이 아니라 「생산공정이 이뤄지는 고정된 기술 단위」이고, 같은 CN 제품으로 이어지는 모든 공정을 포함하는 장소다. 우리 제품을 만드는 공정이면 **우리 사업장에 포함**한다. 설령 따로 본다 해도 Q&A 4.31에 따라 우리 사업장에서 일어난 것처럼 다룬다 — 결과는 같다. |
+| 4. 다크로 코팅과 전기아연도금 | 2547 부속서 I 3.16.2 · Q&A 4.31 | 원문은 coating·galvanizing **포함**, plating **제외**만 말하고 정의는 없다. 다크로·아연 플레이크(비전해 코팅)는 coating, 전기아연도금(전해)은 plating으로 보는 것이 기술적으로 맞는 해석이다. 실제 공정 기술(전해 여부)을 공정 설명서로 남겨 검증인에게 보인다. **이 부분만 원문에 정의가 없다.** |
 
 ## 2. 원문
 
-**부속서 I 3.16.2 (Iron or steel products — System boundary)**
-> direct emissions monitoring shall take into account: all processes directly or indirectly linked to the production processes emitting CO2 emissions from combustion of fuels and process emissions from flue gas treatment, including re-heating, re-melting, casting, hot rolling, cold rolling, forging, annealing, coating, galvanizing, wire drawing, pickling and excluding the following processes: plating, cutting, welding and finishing of iron or steel products.
+**Q&A 4.31** (2026-05-27) — Which transformation processes of iron and steel and aluminium products need to be taken into account?
+> … Section 3.16.2 of Annex I to Implementing Regulation (EU) 2025/2547 … include … re-heating, re-melting, casting, hot rolling, cold rolling, forging, pickling, annealing, coating, galvanising, wire drawing, and exclude plating, cutting, welding, and finishing …
+> **If these processes occur in secondary installations or are outsourced to other companies and the goods are subsequently returned to the primary installation, they should be treated as if they happen in the primary installation.**
 
-**제4조 1항**: Operators of an installation shall identify, within the system boundaries of an installation, the production process of goods to which the same functional unit applies.
+**Q&A 4.3** — What is the definition of an installation? Is it determined by the legal entities on site?
+> 'Installation' means a stationary technical unit where a production process is carried out … an installation must be understood as a site or a place where the production process of goods in Annex I is occurring … the installation is the site which encompasses all the chemical and physical processes that lead to the production of goods under the same CN code.
 
-**제4조 7항**: Splitting an installation into different installations … shall only be allowed where the operators demonstrate valid commercial reasons for this split … where circumventing Regulation (EU) 2023/956 is not their main purpose.
+**Q&A 4.7**: 같은 CN에는 생산공정이 하나뿐이다. **Q&A 4.8**: 수출 여부로 생산공정을 나눌 수 없다.
 
-**제2조 (7)**: 'precursor' means any input material into a production process included in the list of goods set out in Annex I to Regulation (EU) 2023/956.
+**Q&A 5.21**: 다른 사업장이 만든 전구물질은 기본값을 쓰거나, 그 사업장의 검증보고서에 있는 실측값만 쓴다. (외주 후 돌아온 부품에는 4.31이 우선한다.)
 
-**부속서 II E(2)**: Where the precursor is obtained from another installation, data sets to be determined shall include: (a) the country of origin … (b) the installation where it was produced (identifier, UN/LOCODE, address, coordinates) … (d) the production routes … (e) the values of applicable specific parameters required for determining the embedded emissions …
+**2547 부속서 I 3.16.2**: … including re-heating, re-melting, casting, hot rolling, cold rolling, forging, annealing, coating, galvanizing, wire drawing, pickling and excluding the following processes: plating, cutting, welding and finishing of iron or steel products.
 
-**제14조 2·3항**: precursors under a given CN code from multiple installations → weighted average by default; with evidence that a production process used only precursors from a single installation (or subset), use those.
+**2547 부속서 II A.1 5항 (Accuracy)**: Where data gaps have occurred or are expected to be unavoidable, substitute data shall consist of conservative estimates.
 
-**CBAM Q&A 91** (사업장 나누기): "a division of installations should not lead to different results of the final embedded emissions of steel products, as precursors are taken fully into account by the CBAM methodology."
+**2547 부속서 II A.1 2항**: An operator can either determine actual values of embedded emissions, or make use of the default values …, or combine actual values and default values.
 
-**가이던스(2023-11-21) 5.2절, 27쪽**: 같은 사업장에서 하는 상류(전구물질 생산)와 하류 활동(압연·주조, 철강제품의 세척·코팅)을 분명히 하라 — 별도 생산공정이 필요할 수 있다.
+**2547 제4조 7항**: 사업장 나누기는 상업적 이유가 있을 때만(우회 목적 금지).
 
-## 3. 해석 — 외주 열처리의 흐름
+**2547 부속서 II A.5 point 22(g) 「control of outsourced processes」**: 자료 품질 관리 체계 안의 항목이다 — 외주로 맡긴 **자료 처리·관리 활동**의 통제이지 생산 외주 규정이 아니다.
 
-우리 공장(성형) → 외주처(열처리) → 우리 공장(전조·포장) → 수출, 의 경우:
+## 3. 외주 열처리의 흐름 (Q&A 4.31 기준)
 
-1. 우리 공장의 성형 공정이 만든 반제품(CN 7318)은 외주처로 나간다 — 우리 사업장 밖으로 나간 산출물이다.
-2. 외주처는 그 반제품을 전구물질로 써서 열처리된 볼트(CN 7318)를 만든다. 그 내재배출 = 반제품의 내재배출 + 외주처 열처리 배출(그 사업장의 연료·전력을 처리량으로 나눈 것).
-3. 돌아온 볼트는 우리 공장 후공정의 구매 전구물질이다. 최종 제품의 SEE = 후공정 직접배출 + 돌아온 볼트의 내재배출.
+우리 공장(성형) → 외주처(열처리·코팅) → 우리 공장(전조·포장) → 수출:
 
-두 갈래가 생긴다.
-- **외주처가 값을 주는 경우**: 외주처가 자기 열처리 배출(톤당)을 알려 주고, 반제품의 내재배출은 우리가 계산해 넘긴다(또는 함께 합친다). 결과는 「우리 전 공정 + 외주 열처리」와 같다 — Q&A 91의 취지와 맞는다. 검증: 외주처 값은 제3국 전구물질 실측값이라 검증보고서 요건(부속서 II A.1 4·5항, 앱이 이미 적용하는 규칙)이 걸린다.
-- **값을 못 받는 경우**: 돌아온 볼트를 다른 사업장 전구물질로 보면 기본값은 그 CN(7318)의 기본값 — 완제품 기준값이라 우리 반제품까지 포함한 값이다. 이때 우리 성형 공정의 배출과 우리가 산 선재는 반제품과 함께 「나간 것」이 되어 최종 제품에 다시 더하면 이중계산이 된다. 이 처리가 맞는지는 원문에 없다 → 헬프데스크 확인 대상.
+- 외주처의 그 공정 배출(우리 부품에 쓴 연료·전력 몫)을 우리 공정의 배출원으로 넣는다. 돌아온 부품은 전구물질이 아니다.
+- 최종 SEE = 우리 공정 배출 + 외주 공정 배출(우리 부품 몫) + 사 온 강재의 내재배출. 이중계산이 생기지 않는다.
+- 외주처가 그 회사 전체 연료만 줄 수 있으면 우리 부품 몫을 나눠야 한다 — 처리량(t) 비율 같은 근거를 남긴다(우리 공정의 공용 계량기 나누기와 같은 문제).
+- 자료가 없으면 보수적 추정(정격 열용량 × 가동시간 × 부하율 등)과 그 근거. 근거조차 없으면 실측 산정이 어렵다 — 제품 전체를 기본값으로 가는 선택지가 남는다.
+- 전기도금·절단·용접·마무리는 외주든 자체든 경계 밖이다.
 
-## 4. 헬프데스크에 물을 것
+## 4. 남는 확인 (헬프데스크 또는 검증인)
 
-1. 소유권이 넘어가지 않는 임가공(열처리·코팅)을 외주처 사업장의 생산으로 보고, 돌아온 부품을 우리 사업장의 「다른 사업장에서 받은 전구물질」(부속서 II E(2))로 다루는 것이 맞는가?
-2. 외주처가 자료를 주지 않을 때, 돌아온 부품에 그 CN의 기본값을 쓰고 우리 전공정 배출·투입 강재는 빼는 것이 맞는가? 아니면 외주 공정 배출만 추정·기본값으로 더하는 방식이 허용되는가?
-3. 같은 부지에서 우리 설비로 일하는 협력업체(소사장)의 연료·전력은 우리 사업장(제4조 7항)으로 보아야 하는가?
-4. 아연 플레이크 코팅(다크로·지오메트)과 전기아연도금의 구분 — 3.16.2의 「coating」(안)과 「plating」(밖)의 경계.
+1. 다크로·지오메트(아연 플레이크) 코팅이 3.16.2의 coating이고 전기아연도금이 plating이라는 구분 — 원문 정의 없음.
+2. 외주처가 그 회사 전체 연료만 줄 때 우리 몫을 나누는 기준(처리량 비율 등)이 검증에서 받아들여지는지.
 
-## 5. 앱에 미치는 것 (지금 확인된 것)
+### 4-1. 두 확인의 진전 (2026-10-16, 사용자 제공 검토 메모 「외주 표면처리 공정 분류 및 공통 연료사용량 배분 검토」 대조)
 
-- **도금 경계 (정정, 2026-10-16)**: 처음에는 「앱이 도금을 통째로 경계 밖으로 본다」고 적었으나 틀렸다. 코드를 다시 보니 앱은 이미 전기도금(plating)만 되묻고, 용융아연도금·코팅·지오메트·다크로는 되묻지 않으며(`steel-boundary.ts`의 `INCLUDED_COATING`), `cbam-product-rules.ts`·제품군 안내·서식 안내 문단도 둘을 나눠 적고 있었다. 실제로 어긋난 것은 문구뿐이었다 — 연료 안내·되묻기 문장·서식 4_연료 제목·모니터링 계획 9번 문단이 「도금」만 적어 둘을 구분하지 않았다. 이 문구를 「전기도금(plating)」으로 고치고 「용융아연도금·코팅은 경계 안」을 덧붙였다(`verify-2547-alignment.mjs`가 잠근다). 「아연도금」만 적힌 이름은 전기아연도금일 수도 있어 계속 되묻는다.
-- **외주 공정 입력**: 규정 경로는 「다른 사업장에서 받은 전구물질」이다. 앱의 구매 강재(5_구매강재)가 이미 그 자료(나라·사업장·SEE·검증)를 받는다. 남은 설계 결정은 (a) 반제품이 나갔다 돌아오는 흐름을 어떻게 적게 할지, (b) 값이 없을 때 무엇을 쓸지(4장 2번) — 헬프데스크 답을 받은 뒤 정한다.
+**1번 — 법적 정의는 여전히 없고, 증빙 방법이 생겼다.** 피막 형성 원리로 나누고 체결부품 국제표준을 기술 근거로 붙인다: ISO 10683(비전해 아연 플레이크 코팅 → coating), ISO 4042(전해 코팅 → plating), 용융 침지(→ galvanizing). 표준은 공정 기술의 증빙이지 CBAM의 정의가 아니다. 주의: 전기아연도금은 영어로 electro-galvanizing이라고도 해 「galvanizing(포함)」과 낱말이 겹친다 — 「전기아연도금이니 무조건 제외」로 단정하지 말고 분류 판단서(전해 방식 근거·설비: 도금조·정류기)를 모니터링 계획에 남긴다. 앱이 「아연도금」만 적힌 이름을 계속 되묻는 것이 이 때문이다.
+
+**2번 — 메모의 배분 순서가 2547의 일반 규칙과 그대로 맞는다(메모는 조항을 적지 않았다).** Q&A 4.31로 외주 공정이 우리 사업장 공정이 되므로, 우리 공정의 자료 규칙이 그대로 걸린다.
+- 설비별 계량기가 있으면 그 값 — 부속서 II **A.3** 1항(직접 결정 방법이 우선).
+- 계량기가 없으면 설비 소비율 × 가동시간으로 재구성 — 부속서 II **A.3** 2항 (b) 「설비 설계자료(단위 제품당 에너지 소비 등)」, (c) 「생산 기록에 기반한 경험적 상관관계」.
+- 재구성한 설비별 합이 회사 고지서 총량과 다르면 같은 비율로 맞춘다 — 부속서 III **A.1 식 41·42(reconciliation factor RecF = D_Inst / D_PP)**. 메모의 사례 A(120,000 ÷ 100,000 → 우리 몫 30,000 → 36,000 Nm³)가 이 식이다.
+- 같은 설비·같은 조건에서 여러 고객 제품을 처리하면 처리 중량으로 — 부속서 III **A.2**(관련 물리적 관계로 나누고, 따로 정한 규칙이 없으면 기능단위 = 질량). 운전조건(경화 온도·체류시간·코팅 횟수)이 다르면 질량만으로는 대표하지 못한다.
+- 공용 보일러의 열은 열 귀속을 먼저 — 부속서 III **A.2**의 적용 순서(열 → 폐가스 → 기능단위).
+- 경계 밖 공정(전기도금 등)과 같은 계량기를 쓰면 그 몫은 우리 제품에 넣지 않는다 — 부속서 I 3.16.2.
+- 근거 자료가 없으면 보수적 추정 — 부속서 II A.1 5항. 회사 총량만 있고 다른 자료가 없으면 믿을 만한 배분이 어렵다 → 추가 자료 요청.
+
+앱에는 이미 같은 구조가 있다(공용 계량기 나누기: 기준 3종 · 합계 = 고지서 · 추정은 근거 요구). 외주 공정은 이 나누기를 「외주처의 계량기」에 쓰는 것으로 설계할 수 있다.
+
+## 5. 앱에 미치는 것
+
+- **도금 경계 문구**: 앱은 이미 전기도금만 되묻고 용융아연도금·코팅은 통과시켰다. 사용자가 읽는 문장 다섯 곳이 「도금」만 적어 구분이 없던 것을 「전기도금(plating)」으로 고쳤다(PR #153, `verify-2547-alignment.mjs`가 잠근다). 「아연도금」만 적힌 이름은 전기아연도금일 수도 있어 계속 되묻는다.
+- **외주 공정 입력 (설계 방향이 바뀜)**: 구매 강재 칸이 아니라 **연료·전력과 같은 배출원 칸**에서 받는다. 필요한 것: 외주처 이름, 어느 공정(제품)의 몫인지, 연료 종류·양 또는 배출량, 근거(외주처 자료 / 보수적 추정의 계산 근거), 나눈 기준. 앱은 이것을 우리 공정의 배출에 더하고, 보고서에는 「외주 공정(Q&A 4.31에 따라 1차 사업장 공정으로 처리)」으로 따로 보이게 한다. 추정값이면 「확인 필요」로 남긴다.
