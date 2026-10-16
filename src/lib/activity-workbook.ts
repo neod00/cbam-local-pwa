@@ -360,7 +360,7 @@ const TABLE_SHEETS = [
     { name: SHEET_PRODUCTS, title: '2. 제품 — 이 공장에서 만드는 제품을 한 줄에 하나씩', columns: PRODUCT_COLUMNS },
     { name: SHEET_PARTS, title: '2b. 품번 목록(선택) — 품번이 많으면 생산실적을 붙여 넣으세요. 앱이 CN 코드별로 합쳐 제품(2_제품)과 공정(3_공정)을 만듭니다 — 같은 CN은 재질이 달라도 한 제품·한 공정입니다. 재질의 비율이 CN마다 다르면 올릴 때 한 공정으로 합칠지(가중평균) CN별 공정으로 나눌지 고릅니다. 공정 이름은 쓴 재질로 지어지고(예: SCM435 공정), 4_연료·5_구매강재의 「쓰는 공정」에는 재질만 적어도 됩니다. 2_제품·3_공정에 이미 적었다면 비워 두세요', columns: PART_COLUMNS },
     { name: SHEET_PROCESSES, title: '3. 공정 — 제품을 만드는 생산 라인과 생산량', columns: PROCESS_COLUMNS },
-    { name: SHEET_FUELS, title: '4. 연료 — 공장에서 태우는 연료(가스·경유·등유 등). 전기는 1_사업장에. 도금·절단·용접·마무리 설비 전용 연료는 적지 않습니다', columns: FUEL_COLUMNS },
+    { name: SHEET_FUELS, title: '4. 연료 — 공장에서 태우는 연료(가스·경유·등유 등). 전기는 1_사업장에. 전기도금·절단·용접·마무리 설비 전용 연료는 적지 않습니다(용융아연도금·코팅은 적습니다)', columns: FUEL_COLUMNS },
     { name: SHEET_PRECURSORS, title: '5. 구매 강재 — 사 와서 가공하는 철강 원료와 그 원료의 배출량', columns: PRECURSOR_COLUMNS },
     { name: SHEET_RNR, title: '6. 역할·책임 — 자료를 누가 모으고 옮기고 확인하는지 (산정보고서에 실립니다. 아는 만큼만)', columns: RNR_COLUMNS },
     { name: SHEET_EVIDENCE, title: '7. 증빙 목록 — 검증인에게 보여 줄 자료와 보관하는 곳 (산정보고서에 실립니다. 아는 만큼만)', columns: EVIDENCE_COLUMNS },

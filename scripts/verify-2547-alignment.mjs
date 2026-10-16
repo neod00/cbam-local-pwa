@@ -62,6 +62,14 @@ assert.equal(isIronOrSteelProductsGood(undefined), false);
 assert.match(IRON_STEEL_PRODUCTS_BOUNDARY.text, /excluding the following processes: plating, cutting, welding and finishing/);
 assert.match(IRON_STEEL_PRODUCTS_BOUNDARY.included, /아연도금\(galvanizing\)/, '아연도금은 경계 안이다');
 assert.match(IRON_STEEL_PRODUCTS_BOUNDARY.excluded, /도금\(plating\)·절단·용접·마무리/);
+// 「도금」만 적으면 전기도금(경계 밖)과 용융아연도금(경계 안)이 섞인다 — 사용자가 읽는 문장은 둘을 나눠 적는다(run39 규정 대조).
+for (const [file, pattern, label] of [
+  ['src/lib/steel-boundary.ts', /`전기도금\(plating\)·절단·태핑·용접/, '연료 안내'],
+  ['src/lib/steel-boundary.ts', /전기도금·절단·용접·마무리 설비의 연료일 수 있습니다[^']*용융아연도금·코팅 설비라면 경계 안/, '이름으로 짐작될 때의 되묻기'],
+  ['src/lib/monitoring-plan.ts', /전기도금\(plating\)·절단·용접·마무리 설비는[^']*용융아연도금\(galvanizing\)·코팅·열처리·단조는 경계 안입니다/, '모니터링 계획 9번'],
+  ['src/lib/activity-workbook.ts', /전기도금·절단·용접·마무리 설비 전용 연료는 적지 않습니다\(용융아연도금·코팅은 적습니다\)/, '서식 4_연료 제목'],
+  ['src/lib/activity-import.ts', /이름으로 보아 전기도금·절단·용접·마무리 설비의 연료일 수 있습니다/, '가져오기 경고'],
+]) assert.match(readFileSync(file, 'utf8'), pattern, `${label}: 「도금」을 전기도금(plating)으로 구분해 적는다`);
 const presets = readFileSync('src/lib/product-family-presets.ts', 'utf8');
 for (const stale of ['용접·절단 연료 사용량', '용접·도장 연료 사용량', "description: '용접, 절단, 열처리 관련 전력·연료 자료'", "description: '열처리로, 도금, 세척 등 에너지 사용량'"]) {
   assert.ok(!presets.includes(stale), `제품군 안내가 경계 밖 연료를 모으라고 한다: ${stale}`);

@@ -254,7 +254,7 @@ export function buildMonitoringPlan(input: MonitoringPlanInput): MonitoringPlan 
         no: 9,
         title: '공정별 배출원(source stream)·배출시설의 목록',
         status: input.sourceStreams.length > 0 ? 'AUTO' : 'TODO',
-        paragraphs: ['도금·절단·용접·마무리 설비는 철강 제품의 시스템 경계 밖이라 배출원에 넣지 않습니다.'],
+        paragraphs: ['전기도금(plating)·절단·용접·마무리 설비는 철강 제품의 시스템 경계 밖이라 배출원에 넣지 않습니다. 용융아연도금(galvanizing)·코팅·열처리·단조는 경계 안입니다.'],
         tables: [{ headers: ['공정', '배출원', '유형', '활동자료', '근거 자료'], rows: input.sourceStreams.map((stream) => [
             processName(stream.process_id) + (stream.heat_system ? ` (열 공급원 「${stream.heat_system.name}」)` : ''),
             stream.name,
