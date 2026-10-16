@@ -79,6 +79,7 @@ import { ALLOCATION_RULES, DIRECT_EMISSIONS_INPUT_MODE_LABEL, ELECTRICITY_SPLIT_
 import { ElectricitySplit } from '@/components/guided/ElectricitySplit';
 import { EnergySplitHub } from '@/components/guided/EnergySplitHub';
 import { FuelSplit } from '@/components/guided/FuelSplit';
+import { OutsourcedProcess } from '@/components/guided/OutsourcedProcess';
 import { StepExplainerBox } from '@/components/guided/ExplainLevel';
 import { SupplierLoop } from '@/components/guided/SupplierLoop';
 import { SharedHeat } from '@/components/guided/SharedHeat';
@@ -1363,6 +1364,9 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
 
             {/* 한 고지서의 연료를 여러 공정이 같이 쓰면 앱이 공정별 몫으로 나눈다(CBAM-ALLOC-RECF-01·02·03). */}
             <FuelSplit processes={data.processes} sourceStreams={data.sourceStreams} results={data.results} onApplied={onSaved} />
+
+            {/* 열처리·코팅을 외주사에서 하면 외주처 연료의 우리 몫을 우리 공정의 연료로 더한다(EC Q&A 4.31). */}
+            <OutsourcedProcess processes={data.processes} sourceStreams={data.sourceStreams} precursors={data.precursors} results={data.results} onApplied={onSaved} />
 
             {/* 한 보일러·스팀을 여러 공정이 같이 쓰면 연료 배출은 쓴 열량 비율로 귀속한다(CBAM-ALLOC-HEAT-02). */}
             <SharedHeat processes={data.processes} sourceStreams={data.sourceStreams} onApplied={onSaved} />

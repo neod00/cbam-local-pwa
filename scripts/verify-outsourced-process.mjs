@@ -168,3 +168,17 @@ assert.equal(fixTable.rows.find((item) => item.id === 'OUTSOURCED').code, 'V10')
 assert.equal(none.counts.na, okTable.counts.na, '외주 행이 있어도 「해당 없음」 개수는 변하지 않는다');
 
 console.log('Outsourced process verified (사례 A 36,000 · 사례 B 18,000 · 전기도금 거부 · 추정은 근거 필수 · 합 = 총 몫 · 엔진 배출 불변 · OUT01~05 · V10).');
+
+// ── 6) 화면 배선(2단계): 지도 4단계가 외주 공정 입력을 달고, 입력은 순수 함수와 같은 저장 규칙을 쓴다 ──
+{
+  const panels = readFileSync('src/components/guided/panels.tsx', 'utf8');
+  const screen = readFileSync('src/components/guided/OutsourcedProcess.tsx', 'utf8');
+  assert.ok(/<OutsourcedProcess processes=\{data\.processes\} sourceStreams=\{data\.sourceStreams\} precursors=\{data\.precursors\}/.test(panels), '4단계 패널이 외주 공정 입력을 단다');
+  for (const name of ['computeOutsourcedShare', 'validateOutsourcedInfo', 'buildOutsourcedStreamDrafts', 'checkOutsourcedStreams']) {
+    assert.ok(screen.includes(name), `화면이 ${name}을(를) 쓴다(계산·검사를 따로 두지 않는다)`);
+  }
+  assert.ok(/createSourceStreamValidationErrors\(draft\)/.test(screen), '저장하는 행마다 상세 화면과 같은 연료 검증을 거친다');
+  assert.ok(/direct_attributable_emissions_tco2e: sumReconciledSourceStreamEmissions\(process\.id, streams\)/.test(screen), '저장·지우기 뒤 공정의 직접배출을 배출원 합계로 다시 맞춘다');
+  assert.ok(/disabled=\{busy \|\| technique === 'ELECTROPLATING'\}/.test(screen), '전기도금이면 저장 버튼이 꺼진다');
+  assert.ok(/구매 강재」에 적지 마세요/.test(screen), '돌아온 부품을 구매 강재에 적지 말라고 안내한다');
+}
