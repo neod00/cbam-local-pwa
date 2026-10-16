@@ -1,5 +1,6 @@
 import type { AttributionCheckId, LocalCalculationResult, LocalCalculationWarning } from './calculation-engine';
 import { summarizeEnergySplits } from './energy-split-summary';
+import { checkOutsourcedStreams } from './outsourced-process';
 import type { Installation, ProductionProcess, ProductOutputLine, SourceStream } from './local-db';
 
 /**
@@ -174,6 +175,23 @@ export function buildAttributionStatus(input: {
             detail: '이 사업장은 폐가스가 있고 공정이 둘 이상입니다. 현재 버전은 이 보정을 계산하지 않습니다 — 검증인과 따로 확인하세요.',
             items: [],
             href: '/installations',
+        });
+    }
+
+    // 외주 공정 몫(EC Q&A 4.31): 외주 몫 행이 있을 때만 한 줄 — 없는 프로젝트의 표와 「해당 없음」 개수는 그대로 둔다.
+    if (input.sourceStreams.some((stream) => stream.outsourced)) {
+        const outsourcedIssues = checkOutsourcedStreams(input.sourceStreams);
+        const status = worst(outsourcedIssues.map((issue) => issue.level));
+        rows.push({
+            id: 'OUTSOURCED',
+            code: 'V10',
+            title: '외주 공정 몫이 우리 공정의 연료로 근거와 함께 들어감 (EC Q&A 4.31)',
+            status: outsourcedIssues.length === 0 ? 'ok' : status,
+            detail: outsourcedIssues.length === 0
+                ? '외주 공정 몫의 방법·근거가 갖춰졌고 총량을 넘지 않습니다.'
+                : `${outsourcedIssues.length}건 — ${status === 'fix' ? '값이 어긋났습니다. 고쳐야 합니다.' : '근거를 확인해야 합니다.'}`,
+            items: outsourcedIssues.map((issue) => clip(issue.message)).slice(0, 3),
+            href: '/source-streams',
         });
     }
 

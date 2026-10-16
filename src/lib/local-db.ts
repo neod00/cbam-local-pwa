@@ -235,6 +235,65 @@ export interface SourceStreamSharedMeter {
   note?: string;
 }
 
+/**
+ * 외주 임가공 공정의 종류. EC CBAM Q&A 2026-05-27 4.31: 철강제품 경계(2025/2547 부속서 I 3.16.2) 안의 공정을 외주사에서 하고 물건이 돌아오면
+ * 우리 사업장에서 일어난 것처럼 다룬다. 전기도금(plating)·절단·용접·마무리는 경계 밖이다.
+ */
+export type OutsourcedTechnique =
+  | "HEAT_TREATMENT"
+  | "ZINC_FLAKE_COATING"
+  | "HOT_DIP_GALVANIZING"
+  | "OTHER_COATING"
+  | "ELECTROPLATING";
+
+/**
+ * 외주처의 연료 사용량 중 우리 몫을 정한 방법.
+ * METERED_LINE = 그 공정 설비의 계량값(필요하면 처리량 비율) — 부속서 II A.3(1) · 부속서 III A.2
+ * RECONSTRUCTED = 설비 소비율 × 가동시간으로 재구성하고 고지서 총량에 맞춘다 — 부속서 II A.3(2)(b) · 부속서 III A.1 식 41·42
+ * OUTPUT_MASS = 같은 설비·같은 조건의 처리 중량 비율 — 부속서 III A.2
+ * CONSERVATIVE_ESTIMATE = 객관적 근거가 있는 보수적 추정 — 부속서 II A.1 5항 (항상 확인 필요)
+ */
+export type OutsourcedBasis = "METERED_LINE" | "RECONSTRUCTED" | "OUTPUT_MASS" | "CONSERVATIVE_ESTIMATE";
+
+export interface OutsourcedEquipment {
+  name: string;
+  /** 보고기간 가동시간 (h) */
+  hours: number;
+  /** 설비 연료 소비율 (활동량 단위/h) */
+  rate_per_h: number;
+  /** 우리 부품을 처리하는 설비인가 */
+  ours?: boolean;
+}
+
+/**
+ * 외주 공정 몫으로 만든 연료 배출원의 출처 기록(선택). 몫 자체는 보통 연료 배출원처럼 activity_data에 이미 들어 있다 —
+ * 엔진은 이 필드로 산술을 하지 않으므로 이 필드를 모르는 옛 앱도 같은 숫자를 낸다(백업 format_version을 올리지 않는다).
+ */
+export interface OutsourcedProcessInfo {
+  subcontractor: string;
+  technique: OutsourcedTechnique;
+  /** 분류 근거(전해 여부, 공정 설명서, ISO 10683·ISO 4042 등). 코팅·도금 구분에 필요하다. */
+  technique_evidence?: string;
+  basis: OutsourcedBasis;
+  /** 외주처 전체(또는 해당 계량기) 연료량 — 활동량과 같은 단위. */
+  company_total?: number;
+  /** 그 공정 설비의 연료량 — 활동량과 같은 단위. */
+  line_quantity?: number;
+  /** 우리 부품 처리량(t) */
+  our_throughput_t?: number;
+  /** 같은 설비 전체 처리량(t) */
+  line_throughput_t?: number;
+  equipment?: OutsourcedEquipment[];
+  /** CONSERVATIVE_ESTIMATE의 추정 활동량(사용자가 정격×시간×부하율 등으로 계산한 값). */
+  estimate_quantity?: number;
+  /** 근거·가정. 보수적 추정이면 필수. */
+  note: string;
+  /** 외주처 고지서·가동기록·계약서 등 */
+  evidence?: string;
+  /** 이 외주 몫 전체(우리 공정이 여럿이어도 같다)의 활동량 — 행들의 합이 이 값과 같아야 한다. */
+  total_share?: number;
+}
+
 export interface SourceStream extends LocalEntity {
   period_id?: string;
   process_id?: string;
@@ -261,6 +320,8 @@ export interface SourceStream extends LocalEntity {
    * 있으면 어느 공정의 직접배출에도 들어가지 않고(process_id를 비워 둔다) 열 공급원으로 모여, 공정이 쓴 열량 비율로 귀속된다.
    */
   heat_system?: SourceStreamHeatSystem;
+  /** 외주 임가공 공정 몫의 출처(EC Q&A 4.31). 있으면 이 행은 외주처에서 한 공정의 연료 중 우리 몫이다. */
+  outsourced?: OutsourcedProcessInfo;
 }
 
 // 산정보고서(Word)에만 쓰이는 사용자 입력. 앱이 산정 데이터로는 알 수 없는 것들
