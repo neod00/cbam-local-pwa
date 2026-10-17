@@ -540,8 +540,30 @@ const report = I.describeActivityImportIssues(brokenRun.result.issues);
 const has = (pattern) => assert.match(report, pattern);
 assert.equal(brokenRun.store.data.periods[0].start_date, '2025-01-01', '엑셀 날짜 일련번호도 읽는다');
 has(/\[확인 필요\] 1_사업장 — 비어 있습니다: 법인\/사업자 등록번호/);
-// 출처(국가 전력망 평균)는 골랐는데 값이 빈 경우 — 「출처 없이」라는 모순 대신 무엇을 했는지 말한다(run35 P2-04 · run37)
-has(/\[확인 필요\] 1_사업장 — 전력 배출계수 칸이 비어 있습니다 — 출처로 「국가 전력망 평균」을\(를\) 고르셨지만 계수 값이 없어 앱의 자리값 0\.47을\(를\) 넣었고, 자리값이 공표값처럼 보이지 않게 출처는 비워 두었습니다/);
+// 계수를 비운 한국 사업장: 내장 한국 값(2025/2621 부속서 II 0,475)을 넣고 무엇을 했는지 말한다.
+has(/\[참고\] 1_사업장 — 전력 배출계수를 비워 두어 한국 기본값 0\.475 tCO₂e\/MWh\(2025\/2621 부속서 II\)를 넣었습니다/);
+assert.ok(!/자리값 0\.47을\(를\) 넣었고/.test(report), '한국 사업장에는 임시 자리값 경고가 나오지 않는다');
+assert.ok(brokenRun.store.data.processes.filter((process) => process.electricity_mwh > 0).every((process) => process.electricity_ef_tco2e_per_mwh === 0.475 && process.electricity_ef_source === 'COUNTRY_GRID_DEFAULT'), '전력을 쓰는 공정의 계수는 0.475 · 출처는 국가 전력망 평균');
+{
+  // 서식에 적은 출처(공표기관·문서·연도)는 그대로 쓰고, 안 적었으면 내장 값의 출처를 적는다
+  const given = brokenRun.store.report?.electricity_ef_meta ?? [];
+  assert.ok(given.length > 0 && given.every((row) => row.publisher && row.publisher !== 'European Commission'), '서식에 적은 출처가 우선한다(덮어쓰지 않는다)');
+  const noMeta = structuredClone(broken);
+  for (const key of ['electricity_ef_publisher', 'electricity_ef_document', 'electricity_ef_vintage']) delete noMeta.installation[key];
+  const autoMeta = (await importOf(noMeta)).store.report?.electricity_ef_meta ?? [];
+  assert.ok(autoMeta.length > 0 && autoMeta.every((row) => row.publisher === 'European Commission' && row.document === 'Implementing Regulation (EU) 2025/2621 Annex II' && row.vintage === '2025'), '출처를 안 적었으면 내장 값의 출처(공표기관·문서·연도)가 보고서 입력에 적힌다');
+}
+// 한국이 아닌 사업장은 앱이 값을 모른다 — 종전처럼 자리값 + 경고(값을 지어내지 않는다)
+const brokenForeign = structuredClone(broken);
+brokenForeign.installation.country = 'TW';
+const foreignRun = await importOf(brokenForeign);
+const foreignText = I.describeActivityImportIssues(foreignRun.result.issues);
+assert.match(foreignText, /\[확인 필요\] 1_사업장 — 전력 배출계수 칸이 비어 있습니다 — 출처로 「국가 전력망 평균」을\(를\) 고르셨지만 계수 값이 없어 앱의 자리값 0\.47을\(를\) 넣었고, 자리값이 공표값처럼 보이지 않게 출처는 비워 두었습/);
+assert.doesNotMatch(foreignText, /한국 기본값 0\.475/);
+// 한국이어도 다른 출처(PPA)를 골랐으면 값을 넣지 않는다
+const brokenPpa = structuredClone(broken);
+brokenPpa.installation.electricity_ef_source = W.ELECTRICITY_SOURCE_CHOICES.find((item) => item.value === 'PPA').label;
+assert.doesNotMatch(I.describeActivityImportIssues((await importOf(brokenPpa)).result.issues), /한국 기본값 0\.475/, '다른 출처를 골랐으면 한국 값을 넣지 않는다');
 has(/\[참고\] 1_사업장 — 「밖에서 사 오는 스팀·온수가 있나요\?」가 비어 있습니다/);
 has(/\[넣지 못함\] 2_제품 7번째 줄 — 코드가 짧은 제품: CN 코드는 8자리/);
 has(/\[넣지 못함\] 3_공정 7번째 줄 — 없는 제품 공정: 만드는 제품 「서식에 없는 제품」/);
@@ -557,7 +579,8 @@ const named = (name) => brokenRun.store.data.source_streams.find((stream) => str
 assert.ok(!named('단위를 적은 가스') && !named('계수만 적은 가스'), '틀린 줄은 0으로 넣지 않고 빼 둔다');
 assert.deepEqual(plain([named('성적서 가스').ncv_gj_per_unit, named('성적서 가스').emission_factor_tco2e_per_unit, named('성적서 가스').factor_source_type]), [0.0389, 55.9, 'SUPPLIER_OR_LAB'], '직접 적은 계수와 출처는 그대로');
 assert.equal(brokenRun.store.data.precursors.find((item) => item.name === '한글 나라 이름').supplier_country, 'Taiwan', '한글로 적은 흔한 나라는 기본값표 이름으로 바꾼다');
-assert.equal(brokenRun.store.data.processes.find((process) => process.name === 'STS 나사 공정').electricity_ef_source, undefined, '임시 계수에는 출처를 붙이지 않는다');
+assert.equal(foreignRun.store.data.processes.find((process) => process.name === 'STS 나사 공정').electricity_ef_source, undefined, '임시 계수에는 출처를 붙이지 않는다(앱이 값을 모르는 나라)');
+assert.equal(brokenRun.store.data.processes.find((process) => process.name === 'STS 나사 공정').electricity_ef_source, 'COUNTRY_GRID_DEFAULT', '한국 사업장의 내장 값에는 국가 전력망 평균 출처가 붙는다');
 assert.equal(I.describeActivityImportIssues([]), '확인할 것이 없습니다.');
 // 보고기간을 못 읽으면 공정을 만들지 않는다(기간 없는 자료를 조용히 만들지 않는다).
 const noPeriod = structuredClone(plain(sample));

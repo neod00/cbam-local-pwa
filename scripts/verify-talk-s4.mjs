@@ -100,7 +100,7 @@ assert.ok(writes.includes('sumReconciledSourceStreamEmissions(process.id, [...ex
 assert.ok(writes.includes('firstSourceStreamError(createSourceStreamValidationErrors(draft))') && panelFlat.includes('firstSourceStreamError(createSourceStreamValidationErrors(draft))'), '검증은 상세 화면과 같은 함수');
 // 전력: 새 빌더 없이 같은 함수
 assert.ok(writes.includes('validateElectricityDraft(full)') && writes.includes('buildElectricityUpdate(process, full)') && panelFlat.includes('validateElectricityDraft(draft)') && panelFlat.includes('buildElectricityUpdate(process, draft)'), '전력은 지도 5단계와 같은 검증·갱신 빌더');
-assert.ok(panelFlat.includes('String(process.electricity_ef_tco2e_per_mwh || 0.47)') && app.ELECTRICITY_PLACEHOLDER_EF === 0.47, '임시 자리값 0.47이 패널과 같다');
+assert.ok(panelFlat.includes('String(process.electricity_ef_tco2e_per_mwh || gridDefaultFor(country)?.value || 0.47)') && app.ELECTRICITY_PLACEHOLDER_EF === 0.47, '임시 자리값 0.47(한국 사업장은 내장 한국 값)이 패널과 같다');
 const panelSources = [...panels.slice(panels.indexOf('const ELECTRICITY_EF_SOURCES = [')).matchAll(/\{ value: '([A-Z_]+)', label: '([^']+)' \}/g)].slice(0, 5).map((m) => ({ value: m[1], label: m[2] }));
 assert.deepEqual(plain(app.ELECTRICITY_EF_SOURCE_OPTIONS), panelSources, '계수 출처 선택지가 패널과 같다');
 assert.equal(app.ELECTRICITY_DEFAULT_EF_SOURCE, 'COUNTRY_GRID_DEFAULT');
@@ -156,7 +156,7 @@ close(results[0].indirect_emissions_gross_tco2e, 5412 * 0.47, '전력은 보고�
 // ── 5) 화면 ──────────────────────────────────────────────────────────
 const ui = readFileSync('src/components/talk/TalkWorkspace.tsx', 'utf8');
 assert.match(ui, /임시 자리값/, '자리값은 임시값이라고 말한다');
-assert.match(ui, /앱은 한국 계통 평균값을 갖고 있지 않습니다/);
+assert.match(ui, /앱에는 한국 0\.475와 「목록에 없는 나라」 0\.465 두 값만 들어 있습니다/);
 assert.match(ui, /state\.pending\.find\(\(id\) => !skipped\.includes\(talkSkipKey\(focusProductId, id\)\)\)/, '건너뛴 질문을 (제품별로) 빼고 다음을 고른다');
 assert.match(ui, /지금은 모릅니다 — 나중에 입력/);
 assert.match(ui, /예 — 지도 화면 4단계에서 입력하기/, '산 열 「예」는 이 화면이 받지 않는다');

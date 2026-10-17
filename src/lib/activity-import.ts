@@ -39,7 +39,7 @@ import {
     type PartGrouping,
     type ActivityWorkbookData,
 } from './activity-workbook';
-import { ELECTRICITY_GRID_FACTOR_GUIDE, weightedAverageEf } from './electricity-ef-basis';
+import { ELECTRICITY_GRID_FACTOR_GUIDE, GRID_FACTOR_META, gridDefaultFor, weightedAverageEf } from './electricity-ef-basis';
 import { describeCn, glossCn, shortCnText, strengthMpaFromText } from './cn-description';
 import { CN_MASTER } from './cn-master.generated';
 import { isImplausibleElectricityIntensity, PRECURSOR_MIX_TOLERANCE, sumReconciledSourceStreamEmissions } from './allocation-rules';
@@ -422,6 +422,8 @@ export async function importActivityWorkbook(
     /** 「구매한 강재를 쓰지 않나요?」를 「예」로 적은 공정 */
     const noPrecursorFlag = new Set<string>();
     const meteredMwh = new Map<string, number>();
+    /** 전력 계수를 비워 둔 한국 사업장에 내장 한국 값(2025/2621 부속서 II)을 넣었는가 — 보고서 입력의 출처 칸에 그 출처를 적는다. */
+    let gridDefaultApplied = false;
     /** 공정별 전력 계량기 정보(이름·그 계량기의 합계·나누는 기준·추정 근거) */
     const meterOf = new Map<string, { name: string; total?: number; basis?: 'OUTPUT_MASS' | 'SUB_METER' | 'ESTIMATE'; note: string }>();
     /** 이번에 만든 공정의 제품 라인(활동수준 제외 라인은 빼고) */
@@ -657,12 +659,20 @@ export async function importActivityWorkbook(
         const writtenFactor = numberOf(text('electricity_ef'));
         // 계수를 비웠고 공급원 내역이 있으면 가중평균을 계수로, 출처는 「혼합」으로 넣는다. 적었으면 적은 값을 쓰고 평균과 다르면 알린다.
         const averageEf = sourceAverage?.ef !== undefined ? Math.round(sourceAverage.ef * 1e6) / 1e6 : undefined;
-        const factor = writtenFactor ?? averageEf;
+        // 한국 사업장이 계수를 비워 뒀고(공급원 평균도 없고) 출처가 비었거나 「국가 전력망 평균」이면 내장 한국 값을 넣는다. PPA·직접 연결 등 다른 출처를 골랐으면 값을 지어내지 않는다.
+        const koreaDefault = gridDefaultFor(installation?.country);
+        const chosenSource = labelValue(ELECTRICITY_SOURCE_CHOICES, text('electricity_ef_source'));
+        const useGridDefault = writtenFactor === undefined && averageEf === undefined && koreaDefault !== undefined && (chosenSource === undefined || chosenSource === 'COUNTRY_GRID_DEFAULT');
+        const factor = writtenFactor ?? averageEf ?? (useGridDefault ? koreaDefault?.value : undefined);
+        if (useGridDefault && koreaDefault) {
+            gridDefaultApplied = true;
+            note('info', SHEET_INSTALLATION, `전력 배출계수를 비워 두어 한국 기본값 ${koreaDefault.value} tCO₂e/MWh(2025/2621 부속서 II)를 넣었습니다 — 한국 전력망 평균을 쓰는 경우입니다. PPA·직접 연결 같은 실측이면 계수를 직접 적고 출처를 바꾸세요.`);
+        }
         if (writtenFactor === undefined && averageEf !== undefined) note('info', SHEET_ELECTRICITY_SOURCES, `전력 배출계수는 공급원별 가중평균 ${averageEf} tCO₂e/MWh로 넣었습니다(공급원 ${sourceAverage?.usableRows}곳).`);
         if (writtenFactor !== undefined && averageEf !== undefined && Math.abs(writtenFactor - averageEf) > Math.max(1e-4, averageEf * 0.01)) {
             note('warning', SHEET_INSTALLATION, `전력 배출계수 ${writtenFactor}가 12_전력공급원의 가중평균(${averageEf})과 다릅니다. 적은 값을 썼습니다 — 가중평균을 쓰려면 이 칸을 비우세요.`);
         }
-        const source = labelValue(ELECTRICITY_SOURCE_CHOICES, text('electricity_ef_source')) ?? (averageEf !== undefined ? 'MIX' : undefined);
+        const source = chosenSource ?? (averageEf !== undefined ? 'MIX' : useGridDefault ? 'COUNTRY_GRID_DEFAULT' : undefined);
         if (averageEf !== undefined && source !== undefined && source !== 'MIX') note('warning', SHEET_INSTALLATION, '전력 공급원이 여럿인데 전력 계수 출처가 「혼합」이 아닙니다. 보고서에는 출처 유형이 그대로 실립니다 — 공급원이 여럿이면 「혼합」이 맞는지 확인하세요.');
         const factorOk = factor !== undefined && factor > 0;
         if (text('electricity_ef') && !factorOk) note('error', SHEET_INSTALLATION, `전력 배출계수 「${text('electricity_ef')}」을(를) 0보다 큰 숫자로 적어 주세요.`);
@@ -1427,7 +1437,7 @@ export async function importActivityWorkbook(
         if (transpositionRows.length > 0) next.transpositions = [...(current.transpositions ?? []).filter((item) => !transpositionRows.some((row) => row.source_stream_id === item.source_stream_id)), ...transpositionRows];
         // 전력 계수의 출처(공표기관·문서·연도)는 공장 값이라 이번에 만든 공정 모두에 붙인다. 산정근거 유형은 5단계에서 고른 출처가 이어진다.
         const multi = sourceAverage?.ef !== undefined ? { basis: 'MULTI_SOURCE' as const, sources: sourceRows.filter((item) => item.name || item.mwh || item.ef).map((item) => ({ name: item.name, country: item.country, mwh: item.mwh, ef: item.ef })) } : {};
-        const meta = { publisher: text('electricity_ef_publisher') || undefined, document: text('electricity_ef_document') || undefined, vintage: text('electricity_ef_vintage') || undefined, ...multi };
+        const meta = { publisher: text('electricity_ef_publisher') || (gridDefaultApplied ? GRID_FACTOR_META.publisher : undefined), document: text('electricity_ef_document') || (gridDefaultApplied ? GRID_FACTOR_META.document : undefined), vintage: text('electricity_ef_vintage') || (gridDefaultApplied ? GRID_FACTOR_META.vintage : undefined), ...multi };
         if (Object.values(meta).some(Boolean) && fresh.size > 0) {
             const others = (current.electricity_ef_meta ?? []).filter((item) => !fresh.has(item.process_id));
             next.electricity_ef_meta = [...others, ...freshList().filter((process) => process.electricity_mwh > 0).map((process) => ({ process_id: process.id, ...meta }))];

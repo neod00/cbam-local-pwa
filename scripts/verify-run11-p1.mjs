@@ -80,7 +80,7 @@ assert.doesNotMatch(mapSource, /'생성할 수 있습니다'/, '「생성할 수
 // ── 화면 문안 (P1-05 · 09 · 10 · 11 · 16 · 21) ───────────────────────────
 const panels = readFileSync('src/components/guided/panels.tsx', 'utf8');
 assert.match(panels, /CURRENT_CBAM_PERIOD\.reportingYear/, '기간 연도가 확정기간 연도와 다를 때의 안내가 없다 (P1-05)');
-assert.match(panels, /앱은 한국 계통 평균값을 갖고 있지 않습니다/, '전력 계수의 출처 안내가 사라졌다 (P1-09)');
+assert.match(panels, /앱에는 한국 0\.475와 「목록에 없는 나라」 0\.465 두 값만 들어 있습니다/, '전력 계수의 출처 안내가 사라졌다 (P1-09)');
 assert.doesNotMatch(panels, /국가\/지역 계통 평균 기본값 \(Commission\/IEA\)/, '사용자가 넣은 국가 공표값을 「Commission/IEA 기본값」으로 부르면 안 된다 (P1-09)');
 // 전력 계수 출처 안내: 앱은 표를 내장하지 않고(IEA 비상업 라이선스) 공식 표(2025/2621 부속서 II)를 가리킨다. 모든 화면이 같은 안내를 쓴다.
 {
@@ -88,8 +88,8 @@ assert.doesNotMatch(panels, /국가\/지역 계통 평균 기본값 \(Commission
   const guide = basis.match(/ELECTRICITY_GRID_FACTOR_GUIDE =\s*'[^']*'/)?.[0] ?? '';
   assert.match(guide, /2025\/2621 부속서 II/, '안내문이 부속서 II 표를 가리킨다');
   assert.match(guide, /Other countries and territories/, '목록에 없는 나라의 행을 말한다');
-  assert.match(guide, /내장하지 않으니/, '앱이 표를 내장하지 않는다고 말한다');
-  assert.doesNotMatch(guide, /\d[.,]\d{2,}/, '안내문에 표의 숫자를 싣지 않는다(표 재배포가 아니다)');
+  assert.match(guide, /한국과 「목록에 없는 나라」 두 값만 들어 있으니/, '앱에 든 것은 두 값뿐이라고 말한다(표 전체를 내장하지 않는다)');
+  assert.doesNotMatch(guide, /\d[.,]\d{2,}/, '안내문 자체에는 숫자를 싣지 않는다(값은 단추·상수에 있다)');
   assert.match(panels, /\{ELECTRICITY_GRID_FACTOR_GUIDE\}/, '지도 5단계에 안내가 있다');
   assert.match(readFileSync('src/components/talk/TalkWorkspace.tsx', 'utf8'), /\{ELECTRICITY_GRID_FACTOR_GUIDE\}/, '대화 화면에도 같은 안내가 있다');
   assert.match(readFileSync('src/lib/activity-import.ts', 'utf8'), /\$\{ELECTRICITY_GRID_FACTOR_GUIDE\}/, '업로드 경고에도 같은 안내가 있다');
