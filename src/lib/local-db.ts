@@ -1049,17 +1049,33 @@ export const NEW_PROJECT_PRESERVED_SETTING_KEYS = [
  * (run13에서 벤치마크·보고서 입력값, run14에서 수출 유형 선택이 그렇게 빠져 있었다). scripts/verify-run13.mjs가 잠근다.
  */
 export const NEW_PROJECT_CLEARED_SETTINGS: Record<string, string> = {
-  "report:inputs": "산정보고서 입력값(문서번호 등)",
+  "report:inputs": "산정보고서 입력값(문서번호 등 — 모니터링 계획의 회사 공통 답은 제외)",
   "activity-import:last": "마지막 서식 올리기 결과(넣지 못한 줄 목록)",
   "export:reporting-period": "EU 문서 기간 선택",
   "export:response-type": "수출 유형 선택",
 };
 
+/**
+ * 새 프로젝트에서도 **남기는** 모니터링 계획 직접 쓰기 답의 항목 번호(ReportMonitoringPlan.answers의 키).
+ * 회사의 운영 방식이라 해마다 같은 것(7 측정기 위치 · 8 시료 채취 · 11 연속측정 · 13 공정 흐름도 · 21 CO₂ 포집 · 22 검·교정·위험 평가·IT 품질)만 남긴다.
+ * 16(사 온 열의 공급처)·17(자가발전·반출량)은 해마다 달라질 수 있어 지운다.
+ */
+export const NEW_PROJECT_CARRIED_PLAN_ANSWERS: readonly string[] = ["7", "8", "11", "13", "21", "22"];
+
+/** 보고서 입력에서 새 프로젝트로 넘길 것만 뽑는다 — 남길 답이 없으면 undefined. */
+export function carriedReportInputs(inputs: ReportInputs | undefined): ReportInputs | undefined {
+  const answers = Object.fromEntries(
+    Object.entries(inputs?.monitoring_plan?.answers ?? {}).filter(([no, text]) => NEW_PROJECT_CARRIED_PLAN_ANSWERS.includes(no) && text.trim() !== ""),
+  );
+
+  return Object.keys(answers).length === 0 ? undefined : { monitoring_plan: { answers } };
+}
+
 /** 새 프로젝트 확인창 문구. 지워지는 것과 남는 것을 모두 말한다. */
 export function describeNewProjectEffects(): string {
   return [
     "새 프로젝트를 시작하면 현재 입력 데이터(사업장·제품·공정·연료·전력·전구물질·사내 이송)가 모두 삭제됩니다.",
-    "라이선스·EU 기본값(DV)·벤치마크 파일·비용 가정은 유지됩니다.",
+    "라이선스·EU 기본값(DV)·벤치마크 파일·비용 가정은 유지됩니다. 모니터링 계획 초안에 직접 적은 회사 공통 답(측정기 위치·시료 채취·검·교정 체계 등)도 남습니다.",
     `${Object.values(NEW_PROJECT_CLEARED_SETTINGS).join(", ")}은 함께 지워집니다. 「마지막 백업」 기록도 초기화됩니다.`,
     "계속할까요?",
   ].join("\n");
@@ -1068,6 +1084,8 @@ export function describeNewProjectEffects(): string {
 // 입력 데이터(7개 도메인 스토어)만 비우고, 설정은 위 보존 키만 남긴다. 라이선스·DV는 유지되므로
 // 사용자는 다시 로그인하거나 기본값을 재업로드할 필요가 없다. clearLocalData(전체 삭제)와 구별된다.
 export async function startNewProject(): Promise<void> {
+  // 회사 공통 답은 지우기 전에 읽어 두었다가 지운 뒤 다시 쓴다(보고서 입력 나머지는 종전대로 지워진다).
+  const carried = carriedReportInputs(await getLocalSetting<ReportInputs>(REPORT_INPUTS_SETTING_KEY));
   const db = await openDatabase();
   const domainStores = STORE_NAMES.filter((storeName) => storeName !== "settings");
   const preserved = new Set<string>(NEW_PROJECT_PRESERVED_SETTING_KEYS);
@@ -1093,6 +1111,10 @@ export async function startNewProject(): Promise<void> {
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error);
   });
+
+  if (carried) {
+    await setLocalSetting(REPORT_INPUTS_SETTING_KEY, carried);
+  }
 }
 
 export async function seedLocalData(): Promise<void> {
