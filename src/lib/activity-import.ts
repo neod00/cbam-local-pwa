@@ -1059,6 +1059,8 @@ export async function importActivityWorkbook(
             evidence: evidence || undefined,
         };
         const validation = validateOutsourcedInfo(info);
+        // 전기도금은 경계 밖이라 넣지 않는 것이 맞다 — 자료가 빠진 것이 아니므로 「넣지 못함」이 아니라 참고로 알린다(제출 화면이 「자료가 덜 들어왔다」고 하지 않게; 씨밤이 run41).
+        if (technique === 'ELECTROPLATING') { tell('info', `${validation.errors[0]} 그래서 이 줄은 넣지 않았고 배출에도 들어가지 않습니다(정상).`); continue; }
         if (validation.errors.length > 0) { tell('error', validation.errors[0]); continue; }
         const result = computeOutsourcedShare(info);
         if (!result.ok) { tell('error', result.reason); continue; }

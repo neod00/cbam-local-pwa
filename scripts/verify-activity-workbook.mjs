@@ -1046,7 +1046,9 @@ assert.equal(echoRun.result.issues.filter((issue) => /CN 87089997/.test(issue.me
   // 전기도금은 경계 밖 — 넣지 않는다
   const plating = await importOf(withOutsourced([outsourcedRow({ ...byMass, technique: W.OUTSOURCED_TECHNIQUE_CHOICES[4].label })]));
   assert.equal(outsourcedStreams(plating).length, 0);
-  assert.match(textOf(plating), /\[넣지 못함\] 13_외주공정 5번째 줄 — 가상 코팅 B사: 전기도금\(plating\)은 철강 제품의 시스템 경계 밖/);
+  assert.match(textOf(plating), /\[참고\] 13_외주공정 5번째 줄 — 가상 코팅 B사: 전기도금\(plating\)은 철강 제품의 시스템 경계 밖.*그래서 이 줄은 넣지 않았고 배출에도 들어가지 않습니다\(정상\)/);
+  assert.ok(!/\[넣지 못함\] 13_외주공정/.test(textOf(plating)), '경계 밖 줄은 「넣지 못함」이 아니다 — 제출 화면이 자료 빠짐으로 읽지 않는다');
+  assert.equal(plating.result.issues.filter((issue) => issue.level === 'error').length, 0, '오류가 없다');
 
   // 보수적 추정: 근거 없으면 거부, 있으면 넣고 확인 필요로 남긴다
   const noNote = await importOf(withOutsourced([outsourcedRow({ basis: W.OUTSOURCED_BASIS_CHOICES[3].label, estimate: '280', note: '' })]));
