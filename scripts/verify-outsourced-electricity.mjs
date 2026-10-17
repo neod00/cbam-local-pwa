@@ -135,6 +135,8 @@ assert.deepEqual(codes([{ ...p1, outsourced_electricity: [{ ...shareBase, note: 
 assert.deepEqual(codes([{ ...p1, electricity_mwh: 80 }]), ['OUTE02'], '합계가 외주 몫보다 작으면 수정 필요');
 assert.deepEqual(codes([{ ...p1, outsourced_electricity: [{ ...shareBase, same_grid: false }] }]), ['OUTE03'], '같은 나라 확인이 없으면 수정 필요');
 assert.deepEqual(codes([{ ...p1, outsourced_electricity: [{ ...shareBase, mwh: 450 }], electricity_mwh: 900 }]), ['OUTE04'], '우리 몫이 외주처 전체 전력보다 크면 수정 필요');
+assert.deepEqual(codes([{ ...p1, outsourced_electricity: [{ ...shareBase, technique_evidence: '' }] }]), ['OUTE06'], '코팅의 분류 근거가 비면 확인 필요(연료 몫의 OUT03과 같다)');
+assert.deepEqual(codes([{ ...p1, outsourced_electricity: [{ ...shareBase, technique: 'HEAT_TREATMENT', technique_evidence: '' }] }]), [], '열처리는 분류 근거가 필요 없다');
 assert.deepEqual(codes([proc()]), [], '외주 몫이 없는 공정은 점검하지 않는다');
 assert.equal(O.checkOutsourcedElectricity([{ ...p1, electricity_mwh: 80 }])[0].level, 'fix');
 assert.equal(O.checkOutsourcedElectricity([{ ...p1, outsourced_electricity: [{ ...shareBase, note: '' }] }])[0].level, 'review');

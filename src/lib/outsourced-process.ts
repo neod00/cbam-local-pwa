@@ -345,7 +345,7 @@ export function outsourcedElectricityGroupNeedsData(group: OutsourcedElectricity
 }
 
 export interface OutsourcedElectricityIssue {
-    code: 'OUTE01' | 'OUTE02' | 'OUTE03' | 'OUTE04' | 'OUTE05';
+    code: 'OUTE01' | 'OUTE02' | 'OUTE03' | 'OUTE04' | 'OUTE05' | 'OUTE06';
     level: 'fix' | 'review';
     processId: string;
     message: string;
@@ -355,7 +355,8 @@ export interface OutsourcedElectricityIssue {
  * 외주처 전력 몫의 점검(귀속·할당 점검 V10).
  *  OUTE01 추정이거나 근거(note)가 비었다 · OUTE02 공정 전력 합계가 외주 몫 합보다 작다(다시 나누거나 직접 고치며 외주 몫이 지워졌다) ·
  *  OUTE03 같은 나라 계통 전력이라는 확인이 없다 · OUTE04 우리 몫이 외주처 설비·전체 전력보다 크다 ·
- *  OUTE05 공정의 전력 배출계수가 비어 있다(계수가 0이면 외주 전력도 0 배출로 계산된다).
+ *  OUTE05 공정의 전력 배출계수가 비어 있다(계수가 0이면 외주 전력도 0 배출로 계산된다) ·
+ *  OUTE06 코팅인데 분류 근거(비전해 방식)가 비었다(연료 몫의 OUT03과 같다 — 전해식이면 plating이라 경계 밖).
  */
 export function checkOutsourcedElectricity(processes: Array<Pick<ProductionProcess, 'id' | 'name' | 'electricity_mwh'> & Partial<Pick<ProductionProcess, 'electricity_ef_tco2e_per_mwh'>> & Partial<Pick<ProductionProcess, 'outsourced_electricity'>>>): OutsourcedElectricityIssue[] {
     const issues: OutsourcedElectricityIssue[] = [];
@@ -374,6 +375,9 @@ export function checkOutsourcedElectricity(processes: Array<Pick<ProductionProce
             const who = `${label} 외주처 「${share.subcontractor.trim()}」`;
             if (share.basis === 'CONSERVATIVE_ESTIMATE' || !share.note?.trim()) {
                 issues.push({ code: 'OUTE01', level: 'review', processId: process.id, message: `${who} 전력: ${share.basis === 'CONSERVATIVE_ESTIMATE' ? '보수적 추정입니다' : '근거(note)가 비어 있습니다'} — 설비 사양·가동기록·외주처 자료로 확인하세요(${OUTSOURCED_BASIS_ANCHOR.CONSERVATIVE_ESTIMATE}).` });
+            }
+            if (NEEDS_TECHNIQUE_EVIDENCE.includes(share.technique) && !share.technique_evidence?.trim()) {
+                issues.push({ code: 'OUTE06', level: 'review', processId: process.id, message: `${who} 전력: 코팅의 분류 근거(비전해 방식)가 비어 있습니다 — 전해식이면 plating이라 경계 밖입니다.` });
             }
             if (share.same_grid !== true) {
                 issues.push({ code: 'OUTE03', level: 'fix', processId: process.id, message: `${who} 전력: 같은 나라 계통 전력이라는 확인이 없습니다 — 공정의 전력 배출계수 하나로 계산하므로 검증인과 처리 방식을 정하세요.` });

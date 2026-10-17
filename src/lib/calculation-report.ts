@@ -12,6 +12,7 @@ import { SHARED_HEAT_RULE } from './measurable-heat';
 import { findDefaultValueReference, hasAmbiguousDefaultValueRoutes } from './reference-workbooks';
 import type { DefaultValueReferenceRow, ImportedDefaultValueReference } from './reference-workbooks';
 import { getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
+import { outsourcedElectricityMwh, ownElectricityMwh } from './electricity-own-share';
 import { checkOutsourcedElectricity, checkOutsourcedStreams, fuelSubcontractorsWithoutElectricity, groupOutsourcedElectricity, groupOutsourcedStreams, OUTSOURCED_BASIS_ANCHOR, OUTSOURCED_BASIS_LABEL, outsourcedElectricityMissingNotice, OUTSOURCED_TECHNIQUE_LABEL } from './outsourced-process';
 import { calculateLocalResults } from './calculation-engine';
 import type { InternalTransferInput, LocalCalculationResult } from './calculation-engine';
@@ -1289,6 +1290,12 @@ function electricitySection(input: CalculationReportInput) {
 
         if (process.electricity_allocation_note?.trim()) {
             body.push(paragraph(`${process.name} — 전력 사용량 배분 근거(사업장 기재): ${process.electricity_allocation_note.trim()}`, 'Note'));
+        }
+        // 외주처 전력 몫이 합계에 들어 있으면 표의 사용량과 위 배분 근거의 「이 공정 몫」이 달라 보인다 — 구성을 밝힌다(씨밤이 run42 P1-01).
+        const outsourcedMwh = outsourcedElectricityMwh(process);
+        if (outsourcedMwh > 0) {
+            const names = (process.outsourced_electricity ?? []).map((share) => `${share.subcontractor.trim()} ${formatForReport(share.mwh, 4)} MWh`).join(', ');
+            body.push(paragraph(`${process.name} — 표의 전력 사용량 ${formatForReport(process.electricity_mwh, 4)} MWh는 자체 사용량 ${formatForReport(ownElectricityMwh(process), 4)} MWh(위 배분 근거의 「이 공정 몫」은 이 값이다)에 외주처 전력의 우리 몫 ${formatForReport(outsourcedMwh, 4)} MWh(${names}; 제6.6장)를 더한 값이다.`, 'Note'));
         }
         const stress = included ? ' 이 공정의 간접배출은 인증서 기준 SEE에 포함되므로(제3.1장), 이 계수가 기준값에 직접 들어간다 — 검증인이 대조할 수 없으면 기준값의 해당 부분이 미검증으로 남는다.' : '';
 
