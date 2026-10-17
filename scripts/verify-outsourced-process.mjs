@@ -199,3 +199,10 @@ console.log('Outsourced process verified (사례 A 36,000 · 사례 B 18,000 · 
   assert.ok(readFileSync('src/lib/activity-workbook.ts', 'utf8').includes('외주처가 쓴 전기(간접배출)는 이 시트가 받지 않습니다'), '서식 안내 시트');
   assert.ok(/new Intl\.NumberFormat\('ko-KR', \{ maximumFractionDigits: 3 \}\)\.format\(group\.total\)/.test(readFileSync('src/lib/calculation-report.ts', 'utf8')), '6.6 표의 우리 몫은 천 단위 구분');
 }
+
+// ── 8) 대화 모드에도 같은 외주 공정 입력(지도 4단계와 같은 컴포넌트·같은 저장 규칙) ──
+{
+  const talk = readFileSync('src/components/talk/TalkWorkspace.tsx', 'utf8');
+  assert.ok(/<OutsourcedProcess processes={periodProcesses} sourceStreams={data.sourceStreams} precursors={data.precursors}/.test(talk), '대화 모드의 에너지 도구에 외주 공정 입력이 있다');
+  assert.ok(talk.includes("from '@/components/guided/OutsourcedProcess'"), '지도와 같은 컴포넌트를 쓴다(따로 만들지 않는다)');
+}
