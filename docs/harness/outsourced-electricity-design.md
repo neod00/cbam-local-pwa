@@ -50,7 +50,7 @@ export interface OutsourcedElectricityShare {
 |---|---|---|
 | OUTE01 | 추정이거나 근거(note)가 비었다 | 확인 필요 |
 | OUTE02 | 공정의 `electricity_mwh`가 외주 몫 합보다 작다(전력을 다시 나누며 외주 몫이 지워졌거나 직접 고쳤다) | 수정 필요 |
-| OUTE03 | 같은 외주처의 연료 몫과 전력 몫이 서로 다른 방법·근거인데 근거 문장이 같은 증빙을 가리키지 않는다 | 참고 |
+| OUTE03 | 같은 나라 계통 전력이라는 확인(`same_grid`)이 없다 (구현 시 이 항목으로 바꿨다 — 계수가 하나라서 가장 중요한 전제) | 수정 필요 |
 | OUTE04 | 우리 몫이 외주처 전체 전력(`company_total`)보다 크다 | 수정 필요 |
 
 ## 5. 화면·서식·문서
@@ -64,7 +64,7 @@ export interface OutsourcedElectricityShare {
 
 | 단계 | 내용 |
 |---|---|
-| 1 | `outsourced_electricity` 필드, 자체 몫 계산 함수(`ownElectricityMwh`), 전력 나누기·계량기 합계 검사·`guided-edit` 세 곳 보정, 점검 OUTE01·02·04, 시험(전력 나누기를 다시 해도 외주 몫이 유지됨 · 합계 검사가 거짓 경고를 내지 않음 · 엔진 결과가 `electricity_mwh` 합과 같음) |
+| 1 (**구현됨 2026-10-17**) | `outsourced_electricity` 필드, 자체 몫 계산 함수(`ownElectricityMwh`), 전력 나누기·계량기 합계 검사·`guided-edit` 세 곳 보정, 점검 OUTE01~04, 시험(전력 나누기를 다시 해도 외주 몫이 유지됨 · 합계 검사가 거짓 경고를 내지 않음 · 엔진 결과가 `electricity_mwh` 합과 같음) |
 | 2 | 지도 4단계 · 대화 모드 입력 |
 | 3 | 서식 에너지 종류 칸과 가져오기 |
 | 4 | 보고서 6.6·모니터링 계획·할 일 갱신, 「포함되지 않습니다」 안내를 조건부로 |
@@ -73,3 +73,12 @@ export interface OutsourcedElectricityShare {
 1. 외주처 전력은 철강제품에서 **인증서 기준 SEE에 들지 않고 보고(간접 SEE)에만** 들어간다. 그래도 입력을 받는 것이 맞는가? (받는다 — 같은 EU 엑셀 칸에 실려 검증인이 외주처 전력 누락을 지적할 수 있다. 우선순위는 낮다.)
 2. kW(정격)로 받을 때 앱이 MWh/h로 환산하는 옵션을 둘지, 입력자가 환산해 적게 할지.
 3. 해외 외주처 전력(계수가 다른 경우)은 이번에 받지 않는다 — 필요해지면 공정 전력 계수를 가중평균으로 바꾸는 별도 설계가 필요하다(다출처 계수 `electricity_sources` 규칙 재사용 가능).
+
+## 7. 1단계 구현 메모 (2026-10-17)
+
+- 필드: `ProductionProcess.outsourced_electricity?: OutsourcedElectricityShare[]` (`OutsourcedProcessInfo` + `mwh` + `same_grid`). 백업 `format_version` 불변.
+- 자체 몫 함수: `src/lib/electricity-own-share.ts` (의존성 없음) — `outsourcedElectricityMwh`, `ownElectricityMwh`, `electricityTotalFromOwn`.
+- 보정한 곳: `checkElectricitySharedMeters`(allocation-rules) · `buildElectricitySplitUpdates` · `buildElectricityUpdate`(지도 5단계·대화 모드·가져오기 공통) · 전력 나누기 미리 채움 · 공정 상세 화면(`processes/page.tsx`) · 지도 5단계 저장값 표시(자체 + 외주 풀이).
+- 검사/점검: `validateOutsourcedElectricityShare`, `checkOutsourcedElectricity`(OUTE01~04), 귀속 점검 V10 한 줄에 합산(외주 연료·외주 전력 어느 쪽이든 있으면 표시).
+- 아직 없는 것: 입력 화면(2단계), 엑셀 서식·가져오기(3단계), 보고서 6.6·모니터링 계획·할 일(4단계). 그때까지 `OUTSOURCED_ELECTRICITY_NOTICE` 안내가 그대로 남는다.
+- 시험: `scripts/verify-outsourced-electricity.mjs`.

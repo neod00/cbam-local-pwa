@@ -11,6 +11,7 @@ import { calculateLocalResults } from '@/lib/calculation-engine';
 import { summarizeEnergySplits } from '@/lib/energy-split-summary';
 import { evaluateEuExportReadiness, getEuExportIssueEditHref } from '@/lib/eu-template-export';
 import { ELECTRICITY_GRID_FACTOR_GUIDE } from '@/lib/electricity-ef-basis';
+import { ownElectricityMwh } from '@/lib/electricity-own-share';
 import { describeFuelEditBlock, ELECTRICITY_DEFAULT_EF_SOURCE, ELECTRICITY_EF_SOURCE_OPTIONS, ELECTRICITY_PLACEHOLDER_EF, TALK_FUEL_KINDS } from '@/lib/conversation-energy';
 import { describePrecursorEditBlock, fillEuDefault, precursorAnswerFromExisting, type DefaultFill } from '@/lib/conversation-precursor';
 import { defaultProcessName, describeOutputEditBlock } from '@/lib/conversation-process';
@@ -397,7 +398,7 @@ export function TalkWorkspace() {
             if (precursorEditables.length === 1) loadPrecursorEdit(precursorEditables[0]);
         } else if (id === 'electricity') {
             // 지도 5단계의 수정과 같은 저장(buildElectricityUpdate)을 쓴다. 공용 계량기에서 나눈 값은 여기서 고치지 않는다(칩이 지도로 안내).
-            setElecMwh(focusProcess && focusProcess.electricity_mwh > 0 ? String(focusProcess.electricity_mwh) : '');
+            setElecMwh(focusProcess && ownElectricityMwh(focusProcess) > 0 ? String(ownElectricityMwh(focusProcess)) : '');
             setElecEf(String(focusProcess?.electricity_ef_tco2e_per_mwh || ELECTRICITY_PLACEHOLDER_EF));
             setElecSource(focusProcess?.electricity_ef_source ?? ELECTRICITY_DEFAULT_EF_SOURCE);
         } else if (id === 'period') {

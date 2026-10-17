@@ -1,4 +1,5 @@
 import type { ActivityLevelRole, DirectEmissionsInputMode, ProductOutputLine, ProductReportingScope, ProductionProcess, ReportProcessGrouping, SourceStream } from './local-db';
+import { ownElectricityMwh } from './electricity-own-share';
 import { calculateSourceStreamEmissions } from './source-stream-calculation';
 
 /**
@@ -351,7 +352,7 @@ export interface ElectricityMeterGroup {
     /** 그룹 안 공정들의 기준이 다르면 MIXED — 한 계량기를 두 가지 방법으로 나눌 수는 없다. */
     basis: ElectricitySplitBasis | 'MIXED';
     installation_total_mwh: number;
-    /** 공정별 electricity_mwh 합계 */
+    /** 공정별 자체 몫(electricity_mwh − 외주 몫) 합계 */
     sum_mwh: number;
     process_ids: string[];
     /** 확인이 필요한 이유(문제 없으면 빈 문자열). */
@@ -369,7 +370,7 @@ export const ELECTRICITY_SPLIT_STALE_TOLERANCE = 0.005;
  * 전력만 손으로 고쳤거나 공정을 지워서 합계가 고지서와 어긋났는지를 본다.
  */
 export function checkElectricitySharedMeters(
-    processes: Array<Pick<ProductionProcess, 'id' | 'period_id' | 'electricity_mwh' | 'electricity_shared_meter'>>
+    processes: Array<Pick<ProductionProcess, 'id' | 'period_id' | 'electricity_mwh' | 'electricity_shared_meter'> & Partial<Pick<ProductionProcess, 'outsourced_electricity'>>>
 ): ElectricityMeterGroup[] {
     const byGroup = new Map<string, typeof processes>();
 
@@ -390,7 +391,8 @@ export function checkElectricitySharedMeters(
         const bases = new Set(members.map((process) => process.electricity_shared_meter?.basis));
         const totals = new Set(members.map((process) => process.electricity_shared_meter?.installation_total_mwh));
         const installationTotal = meter?.installation_total_mwh ?? 0;
-        const sum = members.reduce((total, process) => total + process.electricity_mwh, 0);
+        // 외주처 전력 몫은 계량기와 무관하다 — 합계에서 뺀 자체 몫끼리 사업장 계량값과 맞춘다.
+        const sum = members.reduce((total, process) => total + ownElectricityMwh(process), 0);
 
         let reason = '';
         if (bases.size > 1) {

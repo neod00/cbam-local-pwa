@@ -1,6 +1,6 @@
 import type { AttributionCheckId, LocalCalculationResult, LocalCalculationWarning } from './calculation-engine';
 import { summarizeEnergySplits } from './energy-split-summary';
-import { checkOutsourcedStreams } from './outsourced-process';
+import { checkOutsourcedElectricity, checkOutsourcedStreams } from './outsourced-process';
 import type { Installation, ProductionProcess, ProductOutputLine, SourceStream } from './local-db';
 
 /**
@@ -179,13 +179,13 @@ export function buildAttributionStatus(input: {
     }
 
     // 외주 공정 몫(EC Q&A 4.31): 외주 몫 행이 있을 때만 한 줄 — 없는 프로젝트의 표와 「해당 없음」 개수는 그대로 둔다.
-    if (input.sourceStreams.some((stream) => stream.outsourced)) {
-        const outsourcedIssues = checkOutsourcedStreams(input.sourceStreams);
+    if (input.sourceStreams.some((stream) => stream.outsourced) || input.processes.some((process) => (process.outsourced_electricity ?? []).length > 0)) {
+        const outsourcedIssues = [...checkOutsourcedStreams(input.sourceStreams), ...checkOutsourcedElectricity(input.processes)];
         const status = worst(outsourcedIssues.map((issue) => issue.level));
         rows.push({
             id: 'OUTSOURCED',
             code: 'V10',
-            title: '외주 공정 몫이 우리 공정의 연료로 근거와 함께 들어감 (EC Q&A 4.31)',
+            title: '외주 공정 몫이 우리 공정의 연료·전력으로 근거와 함께 들어감 (EC Q&A 4.31)',
             status: outsourcedIssues.length === 0 ? 'ok' : status,
             detail: outsourcedIssues.length === 0
                 ? '외주 공정 몫의 방법·근거가 갖춰졌고 총량을 넘지 않습니다.'

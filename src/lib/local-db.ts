@@ -146,6 +146,10 @@ export interface ProductionProcess extends LocalEntity {
    */
   electricity_shared_meter?: ElectricitySharedMeter;
   /**
+   * 외주처 전력 중 우리 몫(EC Q&A 4.31). 합계는 electricity_mwh에 들어 있다 — 자체 몫은 electricity-own-share.ts의 ownElectricityMwh.
+   */
+  outsourced_electricity?: OutsourcedElectricityShare[];
+  /**
    * 사내 공용 열 공급원(보일러·스팀 헤더)에서 이 공정이 받아 쓴 열(CBAM-ALLOC-HEAT-02). 있으면 엔진이 그 공급원의
    * 연료 배출을 쓴 열량 비율로 귀속해 직접배출에 더한다 — 이 필드를 모르는 옛 앱이 열면 그 배출이 사라지므로
    * 백업 format_version 4로 막는다.
@@ -292,6 +296,20 @@ export interface OutsourcedProcessInfo {
   evidence?: string;
   /** 이 외주 몫 전체(우리 공정이 여럿이어도 같다)의 활동량 — 행들의 합이 이 값과 같아야 한다. */
   total_share?: number;
+}
+
+/**
+ * 외주처가 우리 부품에 쓴 전력(간접배출)의 우리 몫 기록 (EC CBAM Q&A 2026-05-27 4.31).
+ * **합계는 공정의 electricity_mwh에 이미 들어 있다**(자체 몫 + 외주 몫) — 엔진·EU 엑셀·보고서·옛 앱은 그 칸만 읽으므로
+ * 이 필드를 몰라도 같은 숫자를 낸다(백업 format_version을 올리지 않는다). 이 필드는 「합계 중 어느 부분이 외주 몫인가」를
+ * 알아보는 용도다: 공용 계량기 합계 검사·전력 나누기·전력 직접 수정은 자체 몫(= electricity_mwh − 외주 몫 합)으로 다뤄야 한다.
+ * 설계: docs/harness/outsourced-electricity-design.md
+ */
+export interface OutsourcedElectricityShare extends OutsourcedProcessInfo {
+  /** 우리 몫 (MWh) — electricity_mwh에 이미 포함됨. company_total·line_quantity·estimate_quantity도 MWh. */
+  mwh: number;
+  /** 외주처가 이 공정과 같은 나라의 계통 전력을 쓴다고 확인했는가 — 공정의 전력 배출계수 하나로 계산하므로 필수. */
+  same_grid: boolean;
 }
 
 export interface SourceStream extends LocalEntity {

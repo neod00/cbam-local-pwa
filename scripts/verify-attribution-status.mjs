@@ -20,6 +20,7 @@ const base = (engineText) => [
   file('src/lib/cn-master.generated.ts').replace(/^export /gm, ''),
   strip(file('src/lib/cbam-product-rules.ts')),
   strip(file('src/lib/reporting-scope.ts'), false),
+  strip(file('src/lib/electricity-own-share.ts')),
   strip(file('src/lib/allocation-rules.ts')),
   strip(file('src/lib/measurable-heat.ts')),
   strip(file('src/lib/precursor-verification.ts')),

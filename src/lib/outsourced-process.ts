@@ -1,4 +1,5 @@
-import type { OutsourcedBasis, OutsourcedEquipment, OutsourcedProcessInfo, OutsourcedTechnique, SourceStream } from './local-db';
+import { outsourcedElectricityMwh } from './electricity-own-share';
+import type { OutsourcedBasis, OutsourcedElectricityShare, OutsourcedEquipment, OutsourcedProcessInfo, OutsourcedTechnique, ProductionProcess, SourceStream } from './local-db';
 import { STEEL_BOUNDARY_ANCHOR } from './steel-boundary';
 
 /**
@@ -137,6 +138,16 @@ export function validateOutsourcedInfo(info: OutsourcedProcessInfo): OutsourcedV
     }
     if (!info.evidence?.trim()) reviews.push('외주처 고지서·가동기록·계약서 등 증빙이 비어 있습니다.');
     return { errors, reviews };
+}
+
+/** 외주처 전력 몫 저장 전 검사 — 연료 몫과 같은 검사에 우리 몫(MWh)과 같은 계통 확인을 더한다. */
+export function validateOutsourcedElectricityShare(share: OutsourcedElectricityShare): OutsourcedValidation {
+    const result = validateOutsourcedInfo(share);
+    if (!isFiniteOut(share.mwh) || !(share.mwh > 0)) result.errors.push('외주처 전력의 우리 몫(MWh)은 0보다 커야 합니다.');
+    if (share.same_grid !== true) {
+        result.errors.push('외주처가 이 공정과 같은 나라의 계통 전력을 쓰는지 확인해 주세요 — 전력 배출계수가 하나라서 다른 나라 외주처의 전력은 아직 받지 않습니다(검증인과 처리 방식을 따로 정하세요).');
+    }
+    return result;
 }
 
 /** 우리 몫을 공정별로 나눈다(합계 = total). fractions는 합이 1이어야 하고 마지막 공정이 반올림 차이를 받는다. */
@@ -288,4 +299,43 @@ export function outsourcedGroupNeedsData(group: OutsourcedGroup): boolean {
         || !info.note?.trim()
         || !info.evidence?.trim()
         || (NEEDS_TECHNIQUE_EVIDENCE.includes(info.technique) && !info.technique_evidence?.trim());
+}
+
+export interface OutsourcedElectricityIssue {
+    code: 'OUTE01' | 'OUTE02' | 'OUTE03' | 'OUTE04';
+    level: 'fix' | 'review';
+    processId: string;
+    message: string;
+}
+
+/**
+ * 외주처 전력 몫의 점검(귀속·할당 점검 V10).
+ *  OUTE01 추정이거나 근거(note)가 비었다 · OUTE02 공정 전력 합계가 외주 몫 합보다 작다(다시 나누거나 직접 고치며 외주 몫이 지워졌다) ·
+ *  OUTE03 같은 나라 계통 전력이라는 확인이 없다 · OUTE04 우리 몫이 외주처 설비·전체 전력보다 크다.
+ */
+export function checkOutsourcedElectricity(processes: Array<Pick<ProductionProcess, 'id' | 'name' | 'electricity_mwh'> & Partial<Pick<ProductionProcess, 'outsourced_electricity'>>>): OutsourcedElectricityIssue[] {
+    const issues: OutsourcedElectricityIssue[] = [];
+    for (const process of processes) {
+        const shares = process.outsourced_electricity ?? [];
+        if (shares.length === 0) continue;
+        const label = `「${process.name}」`;
+        const outsourced = outsourcedElectricityMwh(process);
+        if (process.electricity_mwh + 1e-6 < outsourced) {
+            issues.push({ code: 'OUTE02', level: 'fix', processId: process.id, message: `${label}: 전력 사용량 ${fmtOut(process.electricity_mwh)} MWh가 외주처 전력 몫 합 ${fmtOut(outsourced)} MWh보다 작습니다 — 전력을 다시 나누거나 직접 고치면서 외주 몫이 빠졌을 수 있습니다. 외주 몫을 다시 입력하세요.` });
+        }
+        for (const share of shares) {
+            const who = `${label} 외주처 「${share.subcontractor.trim()}」`;
+            if (share.basis === 'CONSERVATIVE_ESTIMATE' || !share.note?.trim()) {
+                issues.push({ code: 'OUTE01', level: 'review', processId: process.id, message: `${who} 전력: ${share.basis === 'CONSERVATIVE_ESTIMATE' ? '보수적 추정입니다' : '근거(note)가 비어 있습니다'} — 설비 사양·가동기록·외주처 자료로 확인하세요(${OUTSOURCED_BASIS_ANCHOR.CONSERVATIVE_ESTIMATE}).` });
+            }
+            if (share.same_grid !== true) {
+                issues.push({ code: 'OUTE03', level: 'fix', processId: process.id, message: `${who} 전력: 같은 나라 계통 전력이라는 확인이 없습니다 — 공정의 전력 배출계수 하나로 계산하므로 검증인과 처리 방식을 정하세요.` });
+            }
+            const limit = isFiniteOut(share.line_quantity) ? share.line_quantity : share.company_total;
+            if (isFiniteOut(limit) && share.mwh > limit + 1e-9) {
+                issues.push({ code: 'OUTE04', level: 'fix', processId: process.id, message: `${who} 전력: 우리 몫 ${fmtOut(share.mwh)} MWh가 외주처 ${isFiniteOut(share.line_quantity) ? '설비' : '전체'} 전력 ${fmtOut(limit)} MWh보다 큽니다.` });
+            }
+        }
+    }
+    return issues;
 }

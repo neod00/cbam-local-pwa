@@ -22,6 +22,7 @@ import { ACTIVITY_LEVEL_ROLE_LABEL, ALLOCATION_BASIS_LABEL, DIRECT_EMISSIONS_INP
 import { Term } from '@/components/ux/Term';
 import { FieldHelp } from '@/components/ux/FieldHelp';
 import { getOutputLineDeleteBlockers } from '@/lib/guided-edit';
+import { electricityTotalFromOwn, ownElectricityMwh } from '@/lib/electricity-own-share';
 import { AlertTriangle, ArrowRight, Factory, Gauge, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
@@ -159,7 +160,7 @@ export default function ProcessesPage() {
                     market_output_mass_t: editProcess.market_output_mass_t,
                     internal_consumption_mass_t: editProcess.internal_consumption_mass_t,
                     direct_attributable_emissions_tco2e: editProcess.direct_attributable_emissions_tco2e,
-                    electricity_mwh: editProcess.electricity_mwh,
+                    electricity_mwh: ownElectricityMwh(editProcess),
                     electricity_ef_tco2e_per_mwh: editProcess.electricity_ef_tco2e_per_mwh,
                     electricity_ef_source: editProcess.electricity_ef_source ?? '',
                     direct_emissions_input_mode: editProcess.direct_emissions_input_mode,
@@ -293,7 +294,8 @@ export default function ProcessesPage() {
             market_output_mass_t: process.market_output_mass_t,
             internal_consumption_mass_t: process.internal_consumption_mass_t,
             direct_attributable_emissions_tco2e: process.direct_attributable_emissions_tco2e,
-            electricity_mwh: process.electricity_mwh,
+            // 이 칸은 자체 몫이다 — 외주처 전력 몫이 있으면 저장할 때 합계에 다시 얹는다.
+            electricity_mwh: ownElectricityMwh(process),
             electricity_ef_tco2e_per_mwh: process.electricity_ef_tco2e_per_mwh,
             electricity_ef_source: process.electricity_ef_source ?? '',
             direct_emissions_input_mode: process.direct_emissions_input_mode,
@@ -491,6 +493,7 @@ export default function ProcessesPage() {
             const updatedProcess = await updateLocalItem('processes', {
                 ...existingProcess,
                 ...newItem,
+                electricity_mwh: electricityTotalFromOwn(existingProcess, newItem.electricity_mwh),
                 internal_consumption_mass_t: internalTransferTotal,
                 market_output_mass_t: effectiveMarketOutput,
                 direct_attributable_emissions_tco2e: resolveDirectTotal(existingProcess.id),

@@ -17,6 +17,7 @@ import {
     validateElectricitySplitDraft,
     type ElectricitySplitDraft,
 } from '@/lib/electricity-allocation';
+import { ownElectricityMwh } from '@/lib/electricity-own-share';
 import { updateLocalItem, type ProductionProcess } from '@/lib/local-db';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -93,7 +94,7 @@ export function ElectricitySplit({
             setNote(members[0]?.electricity_shared_meter?.note ?? '');
         } else {
             const free = processes.filter((process) => !process.electricity_shared_meter?.group?.trim());
-            const currentSum = free.reduce((sum, process) => sum + process.electricity_mwh, 0);
+            const currentSum = free.reduce((sum, process) => sum + ownElectricityMwh(process), 0);
             setEditingGroup('');
             setGroup(groups.some((item) => item.group === DEFAULT_GROUP) ? '' : DEFAULT_GROUP);
             // 이미 공정별로 적어 둔 값이 있으면 그 합계를 미리 넣는다 — 손으로 나눠 적은 사업장은 합계가 곧 고지서 값이다.

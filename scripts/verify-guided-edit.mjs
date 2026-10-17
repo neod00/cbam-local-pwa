@@ -51,8 +51,13 @@ assert.deepEqual(
 );
 
 function loadGuidedEditModule() {
-  const source = rawSource
+  // 전력 자체 몫 계산(electricity-own-share.ts)은 의존성 없는 순수 함수라 앞에 붙여 쓴다.
+  const ownShareSource = readFileSync('src/lib/electricity-own-share.ts', 'utf8')
     .replace(/^import type [\s\S]*?from '.*';$/gm, '')
+    .replace(/^export /gm, '');
+  const source = ownShareSource + '\n' + rawSource
+    .replace(/^import type [\s\S]*?from '.*';$/gm, '')
+    .replace(/^import \{[^}]*\} from '\.\/electricity-own-share';$/gm, '')
     .replace(/^export /gm, '');
   const compiled = ts.transpileModule(
     `${source}\nglobalThis.guidedEdit = { ${EXPECTED_EXPORTS.join(', ')} };`,
