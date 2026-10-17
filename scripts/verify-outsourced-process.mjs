@@ -192,7 +192,7 @@ console.log('Outsourced process verified (사례 A 36,000 · 사례 B 18,000 · 
   // 같은 안내 문장을 네 곳이 쓴다
   const notice = O.OUTSOURCED_ELECTRICITY_NOTICE;
   assert.match(notice, /외주처가 쓴 전기\(간접배출\)는 이 입력에 포함되지 않습니다/);
-  for (const [file, label] of [['src/components/guided/OutsourcedProcess.tsx', '입력 화면'], ['src/lib/calculation-report.ts', '산정보고서 6.6'], ['src/lib/monitoring-plan.ts', '모니터링 계획 9번']]) {
+  for (const [file, label] of [['src/lib/calculation-report.ts', '산정보고서 6.6'], ['src/lib/monitoring-plan.ts', '모니터링 계획 9번']]) {
     assert.ok(readFileSync(file, 'utf8').includes('OUTSOURCED_ELECTRICITY_NOTICE'), `${label}이(가) 외주처 전력 안내를 쓴다`);
   }
   assert.ok(/외주처가 쓴 전기\(간접배출\)는 아직 받지 않습니다/.test(readFileSync('src/lib/activity-workbook.ts', 'utf8')), '서식 13번 시트 제목');

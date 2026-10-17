@@ -80,6 +80,7 @@ import { ALLOCATION_RULES, DIRECT_EMISSIONS_INPUT_MODE_LABEL, ELECTRICITY_SPLIT_
 import { ElectricitySplit } from '@/components/guided/ElectricitySplit';
 import { EnergySplitHub } from '@/components/guided/EnergySplitHub';
 import { FuelSplit } from '@/components/guided/FuelSplit';
+import { OutsourcedElectricity } from '@/components/guided/OutsourcedElectricity';
 import { OutsourcedProcess } from '@/components/guided/OutsourcedProcess';
 import { StepExplainerBox } from '@/components/guided/ExplainLevel';
 import { SupplierLoop } from '@/components/guided/SupplierLoop';
@@ -1368,6 +1369,9 @@ function FuelPanel({ data, steps, selectedProcessId, onSaved, onSelectStep }: Pa
 
             {/* 열처리·코팅을 외주사에서 하면 외주처 연료의 우리 몫을 우리 공정의 연료로 더한다(EC Q&A 4.31). */}
             <OutsourcedProcess processes={data.processes} sourceStreams={data.sourceStreams} precursors={data.precursors} results={data.results} onApplied={onSaved} />
+
+            {/* 그 외주처가 우리 부품에 쓴 전기의 우리 몫(간접배출)도 같은 규칙으로 — 합계는 5단계 전력 사용량에 들어간다. */}
+            <OutsourcedElectricity processes={data.processes} results={data.results} onApplied={onSaved} />
 
             {/* 한 보일러·스팀을 여러 공정이 같이 쓰면 연료 배출은 쓴 열량 비율로 귀속한다(CBAM-ALLOC-HEAT-02). */}
             <SharedHeat processes={data.processes} sourceStreams={data.sourceStreams} onApplied={onSaved} />

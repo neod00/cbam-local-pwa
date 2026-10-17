@@ -65,7 +65,7 @@ export interface OutsourcedElectricityShare {
 | 단계 | 내용 |
 |---|---|
 | 1 (**구현됨 2026-10-17**) | `outsourced_electricity` 필드, 자체 몫 계산 함수(`ownElectricityMwh`), 전력 나누기·계량기 합계 검사·`guided-edit` 세 곳 보정, 점검 OUTE01~04, 시험(전력 나누기를 다시 해도 외주 몫이 유지됨 · 합계 검사가 거짓 경고를 내지 않음 · 엔진 결과가 `electricity_mwh` 합과 같음) |
-| 2 | 지도 4단계 · 대화 모드 입력 |
+| 2 (**구현됨 2026-10-17**) | 지도 4단계 · 대화 모드 입력 |
 | 3 | 서식 에너지 종류 칸과 가져오기 |
 | 4 | 보고서 6.6·모니터링 계획·할 일 갱신, 「포함되지 않습니다」 안내를 조건부로 |
 
@@ -82,3 +82,13 @@ export interface OutsourcedElectricityShare {
 - 검사/점검: `validateOutsourcedElectricityShare`, `checkOutsourcedElectricity`(OUTE01~04), 귀속 점검 V10 한 줄에 합산(외주 연료·외주 전력 어느 쪽이든 있으면 표시).
 - 아직 없는 것: 입력 화면(2단계), 엑셀 서식·가져오기(3단계), 보고서 6.6·모니터링 계획·할 일(4단계). 그때까지 `OUTSOURCED_ELECTRICITY_NOTICE` 안내가 그대로 남는다.
 - 시험: `scripts/verify-outsourced-electricity.mjs`.
+
+## 8. 2단계 구현 메모 (2026-10-17)
+
+- 화면: `src/components/guided/OutsourcedElectricity.tsx` — 지도 4단계의 외주 임가공 연료 입력 바로 아래와 대화 모드 에너지 도구에 같은 컴포넌트. 같은 네 방법·같은 분류 근거·전기도금 거부, 활동량 단위만 MWh. 같은 나라 계통 확인 칸(체크 안 하면 저장 거부).
+- 열린 질문 2(kW 환산) 결정: **설비 정격은 kW로 받고 앱이 ÷1,000으로 MWh/h로 저장한다**(고지서는 MWh, 설비 명판은 kW). 고치기 화면은 다시 kW로 보여 준다.
+- 저장 규칙은 순수 함수: `buildOutsourcedElectricityUpdates`(고치기는 옛 몫을 걷어내고 새로 — 합계가 불어나지 않는다) · `buildOutsourcedElectricityRemoval` · `groupOutsourcedElectricity`(공정마다 흩어진 몫을 한 건으로 묶기). 배출원 행은 만들지 않는다 — 공정 레코드만 바꾼다.
+- 점검 OUTE05 추가: 공정의 전력 배출계수가 비어 있으면(0 배출로 계산됨) 수정 필요. 입력 화면도 같은 경고를 미리 보여 준다.
+- `computeOutsourcedShare(info, 'electricity')` — 계산은 같고 안내 문구만 「전력량·전기 사용처」.
+- 연료 입력 화면의 「전기는 이 입력에 포함되지 않습니다」 안내는 「아래 외주사 전기 입력에서 따로 입력」으로 바꿨다. 보고서 6.6·모니터링 계획 9번·서식 시트의 기존 안내(상수 `OUTSOURCED_ELECTRICITY_NOTICE`)는 3·4단계에서 조건부로 바꾼다.
+- 화면 확인: 진합형 시험 프로젝트에 외주 전기 120 MWh(재구성)를 두 공정에 저장 → 5단계 「자체 56 + 외주처 0.4 MWh」, 공용 계량기 「공정별 합계 21,500 MWh — 고지서 값과 같습니다」 유지, 지우기 후 몫 사라짐.
