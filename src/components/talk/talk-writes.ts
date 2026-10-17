@@ -20,6 +20,7 @@ import {
 } from '@/lib/guided-edit';
 import { buildOutputUpdate, buildProcessCreation, validateProcessAnswer, type ProcessAnswerDraft } from '@/lib/conversation-process';
 import { sumReconciledSourceStreamEmissions } from '@/lib/allocation-rules';
+import { applyGridFactorMeta } from '@/lib/electricity-grid-meta';
 import { buildFuelStreamDraft, buildFuelStreamEdit, noImportedHeatDraft, type FuelAnswer } from '@/lib/conversation-energy';
 import { buildPrecursorDraft, buildPrecursorEditDraft, type PrecursorAnswer } from '@/lib/conversation-precursor';
 import { buildImportedHeatUpdate, validateImportedHeatDraft } from '@/lib/measurable-heat';
@@ -145,6 +146,8 @@ export async function saveElectricity(process: ProductionProcess, draft: { mwh: 
         return error;
     }
     await updateLocalItem('processes', buildElectricityUpdate(process, full));
+    // 내장 값을 계통 평균으로 썼다면 출처를 보고서 입력(제7장)에 적는다(지도 5단계와 같다).
+    await applyGridFactorMeta(process.id, draft.ef, draft.efSource);
     return null;
 }
 

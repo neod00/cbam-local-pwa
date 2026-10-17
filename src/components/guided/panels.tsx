@@ -4,7 +4,8 @@ import { Button, StatusBadge } from '@/components/ui';
 import type { LocalCalculationResult } from '@/lib/calculation-engine';
 import { IRON_STEEL_PRODUCTS_BOUNDARY, getCbamCoverage, isIronOrSteelProductsGood } from '@/lib/cbam-product-rules';
 import { CN_CODE_OPTIONS } from '@/lib/cn-code-options';
-import { ELECTRICITY_GRID_FACTOR_GUIDE } from '@/lib/electricity-ef-basis';
+import { ELECTRICITY_GRID_FACTOR_GUIDE, GRID_DEFAULT_FACTORS, GRID_FACTOR_LICENSE_NOTE, gridDefaultFor } from '@/lib/electricity-ef-basis';
+import { applyGridFactorMeta } from '@/lib/electricity-grid-meta';
 import {
     createEuExportFilename,
     createEuTemplateExportCopyResult,
@@ -1692,7 +1693,7 @@ function ElectricityPanel({ data, steps, selectedProcessId, onSaved, onSelectSte
              * 화면에는 아무 이상이 없어 보이므로 사용자가 알아챌 방법이 없었다.
              */}
             <Fragment key={splitRevision}>
-                <ElectricityForm key={process.id} process={process} steps={steps} onSaved={onSaved} onSelectStep={onSelectStep} />
+                <ElectricityForm key={process.id} process={process} country={data.installations[0]?.country} steps={steps} onSaved={onSaved} onSelectStep={onSelectStep} />
             </Fragment>
         </>
     );
@@ -1700,11 +1701,14 @@ function ElectricityPanel({ data, steps, selectedProcessId, onSaved, onSelectSte
 
 function ElectricityForm({
     process,
+    country,
     steps,
     onSaved,
     onSelectStep,
 }: {
     process: ProductionProcess;
+    /** 사업장 국가 코드 — 한국이면 내장 한국 값을 미리 채운다 */
+    country?: string;
     steps: GuidedStepState[];
     onSaved: () => Promise<void> | void;
     onSelectStep: (id: GuidedStepId) => void;
@@ -1712,7 +1716,7 @@ function ElectricityForm({
     // 입력칸은 자체 몫이다 — 외주처 전력 몫이 있으면 저장할 때 합계에 다시 얹는다(guided-edit.ts buildElectricityUpdate).
     const [mwh, setMwh] = useState(ownElectricityMwh(process) > 0 ? String(ownElectricityMwh(process)) : '');
     const outsourcedMwh = outsourcedElectricityMwh(process);
-    const [ef, setEf] = useState(String(process.electricity_ef_tco2e_per_mwh || 0.47));
+    const [ef, setEf] = useState(String(process.electricity_ef_tco2e_per_mwh || gridDefaultFor(country)?.value || 0.47));
     const [allocationNote, setAllocationNote] = useState(process.electricity_allocation_note ?? '');
     const [efSource, setEfSource] = useState(process.electricity_ef_source ?? 'COUNTRY_GRID_DEFAULT');
     const [message, setMessage] = useState('');
@@ -1726,6 +1730,8 @@ function ElectricityForm({
             return;
         }
         await updateLocalItem('processes', buildElectricityUpdate(process, draft));
+        // 내장 값(한국·목록에 없는 나라)을 계통 평균으로 썼다면 출처(2025/2621 부속서 II)를 보고서 입력에 적는다.
+        await applyGridFactorMeta(process.id, draft.ef, draft.efSource);
         setMessage('');
         setSaved(true);
         await onSaved();
@@ -1758,8 +1764,22 @@ function ElectricityForm({
                 <Field label="전력 배출계수 (tCO₂e/MWh)" hint="국가 기본계수 또는 PPA·직접연결 실측만 인정됩니다. 녹색프리미엄으로 낮출 수 없습니다.">
                     <input className={fieldClass} inputMode="decimal" value={ef} onChange={(event) => setEf(event.target.value)} />
                 </Field>
+                <div className="flex flex-wrap items-center gap-2" data-testid="grid-default-buttons">
+                    {GRID_DEFAULT_FACTORS.map((item) => (
+                        <button
+                            key={item.key}
+                            type="button"
+                            className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-100"
+                            onClick={() => { setEf(String(item.value)); setEfSource('COUNTRY_GRID_DEFAULT'); }}
+                            title={`2025/2621 부속서 II — ${item.tableRow}`}
+                        >
+                            {item.label} {item.value} 적용
+                        </button>
+                    ))}
+                    <span className="text-xs text-slate-500">누르면 값과 계수 출처가 채워지고, 저장하면 출처가 보고서 입력(제7장)에도 적힙니다.</span>
+                </div>
                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-                    {num(ef) === 0.47 ? '미리 채워진 0.47은 임시 자리값입니다. ' : ''}<span className="font-semibold">앱은 한국 계통 평균값을 갖고 있지 않습니다</span> — 업로드하는 EU 기본값 파일(DVs)에도 전력 행은 없습니다. {ELECTRICITY_GRID_FACTOR_GUIDE} 발행기관·문서·공표연도를{' '}
+                    {num(ef) === 0.47 ? '미리 채워진 0.47은 임시 자리값입니다. ' : ''}<span className="font-semibold">앱에는 한국 0.475와 「목록에 없는 나라」 0.465 두 값만 들어 있습니다</span> — 업로드하는 EU 기본값 파일(DVs)에도 전력 행은 없습니다. {ELECTRICITY_GRID_FACTOR_GUIDE} {GRID_FACTOR_LICENSE_NOTE} 다른 값을 쓰면 발행기관·문서·공표연도를{' '}
                     <Link href="/report-inputs" className="font-semibold underline">보고서 입력(제7장)</Link>에 적어 두세요. EU가 인정하는 값인지는 수입자·검증인에게 확인이 필요합니다.
                 </p>
                 <Field label="계수 출처">

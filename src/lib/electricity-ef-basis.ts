@@ -14,17 +14,67 @@
 //
 // 앱은 유형을 대신 정하지 않는다 — 기본 UNCLASSIFIED, 사용자가 고른다(계수 출처 유형과 같은 원칙).
 
-import type { ElectricityEfBasis, ReportElectricitySourceRow } from './local-db';
+import type { ElectricityEfBasis, ReportElectricitySourceRow, ReportInputs } from './local-db';
 
 export const ELECTRICITY_EF_CITATION = 'Commission Implementing Regulation (EU) 2025/2547 point D.4 / Article 9';
 
 /**
- * 설비 전력의 국가 기본계수(계통 평균)의 공식 출처. 값은 IEA 자료라 비상업 라이선스(CC BY-NC-SA)이므로 앱은 표를 내장하지 않고
- * 사용자가 표에서 찾아 직접 넣게 한다. 부속서 III(EU로 수입되는 전력용)과 혼동하지 않는다 — 설비 전력은 부속서 II.
+ * 설비 전력의 국가 기본계수(계통 평균)의 공식 출처. 부속서 III(EU로 수입되는 전력용)과 혼동하지 않는다 — 설비 전력은 부속서 II.
+ * 표 전체(약 126개국)는 IEA 자료라 CC BY-NC-SA 4.0(비상업 목적의 재사용만 허용 — 규정 본문의 고지)이므로 앱은 **두 값만** 내장한다:
+ * 사용자 대부분이 한국 업체라서 한국, 그리고 「목록에 없는 나라」 행. 나머지 나라는 사용자가 표에서 찾아 넣는다.
+ * 내장한 값은 EU 관보 원문(2026-10-17 확인)과 같다: Korea, Republic of (South Korea) 0,475 · Other countries and territories 0,465.
  */
 export const ELECTRICITY_GRID_FACTOR_SOURCE = 'Commission Implementing Regulation (EU) 2025/2621 Annex II';
+
+export interface GridDefaultFactor {
+    key: 'KR' | 'OTHER';
+    label: string;
+    value: number;
+    /** 부속서 II 표의 행 이름(원문 그대로) */
+    tableRow: string;
+}
+
+export const GRID_DEFAULT_FACTORS: readonly GridDefaultFactor[] = [
+    { key: 'KR', label: '한국', value: 0.475, tableRow: 'Korea, Republic of (South Korea)' },
+    { key: 'OTHER', label: '목록에 없는 나라·지역', value: 0.465, tableRow: 'Other countries and territories' },
+];
+
+/** 내장 값을 쓸 때 보고서 입력(제7장)에 자동으로 적는 출처 — 사용자가 이미 적은 칸은 덮어쓰지 않는다. */
+export const GRID_FACTOR_META = { publisher: 'European Commission', document: 'Implementing Regulation (EU) 2025/2621 Annex II', vintage: '2025' } as const;
+
+export const GRID_FACTOR_LICENSE_NOTE =
+    '내장한 두 값은 EU 규정 2025/2621 부속서 II 표에서 가져왔습니다. 그 표는 IEA 자료로 CC BY-NC-SA 4.0 — 비상업 목적의 재사용만 허용됩니다(규정 본문의 고지).';
+
 export const ELECTRICITY_GRID_FACTOR_GUIDE =
-    '국가 기본계수는 Implementing Regulation (EU) 2025/2621 부속서 II의 「Country or territory / Emission factor」 표에서 찾습니다 — 목록에 없는 나라는 「Other countries and territories」 행입니다. 앱은 이 표를 내장하지 않으니 해당 국가의 값을 직접 넣으세요.';
+    '국가 기본계수는 Implementing Regulation (EU) 2025/2621 부속서 II의 「Country or territory / Emission factor」 표에서 찾습니다 — 목록에 없는 나라는 「Other countries and territories」 행입니다. 앱에는 한국과 「목록에 없는 나라」 두 값만 들어 있으니(위 단추), 그 밖의 나라는 표에서 값을 찾아 직접 넣으세요.';
+
+/** 사업장 국가가 한국이면 내장 한국 값을 돌려준다(국가 코드 KR). 그 밖의 나라는 앱이 모른다 — 「목록에 없는 나라」 값을 대신 쓰지 않는다(그 나라가 표에 따로 있을 수 있다). */
+export function gridDefaultFor(country: string | undefined): GridDefaultFactor | undefined {
+    return (country ?? '').trim().toUpperCase() === 'KR' ? GRID_DEFAULT_FACTORS[0] : undefined;
+}
+
+/** 입력값이 내장 값 중 하나와 같은가 */
+export function matchGridDefault(ef: number): GridDefaultFactor | undefined {
+    return GRID_DEFAULT_FACTORS.find((item) => Math.abs(item.value - ef) < 1e-9);
+}
+
+/**
+ * 공정의 전력 배출계수로 내장 값을 썼다면 보고서 입력(제7장)의 출처(공표기관·문서·연도)를 채운다. 아니면(다른 값·다른 출처 유형) undefined.
+ * 이미 적힌 칸은 덮어쓰지 않는다 — 사용자가 다르게 적었다면 그것이 맞다.
+ */
+export function withGridFactorMeta(inputs: ReportInputs | undefined, processId: string, ef: number, efSource: string | undefined): ReportInputs | undefined {
+    if (efSource !== 'COUNTRY_GRID_DEFAULT' || !matchGridDefault(ef)) return undefined;
+    const rows = inputs?.electricity_ef_meta ?? [];
+    const existing = rows.find((row) => row.process_id === processId);
+    const merged = {
+        ...(existing ?? { process_id: processId }),
+        publisher: existing?.publisher || GRID_FACTOR_META.publisher,
+        document: existing?.document || GRID_FACTOR_META.document,
+        vintage: existing?.vintage || GRID_FACTOR_META.vintage,
+    };
+    if (existing && existing.publisher === merged.publisher && existing.document === merged.document && existing.vintage === merged.vintage) return undefined;
+    return { ...(inputs ?? {}), electricity_ef_meta: [...rows.filter((row) => row.process_id !== processId), merged] };
+}
 
 export const ELECTRICITY_EF_BASIS_LABEL: Record<ElectricityEfBasis, string> = {
     GRID_AVERAGE: '원산지국 계통 평균 (default)',

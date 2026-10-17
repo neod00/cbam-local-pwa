@@ -179,7 +179,7 @@ export const INSTALLATION_FORM: FormRow[] = [
     { key: 'period_name', label: '보고기간 이름', hint: '비우면 자동으로 붙입니다(예: 2025년 연간)' },
     { section: '■ 전력 — 한전 고지서' },
     { key: 'electricity_total_mwh', label: '공장 전체 전력 사용량 (MWh)', hint: '단위는 MWh — 고지서 12개월 합계(kWh)를 1,000으로 나눈 값입니다(예: 2,150,000 kWh → 2150). 공정별 계량기가 없으면 이 값만 적으세요 — 앱이 생산량 비율로 나눕니다' },
-    { key: 'electricity_ef', label: '전력 배출계수 (tCO₂e/MWh)', hint: '모르면 비워 두세요(임시값으로 들어가고 「확인할 것」에 남습니다). 국가 기본계수는 Reg. 2025/2621 부속서 II 표에서 찾아 적고 출처·연도를 함께 적으세요' },
+    { key: 'electricity_ef', label: '전력 배출계수 (tCO₂e/MWh)', hint: '한국 사업장은 비워 두면 앱이 한국 기본값 0,475(Reg. 2025/2621 부속서 II)를 넣습니다. 다른 나라는 같은 표에서 찾아 적고 출처·연도를 함께 적으세요(비우면 임시값으로 들어가고 「확인할 것」에 남습니다). PPA·직접 연결 같은 실측은 직접 적으세요' },
     { key: 'electricity_ef_source', label: '전력 배출계수 출처', list: 'electricitySource', hint: '칸을 눌러 목록에서 고르세요' },
     { key: 'electricity_ef_publisher', label: '전력 계수를 공표한 기관', hint: '계수를 어디서 가져왔는지. 예: European Commission(Reg. 2025/2621 부속서 II), 온실가스종합정보센터' },
     { key: 'electricity_ef_document', label: '전력 계수가 실린 문서', hint: '예: Implementing Regulation (EU) 2025/2621 Annex II, 국가 온실가스 배출·흡수계수 2024' },

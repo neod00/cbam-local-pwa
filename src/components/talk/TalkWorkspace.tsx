@@ -11,7 +11,7 @@ import { Button } from '@/components/ui';
 import { calculateLocalResults } from '@/lib/calculation-engine';
 import { summarizeEnergySplits } from '@/lib/energy-split-summary';
 import { evaluateEuExportReadiness, getEuExportIssueEditHref } from '@/lib/eu-template-export';
-import { ELECTRICITY_GRID_FACTOR_GUIDE } from '@/lib/electricity-ef-basis';
+import { ELECTRICITY_GRID_FACTOR_GUIDE, GRID_DEFAULT_FACTORS, GRID_FACTOR_LICENSE_NOTE, gridDefaultFor } from '@/lib/electricity-ef-basis';
 import { ownElectricityMwh } from '@/lib/electricity-own-share';
 import { describeFuelEditBlock, ELECTRICITY_DEFAULT_EF_SOURCE, ELECTRICITY_EF_SOURCE_OPTIONS, ELECTRICITY_PLACEHOLDER_EF, TALK_FUEL_KINDS } from '@/lib/conversation-energy';
 import { describePrecursorEditBlock, fillEuDefault, precursorAnswerFromExisting, type DefaultFill } from '@/lib/conversation-precursor';
@@ -163,6 +163,12 @@ export function TalkWorkspace() {
     const [elecMwh, setElecMwh] = useState('');
     const [elecEf, setElecEf] = useState(String(ELECTRICITY_PLACEHOLDER_EF));
     const [elecSource, setElecSource] = useState<string>(ELECTRICITY_DEFAULT_EF_SOURCE);
+
+    // 사업장이 한국이면 임시 자리값(0.47) 대신 내장 한국 값(2025/2621 부속서 II)을 미리 채운다. 사용자가 다른 값을 적으면 건드리지 않는다.
+    const koreaDefault = gridDefaultFor(data.installations[0]?.country);
+    useEffect(() => {
+        if (koreaDefault && Number(elecEf) === ELECTRICITY_PLACEHOLDER_EF) setElecEf(String(koreaDefault.value));
+    }, [koreaDefault, elecEf]);
 
     const reload = useCallback(async () => {
         setData(await loadTalkData());
@@ -947,10 +953,23 @@ export function TalkWorkspace() {
                     <label className="mt-3 block text-sm font-semibold text-slate-700">
                         전력 배출계수 (tCO₂e/MWh)
                         <input className={fieldClass} value={elecEf} onChange={(event) => setElecEf(event.target.value)} inputMode="decimal" />
+                        <span className="mt-1.5 flex flex-wrap items-center gap-2" data-testid="grid-default-buttons">
+                            {GRID_DEFAULT_FACTORS.map((item) => (
+                                <button
+                                    key={item.key}
+                                    type="button"
+                                    className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-100"
+                                    onClick={() => { setElecEf(String(item.value)); setElecSource('COUNTRY_GRID_DEFAULT'); }}
+                                    title={`2025/2621 부속서 II — ${item.tableRow}`}
+                                >
+                                    {item.label} {item.value} 적용
+                                </button>
+                            ))}
+                        </span>
                         <span className="block text-xs font-normal text-slate-500">국가 기본계수 또는 PPA·직접연결 실측만 인정됩니다. 녹색프리미엄으로 낮출 수 없습니다.</span>
                     </label>
                     <p className="mt-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-                        {Number(elecEf) === ELECTRICITY_PLACEHOLDER_EF ? '미리 채워진 0.47은 임시 자리값입니다. ' : ''}<span className="font-semibold">앱은 한국 계통 평균값을 갖고 있지 않습니다</span> — {ELECTRICITY_GRID_FACTOR_GUIDE} EU가 인정하는 값인지는 수입자·검증인에게 확인이 필요합니다.
+                        {Number(elecEf) === ELECTRICITY_PLACEHOLDER_EF ? '미리 채워진 0.47은 임시 자리값입니다. ' : ''}<span className="font-semibold">앱에는 한국 0.475와 「목록에 없는 나라」 0.465 두 값만 들어 있습니다</span> — {ELECTRICITY_GRID_FACTOR_GUIDE} {GRID_FACTOR_LICENSE_NOTE} EU가 인정하는 값인지는 수입자·검증인에게 확인이 필요합니다.
                     </p>
                     <label className="mt-3 block text-sm font-semibold text-slate-700">
                         계수 출처
