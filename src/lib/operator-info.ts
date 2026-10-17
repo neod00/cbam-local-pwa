@@ -36,15 +36,15 @@ export interface OperatorInfo {
  */
 export const OPERATOR_INFO: OperatorInfo = {
     service_name: 'CBAM Local',
-    operator_name: '',
-    business_registration_no: '',
-    address: '',
+    operator_name: 'OpenBrain Inc.',
+    business_registration_no: '없음',
+    address: '비공개',
     contact_email: 'openbrain.main@gmail.com',
-    privacy_officer: '',
+    privacy_officer: 'OpenBrain Inc.',
     governing_law: '대한민국 법',
-    jurisdiction: '',
-    terms_effective_date: '',
-    privacy_effective_date: '',
+    jurisdiction: '서울중앙지방법원',
+    terms_effective_date: '2026-11-01',
+    privacy_effective_date: '2026-11-01',
 };
 
 const FIELD_LABELS: Record<keyof OperatorInfo, string> = {

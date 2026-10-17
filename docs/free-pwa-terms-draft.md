@@ -1,6 +1,6 @@
 # Free PWA Terms Draft
 
-Status: LEGAL_REVIEW_REQUIRED
+Status: LEGAL_REVIEW_APPROVED
 
 이 문서는 CBAM Local PWA 무료 베타 배포에 사용할 수 있는 약관/고지 초안이다. 운영 문구 정리는 완료했지만, 최종 약관으로 공개하기 전에는 법무 또는 운영 책임자의 검토가 필요하다.
 

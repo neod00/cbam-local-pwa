@@ -1,6 +1,6 @@
 // run36 — 씨밤이(컨설턴트)가 풍강 본사(화성) 방문을 가정해 서식에 적은 값(1차: 「안내」와 설명 줄만 보고 채운 그대로).
 // 공개 자료에서 온 것: 회사명·주소·설립연도·제품군·설비(냉간포머 약 70대, 열간포머 약 1200℃, 태핑 약 210대)·
-//   2025년 온실가스(본사 Scope 1 299 / Scope 2 4,179 tCO2e, LRQA 제한적 보증). 그 밖의 품번·생산량·연료·원료·공급사·담당자는 모두 가상이다.
+//   2025년 온실가스(본사 Scope 1 299 / Scope 2 4,179 tCO2e, 제3자 제한적 보증). 그 밖의 품번·생산량·연료·원료·공급사·담당자는 모두 가상이다.
 //   node cbamy/runs/2026-10-12_run36-pungkang-workbook/make-fill.mjs
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
