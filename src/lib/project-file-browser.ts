@@ -10,7 +10,7 @@ import {
     startNewProject,
     type CbamBackupFile,
 } from './local-db';
-import { backupFilename, PROJECT_FILE_EXTENSION, type FileHandleLike, type FilePickerOptions, type ProjectFileDeps } from './project-file';
+import { addRecent, backupFilename, PROJECT_FILE_EXTENSION, type FileHandleLike, type FilePickerOptions, type ProjectFileDeps, type RecentFile } from './project-file';
 
 /**
  * 프로젝트 파일 기능의 브라우저 쪽 연결 — 파일 선택창·내려받기·핸들 보관.
@@ -21,6 +21,7 @@ import { backupFilename, PROJECT_FILE_EXTENSION, type FileHandleLike, type FileP
 const HANDLE_DB = 'cbam-file-handles';
 const HANDLE_STORE = 'handles';
 const HANDLE_KEY = 'current';
+const RECENT_KEY = 'recent';
 
 function openHandleDb(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
@@ -86,6 +87,18 @@ export function createBrowserProjectFileDeps(): ProjectFileDeps<CbamBackupFile> 
             clear: async () => { await withStore('readwrite', (store) => store.delete(HANDLE_KEY)); },
         },
         markSaved: (isoTime) => window.localStorage.setItem(CBAM_LAST_BACKUP_AT_KEY, isoTime),
+        // 최근 파일은 파일 접근 기능이 있는 브라우저에서만 의미가 있다(핸들을 보관해 선택창 없이 다시 연다). 핸들과 같은 별도 저장소에 둔다.
+        recent: picker.showSaveFilePicker ? {
+            list: async () => (await withStore<RecentFile[]>('readonly', (store) => store.get(RECENT_KEY))) ?? [],
+            add: async (handle, at) => {
+                const current = (await withStore<RecentFile[]>('readonly', (store) => store.get(RECENT_KEY))) ?? [];
+                await withStore('readwrite', (store) => store.put(addRecent(current, handle, at), RECENT_KEY));
+            },
+            remove: async (name) => {
+                const current = (await withStore<RecentFile[]>('readonly', (store) => store.get(RECENT_KEY))) ?? [];
+                await withStore('readwrite', (store) => store.put(current.filter((item) => item.name !== name), RECENT_KEY));
+            },
+        } : undefined,
     };
 }
 

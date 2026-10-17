@@ -1,13 +1,17 @@
 'use client';
 
 import { listLocalItems, type CbamBackupFile } from '@/lib/local-db';
-import { CBAM_LAST_BACKUP_AT_KEY } from '@/lib/local-db';
+import { CBAM_LAST_BACKUP_AT_KEY, CBAM_LAST_CHANGE_AT_KEY, CBAM_PROJECT_CHANGED_EVENT } from '@/lib/local-db';
 import {
     describeBackupContent,
+    isProjectDirty,
+    openRecentFile,
     readProjectFile,
+    remember,
     saveProject,
     suggestProjectFilename,
     type FileHandleLike,
+    type RecentFile,
 } from '@/lib/project-file';
 import {
     createBrowserProjectFileDeps,
@@ -16,12 +20,15 @@ import {
     startNewProjectAndDetach,
     supportsFileSystemAccess,
 } from '@/lib/project-file-browser';
-import { ChevronDown, FileDown, FilePlus2, FileUp, Save, SaveAll } from 'lucide-react';
+import { ChevronDown, Clock, FileDown, FilePlus2, FileUp, Save, SaveAll } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /**
  * 파일 메뉴 — 새로 만들기 · 열기 · 저장(Ctrl+S) · 다른 이름으로 저장. 워드·엑셀처럼 파일 하나가 프로젝트다.
  * 파일 내용은 종전 백업(.cbam)과 같다. 브라우저 안의 자동 저장은 그대로 두고, 이 메뉴는 그 위에 파일로 내보내고 불러온다.
+ *
+ * 2단계: 「저장 안 된 변경 있음」 표시(마지막 변경 시각 > 마지막 저장 시각) · 연결된 파일이 있는데 저장 안 한 변경이 있을 때 창을 닫으면 경고 ·
+ * 최근 파일 목록(핸들을 보관해 선택창 없이 연다 — 파일 접근 기능이 있는 브라우저).
  */
 
 type Pending =
@@ -44,6 +51,8 @@ export function FileMenu() {
     const [savedAt, setSavedAt] = useState<string | null>(null);
     const [message, setMessage] = useState('');
     const [pending, setPending] = useState<Pending | null>(null);
+    const [dirty, setDirty] = useState(false);
+    const [recent, setRecent] = useState<RecentFile[]>([]);
     const rootRef = useRef<HTMLDivElement>(null);
 
     // 지금 연결된 파일 이름과 마지막 저장 시각
@@ -53,6 +62,39 @@ export function FileMenu() {
         try { setSavedAt(window.localStorage.getItem(CBAM_LAST_BACKUP_AT_KEY)); } catch { /* 저장소를 못 읽어도 메뉴는 쓴다 */ }
         return () => { active = false; };
     }, [deps]);
+
+    // 저장 안 된 변경 — 입력이 바뀌면(같은 창은 이벤트, 다른 창은 storage) 다시 계산한다.
+    const refreshDirty = useCallback(() => {
+        try {
+            setSavedAt(window.localStorage.getItem(CBAM_LAST_BACKUP_AT_KEY));
+            setDirty(isProjectDirty(window.localStorage.getItem(CBAM_LAST_CHANGE_AT_KEY), window.localStorage.getItem(CBAM_LAST_BACKUP_AT_KEY)));
+        } catch { /* 저장소를 못 읽으면 표시만 못 한다 */ }
+    }, []);
+    useEffect(() => {
+        refreshDirty();
+        window.addEventListener(CBAM_PROJECT_CHANGED_EVENT, refreshDirty);
+        window.addEventListener('storage', refreshDirty);
+        return () => {
+            window.removeEventListener(CBAM_PROJECT_CHANGED_EVENT, refreshDirty);
+            window.removeEventListener('storage', refreshDirty);
+        };
+    }, [refreshDirty]);
+
+    // 창을 닫을 때 경고 — 연결된 파일이 있는데 그 파일에 없는 변경이 있을 때만. 입력은 브라우저에 자동 저장되므로 파일 없이 쓰는 사람에게는 묻지 않는다.
+    useEffect(() => {
+        if (!dirty || !fileName) return;
+        const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+        window.addEventListener('beforeunload', warn);
+        return () => window.removeEventListener('beforeunload', warn);
+    }, [dirty, fileName]);
+
+    // 메뉴를 열 때마다 최근 파일 목록을 읽는다.
+    useEffect(() => {
+        if (!open || !deps.recent) return;
+        let active = true;
+        deps.recent.list().then((list) => { if (active) setRecent(list); }).catch(() => undefined);
+        return () => { active = false; };
+    }, [open, deps]);
 
     useEffect(() => {
         if (!open) return;
@@ -75,6 +117,7 @@ export function FileMenu() {
             if (result.status === 'cancelled') return false;
             setFileName(result.how === 'download' ? null : result.name);
             setSavedAt(result.savedAt);
+            refreshDirty();
             setMessage(result.how === 'download'
                 ? `「${result.name}」을(를) 내려받았습니다. 이 브라우저는 같은 파일에 덮어쓰기를 지원하지 않아 저장할 때마다 내려받습니다.`
                 : `「${result.name}」에 저장했습니다.`);
@@ -85,7 +128,7 @@ export function FileMenu() {
         } finally {
             setBusy(false);
         }
-    }, [deps, suggestedName]);
+    }, [deps, suggestedName, refreshDirty]);
 
     // Ctrl+S / ⌘S
     useEffect(() => {
@@ -113,6 +156,27 @@ export function FileMenu() {
         }
     }
 
+    async function handleOpenRecent(entry: RecentFile) {
+        setOpen(false);
+        setBusy(true);
+        setMessage('');
+        try {
+            const result = await openRecentFile(entry, parseProjectFile);
+            if (result.status === 'opened') {
+                setPending({ kind: 'open', parsed: result.parsed, name: result.name, handle: result.handle });
+            } else if (result.status === 'denied') {
+                setMessage(`「${entry.name}」을(를) 읽을 권한을 받지 못했습니다. 「열기…」로 다시 고르세요.`);
+            } else if (result.status === 'missing') {
+                await deps.recent?.remove(entry.name);
+                setMessage(`「${entry.name}」을(를) 찾을 수 없습니다(지웠거나 옮겼습니다). 최근 목록에서 뺐습니다.`);
+            }
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : '파일을 읽지 못했습니다.');
+        } finally {
+            setBusy(false);
+        }
+    }
+
     async function proceed(saveFirst: boolean) {
         const target = pending;
         if (!target) return;
@@ -123,7 +187,12 @@ export function FileMenu() {
                 await startNewProjectAndDetach(deps);
             } else {
                 await restoreProjectFromBackup(target.parsed);
-                if (target.handle) await deps.handles.set(target.handle); else await deps.handles.clear();
+                if (target.handle) {
+                    await deps.handles.set(target.handle);
+                    await remember(deps, target.handle, new Date().toISOString());
+                } else {
+                    await deps.handles.clear();
+                }
             }
             // 화면들이 저장소를 새로 읽도록 지도로 돌아가 다시 시작한다.
             window.location.assign('/');
@@ -136,7 +205,8 @@ export function FileMenu() {
     }
 
     const itemClass = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50';
-    const status = fileName ? `${fileName}${savedAt ? ` · ${timeLabel(savedAt)} 저장` : ''}` : savedAt ? `파일 이름 없음 · ${timeLabel(savedAt)} 저장` : '아직 파일로 저장하지 않음';
+    const base = fileName ? `${fileName}${savedAt ? ` · ${timeLabel(savedAt)} 저장` : ''}` : savedAt ? `파일 이름 없음 · ${timeLabel(savedAt)} 저장` : '아직 파일로 저장하지 않음';
+    const status = dirty ? `${base} · 저장 안 된 변경 있음` : base;
 
     return (
         <div ref={rootRef} className="relative" data-testid="file-menu">
@@ -150,6 +220,8 @@ export function FileMenu() {
                 className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 transition hover:bg-slate-50 disabled:opacity-60"
             >
                 파일
+                {dirty && <span className="h-2 w-2 rounded-full bg-amber-500" title="파일에 저장 안 된 변경이 있습니다" data-testid="file-dirty-dot" />}
+                {dirty && <span className="sr-only">저장 안 된 변경 있음</span>}
                 <ChevronDown className="h-4 w-4" />
             </button>
             {open && (
@@ -159,6 +231,17 @@ export function FileMenu() {
                     <button type="button" role="menuitem" className={itemClass} onClick={() => void handleOpen()} data-testid="file-open"><FileUp className="h-4 w-4" />열기…</button>
                     <button type="button" role="menuitem" className={itemClass} onClick={() => { setOpen(false); void save(false); }} data-testid="file-save"><Save className="h-4 w-4" />저장 <span className="ml-auto text-xs font-normal text-slate-400">Ctrl+S</span></button>
                     <button type="button" role="menuitem" className={itemClass} onClick={() => { setOpen(false); void save(true); }} data-testid="file-save-as"><SaveAll className="h-4 w-4" />다른 이름으로 저장…</button>
+                    {recent.length > 0 && (
+                        <div className="mt-1 border-t border-slate-100 pt-1" data-testid="file-recent">
+                            <p className="px-3 pb-1 pt-1 text-xs font-semibold text-slate-500">최근 파일</p>
+                            {recent.map((entry) => (
+                                <button key={entry.name} type="button" role="menuitem" className={itemClass} onClick={() => void handleOpenRecent(entry)} data-testid="file-recent-item" title={`${entry.name} · ${entry.at.slice(0, 16).replace('T', ' ')} 저장·열기`}>
+                                    <Clock className="h-4 w-4 flex-none text-slate-400" />
+                                    <span className="min-w-0 truncate">{entry.name}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     <p className="px-3 pt-2 text-xs leading-5 text-slate-500">
                         {direct ? '입력한 내용은 이 브라우저에 자동으로 저장됩니다. 파일로 저장하면 다른 컴퓨터로 옮기거나 보관할 수 있습니다.' : '이 브라우저에서는 저장할 때마다 .cbam 파일을 내려받습니다(같은 파일에 덮어쓰지 못합니다). Chrome·Edge에서는 덮어쓰기가 됩니다.'}
                     </p>
