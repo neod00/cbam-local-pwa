@@ -767,6 +767,40 @@ export async function listLocalItems<TStoreName extends StoreName>(
   return rows;
 }
 
+/**
+ * 프로젝트 입력이 마지막으로 바뀐 시각(이 브라우저의 localStorage). 파일 메뉴가 「저장 안 된 변경」을 알리는 데 쓴다 —
+ * 마지막 저장 시각(CBAM_LAST_BACKUP_AT_KEY)보다 늦으면 파일에 없는 변경이 있다. 라이선스·EU 기준값처럼 프로젝트가 아닌 설정은 세지 않는다.
+ * 새 프로젝트·복원·전체 삭제는 이 표시를 지운다(그 순간 파일과 같거나 비어 있다).
+ */
+export const CBAM_LAST_CHANGE_AT_KEY = "cbam:last-change-at";
+export const CBAM_PROJECT_CHANGED_EVENT = "cbam-project-changed";
+
+const isProjectScopedSetting = (key: string | undefined) =>
+  Boolean(key) && !key!.startsWith("reference:") && !key!.startsWith("license:") && !(NEW_PROJECT_PRESERVED_SETTING_KEYS as readonly string[]).includes(key!);
+
+function noteProjectChange(storeName: StoreName, item?: { key?: string }) {
+  if (typeof window === "undefined") return;
+  if (storeName === "settings" && !isProjectScopedSetting(item?.key)) return;
+
+  try {
+    window.localStorage.setItem(CBAM_LAST_CHANGE_AT_KEY, nowIso());
+    window.dispatchEvent(new Event(CBAM_PROJECT_CHANGED_EVENT));
+  } catch {
+    // 저장소를 못 써도 입력 저장은 그대로 된다 — 변경 표시만 못 한다.
+  }
+}
+
+function clearProjectChangeMark() {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(CBAM_LAST_CHANGE_AT_KEY);
+    window.dispatchEvent(new Event(CBAM_PROJECT_CHANGED_EVENT));
+  } catch {
+    // 위와 같다.
+  }
+}
+
 export async function createLocalItem<TStoreName extends StoreName>(
   storeName: TStoreName,
   item: Omit<StoreEntityMap[TStoreName], keyof LocalEntity> & Partial<Pick<LocalEntity, "id">>
@@ -780,6 +814,7 @@ export async function createLocalItem<TStoreName extends StoreName>(
   } as StoreEntityMap[TStoreName];
 
   await runTransaction(storeName, "readwrite", (store) => store.put(entity));
+  noteProjectChange(storeName, entity as { key?: string });
   return entity;
 }
 
@@ -793,11 +828,13 @@ export async function updateLocalItem<TStoreName extends StoreName>(
   };
 
   await runTransaction(storeName, "readwrite", (store) => store.put(entity));
+  noteProjectChange(storeName, entity as { key?: string });
   return entity;
 }
 
 export async function deleteLocalItem(storeName: StoreName, id: string): Promise<void> {
   await runTransaction(storeName, "readwrite", (store) => store.delete(id));
+  noteProjectChange(storeName);
 }
 
 /**
@@ -1015,6 +1052,8 @@ export async function importLocalBackup(backup: CbamBackupFile): Promise<void> {
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error);
   });
+
+  clearProjectChangeMark();
 }
 
 export async function clearLocalData(): Promise<void> {
@@ -1031,6 +1070,8 @@ export async function clearLocalData(): Promise<void> {
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error);
   });
+
+  clearProjectChangeMark();
 }
 
 // '새 프로젝트' 시작 시 보존할 설정 키. 라이선스(로그인 유지), 업로드한 EU 기본값(DV) 참조,
@@ -1115,6 +1156,9 @@ export async function startNewProject(): Promise<void> {
   if (carried) {
     await setLocalSetting(REPORT_INPUTS_SETTING_KEY, carried);
   }
+
+  // 새 프로젝트는 비어 있다 — 남긴 답을 다시 쓰며 생긴 변경 표시도 지운다.
+  clearProjectChangeMark();
 }
 
 export async function seedLocalData(): Promise<void> {

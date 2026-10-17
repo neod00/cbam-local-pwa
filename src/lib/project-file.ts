@@ -34,8 +34,34 @@ export interface FileHandleLike {
     name: string;
     createWritable(): Promise<WritableLike>;
     getFile(): Promise<File>;
-    queryPermission?(descriptor: { mode: 'readwrite' }): Promise<'granted' | 'denied' | 'prompt'>;
-    requestPermission?(descriptor: { mode: 'readwrite' }): Promise<'granted' | 'denied' | 'prompt'>;
+    queryPermission?(descriptor: { mode: 'read' | 'readwrite' }): Promise<'granted' | 'denied' | 'prompt'>;
+    requestPermission?(descriptor: { mode: 'read' | 'readwrite' }): Promise<'granted' | 'denied' | 'prompt'>;
+}
+
+/** 최근에 저장하거나 연 파일 한 건 — 핸들을 보관하므로 다시 열 때 선택창 없이 권한만 묻는다(Chrome·Edge). */
+export interface RecentFile {
+    name: string;
+    handle: FileHandleLike;
+    /** 마지막으로 저장하거나 연 시각(ISO) */
+    at: string;
+}
+
+export const MAX_RECENT_FILES = 5;
+
+/** 최근 목록에 한 건을 맨 앞으로 올린다. 같은 이름은 하나로 합친다(폴더가 달라도 이름이 같으면 가장 최근 것만 남는다). */
+export function addRecent(list: RecentFile[], handle: FileHandleLike, at: string): RecentFile[] {
+    return [{ name: handle.name, handle, at }, ...list.filter((item) => item.name !== handle.name)].slice(0, MAX_RECENT_FILES);
+}
+
+/**
+ * 파일에 저장되지 않은 변경이 있는가 — 마지막 변경이 마지막 저장보다 늦으면 true. 변경 표시가 없으면(아직 아무것도 안 바꿈) false,
+ * 저장한 적이 없으면(저장 시각이 없거나 읽을 수 없으면) 변경이 있는 즉시 true.
+ */
+export function isProjectDirty(lastChangeAt: string | null | undefined, lastSavedAt: string | null | undefined): boolean {
+    const changed = lastChangeAt ? Date.parse(lastChangeAt) : NaN;
+    if (!Number.isFinite(changed)) return false;
+    const saved = lastSavedAt ? Date.parse(lastSavedAt) : NaN;
+    return !Number.isFinite(saved) || changed > saved;
 }
 
 export interface FilePickerOptions {
@@ -62,6 +88,12 @@ export interface ProjectFileDeps<TBackup = unknown> {
     };
     /** 저장한 시각을 「마지막 백업」으로 기록한다 */
     markSaved(isoTime: string): void;
+    /** 최근 파일 목록(파일 접근 기능이 있는 브라우저만). 없으면 목록을 만들지 않는다. */
+    recent?: {
+        list(): Promise<RecentFile[]>;
+        add(handle: FileHandleLike, at: string): Promise<void>;
+        remove(name: string): Promise<void>;
+    };
 }
 
 export type SaveResult =
@@ -106,6 +138,11 @@ async function hasWritePermission(handle: FileHandleLike): Promise<boolean> {
     return (await handle.requestPermission({ mode: 'readwrite' })) === 'granted';
 }
 
+/** 최근 목록에 올린다. 목록을 못 써도 저장은 이미 끝났다 — 조용히 넘어간다. */
+export async function remember(deps: Pick<ProjectFileDeps, 'recent'>, handle: FileHandleLike, at: string): Promise<void> {
+    try { await deps.recent?.add(handle, at); } catch { /* 최근 목록은 편의 기능이다 */ }
+}
+
 export async function saveProject<TBackup>(deps: ProjectFileDeps<TBackup>, options: { saveAs?: boolean; suggestedName: string }): Promise<SaveResult> {
     const backup = await deps.exportBackup();
     const text = JSON.stringify(backup, null, 2);
@@ -120,6 +157,7 @@ export async function saveProject<TBackup>(deps: ProjectFileDeps<TBackup>, optio
                     if (await hasWritePermission(current)) {
                         await writeTo(current, text);
                         deps.markSaved(savedAt);
+                        await remember(deps, current, savedAt);
                         return { status: 'saved', name: current.name, how: 'overwrite', savedAt };
                     }
                 } catch (error) {
@@ -133,6 +171,7 @@ export async function saveProject<TBackup>(deps: ProjectFileDeps<TBackup>, optio
             await writeTo(handle, text);
             await deps.handles.set(handle);
             deps.markSaved(savedAt);
+            await remember(deps, handle, savedAt);
             return { status: 'saved', name: handle.name, how: 'picked', savedAt };
         } catch (error) {
             if (isAbort(error)) return { status: 'cancelled' };
@@ -174,6 +213,28 @@ export async function readProjectFile<TParsed>(
     if (!file) return { status: 'cancelled' };
     const parsed = parse(await file.text());
     return { status: 'opened', parsed, name: file.name, handle };
+}
+
+export type OpenRecentResult<TParsed> = OpenResult<TParsed> | { status: 'denied' } | { status: 'missing' };
+
+/**
+ * 최근 파일 한 건을 다시 연다 — 선택창 없이 보관한 핸들로 읽는다. 읽기 권한이 풀려 있으면 한 번 묻는다(사용자 동작 안에서 불러야 한다).
+ * 권한을 거절하면 denied, 파일이 지워졌거나 옮겨졌으면 missing(목록에서 뺄 수 있다). 아직 아무것도 바꾸지 않는다 — 열기 확인 창은 호출한 쪽이 띄운다.
+ */
+export async function openRecentFile<TParsed>(entry: RecentFile, parse: (content: string) => TParsed): Promise<OpenRecentResult<TParsed>> {
+    const handle = entry.handle;
+    try {
+        if (handle.queryPermission && (await handle.queryPermission({ mode: 'read' })) !== 'granted') {
+            if (!handle.requestPermission || (await handle.requestPermission({ mode: 'read' })) !== 'granted') return { status: 'denied' };
+        }
+        const file = await handle.getFile();
+        const parsed = parse(await file.text());
+        return { status: 'opened', parsed, name: file.name, handle };
+    } catch (error) {
+        if (isAbort(error)) return { status: 'cancelled' };
+        if (error instanceof Error && error.name === 'NotFoundError') return { status: 'missing' };
+        throw error;
+    }
 }
 
 /** 확인 창에 보일 한 줄 — 열려는 파일에 무엇이 들었는지. */
