@@ -1082,6 +1082,8 @@ export async function importActivityWorkbook(
                 sameGrid: true,
                 total: electricResult.share,
                 targets: targets.map((item, index) => ({ processId: item.id, fraction: electricWeightSum > 0 ? electricWeights[index] / electricWeightSum : 1 / targets.length })),
+                // 서식의 줄 순서대로 보이게 한다 — 같은 순간에 만든 줄끼리 시각이 겹치지 않도록 줄 번호를 밀리초로 더한다.
+                addedAt: new Date(Date.now() + row.row).toISOString(),
             });
             if (!built.ok) { tell('error', built.reason); continue; }
             for (const text of electricResult.warnings) tell('warning', text);

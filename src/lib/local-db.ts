@@ -310,6 +310,8 @@ export interface OutsourcedElectricityShare extends OutsourcedProcessInfo {
   mwh: number;
   /** 외주처가 이 공정과 같은 나라의 계통 전력을 쓴다고 확인했는가 — 공정의 전력 배출계수 하나로 계산하므로 필수. */
   same_grid: boolean;
+  /** 입력한 시각(ISO). 화면·문서에서 입력한 순서대로 보이게 하는 데만 쓴다 — 없으면(이 필드가 생기기 전 자료) 맨 앞에 둔다. 고치면 처음 입력한 시각을 이어 쓴다. */
+  added_at?: string;
 }
 
 export interface SourceStream extends LocalEntity {

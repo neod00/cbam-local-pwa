@@ -195,6 +195,18 @@ assert.equal(fixRow.code, 'V10');
   const second = O.buildOutsourcedElectricityUpdates(saved.updates, { info: infoOf({ subcontractor: '가상 열처리 C사', technique: 'HEAT_TREATMENT' }), sameGrid: true, total: 10, targets: [{ processId: 'p1', fraction: 1 }] });
   assert.equal(O.groupOutsourcedElectricity([second.updates[0], saved.updates.find((item) => item.id === 'p2')]).length, 2);
   close(second.updates[0].electricity_mwh, 400 + 90 + 10, '두 번째 외주처는 합계에 더해진다');
+  // 입력 순서: 입력한 시각(added_at)이 남고, 묶음은 그 순서로 나온다. 공정 순서와 달라도 입력 순서를 따른다(씨밤이 run42 P2-02).
+  assert.ok(typeof s1.outsourced_electricity[0].added_at === 'string' && s1.outsourced_electricity[0].added_at.length > 10, '입력 시각이 기록된다');
+  const early = O.buildOutsourcedElectricityUpdates(processes, { info: infoOf({ subcontractor: '가상 열처리 G사', technique: 'HEAT_TREATMENT' }), sameGrid: true, total: 10, targets: [{ processId: 'p2', fraction: 1 }], addedAt: '2026-01-01T00:00:01.000Z' });
+  const late = O.buildOutsourcedElectricityUpdates(early.updates.concat(processes.filter((item) => item.id === 'p1')), { info: infoOf({ subcontractor: '가상 코팅 H사' }), sameGrid: true, total: 5, targets: [{ processId: 'p1', fraction: 1 }], addedAt: '2026-01-01T00:00:02.000Z' });
+  const byTime = O.groupOutsourcedElectricity([late.updates[0], early.updates[0]].sort((a, b) => a.id.localeCompare(b.id)));
+  assert.deepEqual(plain(byTime.map((group) => group.first.subcontractor)), ['가상 열처리 G사', '가상 코팅 H사'], '공정 순서(p1 먼저)가 아니라 입력 순서(G → H)');
+  // 시각이 없는 옛 자료는 맨 앞, 고치기는 처음 입력한 시각을 이어 쓴다
+  const legacy = { ...late.updates[0], outsourced_electricity: late.updates[0].outsourced_electricity.map((share) => { const copy = { ...share }; delete copy.added_at; return copy; }) };
+  assert.equal(O.groupOutsourcedElectricity([legacy, early.updates[0]])[0].first.subcontractor, '가상 코팅 H사', '시각 없는 옛 몫은 맨 앞');
+  const keyOf = O.groupOutsourcedElectricity(early.updates)[0].key;
+  const reedited = O.buildOutsourcedElectricityUpdates(early.updates, { editKey: keyOf, info: infoOf({ subcontractor: '가상 열처리 G사', technique: 'HEAT_TREATMENT' }), sameGrid: true, total: 12, targets: [{ processId: 'p2', fraction: 1 }], addedAt: '2030-01-01T00:00:00.000Z' });
+  assert.equal(reedited.updates[0].outsourced_electricity[0].added_at, '2026-01-01T00:00:01.000Z', '고쳐도 처음 입력한 시각을 이어 쓴다(순서가 바뀌지 않는다)');
   // 지우기: 그 몫만 빠지고 자체 몫은 그대로
   const removed = O.buildOutsourcedElectricityRemoval(saved.updates, groups[0].key);
   assert.equal(removed.length, 2);
