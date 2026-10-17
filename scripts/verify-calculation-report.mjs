@@ -147,6 +147,7 @@ assertTrue(!fflate.strFromU8(plain['[Content_Types].xml']).includes('header1.xml
 const prelude = ['const { strToU8, zipSync, strFromU8, unzipSync } = fflate;'].concat([
     'src/lib/report-format.ts',
     'src/lib/docx-builder.ts',
+    'src/lib/file-stamp.ts',
     // cbam-product-rules 가 import 하므로 반드시 그 앞에 온다.
     'src/lib/cn-master.generated.ts',
     'src/lib/cbam-product-rules.ts',
@@ -1322,7 +1323,8 @@ assertTrue(nonSteelCiteXml.includes('N2O·PFC 등 다른 대상 GHG'), '비철�
     const xml = await xmlOf(withRow);
     assertTrue(xml.includes('6.6 외주 공정 몫'), '외주 행이 있으면 제6.6장');
     assertTrue(xml.includes('가상 코팅 B사') && xml.includes('아연 플레이크 코팅') && xml.includes('2025/2547 부속서 II A.3(2)(b)'), '외주처·공정 종류·방법의 근거 조항');
-    assertTrue(xml.includes('36,000') && xml.includes('Nm3'), '우리 몫과 단위');
+    assertTrue(xml.includes('36,000 Nm3'), '우리 몫과 단위(천 단위 구분)');
+    assertTrue(xml.includes('외주처가 쓴 전기(간접배출)는 이 입력에 포함되지 않습니다'), '6.6에 외주처 전력 안내');
     assertTrue(xml.includes('EC CBAM Questions and Answers, 2026-05-27, 4.31'), 'Q&A 4.31 근거');
     assertTrue(xml.includes('근거 갖춤'), '근거가 갖춰지면 상태');
     assertTrue(withRow.sourceStreams.length === 2 && reportModule.createCalculationReport(withRow).issues.filter((issue) => /제6\.6장/.test(issue.message)).length === 0, '갖춰진 외주 몫은 게이트 경고가 없다');

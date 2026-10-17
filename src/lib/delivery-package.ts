@@ -1,4 +1,5 @@
 import { strToU8, zipSync } from 'fflate';
+import { localDateTimeStamp } from './file-stamp';
 import { createDocx, paragraph, table } from './docx-builder';
 import type { LocalCalculationResult } from './calculation-engine';
 import type { ExportChecklistSummary, EuExportReadinessResult, EuTemplateExportVerificationResult } from './eu-template-export';
@@ -67,7 +68,7 @@ export interface DeliveryPackageResult {
 }
 
 function formatStamp(date: Date) {
-    return date.toISOString().slice(0, 19).replace(/[-:T]/g, '');
+    return localDateTimeStamp(date);
 }
 
 function formatDateTime(date: Date | string | undefined) {

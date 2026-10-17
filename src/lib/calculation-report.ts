@@ -1,4 +1,5 @@
 import { cell, createDocx, paragraph, table } from './docx-builder';
+import { localDateStamp } from './file-stamp';
 import { productWithCn } from './product-label';
 import { checkDisplaySum, formatForReport, formatIntegerForReport, formatPercentForReport, formatRawForReport, roundForReport } from './report-format';
 import { getCbamGoodsMetadata, getIndirectEmissionsApplicability } from './cbam-product-rules';
@@ -11,7 +12,7 @@ import { SHARED_HEAT_RULE } from './measurable-heat';
 import { findDefaultValueReference, hasAmbiguousDefaultValueRoutes } from './reference-workbooks';
 import type { DefaultValueReferenceRow, ImportedDefaultValueReference } from './reference-workbooks';
 import { getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
-import { checkOutsourcedStreams, groupOutsourcedStreams, OUTSOURCED_BASIS_ANCHOR, OUTSOURCED_BASIS_LABEL, OUTSOURCED_TECHNIQUE_LABEL } from './outsourced-process';
+import { checkOutsourcedStreams, groupOutsourcedStreams, OUTSOURCED_BASIS_ANCHOR, OUTSOURCED_BASIS_LABEL, OUTSOURCED_ELECTRICITY_NOTICE, OUTSOURCED_TECHNIQUE_LABEL } from './outsourced-process';
 import { calculateLocalResults } from './calculation-engine';
 import type { InternalTransferInput, LocalCalculationResult } from './calculation-engine';
 import type {
@@ -1122,7 +1123,7 @@ function outsourcedProcessSection(input: CalculationReportInput) {
             OUTSOURCED_TECHNIQUE_LABEL[group.technique],
             group.members.map((stream) => processName(stream.process_id)).join(' · '),
             `${OUTSOURCED_BASIS_LABEL[group.basis]} (${OUTSOURCED_BASIS_ANCHOR[group.basis]})`,
-            `${formatRawForReport(group.total)} ${group.unit}`,
+            `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 3 }).format(group.total)} ${group.unit}`,
             [info.note?.trim(), info.evidence?.trim() ? `증빙: ${info.evidence.trim()}` : '', info.technique_evidence?.trim() ? `분류 근거: ${info.technique_evidence.trim()}` : ''].filter(Boolean).join(' / ') || PLACEHOLDER,
             mine.length === 0 ? '근거 갖춤' : '확인 필요',
         ];
@@ -1134,7 +1135,7 @@ function outsourcedProcessSection(input: CalculationReportInput) {
         table(['외주처', '공정', '우리 공정', '우리 몫을 정한 방법(근거)', '우리 몫', '근거·증빙', '상태'], rows, {
             widths: [1100, 1300, 1300, 2000, 1000, 1700, 600], headerShade: SOFT, headerBold: true, repeatHeader: true,
         }),
-        paragraph('우리 몫은 배출원 표(제6.2장)에 「(외주)」로 시작하는 연료 행으로 들어 있고, 공정의 직접배출(제4장)에 그대로 합산된다. 보수적 추정은 설비 사양·가동기록 같은 객관적 근거가 있을 때만 쓰며(2025/2547 부속서 II A.1 5항) 검증에서 확인해야 한다.'),
+        paragraph('우리 몫은 배출원 표(제6.2장)에 「(외주)」로 시작하는 연료 행으로 들어 있고, 공정의 직접배출(제4장)에 그대로 합산된다. 보수적 추정은 설비 사양·가동기록 같은 객관적 근거가 있을 때만 쓰며(2025/2547 부속서 II A.1 5항) 검증에서 확인해야 한다. ' + OUTSOURCED_ELECTRICITY_NOTICE),
     ];
     return { xml: body.join(''), gateIssues };
 }
@@ -2381,7 +2382,7 @@ function annexes() {
 // ---------------------------------------------------------------- 조립
 
 export function createCalculationReportFilename(generatedAt: Date) {
-    return `CBAM_Calculation_Report_${formatDate(generatedAt).replaceAll('-', '')}.docx`;
+    return `CBAM_Calculation_Report_${localDateStamp(generatedAt)}.docx`;
 }
 
 export function createCalculationReport(input: CalculationReportInput): CalculationReportResult {

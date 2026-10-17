@@ -95,6 +95,7 @@ function loadEuExportModule() {
       return path.endsWith('energy-split-summary.ts') ? text.split('fmt').join('fmtEnergySplit') : text;
     })
     .join('\n');
+  const fileStampSource = readFileSync('src/lib/file-stamp.ts', 'utf8').replace(/^export /gm, '');
   const source = readFileSync('src/lib/eu-template-export.ts', 'utf8')
     .replace(
       "import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';",
@@ -108,7 +109,8 @@ function loadEuExportModule() {
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
   const compiled = ts.transpileModule(
-    `${sourceStreamCalculationSource}
+    `${fileStampSource}
+${sourceStreamCalculationSource}
 ${productRulesSource}
 ${reportingScopeSource}
 ${allocationRulesSource}
@@ -172,7 +174,9 @@ function loadDeliveryPackageModule() {
     .replace("import { strToU8, zipSync } from 'fflate';", '')
     .replace(/^import type .*;\r?\n/gm, '')
     .replace(/^export /gm, '');
+  const fileStampSource = readFileSync('src/lib/file-stamp.ts', 'utf8').replace(/^export /gm, '');
   const source = readFileSync('src/lib/delivery-package.ts', 'utf8')
+    .replace(/^import \{[^}]*\} from '\.\/file-stamp';\r?\n/gm, '')
     .replace(
       "import { strToU8, zipSync } from 'fflate';",
       'const { strToU8, zipSync } = fflate;'
@@ -183,7 +187,8 @@ function loadDeliveryPackageModule() {
     .replace(/import type[\s\S]*?;\r?\n/gm, '')
     .replace(/^export /gm, '');
   const compiled = ts.transpileModule(
-    `${docxBuilderSource}
+    `${fileStampSource}
+${docxBuilderSource}
 ${source}
 function getSourceStreamEmissionFactorBasis(sourceStream) {
   return sourceStream.emission_factor_basis === 'PER_ACTIVITY_UNIT' ? 'PER_ACTIVITY_UNIT' : 'PER_TJ';
@@ -1279,6 +1284,9 @@ assertEqual(readCell(bridgePrecursorSheet, 'L50'), '0.346', 'E_PurchPrec L50 (br
 assertEqual(readCell(bridgePrecursorSheet, 'L51'), '0.59', 'E_PurchPrec L51 (bridge factor)');
 
 const packageGeneratedAt = new Date('2026-06-14T00:00:00.000Z');
+// 패키지 안의 백업 파일 이름은 현지 시간 스탬프다(file-stamp) — 어느 시간대에서 돌려도 같은 기대값을 만든다.
+const packageStamp = [packageGeneratedAt.getFullYear(), packageGeneratedAt.getMonth() + 1, packageGeneratedAt.getDate(), packageGeneratedAt.getHours(), packageGeneratedAt.getMinutes(), packageGeneratedAt.getSeconds()]
+  .map((value, index) => String(value).padStart(index === 0 ? 4 : 2, '0')).join('');
 const backup = {
   manifest: {
     format: 'cbam-local-backup',
@@ -1372,7 +1380,7 @@ const expectedPackageFiles = [
   '01_synthetic-cbam-template_cbam-local-copy_20260614.xlsx',
   '02_Calculation_Basis_Summary_KO-EN.docx',
   '03_Evidence_Checklist_KO-EN.docx',
-  'internal_archive/04_cbam-local-backup-20260614000000.cbam',
+  `internal_archive/04_cbam-local-backup-${packageStamp}.cbam`,
   'internal_archive/05_export-log.json',
   'README_KO-EN.txt',
 ];
@@ -1417,7 +1425,7 @@ assertEqual(
   'delivery package includes 04_Calculation_Report.docx'
 );
 assertEqual(
-  String(Boolean(packageWithReportZip['internal_archive/05_cbam-local-backup-20260614000000.cbam'])),
+  String(Boolean(packageWithReportZip[`internal_archive/05_cbam-local-backup-${packageStamp}.cbam`])),
   'true',
   'backup shifted to internal_archive/05 when report is included'
 );
@@ -1457,14 +1465,14 @@ const withBothZip = fflate.unzipSync(new Uint8Array(await withBoth.blob.arrayBuf
 assertEqual(String(withBoth.files.length), '8', 'package file count with report and monitoring plan');
 assertEqual(fflate.strFromU8(withBothZip['05_Monitoring_Plan_Draft.docx']), 'fake-plan', 'monitoring plan is 05 after the report');
 assertEqual(fflate.strFromU8(withBothZip['04_Calculation_Report.docx']), 'fake-report', 'report stays 04');
-assertEqual(String(Boolean(withBothZip['internal_archive/06_cbam-local-backup-20260614000000.cbam'])), 'true', 'backup is 06 with report + plan');
+assertEqual(String(Boolean(withBothZip[`internal_archive/06_cbam-local-backup-${packageStamp}.cbam`])), 'true', 'backup is 06 with report + plan');
 assertEqual(String(Boolean(withBothZip['internal_archive/07_export-log.json'])), 'true', 'log is 07 with report + plan');
 const bothReadme = fflate.strFromU8(withBothZip['README_KO-EN.txt']);
 assertEqual(String(bothReadme.includes('Monitoring_Plan_Draft.docx') && bothReadme.includes('DRAFT') && bothReadme.includes('초안')), 'true', 'README warns that the monitoring plan is a draft');
 const planOnly = await deliveryPackage.createDeliveryPackage({ ...packageBase, monitoringPlanBlob: fakeDocx('fake-plan') });
 const planOnlyZip = fflate.unzipSync(new Uint8Array(await planOnly.blob.arrayBuffer()));
 assertEqual(String(Boolean(planOnlyZip['04_Monitoring_Plan_Draft.docx'])), 'true', 'without a report the plan takes 04');
-assertEqual(String(Boolean(planOnlyZip['internal_archive/05_cbam-local-backup-20260614000000.cbam'])), 'true', 'backup 05 with plan only');
+assertEqual(String(Boolean(planOnlyZip[`internal_archive/05_cbam-local-backup-${packageStamp}.cbam`])), 'true', 'backup 05 with plan only');
 assertEqual(String(Boolean(planOnlyZip['internal_archive/06_export-log.json'])), 'true', 'log 06 with plan only');
 const noReadmePlan = fflate.strFromU8(packageZip['README_KO-EN.txt']);
 assertEqual(String(noReadmePlan.includes('Monitoring_Plan_Draft')), 'false', 'a package without the plan does not mention it');
@@ -1484,7 +1492,7 @@ assertEqual(
   'checklist docx title'
 );
 assertEqual(
-  JSON.parse(fflate.strFromU8(packageZip['internal_archive/04_cbam-local-backup-20260614000000.cbam'])).manifest.format,
+  JSON.parse(fflate.strFromU8(packageZip[`internal_archive/04_cbam-local-backup-${packageStamp}.cbam`])).manifest.format,
   'cbam-local-backup',
   'delivery package backup format'
 );

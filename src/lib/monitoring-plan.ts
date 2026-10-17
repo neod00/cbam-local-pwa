@@ -1,5 +1,6 @@
 import { describeProcessGrouping } from './allocation-rules';
 import { createDocx, paragraph, table } from './docx-builder';
+import { localDateStamp, localIsoDate } from './file-stamp';
 import { D43_EVIDENCE, ELECTRICITY_EF_BASIS_LABEL, resolveElectricityEfBasis } from './electricity-ef-basis';
 import type {
     Installation,
@@ -14,7 +15,7 @@ import type {
 } from './local-db';
 import { findBenchmarkReference, type ImportedBenchmarkReference } from './reference-workbooks';
 import { STEEL_BOUNDARY_NOTE } from './steel-boundary';
-import { groupOutsourcedStreams, OUTSOURCED_BASIS_ANCHOR, OUTSOURCED_BASIS_LABEL, OUTSOURCED_TECHNIQUE_LABEL } from './outsourced-process';
+import { groupOutsourcedStreams, OUTSOURCED_BASIS_ANCHOR, OUTSOURCED_BASIS_LABEL, OUTSOURCED_ELECTRICITY_NOTICE, OUTSOURCED_TECHNIQUE_LABEL } from './outsourced-process';
 
 /**
  * 모니터링 계획 초안 — 2025/2547 부속서 II A.5가 정한 22개 항목의 틀에, 앱에 이미 입력된 자료를 옮겨 적는다.
@@ -76,6 +77,7 @@ function outsourcedPlanParagraphs(streams: SourceStream[]): string[] {
         '외주 공정: 철강제품 경계 안의 공정을 외주사에서 하고 물건이 돌아오면 우리 사업장에서 일어난 것으로 다루며(EC CBAM Q&A 2026-05-27, 4.31), 외주처가 우리 부품에 쓴 연료의 몫을 해당 생산공정의 연료 배출원으로 넣습니다. 돌아온 부품은 구매 전구물질로 넣지 않습니다.',
         ...groups.map((group) => `· ${group.subcontractor} — ${OUTSOURCED_TECHNIQUE_LABEL[group.technique]}: 우리 몫 ${fmt(group.total)} ${group.unit}, 방법 「${OUTSOURCED_BASIS_LABEL[group.basis]}」(${OUTSOURCED_BASIS_ANCHOR[group.basis]}). 근거: ${group.info.note?.trim() || PLAN_TODO}. 증빙: ${group.info.evidence?.trim() || PLAN_TODO}.`),
         '외주 공정의 통제(2025/2547 부속서 II A.5 22(g)): 외주처에서 받은 연료·가동 자료의 출처와 계산(재구성·처리 중량 비율·추정)을 산정 근거와 함께 보관하고, 외주처 고지서와 우리 몫의 합계가 맞는지 해마다 대사합니다.',
+        OUTSOURCED_ELECTRICITY_NOTICE,
     ];
 }
 
@@ -120,7 +122,7 @@ export function buildMonitoringPlan(input: MonitoringPlanInput): MonitoringPlan 
             title: '모니터링 계획의 날짜와 판 번호',
             status: missing.length === 0 ? 'AUTO' : 'PARTIAL',
             paragraphs: [
-                `이 초안을 만든 날: ${input.generatedAt.toISOString().slice(0, 10)}`,
+                `이 초안을 만든 날: ${localIsoDate(input.generatedAt)}`,
                 ...(missing.length === 0 ? [] : [`${missing.join(' · ')}: ${PLAN_TODO} — 지도 8단계의 보고서 입력(모니터링 계획)에 적으면 여기 실립니다.`]),
             ],
             tables: [{ headers: ['항목', '내용'], rows: [['문서번호', dash(plan?.doc_no)], ['판(버전)', dash(plan?.version)], ['승인일', dash(plan?.approved_at)]] }],
@@ -497,8 +499,7 @@ const STATUS_LABEL: Record<PlanItemStatus, string> = {
 const STATUS_COLOR: Record<PlanItemStatus, string> = { AUTO: '0F766E', PARTIAL: 'B45309', TODO: 'B91C1C', NA: '64748B' };
 
 export function createMonitoringPlanFilename(generatedAt: Date) {
-    const pad = (value: number) => String(value).padStart(2, '0');
-    return `CBAM_Monitoring_Plan_Draft_${generatedAt.getFullYear()}${pad(generatedAt.getMonth() + 1)}${pad(generatedAt.getDate())}.docx`;
+    return `CBAM_Monitoring_Plan_Draft_${localDateStamp(generatedAt)}.docx`;
 }
 
 export function createMonitoringPlanDocument(input: MonitoringPlanInput) {

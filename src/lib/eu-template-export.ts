@@ -1,4 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { localDateStamp } from './file-stamp';
 import type { BackupStatus, Installation, InternalTransfer, Product, ProductOutputLine, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import type { CnCodeOption } from './cn-code-options';
 import type { ScenarioRiskSummary } from './scenario-calculation';
@@ -2794,7 +2795,7 @@ export async function createEuTemplateExportCopy(file: File, data: EuTemplateExp
 
 export function createEuExportFilename(originalFilename: string): string {
     const baseName = originalFilename.replace(/\.xlsx$/i, '');
-    const timestamp = new Date().toISOString().slice(0, 10).replaceAll('-', '');
+    const timestamp = localDateStamp(new Date());
     return `${baseName}_cbam-local-copy_${timestamp}.xlsx`;
 }
 

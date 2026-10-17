@@ -182,3 +182,20 @@ console.log('Outsourced process verified (사례 A 36,000 · 사례 B 18,000 · 
   assert.ok(/disabled=\{busy \|\| technique === 'ELECTROPLATING'\}/.test(screen), '전기도금이면 저장 버튼이 꺼진다');
   assert.ok(/구매 강재」에 적지 마세요/.test(screen), '돌아온 부품을 구매 강재에 적지 말라고 안내한다');
 }
+
+// ── 7) 보고서·문서의 모양과 외주처 전력 안내(씨밤이 run40 P2-02·03) ──
+{
+  // 묶음은 입력한 순서(만든 순)를 따른다 — 저장소가 키(UUID) 순으로 돌려줘도
+  const first = { ...withMeta, id: 'zzz-first', created_at: '2026-01-01T00:00:00.000Z', outsourced: { ...withMeta.outsourced, subcontractor: '가상 코팅 B사' } };
+  const second = { ...withMeta, id: 'aaa-second', created_at: '2026-01-02T00:00:00.000Z', outsourced: { ...withMeta.outsourced, subcontractor: '가상 열처리 C사', technique: 'HEAT_TREATMENT' } };
+  assert.deepEqual(plain(O.groupOutsourcedStreams([second, first]).map((group) => group.subcontractor)), ['가상 코팅 B사', '가상 열처리 C사'], '저장소 순서가 아니라 만든 순');
+  // 같은 안내 문장을 네 곳이 쓴다
+  const notice = O.OUTSOURCED_ELECTRICITY_NOTICE;
+  assert.match(notice, /외주처가 쓴 전기\(간접배출\)는 이 입력에 포함되지 않습니다/);
+  for (const [file, label] of [['src/components/guided/OutsourcedProcess.tsx', '입력 화면'], ['src/lib/calculation-report.ts', '산정보고서 6.6'], ['src/lib/monitoring-plan.ts', '모니터링 계획 9번']]) {
+    assert.ok(readFileSync(file, 'utf8').includes('OUTSOURCED_ELECTRICITY_NOTICE'), `${label}이(가) 외주처 전력 안내를 쓴다`);
+  }
+  assert.ok(/외주처가 쓴 전기\(간접배출\)는 아직 받지 않습니다/.test(readFileSync('src/lib/activity-workbook.ts', 'utf8')), '서식 13번 시트 제목');
+  assert.ok(readFileSync('src/lib/activity-workbook.ts', 'utf8').includes('외주처가 쓴 전기(간접배출)는 이 시트가 받지 않습니다'), '서식 안내 시트');
+  assert.ok(/new Intl\.NumberFormat\('ko-KR', \{ maximumFractionDigits: 3 \}\)\.format\(group\.total\)/.test(readFileSync('src/lib/calculation-report.ts', 'utf8')), '6.6 표의 우리 몫은 천 단위 구분');
+}
