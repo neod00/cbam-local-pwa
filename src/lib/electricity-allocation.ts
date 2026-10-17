@@ -1,5 +1,6 @@
 import { ELECTRICITY_SPLIT_BASIS_ANCHOR, RECONCILIATION_REVIEW_DEVIATION } from './allocation-rules';
 import type { ElectricitySplitBasis } from './allocation-rules';
+import { electricityTotalFromOwn } from './electricity-own-share';
 import type { ProductionProcess } from './local-db';
 
 /**
@@ -152,7 +153,8 @@ export function buildElectricitySplitUpdates<T extends ProductionProcess>(proces
         if (share) {
             updates.push({
                 ...process,
-                electricity_mwh: share.mwh,
+                // 나눈 몫은 자체 몫이다 — 외주처 전력 몫(outsourced_electricity)은 그대로 얹어 둔다.
+                electricity_mwh: electricityTotalFromOwn(process, share.mwh),
                 electricity_shared_meter: {
                     group: plan.group,
                     installation_total_mwh: plan.totalMwh,

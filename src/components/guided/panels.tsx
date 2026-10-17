@@ -37,6 +37,7 @@ import {
     validateProductDraft,
     type PrecursorDraft,
 } from '@/lib/guided-edit';
+import { outsourcedElectricityMwh, ownElectricityMwh } from '@/lib/electricity-own-share';
 import type { GuidedStepId, GuidedStepState } from '@/lib/guided-map';
 import {
     HEAT_STANDARD_BOILER_EFFICIENCY,
@@ -1704,7 +1705,9 @@ function ElectricityForm({
     onSaved: () => Promise<void> | void;
     onSelectStep: (id: GuidedStepId) => void;
 }) {
-    const [mwh, setMwh] = useState(process.electricity_mwh > 0 ? String(process.electricity_mwh) : '');
+    // 입력칸은 자체 몫이다 — 외주처 전력 몫이 있으면 저장할 때 합계에 다시 얹는다(guided-edit.ts buildElectricityUpdate).
+    const [mwh, setMwh] = useState(ownElectricityMwh(process) > 0 ? String(ownElectricityMwh(process)) : '');
+    const outsourcedMwh = outsourcedElectricityMwh(process);
     const [ef, setEf] = useState(String(process.electricity_ef_tco2e_per_mwh || 0.47));
     const [allocationNote, setAllocationNote] = useState(process.electricity_allocation_note ?? '');
     const [efSource, setEfSource] = useState(process.electricity_ef_source ?? 'COUNTRY_GRID_DEFAULT');
@@ -1731,6 +1734,7 @@ function ElectricityForm({
                 <p className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-2.5 text-sm text-emerald-900">
                     <span className="font-semibold">{process.name}</span>에 저장된 값: {fmt(process.electricity_mwh, 1)} MWh
                     × {fmt(process.electricity_ef_tco2e_per_mwh, 4)} = {fmt(process.electricity_mwh * process.electricity_ef_tco2e_per_mwh, 1)} tCO₂e
+                    {outsourcedMwh > 0 && <> (자체 {fmt(ownElectricityMwh(process), 1)} + 외주처 {fmt(outsourcedMwh, 1)} MWh)</>}
                 </p>
             )}
 

@@ -26,6 +26,7 @@ const source = [
   readFileSync('src/lib/cn-master.generated.ts', 'utf8').replace(/^export /gm, ''),
   strip('src/lib/cbam-product-rules.ts'),
   strip('src/lib/reporting-scope.ts', false),
+  strip('src/lib/electricity-own-share.ts'),
   strip('src/lib/allocation-rules.ts'),
   strip('src/lib/measurable-heat.ts'),
   strip('src/lib/precursor-verification.ts'),

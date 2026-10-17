@@ -15,6 +15,7 @@ const strip = (path, all = true) => readFileSync(path, 'utf8')
   .replace(/^export /gm, '');
 const source = [
   strip('src/lib/source-stream-calculation.ts', false),
+  strip('src/lib/electricity-own-share.ts'),
   strip('src/lib/allocation-rules.ts'),
   strip('src/lib/step-explainers.ts'),
   'globalThis.app = { ALLOCATION_RULES, STEP_EXPLAINERS, parseExplainLevel, DEFAULT_EXPLAIN_LEVEL, EXPLAIN_LEVEL_STORAGE_KEY };',

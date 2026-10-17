@@ -7,6 +7,7 @@ import type {
     ReportingPeriod,
     SourceStream,
 } from './local-db';
+import { electricityTotalFromOwn } from './electricity-own-share';
 
 /**
  * 길잡이 지도 패널의 **수정·삭제 로직**. 화면(.tsx)이 아니라 여기 있다.
@@ -251,7 +252,8 @@ export function validateElectricityDraft(draft: ElectricityDraft): string | null
 export function buildElectricityUpdate(existing: ProductionProcess, draft: ElectricityDraft): ProductionProcess {
     return {
         ...existing,
-        electricity_mwh: draft.mwh,
+        // draft.mwh는 자체 몫이다 — 외주처 전력 몫(outsourced_electricity)이 있으면 합계에 그대로 얹는다.
+        electricity_mwh: electricityTotalFromOwn(existing, draft.mwh),
         electricity_ef_tco2e_per_mwh: draft.ef,
         electricity_ef_source: draft.efSource || undefined,
         electricity_allocation_note: draft.allocationNote?.trim() || undefined,
