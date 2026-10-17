@@ -401,9 +401,11 @@ export interface OutsourcedElectricityGroup {
     members: Array<{ process: ProductionProcess; share: OutsourcedElectricityShare }>;
     /** 공정별 몫의 합 (MWh) */
     total: number;
+    /** 처음 입력한 시각 — 이 필드가 생기기 전 자료는 없다 */
+    addedAt?: string;
 }
 
-/** 공정들에 흩어진 외주 전력 몫을 한 건씩 묶는다(입력 순서 유지). */
+/** 공정들에 흩어진 외주 전력 몫을 한 건씩 묶는다. 입력한 시각(added_at) 순 — 시각이 없는 옛 자료는 맨 앞에 공정 순서로 둔다(연료 몫의 입력 순서와 같은 느낌). */
 export function groupOutsourcedElectricity(processes: ProductionProcess[]): OutsourcedElectricityGroup[] {
     const groups = new Map<string, OutsourcedElectricityGroup>();
     for (const process of processes) {
@@ -412,10 +414,12 @@ export function groupOutsourcedElectricity(processes: ProductionProcess[]): Outs
             const group = groups.get(key) ?? { key, first: share, members: [], total: 0 };
             group.members.push({ process, share });
             group.total = roundOut(group.total + share.mwh);
+            if (share.added_at && (!group.addedAt || share.added_at < group.addedAt)) group.addedAt = share.added_at;
             groups.set(key, group);
         }
     }
-    return [...groups.values()];
+    // 정렬은 안정적이다 — 시각이 같거나 없으면 공정 순서가 그대로 남는다.
+    return [...groups.values()].sort((a, b) => (a.addedAt ?? '').localeCompare(b.addedAt ?? ''));
 }
 
 const withElectricityShares = <T extends ProductionProcess>(process: T, shares: OutsourcedElectricityShare[]): T => {
@@ -434,10 +438,17 @@ export function buildOutsourcedElectricityUpdates<T extends ProductionProcess>(p
     sameGrid: boolean;
     total: number;
     targets: Array<{ processId: string; fraction: number }>;
+    /** 입력 시각(ISO) — 없으면 지금. 고치기(editKey)는 처음 입력한 시각을 이어 쓴다. */
+    addedAt?: string;
 }): { ok: true; updates: T[] } | { ok: false; reason: string } {
     const parts = splitOutsourcedShare(input.total, input.targets.map((target) => target.fraction));
     if (!parts) return { ok: false, reason: '공정별 비율의 합이 1(100%)이어야 합니다.' };
-    const record = (mwh: number): OutsourcedElectricityShare => ({ ...input.info, mwh, same_grid: input.sameGrid, total_share: input.total });
+    const earlier = input.editKey
+        ? processes.flatMap((process) => (process.outsourced_electricity ?? []).filter((share) => outsourcedElectricityKey(share, process.period_id) === input.editKey).map((share) => share.added_at ?? ''))
+            .filter(Boolean).sort()[0]
+        : undefined;
+    const addedAt = earlier ?? input.addedAt ?? new Date().toISOString();
+    const record = (mwh: number): OutsourcedElectricityShare => ({ ...input.info, mwh, same_grid: input.sameGrid, total_share: input.total, added_at: addedAt });
     const validation = validateOutsourcedElectricityShare(record(input.total));
     if (validation.errors.length > 0) return { ok: false, reason: validation.errors[0] };
     const updates: T[] = [];

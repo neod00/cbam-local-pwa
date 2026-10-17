@@ -102,3 +102,7 @@ export interface OutsourcedElectricityShare {
 - **모니터링 계획 9번**: 외주처별로 연료·전기 줄을 따로, 통제 문장은 전력 자료도 포함.
 - **할 일**: 외주 전기 몫의 근거 부족 → 외주처에게 받을 것(전력 고지서·설비 정격 kW·가동시간 …), 숫자 어긋남 → 우리가 고칠 것, 연료만 입력한 외주처 → 「전기도 썼는지 확인」(한 건, 알림).
 - 시험: `verify-activity-workbook`(전기 줄 가져오기·잘못된 줄·왕복)·`verify-calculation-report`·`verify-monitoring-plan`·`verify-todo`·`verify-outsourced-process`.
+
+## 10. 입력 순서 (2026-10-17, run42 P2-02)
+
+외주 전기 몫에 선택 필드 `added_at`(입력 시각, ISO)을 둔다. 묶음(`groupOutsourcedElectricity`)은 이 시각 순으로 나오고 — 지도 카드·산정보고서 6.6·모니터링 계획 9번이 같은 순서 — 시각이 없는 옛 자료는 맨 앞에 공정 순서로 둔다. 고치기는 처음 입력한 시각을 이어 쓴다(순서가 바뀌지 않는다). 서식 가져오기는 줄 번호를 밀리초로 더해 같은 순간에 만든 줄끼리도 줄 순서를 지킨다. 읽는 쪽은 이 필드를 쓰지 않으므로 옛 앱·백업 호환은 그대로다(선택 필드, `format_version` 불변).

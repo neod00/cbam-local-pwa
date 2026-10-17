@@ -1125,6 +1125,18 @@ assert.equal(echoRun.result.issues.filter((issue) => /CN 87089997/.test(issue.me
     // 같은 줄을 두 번 올려도 한 번만
     const e3 = await importOf(withOutsourced([electric(), electric()]));
     assert.equal(processOf(e3, '볼트 공정').outsourced_electricity.length, 1, '같은 외주 전기 몫은 한 번만');
+    // 서식에 적은 줄 순서가 화면·문서에서도 이어진다 — 먼저 적은 줄이 나중 공정에 들어가도 먼저 나온다(씨밤이 run42 P2-02)
+    {
+      const OE = load('src/lib/outsourced-process.ts');
+      const ordered = await importOf(withOutsourced([
+        { ...electric({ subcontractor: '가상 열처리 G사', where: '너트 공정' }), row: 5 },
+        { ...electric({ subcontractor: '가상 코팅 H사', where: '볼트 공정' }), row: 6 },
+        { ...electric({ subcontractor: '가상 아연도금 M사', where: '볼트 공정' }), row: 7 },
+      ]));
+      const groups = OE.groupOutsourcedElectricity(ordered.store.data.processes);
+      assert.deepEqual(plain(groups.map((group) => group.first.subcontractor)), ['가상 열처리 G사', '가상 코팅 H사', '가상 아연도금 M사'], '줄 순서대로(공정 순서 볼트 → 너트와 달라도)');
+      assert.ok(groups.every((group) => group.addedAt), '입력 시각이 남는다');
+    }
     // 연료 줄과 전기 줄을 한 외주처가 둘 다: 연료는 연료 행, 전기는 공정 기록
     const both = await importOf(withOutsourced([outsourcedRow(reconstructed), electric({ row: 6 })]));
     assert.equal(outsourcedStreams(both).length, 1);
