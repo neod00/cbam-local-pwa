@@ -1,6 +1,6 @@
 # Free PWA Release Announcement Draft
 
-Status: OPERATOR_REVIEW_REQUIRED
+Status: OPERATOR_REVIEW_APPROVED
 
 이 문서는 CBAM Local PWA 무료 베타 배포 시 사용할 공지문 초안이다. 실제 공개 전에는 서비스명, 운영자 정보, 약관 링크, 개인정보 처리 안내, 배포 URL을 최종 확정해야 한다. 문의 채널은 `openbrain.main@gmail.com`으로 둔다.
 

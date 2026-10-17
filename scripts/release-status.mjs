@@ -77,7 +77,7 @@ const unresolvedDraftSignals = [
   announcementDraft.includes('OPERATOR_REVIEW_REQUIRED')
     ? 'Release announcement still requires operator review.'
     : undefined,
-  goNoGoRecord.includes('DECISION_REQUIRED')
+  /^Status:s*DECISION_REQUIREDs*$/m.test(goNoGoRecord)
     ? 'Go/No-Go decision record is not finalized.'
     : undefined,
   /\[[^\]]+\]/.test(announcementDraft) ? 'Release announcement still contains bracketed placeholder fields.' : undefined,

@@ -213,4 +213,4 @@ Deployment note:
 
 Not blocking code verification, but required before public distribution:
 
-- Finalize free-use terms wording with legal review.
+None. (2026-10-17: the free-use terms wording was approved by the operator; no external legal review was obtained — see Decision Notes in docs/v0.1.0-beta-go-no-go-record.md.)
