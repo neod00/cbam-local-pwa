@@ -159,4 +159,83 @@ assert.equal(fixRow.code, 'V10');
   assert.ok(readFileSync('src/components/guided/ElectricitySplit.tsx', 'utf8').includes('ownElectricityMwh(process)'), '전력 나누기 미리 채움은 자체 몫 합계');
 }
 
+// ── 9) 2단계: 입력 화면이 쓰는 순수 저장·삭제·묶기 ──────────────────────
+{
+  const infoOf = (patch = {}) => { const info = { ...shareBase }; delete info.mwh; delete info.same_grid; return { ...info, ...patch }; };
+  const base1 = proc({ id: 'p1', electricity_mwh: 400 });
+  const base2 = proc({ id: 'p2', name: '2공정', electricity_mwh: 600 });
+  const processes = [base1, base2];
+  // 두 공정에 3 : 1로 나눠 저장 — 자체 몫은 그대로, 합계 = 자체 + 외주 몫
+  const saved = O.buildOutsourcedElectricityUpdates(processes, { info: infoOf(), sameGrid: true, total: 120, targets: [{ processId: 'p1', fraction: 0.75 }, { processId: 'p2', fraction: 0.25 }] });
+  assert.equal(saved.ok, true);
+  assert.equal(saved.updates.length, 2);
+  const s1 = saved.updates.find((item) => item.id === 'p1');
+  const s2 = saved.updates.find((item) => item.id === 'p2');
+  close(s1.electricity_mwh, 400 + 90, 'p1 합계 = 자체 400 + 외주 90');
+  close(s2.electricity_mwh, 600 + 30, 'p2 합계 = 자체 600 + 외주 30');
+  assert.equal(s1.outsourced_electricity[0].total_share, 120, '총 몫이 기록된다');
+  assert.equal(s1.outsourced_electricity[0].same_grid, true);
+  close(own.ownElectricityMwh(s1), 400, '저장해도 자체 몫은 그대로');
+  // 묶기: 두 공정이 한 건
+  const groups = O.groupOutsourcedElectricity(saved.updates);
+  assert.equal(groups.length, 1);
+  close(groups[0].total, 120, '묶은 합계는 총 몫');
+  assert.equal(groups[0].members.length, 2);
+  // 고치기(editKey): 옛 몫을 걷어내고 새로 — 합계가 불어나지 않는다
+  const edited = O.buildOutsourcedElectricityUpdates(saved.updates, { editKey: groups[0].key, info: infoOf({ subcontractor: '가상 코팅 B사' }), sameGrid: true, total: 60, targets: [{ processId: 'p1', fraction: 1 }] });
+  assert.equal(edited.ok, true);
+  const e1 = edited.updates.find((item) => item.id === 'p1');
+  const e2 = edited.updates.find((item) => item.id === 'p2');
+  close(e1.electricity_mwh, 400 + 60, '고친 뒤 p1 = 자체 400 + 새 몫 60');
+  close(e2.electricity_mwh, 600, '고르지 않은 공정에서는 옛 몫이 빠진다');
+  assert.equal(e2.outsourced_electricity, undefined);
+  // 외주처가 둘이면 서로 다른 건으로 쌓인다
+  const second = O.buildOutsourcedElectricityUpdates(saved.updates, { info: infoOf({ subcontractor: '가상 열처리 C사', technique: 'HEAT_TREATMENT' }), sameGrid: true, total: 10, targets: [{ processId: 'p1', fraction: 1 }] });
+  assert.equal(O.groupOutsourcedElectricity([second.updates[0], saved.updates.find((item) => item.id === 'p2')]).length, 2);
+  close(second.updates[0].electricity_mwh, 400 + 90 + 10, '두 번째 외주처는 합계에 더해진다');
+  // 지우기: 그 몫만 빠지고 자체 몫은 그대로
+  const removed = O.buildOutsourcedElectricityRemoval(saved.updates, groups[0].key);
+  assert.equal(removed.length, 2);
+  close(removed.find((item) => item.id === 'p1').electricity_mwh, 400);
+  close(removed.find((item) => item.id === 'p2').electricity_mwh, 600);
+  assert.equal(removed[0].outsourced_electricity, undefined, '다 지우면 필드 자체가 사라진다(옛 자료와 같은 모양)');
+  // 거부: 같은 나라 확인 없음 · 전기도금 · 비율 합이 1이 아님
+  assert.equal(O.buildOutsourcedElectricityUpdates(processes, { info: infoOf(), sameGrid: false, total: 120, targets: [{ processId: 'p1', fraction: 1 }] }).ok, false, '다른 나라 계통이면 저장하지 않는다');
+  assert.equal(O.buildOutsourcedElectricityUpdates(processes, { info: infoOf({ technique: 'ELECTROPLATING' }), sameGrid: true, total: 120, targets: [{ processId: 'p1', fraction: 1 }] }).ok, false, '전기도금은 저장하지 않는다');
+  assert.equal(O.buildOutsourcedElectricityUpdates(processes, { info: infoOf(), sameGrid: true, total: 120, targets: [{ processId: 'p1', fraction: 0.5 }] }).ok, false, '비율 합이 1이 아니면 저장하지 않는다');
+  // 저장한 직후에는 점검이 조용하고, 전력 배출계수가 비었으면 OUTE05
+  assert.deepEqual(codes(saved.updates), [], '저장 직후 점검이 조용하다');
+  assert.deepEqual(codes(saved.updates.map((item) => ({ ...item, electricity_ef_tco2e_per_mwh: 0 }))), ['OUTE05', 'OUTE05'], '전력 배출계수가 비면 알린다');
+  // 저장한 뒤 전력을 다시 나눠도 몫이 유지된다(1단계 규칙과 이어서)
+  const re = split.buildElectricitySplitUpdates(saved.updates.map((item) => ({ ...item, electricity_shared_meter: meter })), split.computeElectricitySplit({ group: '본사 한전', totalMwh: 1000, basis: 'OUTPUT_MASS', note: '', rows: [{ processId: 'p1', processName: '볼트 공정', value: 1 }, { processId: 'p2', processName: '2공정', value: 1 }] }));
+  close(re.find((item) => item.id === 'p1').electricity_mwh, 500 + 90, '다시 나눈 뒤에도 외주 몫 90이 얹혀 있다');
+  // kW → MWh/h 환산(화면은 kW로 받아 /1000으로 저장): 600 h × 20 kW = 12 MWh
+  const viaKw = O.computeOutsourcedShare({ basis: 'RECONSTRUCTED', company_total: 400, equipment: [{ name: '우리', hours: 600, rate_per_h: 20 / 1000, ours: true }, { name: '타사', hours: 900, rate_per_h: 20 / 1000 }, { name: '기타', hours: 1000, rate_per_h: 10 / 1000 }] });
+  close(viaKw.share, 120, 'kW로 받아 환산해도 설계 사례 120 MWh');
+}
+
+// 전력 입력의 안내 문구는 「전력량」이다(연료 입력은 종전대로 「연료량」)
+assert.ok(O.computeOutsourcedShare({ basis: 'METERED_LINE' }, 'electricity').reason.includes('전력량'));
+assert.ok(O.computeOutsourcedShare({ basis: 'METERED_LINE' }).reason.includes('연료량'), '연료 입력의 문구는 그대로');
+assert.ok(O.computeOutsourcedShare({ basis: 'RECONSTRUCTED', equipment: [{ name: 'a', hours: 1, rate_per_h: 1, ours: true }] }, 'electricity').reason.includes('전력량'));
+assert.ok(O.computeOutsourcedShare({ basis: 'RECONSTRUCTED', company_total: 400, equipment: [{ name: 'a', hours: 100, rate_per_h: 1, ours: true }] }, 'electricity').warnings[0].includes('전기 사용처'));
+assert.ok(O.computeOutsourcedShare({ basis: 'RECONSTRUCTED', company_total: 400, equipment: [{ name: 'a', hours: 100, rate_per_h: 1, ours: true }] }).warnings[0].includes('가스 사용처'), '연료 입력의 문구는 그대로');
+assert.ok(readFileSync('src/components/guided/OutsourcedElectricity.tsx', 'utf8').includes("computeOutsourcedShare(info, 'electricity')"), '화면이 전력 문구를 쓴다');
+
+// ── 10) 화면 배선 ────────────────────────────────────────────────────
+{
+  const screen = readFileSync('src/components/guided/OutsourcedElectricity.tsx', 'utf8');
+  assert.ok(screen.includes('buildOutsourcedElectricityUpdates') && screen.includes('buildOutsourcedElectricityRemoval'), '화면은 순수 저장·삭제 함수를 쓴다(따로 계산하지 않는다)');
+  assert.ok(/disabled=\{busy \|\| technique === 'ELECTROPLATING'\}/.test(screen), '전기도금이면 저장 버튼이 꺼진다');
+  assert.ok(screen.includes('checked={sameGrid}') && screen.includes('!sameGrid'), '같은 나라 확인 칸이 있고 없으면 저장하지 않는다');
+  assert.ok(screen.includes('num(row.kw) / 1000'), '정격은 kW로 받아 MWh/h로 저장한다');
+  assert.ok(!screen.includes('createLocalItem'), '전력 몫은 공정 레코드에만 쓴다(배출원 행을 만들지 않는다)');
+  const panels = readFileSync('src/components/guided/panels.tsx', 'utf8');
+  assert.ok(/<OutsourcedElectricity processes=\{data\.processes\}/.test(panels), '지도 4단계에 외주처 전기 입력이 있다');
+  const talk = readFileSync('src/components/talk/TalkWorkspace.tsx', 'utf8');
+  assert.ok(/<OutsourcedElectricity processes=\{periodProcesses\}/.test(talk), '대화 모드에도 같은 컴포넌트가 있다');
+  const fuelScreen = readFileSync('src/components/guided/OutsourcedProcess.tsx', 'utf8');
+  assert.ok(fuelScreen.includes('외주처 전기」에서 따로 입력') || fuelScreen.includes('우리 부품에 쓴 전기」에서 따로 입력'), '연료 입력의 안내가 전기 입력으로 안내한다');
+}
+
 console.log('Outsourced electricity verified (엔진 불변 · 자체 몫 = 합계 − 외주 · 계량기 합계 검사 · 다시 나눠도 유지 · 직접 수정 · OUTE01~04 · V10).');

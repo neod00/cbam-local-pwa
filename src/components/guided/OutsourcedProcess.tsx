@@ -6,7 +6,6 @@ import type { LocalCalculationResult } from '@/lib/calculation-engine';
 import { createLocalItem, deleteLocalItem, updateLocalItem, type OutsourcedBasis, type OutsourcedEquipment, type OutsourcedProcessInfo, type OutsourcedTechnique, type ProductionProcess, type PurchasedPrecursor, type SourceStream } from '@/lib/local-db';
 import {
     OUTSOURCED_BASIS_ANCHOR,
-    OUTSOURCED_ELECTRICITY_NOTICE,
     OUTSOURCED_BASIS_LABEL,
     OUTSOURCED_TECHNIQUE_LABEL,
     RECONSTRUCTION_TOLERANCE,
@@ -253,7 +252,7 @@ export function OutsourcedProcess({
                         외주사가 우리 부품에 쓴 연료의 몫을 우리 공정의 연료로 더합니다. 돌아온 부품은 「구매 강재」에 적지 마세요 — 이중으로 셉니다.
                         전기도금·절단·용접·마무리는 외주여도 경계 밖이라 넣지 않습니다.
                     </p>
-                    <p className="mt-1 text-xs leading-5 text-amber-900" data-testid="outsourced-electricity-notice">{OUTSOURCED_ELECTRICITY_NOTICE}</p>
+                    <p className="mt-1 text-xs leading-5 text-amber-900" data-testid="outsourced-electricity-notice">이 연료 입력에는 외주처가 쓴 전기(간접배출)가 들어가지 않습니다 — 바로 아래 「외주사가 우리 부품에 쓴 전기」에서 따로 입력하세요.</p>
                 </div>
                 {!open && (
                     <Button type="button" variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => openForm()} disabled={processes.length === 0}>

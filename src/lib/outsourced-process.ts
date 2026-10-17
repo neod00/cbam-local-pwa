@@ -1,4 +1,4 @@
-import { outsourcedElectricityMwh } from './electricity-own-share';
+import { outsourcedElectricityMwh, ownElectricityMwh } from './electricity-own-share';
 import type { OutsourcedBasis, OutsourcedElectricityShare, OutsourcedEquipment, OutsourcedProcessInfo, OutsourcedTechnique, ProductionProcess, SourceStream } from './local-db';
 import { STEEL_BOUNDARY_ANCHOR } from './steel-boundary';
 
@@ -50,8 +50,11 @@ export type OutsourcedShareResult =
 
 /** 입력만 보고 우리 몫(활동량)을 계산한다. 단위는 입력과 같다. */
 export function computeOutsourcedShare(info: Pick<OutsourcedProcessInfo,
-    'basis' | 'company_total' | 'line_quantity' | 'our_throughput_t' | 'line_throughput_t' | 'equipment' | 'estimate_quantity'>): OutsourcedShareResult {
+    'basis' | 'company_total' | 'line_quantity' | 'our_throughput_t' | 'line_throughput_t' | 'equipment' | 'estimate_quantity'>, energy: 'fuel' | 'electricity' = 'fuel'): OutsourcedShareResult {
     const warnings: string[] = [];
+    // 문구만 다르다 — 계산은 같다(활동량 단위는 입력과 같다: 연료는 Nm³·t, 전력은 MWh).
+    const amount = energy === 'electricity' ? '전력량' : '연료량';
+    const user = energy === 'electricity' ? '전기 사용처' : '가스 사용처';
     const isPositiveOut = (value: number | undefined) => isFiniteOut(value) && value > 0;
 
     if (info.basis === 'CONSERVATIVE_ESTIMATE') {
@@ -60,12 +63,12 @@ export function computeOutsourcedShare(info: Pick<OutsourcedProcessInfo,
     }
 
     if (info.basis === 'METERED_LINE' || info.basis === 'OUTPUT_MASS') {
-        if (!isPositiveOut(info.line_quantity)) return { ok: false, reason: '그 공정 설비의 연료량(0보다 큰 값)을 적어야 합니다.' };
+        if (!isPositiveOut(info.line_quantity)) return { ok: false, reason: `그 공정 설비의 ${amount}(0보다 큰 값)을 적어야 합니다.` };
         const hasThroughput = isFiniteOut(info.our_throughput_t) || isFiniteOut(info.line_throughput_t);
         if (info.basis === 'OUTPUT_MASS' && !hasThroughput) return { ok: false, reason: '처리 중량 비율로 나누려면 우리 처리량과 설비 전체 처리량을 적어야 합니다.' };
         if (!hasThroughput) {
             // 우리만 쓰는 전용 설비·전용 계량 — 설비 연료량이 곧 우리 몫이다.
-            return { ok: true, share: roundOut(info.line_quantity!), formula: `우리 전용 설비의 연료량 ${fmtOut(info.line_quantity!)}`, warnings };
+            return { ok: true, share: roundOut(info.line_quantity!), formula: `우리 전용 설비의 ${amount} ${fmtOut(info.line_quantity!)}`, warnings };
         }
         if (!isPositiveOut(info.our_throughput_t) || !isPositiveOut(info.line_throughput_t)) return { ok: false, reason: '우리 처리량과 설비 전체 처리량을 모두 0보다 큰 값으로 적어야 합니다.' };
         if (info.our_throughput_t! > info.line_throughput_t!) return { ok: false, reason: '우리 처리량이 설비 전체 처리량보다 클 수 없습니다.' };
@@ -76,19 +79,19 @@ export function computeOutsourcedShare(info: Pick<OutsourcedProcessInfo,
     // RECONSTRUCTED
     const equipment = info.equipment ?? [];
     if (equipment.length === 0) return { ok: false, reason: '재구성하려면 설비 목록(이름·가동시간·소비율)을 적어야 합니다.' };
-    if (!isPositiveOut(info.company_total)) return { ok: false, reason: '재구성한 값을 고지서 총량에 맞추려면 외주처 전체 연료량(0보다 큰 값)이 필요합니다.' };
+    if (!isPositiveOut(info.company_total)) return { ok: false, reason: `재구성한 값을 고지서 총량에 맞추려면 외주처 전체 ${amount}(0보다 큰 값)이 필요합니다.` };
     for (const item of equipment) {
         if (!isFiniteOut(item.hours) || item.hours < 0 || !isFiniteOut(item.rate_per_h) || item.rate_per_h < 0) return { ok: false, reason: `설비 「${item.name}」의 가동시간·소비율은 0 이상의 숫자여야 합니다.` };
     }
     const ours = equipment.filter((item) => item.ours);
     if (ours.length === 0) return { ok: false, reason: '우리 부품을 처리하는 설비를 하나 이상 표시해 주세요.' };
     const reconstructed = equipment.reduce((sum, item) => sum + item.hours * item.rate_per_h, 0);
-    if (!(reconstructed > 0)) return { ok: false, reason: '재구성한 연료량이 0입니다 — 가동시간과 소비율을 확인해 주세요.' };
+    if (!(reconstructed > 0)) return { ok: false, reason: `재구성한 ${amount}이 0입니다 — 가동시간과 ${energy === 'electricity' ? '정격 전력' : '소비율'}을 확인해 주세요.` };
     const ourReconstructed = ours.reduce((sum, item) => sum + item.hours * item.rate_per_h, 0);
     const factor = info.company_total! / reconstructed;
     const share = ourReconstructed * factor;
     if (Math.abs(factor - 1) > RECONSTRUCTION_TOLERANCE) {
-        warnings.push(`재구성 합계 ${fmtOut(reconstructed)}가 고지서 총량 ${fmtOut(info.company_total!)}과 ${roundOut(Math.abs(factor - 1) * 100, 1)}% 어긋납니다 — 설비 목록에 빠진 가스 사용처가 없는지, 소비율·가동시간이 맞는지 확인하세요.`);
+        warnings.push(`재구성 합계 ${fmtOut(reconstructed)}가 고지서 총량 ${fmtOut(info.company_total!)}과 ${roundOut(Math.abs(factor - 1) * 100, 1)}% 어긋납니다 — 설비 목록에 빠진 ${user}가 없는지, ${energy === 'electricity' ? '정격 전력' : '소비율'}·가동시간이 맞는지 확인하세요.`);
     }
     return {
         ok: true,
@@ -302,7 +305,7 @@ export function outsourcedGroupNeedsData(group: OutsourcedGroup): boolean {
 }
 
 export interface OutsourcedElectricityIssue {
-    code: 'OUTE01' | 'OUTE02' | 'OUTE03' | 'OUTE04';
+    code: 'OUTE01' | 'OUTE02' | 'OUTE03' | 'OUTE04' | 'OUTE05';
     level: 'fix' | 'review';
     processId: string;
     message: string;
@@ -311,9 +314,10 @@ export interface OutsourcedElectricityIssue {
 /**
  * 외주처 전력 몫의 점검(귀속·할당 점검 V10).
  *  OUTE01 추정이거나 근거(note)가 비었다 · OUTE02 공정 전력 합계가 외주 몫 합보다 작다(다시 나누거나 직접 고치며 외주 몫이 지워졌다) ·
- *  OUTE03 같은 나라 계통 전력이라는 확인이 없다 · OUTE04 우리 몫이 외주처 설비·전체 전력보다 크다.
+ *  OUTE03 같은 나라 계통 전력이라는 확인이 없다 · OUTE04 우리 몫이 외주처 설비·전체 전력보다 크다 ·
+ *  OUTE05 공정의 전력 배출계수가 비어 있다(계수가 0이면 외주 전력도 0 배출로 계산된다).
  */
-export function checkOutsourcedElectricity(processes: Array<Pick<ProductionProcess, 'id' | 'name' | 'electricity_mwh'> & Partial<Pick<ProductionProcess, 'outsourced_electricity'>>>): OutsourcedElectricityIssue[] {
+export function checkOutsourcedElectricity(processes: Array<Pick<ProductionProcess, 'id' | 'name' | 'electricity_mwh'> & Partial<Pick<ProductionProcess, 'electricity_ef_tco2e_per_mwh'>> & Partial<Pick<ProductionProcess, 'outsourced_electricity'>>>): OutsourcedElectricityIssue[] {
     const issues: OutsourcedElectricityIssue[] = [];
     for (const process of processes) {
         const shares = process.outsourced_electricity ?? [];
@@ -322,6 +326,9 @@ export function checkOutsourcedElectricity(processes: Array<Pick<ProductionProce
         const outsourced = outsourcedElectricityMwh(process);
         if (process.electricity_mwh + 1e-6 < outsourced) {
             issues.push({ code: 'OUTE02', level: 'fix', processId: process.id, message: `${label}: 전력 사용량 ${fmtOut(process.electricity_mwh)} MWh가 외주처 전력 몫 합 ${fmtOut(outsourced)} MWh보다 작습니다 — 전력을 다시 나누거나 직접 고치면서 외주 몫이 빠졌을 수 있습니다. 외주 몫을 다시 입력하세요.` });
+        }
+        if (!((process.electricity_ef_tco2e_per_mwh ?? 0) > 0)) {
+            issues.push({ code: 'OUTE05', level: 'fix', processId: process.id, message: `${label}: 전력 배출계수가 비어 있어 외주처 전력이 0 배출로 계산됩니다 — 지도 5단계에서 전력 배출계수를 넣으세요.` });
         }
         for (const share of shares) {
             const who = `${label} 외주처 「${share.subcontractor.trim()}」`;
@@ -338,4 +345,74 @@ export function checkOutsourcedElectricity(processes: Array<Pick<ProductionProce
         }
     }
     return issues;
+}
+
+/** 외주 전력 몫 한 건(같은 외주처·공정 종류·방법·총 몫·기간)을 알아보는 열쇠. */
+export const outsourcedElectricityKey = (share: OutsourcedElectricityShare, periodId: string | undefined) =>
+    [share.subcontractor.trim(), share.technique, share.basis, share.total_share ?? '', periodId ?? ''].join('|');
+
+export interface OutsourcedElectricityGroup {
+    key: string;
+    first: OutsourcedElectricityShare;
+    members: Array<{ process: ProductionProcess; share: OutsourcedElectricityShare }>;
+    /** 공정별 몫의 합 (MWh) */
+    total: number;
+}
+
+/** 공정들에 흩어진 외주 전력 몫을 한 건씩 묶는다(입력 순서 유지). */
+export function groupOutsourcedElectricity(processes: ProductionProcess[]): OutsourcedElectricityGroup[] {
+    const groups = new Map<string, OutsourcedElectricityGroup>();
+    for (const process of processes) {
+        for (const share of process.outsourced_electricity ?? []) {
+            const key = outsourcedElectricityKey(share, process.period_id);
+            const group = groups.get(key) ?? { key, first: share, members: [], total: 0 };
+            group.members.push({ process, share });
+            group.total = roundOut(group.total + share.mwh);
+            groups.set(key, group);
+        }
+    }
+    return [...groups.values()];
+}
+
+const withElectricityShares = <T extends ProductionProcess>(process: T, shares: OutsourcedElectricityShare[]): T => {
+    // 자체 몫은 그대로 두고 외주 몫만 바꾼다 — 합계(electricity_mwh)는 자체 몫 + 새 외주 몫 합.
+    const base: T = { ...process, outsourced_electricity: shares.length > 0 ? shares : undefined };
+    return { ...base, electricity_mwh: roundOut(ownElectricityMwh(process) + outsourcedElectricityMwh(base)) };
+};
+
+/**
+ * 외주 전력 몫을 저장한 뒤의 공정들을 만든다(바뀐 공정만 돌려준다). editKey가 있으면 그 건의 옛 몫을 먼저 걷어낸다.
+ * 우리 몫(total, MWh)은 고른 공정에 fraction 비율로 나눈다.
+ */
+export function buildOutsourcedElectricityUpdates<T extends ProductionProcess>(processes: T[], input: {
+    editKey?: string;
+    info: OutsourcedProcessInfo;
+    sameGrid: boolean;
+    total: number;
+    targets: Array<{ processId: string; fraction: number }>;
+}): { ok: true; updates: T[] } | { ok: false; reason: string } {
+    const parts = splitOutsourcedShare(input.total, input.targets.map((target) => target.fraction));
+    if (!parts) return { ok: false, reason: '공정별 비율의 합이 1(100%)이어야 합니다.' };
+    const record = (mwh: number): OutsourcedElectricityShare => ({ ...input.info, mwh, same_grid: input.sameGrid, total_share: input.total });
+    const validation = validateOutsourcedElectricityShare(record(input.total));
+    if (validation.errors.length > 0) return { ok: false, reason: validation.errors[0] };
+    const updates: T[] = [];
+    for (const process of processes) {
+        const kept = (process.outsourced_electricity ?? []).filter((share) => !input.editKey || outsourcedElectricityKey(share, process.period_id) !== input.editKey);
+        const index = input.targets.findIndex((target) => target.processId === process.id);
+        const next = index >= 0 ? [...kept, record(parts[index])] : kept;
+        if (index >= 0 || kept.length !== (process.outsourced_electricity ?? []).length) updates.push(withElectricityShares(process, next));
+    }
+    return { ok: true, updates };
+}
+
+/** 외주 전력 몫 한 건을 지운 뒤의 공정들(바뀐 공정만). 합계에서 그 몫만 빠지고 자체 몫은 그대로다. */
+export function buildOutsourcedElectricityRemoval<T extends ProductionProcess>(processes: T[], key: string): T[] {
+    const updates: T[] = [];
+    for (const process of processes) {
+        const shares = process.outsourced_electricity ?? [];
+        const kept = shares.filter((share) => outsourcedElectricityKey(share, process.period_id) !== key);
+        if (kept.length !== shares.length) updates.push(withElectricityShares(process, kept));
+    }
+    return updates;
 }
