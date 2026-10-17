@@ -1,5 +1,5 @@
 import { PageHeader, SectionCard, StatusBadge } from '@/components/ui';
-import { COLLECTED_PERSONAL_DATA, getOperatorInfoGaps, isOperatorInfoComplete, operatorField, PERSONAL_DATA_PROCESSORS } from '@/lib/operator-info';
+import { COLLECTED_PERSONAL_DATA, CONTACT_FORM_PERSONAL_DATA, getOperatorInfoGaps, isOperatorInfoComplete, operatorField, PERSONAL_DATA_PROCESSORS } from '@/lib/operator-info';
 import { AlertTriangle, Database, Mail, ServerOff, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 
@@ -164,6 +164,32 @@ export default function PrivacyPage() {
                             이 밖에 앱 버전과 라이선스 상태를 함께 저장합니다(개인을 식별하는 정보가 아닙니다).
                         </p>
                     </div>
+                </div>
+            </SectionCard>
+
+            <SectionCard title="문의 창으로 문의를 보낼 때">
+                <ul className="space-y-2 text-sm leading-6 text-slate-700">
+                    <li>앱 안의 문의 창으로 문의를 보내면 아래 정보가 운영자의 문의 메일로 전송됩니다. 문의를 보내려면 무료 라이선스 등록이 되어 있어야 합니다.</li>
+                    <li>문의 내용은 서버 데이터베이스에 저장하지 않고 메일 발송에만 사용합니다. 메일은 운영자의 문의 메일함(Gmail)에 남으며, 문의 응대에 필요한 기간 동안만 보관하고 응대가 끝나면 삭제합니다.</li>
+                    <li>문의 내용에 실제 회사 자료, EU Communication Template 작성본, .cbam 백업 파일을 적거나 첨부하지 마세요.</li>
+                </ul>
+                <div className="mt-4 overflow-x-auto" data-testid="contact-form-data">
+                    <table className="w-full min-w-[22rem] text-left text-sm">
+                        <thead>
+                            <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500">
+                                <th className="py-2 pr-4">보내는 항목</th>
+                                <th className="py-2">이용 목적</th>
+                            </tr>
+                        </thead>
+                        <tbody className="text-slate-700">
+                            {CONTACT_FORM_PERSONAL_DATA.map((row) => (
+                                <tr key={row.field} className="border-b border-slate-100">
+                                    <td className="py-2 pr-4 font-medium text-slate-900">{row.field}</td>
+                                    <td className="py-2 leading-6">{row.purpose}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </SectionCard>
 
