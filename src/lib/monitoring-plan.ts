@@ -46,6 +46,8 @@ export interface PlanSection {
     tables: PlanTable[];
     /** 회사가 직접 써야 하는 물음 — 「작성 필요」 자리에 붙는다 */
     questions: string[];
+    /** 회사가 보고서 입력에서 직접 적은 답(물음이 있는 항목만). 있으면 「작성 필요」 자리를 이것이 채운다. */
+    answer?: string;
 }
 
 export interface MonitoringPlanInput {
@@ -69,6 +71,8 @@ export interface MonitoringPlan {
 
 /** 값이 없을 때 쓰는 말 — 빈 칸을 0이나 「없음」으로 오해하지 않게 한다. */
 export const PLAN_TODO = '작성 필요';
+/** 회사가 직접 적은 답이 있는 항목의 안내 문구 — 「작성 필요」 대신 본문에 쓴다. */
+const ANSWERED_NOTE = '아래 「회사가 직접 적은 내용」에 적었습니다';
 /** 외주 공정 몫이 있으면 모니터링 계획 제9항에 방법·근거와 통제(부속서 II A.5 22(g))를 적는다 — 없으면 아무것도 더하지 않는다. */
 function outsourcedPlanParagraphs(streams: SourceStream[], processes: ProductionProcess[]): string[] {
     const groups = groupOutsourcedStreams(streams);
@@ -114,8 +118,23 @@ export function buildMonitoringPlan(input: MonitoringPlanInput): MonitoringPlan 
     const transpositionOf = (streamId: string) => input.reportInputs?.transpositions?.find((row) => row.source_stream_id === streamId);
     const processName = (id: string | undefined) => (id ? processById.get(id)?.name : undefined) ?? '(공정 밖·공용)';
     const sections: PlanSection[] = [];
-    const add = (section: Omit<PlanSection, 'tables' | 'questions'> & Partial<Pick<PlanSection, 'tables' | 'questions'>>) => {
-        sections.push({ tables: [], questions: [], ...section });
+    const answers = plan?.answers ?? {};
+    const answerOf = (no: number) => answers[String(no)]?.trim() || undefined;
+    /** 물음이 있는 항목에 회사가 답을 적었는가 — 본문의 「작성 필요」 문구를 바꾸는 데 쓴다. */
+    const said = (no: number, whenTodo: string, whenSaid = `${ANSWERED_NOTE}.`) => (answerOf(no) ? whenSaid : whenTodo);
+    const add = (section: Omit<PlanSection, 'tables' | 'questions' | 'answer'> & Partial<Pick<PlanSection, 'tables' | 'questions'>> & { answerCompletes?: boolean }) => {
+        const { answerCompletes, ...rest } = section;
+        const next: PlanSection = { tables: [], questions: [], ...rest };
+        const answer = next.questions.length > 0 ? answerOf(next.no) : undefined;
+        if (answer) {
+            next.answer = answer;
+            // 답이 있어도 앱이 채우지 못한 칸(표의 「작성 필요」)이 남았으면 일부만 채운 것이다. 자료가 없어 TODO였던 항목은 답만으로 AUTO가 되지 않는다.
+            const gap = next.paragraphs.some((text) => text.includes(PLAN_TODO)) || next.tables.some((table) => table.rows.some((row) => row.some((cell) => cell.includes(PLAN_TODO))));
+            if (answerCompletes && !gap) next.status = 'AUTO';
+            else if (next.status === 'TODO') next.status = 'PARTIAL';
+            else if (next.status === 'PARTIAL' && !gap) next.status = 'AUTO';
+        }
+        sections.push(next);
     };
 
     // 1. 문서의 날짜와 판
@@ -236,7 +255,7 @@ export function buildMonitoringPlan(input: MonitoringPlanInput): MonitoringPlan 
             status: input.sourceStreams.length === 0 ? 'TODO' : 'PARTIAL',
             paragraphs: [
                 '배출량은 연료·부원료의 활동자료에 순발열량과 배출계수, 산화계수를 곱해 계산합니다(계산 기반 방법). 입력 자료: 활동자료, 순발열량, 배출계수, 산화계수, 바이오매스 비율.',
-                `(a) 계산식은 위와 같습니다. (b) 측정 시스템과 측정기의 정확한 위치는 앱이 알 수 없습니다 — 아래 표의 「측정 방식」 칸은 입력된 값이고, 측정기 위치는 ${PLAN_TODO}입니다.`,
+                `(a) 계산식은 위와 같습니다. (b) 측정 시스템과 측정기의 정확한 위치는 앱이 알 수 없습니다 — 아래 표의 「측정 방식」 칸은 입력된 값이고, 측정기 위치는 ${said(7, `${PLAN_TODO}입니다.`)}`,
             ],
             tables: [{ headers: ['공정', '배출원', '계산식', '측정 방식(입력된 값)'], rows }],
             questions: ['각 배출원의 계량기·측정기가 설비의 어디에 있는지(설비명·라인·위치)와 계량기 종류(예: 도시가스사 정산용 계량기, 주유 전표)를 적으세요.'],
@@ -261,7 +280,7 @@ export function buildMonitoringPlan(input: MonitoringPlanInput): MonitoringPlan 
             status: input.sourceStreams.length === 0 ? 'TODO' : 'PARTIAL',
             paragraphs: lab.length === 0
                 ? ['성적서·분석값을 쓰는 배출원이 없어(IPCC·EU 기본값 또는 국가 인벤토리 값) 시료 채취 계획은 필요하지 않은 것으로 보입니다 — 확인 필요.']
-                : [`성적서·분석 값을 쓰는 배출원이 ${lab.length}개(${lab.map((stream) => stream.name).join(', ')}) 있습니다. 시료 채취 계획과 분석 방법: ${PLAN_TODO}.`],
+                : [`성적서·분석 값을 쓰는 배출원이 ${lab.length}개(${lab.map((stream) => stream.name).join(', ')}) 있습니다. 시료 채취 계획과 분석 방법: ${said(8, `${PLAN_TODO}.`)}`],
             tables: [{ headers: ['배출원', '계수 출처 유형', '순발열량 / 배출계수', '계수의 출처 문서'], rows }],
             questions: lab.length === 0 ? [] : ['성적서 값을 쓰는 연료의 시료 채취 주기·방법과 분석 기관(공인 여부)을 적으세요.'],
         });
@@ -339,7 +358,7 @@ export function buildMonitoringPlan(input: MonitoringPlanInput): MonitoringPlan 
                     : []),
                 ...(shared.length > 0 ? [`공용 전력 계량기를 나눈 공정: ${shared.map((process) => `${process.name}(${process.electricity_shared_meter?.group})`).join(', ')}. 나눈 합계는 고지서 합계와 맞춥니다.`] : []),
                 ...(heatSystems.length > 0 ? [`공용 열 공급원: ${heatSystems.join(', ')} — 공정이 쓴 열량 비율로 귀속합니다.`] : []),
-                `공정 흐름도와 설비 배치도(그림): ${PLAN_TODO}`,
+                `공정 흐름도와 설비 배치도(그림): ${said(13, PLAN_TODO)}`,
             ],
             questions: ['설비 배치와 공정 흐름을 그린 도식(원료 입고 → 공정 → 출하)을 첨부하세요. 이중계산이 없다는 설명은 위 경계·이송·나누기 기록을 인용해 적을 수 있습니다.'],
         });
@@ -408,7 +427,7 @@ export function buildMonitoringPlan(input: MonitoringPlanInput): MonitoringPlan 
             title: '사업장 안에서 전력을 만드는지(열병합·별도 발전·화석/재생·시스템 경계 밖 반출)',
             status: own ? 'PARTIAL' : 'AUTO',
             paragraphs: own
-                ? [`전력 계수 출처에 「설비 내 자가발전」 또는 「혼합」을 고른 공정이 있습니다. 열병합 여부, 별도 발전 여부, 화석·재생 구분, 시스템 경계 밖으로 내보내는 전력: ${PLAN_TODO}.`]
+                ? [`전력 계수 출처에 「설비 내 자가발전」 또는 「혼합」을 고른 공정이 있습니다. 열병합 여부, 별도 발전 여부, 화석·재생 구분, 시스템 경계 밖으로 내보내는 전력: ${said(17, `${PLAN_TODO}.`)}`]
                 : ['입력된 전력은 모두 외부(계통·계약)에서 받는 것으로 입력되어 있어, 사업장 안 발전은 없는 것으로 봅니다 — 확인 필요.'],
             questions: own ? ['자가발전 설비의 종류(열병합/별도), 연료(화석/재생), 시스템 경계 밖으로 내보내는 전력량을 적으세요.'] : [],
         });
@@ -461,7 +480,8 @@ export function buildMonitoringPlan(input: MonitoringPlanInput): MonitoringPlan 
         no: 21,
         title: 'CO₂ 포집·저장·이용',
         status: 'TODO',
-        paragraphs: [`앱은 CO₂ 포집·저장·이용을 다루지 않습니다. 해당이 없다면 그렇게 적고, 있다면 받는 시설·운송 기반의 책임자와 모니터링 방법을 적어야 합니다. ${PLAN_TODO}`],
+        answerCompletes: true,
+        paragraphs: [`앱은 CO₂ 포집·저장·이용을 다루지 않습니다. 해당이 없다면 그렇게 적고, 있다면 받는 시설·운송 기반의 책임자와 모니터링 방법을 적어야 합니다. ${said(21, PLAN_TODO, `${ANSWERED_NOTE}.`)}`],
         questions: ['CO₂ 포집·저장·이용이 없으면 「해당 없음」이라고 적으세요.'],
     });
 
@@ -474,7 +494,7 @@ export function buildMonitoringPlan(input: MonitoringPlanInput): MonitoringPlan 
             title: '자료 품질을 보장하는 관리 체계',
             status: rnr.length > 0 || evidence.length > 0 ? 'PARTIAL' : 'TODO',
             paragraphs: [
-                '(a) 측정 장비의 검·교정 등 품질 보증, (b) 자료 흐름의 오류 위험 평가, (c) 정보 시스템의 품질 보증은 회사의 운영 방식이라 앱이 알 수 없습니다. ' + PLAN_TODO,
+                '(a) 측정 장비의 검·교정 등 품질 보증, (b) 자료 흐름의 오류 위험 평가, (c) 정보 시스템의 품질 보증은 회사의 운영 방식이라 앱이 알 수 없습니다. ' + said(22, PLAN_TODO),
             ],
             tables: [
                 ...(rnr.length > 0 ? [{ headers: ['자료', '수집', '옮겨 적기', '확인·승인', '자료가 있는 곳'], rows: rnr.map((row) => [row.data, row.collector || PLAN_TODO, row.transposer || PLAN_TODO, row.approver || PLAN_TODO, row.system || PLAN_TODO]) }] : []),
@@ -531,7 +551,10 @@ export function createMonitoringPlanDocument(input: MonitoringPlanInput) {
             const widths = item.headers.map(() => Math.floor(9000 / item.headers.length));
             body.push(table(item.headers, item.rows, { widths, headerShade: 'F1F5F9', headerBold: true, repeatHeader: true }));
         }
-        if (section.questions.length > 0) {
+        if (section.answer) {
+            body.push(paragraph('회사가 직접 적은 내용', undefined, { bold: true }));
+            for (const line of section.answer.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)) body.push(paragraph(line));
+        } else if (section.questions.length > 0) {
             body.push(paragraph('회사가 직접 적을 것', undefined, { bold: true }));
             for (const question of section.questions) body.push(paragraph(`· ${question}`));
             body.push(paragraph(`[ ${PLAN_TODO}: 여기에 적으세요 ]`, 'Note'));

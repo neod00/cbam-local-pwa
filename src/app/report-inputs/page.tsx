@@ -1,5 +1,6 @@
 'use client';
 
+import { MonitoringPlanAnswers } from '@/components/MonitoringPlanAnswers';
 import { Button, PageHeader, SectionCard, StatusBadge } from '@/components/ui';
 import {
     getLocalSetting,
@@ -8,8 +9,13 @@ import {
     setLocalSetting,
 } from '@/lib/local-db';
 import type {
+    Installation,
+    InternalTransfer,
     Product,
     ProductionProcess,
+    ProductOutputLine,
+    PurchasedPrecursor,
+    ReportingPeriod,
     ReportCarbonPriceRow,
     ReportEvidenceRow,
     ReportInputs,
@@ -17,6 +23,7 @@ import type {
     SourceStream,
 } from '@/lib/local-db';
 import { getIndirectEmissionsApplicability } from '@/lib/cbam-product-rules';
+import { buildMonitoringPlan } from '@/lib/monitoring-plan';
 import { getSectorParameters, SECTOR_PARAM_CITATION } from '@/lib/sector-parameters';
 import { ELECTRICITY_EF_BASIS_LABEL, isActualBasis, resolveElectricityEfBasis } from '@/lib/electricity-ef-basis';
 import type { ElectricityEfBasis } from '@/lib/local-db';
@@ -39,6 +46,12 @@ export default function ReportInputsPage() {
     const [sourceStreams, setSourceStreams] = useState<SourceStream[]>([]);
     const [processes, setProcesses] = useState<ProductionProcess[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
+    // 모니터링 계획 초안이 어떤 항목을 직접 쓰게 하는지 알려면 초안을 만들 때 쓰는 자료가 모두 필요하다.
+    const [installations, setInstallations] = useState<Installation[]>([]);
+    const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
+    const [outputLines, setOutputLines] = useState<ProductOutputLine[]>([]);
+    const [precursors, setPrecursors] = useState<PurchasedPrecursor[]>([]);
+    const [transfers, setTransfers] = useState<InternalTransfer[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [savedAt, setSavedAt] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -48,11 +61,16 @@ export default function ReportInputsPage() {
 
         async function load() {
             try {
-                const [stored, streams, processList, productList] = await Promise.all([
+                const [stored, streams, processList, productList, installationList, periodList, lineList, precursorList, transferList] = await Promise.all([
                     getLocalSetting<ReportInputs>(REPORT_INPUTS_SETTING_KEY),
                     listLocalItems('source_streams'),
                     listLocalItems('processes'),
                     listLocalItems('products'),
+                    listLocalItems('installations'),
+                    listLocalItems('periods'),
+                    listLocalItems('product_output_lines'),
+                    listLocalItems('precursors'),
+                    listLocalItems('internal_transfers'),
                 ]);
 
                 if (cancelled) {
@@ -63,6 +81,11 @@ export default function ReportInputsPage() {
                 setSourceStreams(streams);
                 setProcesses(processList);
                 setProducts(productList);
+                setInstallations(installationList);
+                setPeriods(periodList);
+                setOutputLines(lineList);
+                setPrecursors(precursorList);
+                setTransfers(transferList);
             } catch {
                 if (!cancelled) {
                     setError('보고서 입력을 불러오지 못했습니다.');
@@ -99,6 +122,20 @@ export default function ReportInputsPage() {
     if (isLoading) {
         return <p className="text-sm text-slate-500">불러오는 중…</p>;
     }
+
+    // 물음이 있는 항목 — 입력하는 대로 상태가 바뀌도록 지금 입력값(inputs)으로 초안을 다시 만든다.
+    const planSections = buildMonitoringPlan({
+        installations,
+        periods,
+        products,
+        processes,
+        productOutputLines: outputLines,
+        sourceStreams,
+        precursors,
+        internalTransfers: transfers,
+        reportInputs: inputs,
+        generatedAt: new Date(),
+    }).sections.filter((section) => section.questions.length > 0);
 
     return (
         <div className="space-y-6">
@@ -154,6 +191,12 @@ export default function ReportInputsPage() {
                 </div>
                 <p className="mt-2 text-xs text-slate-500">승인일이 보고기간 시작일보다 늦으면 보고서 생성 시 경고가 표시됩니다.</p>
             </SectionCard>
+
+            <MonitoringPlanAnswers
+                sections={planSections}
+                answers={inputs.monitoring_plan?.answers ?? {}}
+                onChange={(no, text) => patch({ monitoring_plan: { ...inputs.monitoring_plan, answers: { ...(inputs.monitoring_plan?.answers ?? {}), [String(no)]: text } } })}
+            />
 
             <SectionCard
                 title="역할·책임 R&R (제12.1장)"

@@ -97,6 +97,56 @@ assert.ok(['TODO', 'PARTIAL'].includes(section(22).status), '품질 관리 체�
 assert.match(section(13).paragraphs.join(' '), /공정 흐름도와 설비 배치도\(그림\): 작성 필요/, '그림은 만들지 않는다');
 assert.equal(plan.counts.TODO + plan.counts.PARTIAL > 0, true);
 
+// ── 3b) 회사가 앱 안에서 적은 답(보고서 입력 monitoring_plan.answers)이 「작성 필요」 자리를 채운다 ──────
+{
+  const withAnswers = (answers) => ({ ...input, reportInputs: { ...report, monitoring_plan: { ...report.monitoring_plan, answers } } });
+  const answers = { '7': '도시가스: 도시가스사 정산용 계량기(본관 보일러실). 경유: 주유 전표.', '21': '해당 없음', '22': '(a) 계량기는 해마다 12월 총무팀이 검교정 성적서를 받는다.\n(b) 집계표는 대표가 확인한다.', '9': '물음 없는 항목의 답은 쓰이지 않는다', '13': '   ' };
+  const answered = P.buildMonitoringPlan(withAnswers(answers));
+  const byNo = (result, no) => result.sections.find((item) => item.no === no);
+  // 답이 있는 항목: answer가 실리고, 본문의 「작성 필요」 문구가 안내로 바뀐다
+  assert.equal(byNo(answered, 7).answer, answers['7']);
+  assert.match(byNo(answered, 7).paragraphs.join(' '), /측정기 위치는 아래 「회사가 직접 적은 내용」에 적었습니다/);
+  assert.ok(!/측정기 위치는 작성 필요/.test(byNo(answered, 7).paragraphs.join(' ')), '답이 있으면 그 문장에 작성 필요가 남지 않는다');
+  assert.equal(byNo(answered, 21).status, 'AUTO', '앱이 전혀 모르는 항목(CO₂ 포집)은 답만으로 채워진다');
+  assert.ok(!/작성 필요/.test(byNo(answered, 21).paragraphs.join(' ')));
+  assert.ok(['PARTIAL', 'AUTO'].includes(byNo(answered, 22).status), '품질 관리 체계는 답이 있으면 TODO가 아니다');
+  assert.ok(!/알 수 없습니다\. 작성 필요/.test(byNo(answered, 22).paragraphs.join(' ')));
+  // 답이 없거나 공백뿐이거나 물음이 없는 항목은 종전과 같다
+  for (const no of [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]) {
+    assert.equal(byNo(answered, no).status, byNo(plan, no).status, `${no}번 상태는 그대로`);
+    assert.equal(byNo(answered, no).answer, undefined, `${no}번에는 답이 실리지 않는다`);
+    assert.deepEqual(plain(byNo(answered, no).paragraphs), plain(byNo(plan, no).paragraphs), `${no}번 본문은 그대로`);
+  }
+  assert.equal(byNo(plan, 7).answer, undefined, '답이 없으면 answer가 없다');
+  // 표의 「작성 필요」가 남은 항목은 답이 있어도 AUTO가 되지 않는다(앱이 못 채운 칸이 있다)
+  assert.ok(['PARTIAL', 'AUTO'].includes(byNo(answered, 7).status));
+  if (/작성 필요/.test(JSON.stringify(byNo(answered, 7).tables))) assert.notEqual(byNo(answered, 7).status, 'AUTO', '표에 작성 필요가 남으면 AUTO가 아니다');
+  // 자료가 없어 TODO인 항목은 답만으로 AUTO가 되지 않는다
+  const noData = P.buildMonitoringPlan({ installations: [], periods: [], products: [], processes: [], productOutputLines: [], sourceStreams: [], precursors: [], generatedAt, reportInputs: { monitoring_plan: { answers: { '7': '위치', '22': '체계' } } } });
+  assert.equal(byNo(noData, 7).status, 'PARTIAL', '배출원이 없어 TODO였던 7번은 답으로 PARTIAL까지');
+  assert.notEqual(byNo(noData, 22).status, 'AUTO');
+  // 문서: 답이 「회사가 직접 적은 내용」으로 실리고 그 항목의 빈 상자는 없다
+  const docPlain = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await P.createMonitoringPlanDocument(input).blob.arrayBuffer()))['word/document.xml']);
+  const docAnswered = fflate.strFromU8(fflate.unzipSync(new Uint8Array(await P.createMonitoringPlanDocument(withAnswers(answers)).blob.arrayBuffer()))['word/document.xml']);
+  const boxes = (value) => (value.match(/여기에 적으세요 \]/g) ?? []).length;
+  assert.equal(boxes(docPlain) - boxes(docAnswered), 3, '답이 있는 항목(7·21·22)의 빈 상자가 사라진다');
+  assert.match(docAnswered, /회사가 직접 적은 내용/);
+  assert.match(docAnswered, /도시가스사 정산용 계량기\(본관 보일러실\)/);
+  assert.match(docAnswered, /계량기는 해마다 12월 총무팀이 검교정 성적서를 받는다/);
+  assert.match(docAnswered, /집계표는 대표가 확인한다/, '여러 줄 답은 줄마다 문단');
+  assert.ok(!docAnswered.includes('물음 없는 항목의 답은 쓰이지 않는다'), '물음이 없는 항목(9번)의 답은 문서에 나오지 않는다');
+  // 읽기 전용: 입력 객체를 바꾸지 않는다
+  assert.deepEqual(plain(withAnswers(answers).reportInputs.monitoring_plan.answers), plain(answers));
+  // 화면 배선: 보고서 입력 화면이 계획이 정한 물음 목록을 보여 주고 답을 monitoring_plan.answers에 저장한다
+  const reportPage = readFileSync('src/app/report-inputs/page.tsx', 'utf8');
+  assert.ok(reportPage.includes('buildMonitoringPlan(') && reportPage.includes('.filter((section) => section.questions.length > 0)'), '물음 목록은 계획 만들기가 정한 것을 그대로 쓴다');
+  assert.ok(reportPage.includes('<MonitoringPlanAnswers') && reportPage.includes('answers: { ...(inputs.monitoring_plan?.answers ?? {}), [String(no)]: text }'), '답은 monitoring_plan.answers[항목 번호]에 쌓인다');
+  const answersScreen = readFileSync('src/components/MonitoringPlanAnswers.tsx', 'utf8');
+  assert.ok(answersScreen.includes('<textarea') && answersScreen.includes('section.questions.map'), '물음을 보여 주고 직접 쓰는 칸이 있다');
+  // 새 프로젝트가 지우는 report:inputs 안에 있다 — 새 설정 키를 만들지 않았다(NEW_PROJECT 목록 변경 없음)
+  assert.ok(!/monitoring_plan_answers|plan:answers/.test(readFileSync('src/lib/local-db.ts', 'utf8')), '별도 설정 키를 만들지 않았다');
+}
+
 // ── 4) 문서 ──────────────────────────────────────────────────────
 const doc = P.createMonitoringPlanDocument(input);
 assert.match(doc.filename, /^CBAM_Monitoring_Plan_Draft_20261011\.docx$/);
