@@ -1,6 +1,7 @@
 'use client';
 
 import { SectionCard, StatusBadge } from '@/components/ui';
+import { NEW_PROJECT_CARRIED_PLAN_ANSWERS } from '@/lib/local-db';
 import type { PlanItemStatus, PlanSection } from '@/lib/monitoring-plan';
 
 const STATUS_LABEL: Record<PlanItemStatus, string> = {
@@ -39,6 +40,7 @@ export function MonitoringPlanAnswers({
                         <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-semibold text-slate-900">{section.no}. {section.title}</p>
                             <StatusBadge tone={section.status === 'AUTO' ? 'success' : 'warning'}>{STATUS_LABEL[section.status]}</StatusBadge>
+                            <StatusBadge tone="neutral">{NEW_PROJECT_CARRIED_PLAN_ANSWERS.includes(String(section.no)) ? '새 프로젝트에도 남음' : '이번 프로젝트만'}</StatusBadge>
                         </div>
                         <ul className="list-disc space-y-0.5 pl-5 text-xs leading-5 text-slate-600">
                             {section.questions.map((question) => <li key={question}>{question}</li>)}
@@ -52,7 +54,7 @@ export function MonitoringPlanAnswers({
                     </div>
                 ))}
             </div>
-            <p className="mt-3 text-xs text-slate-500">위 「저장」을 눌러야 저장됩니다. 새 프로젝트를 시작하면 다른 보고서 입력과 함께 지워지고, 백업(.cbam)에는 함께 담깁니다.</p>
+            <p className="mt-3 text-xs text-slate-500">위 「저장」을 눌러야 저장됩니다. 「새 프로젝트에도 남음」 항목은 새 프로젝트를 시작해도 남고(회사의 운영 방식이라 해마다 같은 답), 「이번 프로젝트만」 항목은 다른 보고서 입력처럼 지워집니다. 백업(.cbam)에는 모두 담깁니다.</p>
         </SectionCard>
     );
 }

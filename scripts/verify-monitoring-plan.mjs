@@ -147,6 +147,32 @@ assert.equal(plan.counts.TODO + plan.counts.PARTIAL > 0, true);
   assert.ok(!/monitoring_plan_answers|plan:answers/.test(readFileSync('src/lib/local-db.ts', 'utf8')), '별도 설정 키를 만들지 않았다');
 }
 
+// ── 3c) 새 프로젝트: 해마다 같은 회사 공통 답은 남고, 나머지 보고서 입력은 종전대로 지워진다 ──────────
+{
+  const DB = load('src/lib/local-db.ts');
+  assert.deepEqual(plain(DB.NEW_PROJECT_CARRIED_PLAN_ANSWERS), ['7', '8', '11', '13', '21', '22'], '남기는 항목: 측정기 위치·시료 채취·연속측정·공정 흐름도·CO₂ 포집·품질 관리');
+  assert.ok(!DB.NEW_PROJECT_CARRIED_PLAN_ANSWERS.includes('16') && !DB.NEW_PROJECT_CARRIED_PLAN_ANSWERS.includes('17'), '사 온 열의 공급처(16)·자가발전 반출량(17)은 해마다 달라 지운다');
+  const full = {
+    monitoring_plan: { doc_no: 'HB-001', version: 'v1', approved_at: '2025-12-01', answers: { '7': '정산용 계량기', '16': '공급처 A', '17': '반출 12 MWh', '21': '해당 없음', '22': '  ', '9': '물음 없는 항목' } },
+    rnr: [{ data: '생산량', collector: 'a', transposer: 'b', approver: 'c', system: 'd' }], declaration: { name: '홍길동' },
+  };
+  const carried = DB.carriedReportInputs(full);
+  assert.deepEqual(plain(carried), { monitoring_plan: { answers: { '7': '정산용 계량기', '21': '해당 없음' } } }, '공통 답만, 비어 있거나 번호가 다른 것은 뺀다. 문서번호·R&R·서명은 새 프로젝트가 지운다');
+  assert.equal(DB.carriedReportInputs(undefined), undefined);
+  assert.equal(DB.carriedReportInputs({ monitoring_plan: { doc_no: 'x' } }), undefined, '남길 답이 없으면 아무것도 쓰지 않는다');
+  assert.equal(DB.carriedReportInputs({ monitoring_plan: { answers: { '16': 'a', '22': '   ' } } }), undefined);
+  // 새 프로젝트 배선: 지우기 전에 읽고, 지운 뒤 같은 설정 키에 다시 쓴다. 확인창이 그렇다고 말한다.
+  const dbSource = readFileSync('src/lib/local-db.ts', 'utf8');
+  const startBlock = dbSource.slice(dbSource.indexOf('export async function startNewProject'), dbSource.indexOf('export async function seedLocalData'));
+  assert.ok(startBlock.indexOf('carriedReportInputs(await getLocalSetting') < startBlock.indexOf('transaction.objectStore(storeName).clear()'), '지우기 전에 읽는다');
+  assert.ok(startBlock.indexOf('setLocalSetting(REPORT_INPUTS_SETTING_KEY, carried)') > startBlock.indexOf('transaction.oncomplete'), '지운 뒤에 다시 쓴다');
+  assert.match(DB.describeNewProjectEffects(), /모니터링 계획 초안에 직접 적은 회사 공통 답.*남습니다/, '확인창이 남는 것을 말한다');
+  assert.match(DB.describeNewProjectEffects(), /회사 공통 답은 제외/, '지워지는 목록의 이름도 정확하다');
+  assert.ok(!/NEW_PROJECT_PRESERVED_SETTING_KEYS = \[[^\]]*report:inputs/.test(dbSource), 'report:inputs 전체를 보존 목록에 넣지 않았다 — 나머지는 종전대로 지워진다');
+  const screen = readFileSync('src/components/MonitoringPlanAnswers.tsx', 'utf8');
+  assert.ok(screen.includes('NEW_PROJECT_CARRIED_PLAN_ANSWERS.includes(String(section.no))') && screen.includes('새 프로젝트에도 남음'), '항목마다 남는지 지워지는지 보여 준다');
+}
+
 // ── 4) 문서 ──────────────────────────────────────────────────────
 const doc = P.createMonitoringPlanDocument(input);
 assert.match(doc.filename, /^CBAM_Monitoring_Plan_Draft_20261011\.docx$/);
