@@ -35,6 +35,27 @@ assert.deepEqual(undeclared, [], `개인정보 처리방침에 없는 수집 항
 const overDeclared = declared.filter((label) => !apiKeys.map((key) => KEY_LABELS[key]).includes(label));
 assert.deepEqual(overDeclared, [], `수집하지 않는 항목이 처리방침에 있다: ${overDeclared.join(', ')}`);
 
+// ── 문의 창(/api/contact)의 전송 항목과 메일 발송 업체도 방침에 있다 ────────────────
+{
+  const contactRoute = read('src/app/api/contact/route.ts');
+  const contactBlock = contactRoute.slice(contactRoute.indexOf('const allowedKeys = ['), contactRoute.indexOf('] as const'));
+  const contactKeys = [...contactBlock.matchAll(/'([a-z_]+)'/g)].map((match) => match[1]);
+  const CONTACT_LABELS = { ...KEY_LABELS, inquiry_type: '문의 유형', message: '문의 내용', source_path: '문의한 화면', app_version: '앱 버전' };
+  assert.ok(contactKeys.length >= 8, `문의 API의 전송 항목을 읽지 못했다: ${contactKeys.join(', ')}`);
+  const unlabeled = contactKeys.filter((key) => !CONTACT_LABELS[key]);
+  assert.deepEqual(unlabeled, [], `문의 API에 새 전송 항목이 생겼는데 이름을 모른다 — KEY_LABELS(CONTACT_LABELS)와 CONTACT_FORM_PERSONAL_DATA에 추가하세요: ${unlabeled.join(', ')}`);
+  const contactBlockText = operatorInfo.slice(operatorInfo.indexOf('CONTACT_FORM_PERSONAL_DATA = ['), operatorInfo.indexOf('] as const', operatorInfo.indexOf('CONTACT_FORM_PERSONAL_DATA = [')));
+  const undeclaredContact = contactKeys.map((key) => CONTACT_LABELS[key]).filter((label) => !contactBlockText.includes(label));
+  assert.deepEqual(undeclaredContact, [], `개인정보 처리방침의 문의 창 항목에 없다 — src/lib/operator-info.ts의 CONTACT_FORM_PERSONAL_DATA에 추가하세요: ${undeclaredContact.join(', ')}`);
+  assert.match(read('src/app/privacy/page.tsx'), /문의 창으로 문의를 보낼 때/, '처리방침에 문의 창 절이 없다');
+  // 메일 발송 업체: 코드가 부르는 곳은 모두 처리 위탁 목록에 있다
+  const mailCode = read('src/lib/license-api.ts');
+  const processorBlock = operatorInfo.slice(operatorInfo.indexOf('PERSONAL_DATA_PROCESSORS = ['), operatorInfo.indexOf('] as const', operatorInfo.indexOf('PERSONAL_DATA_PROCESSORS = [')));
+  for (const [needle, name] of [['api.resend.com', 'Resend'], ['gmail.googleapis.com', 'Google']]) {
+    if (mailCode.includes(needle)) assert.ok(processorBlock.includes(`name: '${name}`), `메일 발송 코드가 ${needle}를 부르는데 처리 위탁 목록에 ${name}이 없다`);
+  }
+}
+
 // ── 처리방침이 현재 시제인가 ───────────────────────────────────────────
 // 라이선스 등록은 이미 동작 중이다. 「향후 … 검토합니다」는 사실과 다르다.
 const privacy = read('src/app/privacy/page.tsx');

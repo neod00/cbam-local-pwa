@@ -94,5 +94,19 @@ export const COLLECTED_PERSONAL_DATA = [
 export const PERSONAL_DATA_PROCESSORS = [
     { name: 'Vercel Inc.', role: '웹 호스팅·서버 실행', location: '해외(미국 등)' },
     { name: 'Neon Inc.', role: '라이선스 정보 데이터베이스', location: '해외(미국 등)' },
-    { name: 'Resend Inc.', role: '라이선스 키 이메일 발송', location: '해외(미국 등)' },
+    // 인증 코드·문의 메일은 같은 발송 함수(src/lib/license-api.ts sendOperationalTextEmail)가 보낸다 — Gmail API 설정이 있으면 Google, 없으면 Resend.
+    { name: 'Resend Inc.', role: '이메일 발송(라이선스 인증 코드·문의 메일) — 발송 설정에 따라 아래 Google과 둘 중 한 곳을 씁니다', location: '해외(미국 등)' },
+    { name: 'Google LLC', role: '이메일 발송(Gmail API, 설정한 경우) 및 운영자 문의 메일함(Gmail)', location: '해외(미국 등)' },
+] as const;
+
+/**
+ * 앱 안 문의 창(/api/contact)이 운영자 메일로 보내는 정보. API가 받는 항목과 **같아야 한다** — 항목이 늘었는데 여기를 고치지 않으면
+ * 처리방침이 사실과 달라진다(scripts/verify-pre-release.mjs가 잠근다). 문의 내용은 DB에 저장하지 않고 메일 발송에만 쓴다.
+ */
+export const CONTACT_FORM_PERSONAL_DATA = [
+    { field: '이메일·회사명·담당자명·연락처·국가·업종', purpose: '등록 때 받은 정보를 문의에 함께 보내 회신' },
+    { field: '문의 유형', purpose: '문의 분류' },
+    { field: '문의 내용', purpose: '문의 응대(직접 적은 내용 그대로)' },
+    { field: '문의한 화면', purpose: '오류 재현 등 문의 응대(앱 안의 화면 경로)' },
+    { field: '앱 버전', purpose: '오류 재현 등 문의 응대' },
 ] as const;
