@@ -1334,6 +1334,8 @@ assertTrue(nonSteelCiteXml.includes('N2O·PFC 등 다른 대상 GHG'), '비철�
     assertTrue(electricXml.includes('120 MWh') && electricXml.includes('>전기<'), '6.6 표에 외주처 전기 줄(MWh)');
     assertTrue(electricXml.includes('연료와 전기') && electricXml.includes('전력 사용량(제7장)에 자체 사용량과 함께 합산'), '6.6 설명이 연료와 전기를 모두 말한다');
     assertTrue(!electricXml.includes('전기(간접배출)는 입력되지 않았습니다'), '전기 몫이 입력된 외주처에는 미입력 안내가 없다');
+    assertTrue(electricXml.includes('는 자체 사용량') && electricXml.includes('에 외주처 전력의 우리 몫 120.0000 MWh(가상 코팅 B사 120.0000 MWh; 제6.6장)를 더한 값이다'), '제7장이 표의 전력 사용량 = 자체 + 외주 몫임을 밝힌다(배분 근거의 「이 공정 몫」과 달라 보이지 않게)');
+    assertTrue(!xml.includes('에 외주처 전력의 우리 몫'), '외주 전기 몫이 없는 문서에는 그 문장이 없다');
     assertTrue(reportModule.createCalculationReport(withElectricity).issues.filter((issue) => /제6\.6장/.test(issue.message)).length === 0, '갖춰진 외주 전기 몫은 게이트 경고가 없다');
     const electricOnly = { ...baseInput(), processes: withElectricity.processes };
     const electricOnlyXml = await xmlOf(electricOnly);
