@@ -347,6 +347,31 @@ assert.ok(ui2.includes('INSTALLATION_FIELD_SPECS[field].hint'), '무엇을 적�
   assert.equal(outsourcedItems([outsourcedStream({}, { technique_evidence: '' })]).length, 1, '코팅의 분류 근거가 비면 받을 것');
   // 같은 외주처 몫의 행이 둘이어도(공정 둘) 항목은 한 건
   assert.equal(outsourcedItems([outsourcedStream({ id: 'a', activity_data: 18000 }, { evidence: '' }), outsourcedStream({ id: 'b', activity_data: 18000 }, { evidence: '' })]).length, 1);
+
+  // ── 외주처 전기 몫(같은 규칙): 근거 부족 → 외주처에게 받을 것, 어긋남 → 우리가 고칠 것, 연료만 입력한 외주처 → 전기 확인 ──
+  const share = (patch = {}) => ({ subcontractor: '가상 코팅 B사', technique: 'ZINC_FLAKE_COATING', technique_evidence: '정류기 없음', basis: 'RECONSTRUCTED', company_total: 400, note: '정격×가동시간', evidence: '전력 고지서', total_share: 120, mwh: 120, same_grid: true, ...patch });
+  const baseProcess = base.processes[0];
+  const electricItems = (processShares, streams = [], total = 520) => app.buildTodoItems({ ...base, sourceStreams: streams, processes: base.processes.map((item, index) => (index === 0 ? { ...item, electricity_mwh: total, electricity_ef_tco2e_per_mwh: 0.4747, outsourced_electricity: processShares } : item)) }).items.filter((item) => item.id.startsWith('oe:'));
+  assert.ok(baseProcess, '시험 공정이 있다');
+  assert.deepEqual(plain(electricItems([share()])), [], '근거가 갖춰진 외주 전기 몫은 할 일이 없다');
+  assert.deepEqual(plain(electricItems(undefined)), [], '외주 전기가 없으면 항목이 없다');
+  const electricNeeds = electricItems([share({ basis: 'CONSERVATIVE_ESTIMATE', evidence: '' })]);
+  assert.equal(electricNeeds.length, 1);
+  assert.deepEqual(plain([electricNeeds[0].owner, electricNeeds[0].severity, electricNeeds[0].area]), ['supplier', 'notice', '외주 공정']);
+  assert.match(electricNeeds[0].title, /외주처 전기 자료 받기 — 「가상 코팅 B사」/);
+  assert.match(electricNeeds[0].detail, /연간·월별 전력 고지서/);
+  assert.match(electricNeeds[0].detail, /설비별 정격 전력\(kW\)/);
+  const electricBroken = electricItems([share({ mwh: 450 })], [], 900);
+  assert.deepEqual(plain([electricBroken[0].owner, electricBroken[0].severity]), ['company', 'error'], '우리 몫이 외주처 전체 전력보다 크면 우리가 고칠 것');
+  assert.match(electricBroken[0].title, /외주 전기 숫자 고치기 — 「가상 코팅 B사」/);
+  const electricLost = electricItems([share()], [], 80);
+  assert.ok(electricLost.some((item) => item.severity === 'error' && /외주 전기 숫자 고치기/.test(item.title)), '전력을 다시 나누며 외주 몫이 지워졌으면 고칠 것');
+  // 연료만 입력한 외주처 → 전기도 썼는지 확인(한 건). 전기 몫이 있는 외주처에는 안 나온다.
+  const missing = electricItems(undefined, [outsourcedStream()]);
+  assert.deepEqual(plain(missing.map((item) => item.id)), ['oe:missing']);
+  assert.deepEqual(plain([missing[0].owner, missing[0].severity]), ['company', 'notice']);
+  assert.match(missing[0].title, /외주처가 전기도 썼는지 확인 — 「가상 코팅 B사」/);
+  assert.deepEqual(plain(electricItems([share()], [outsourcedStream()])), [], '전기 몫이 있는 외주처에는 확인 항목이 없다');
 }
 
 console.log('Todo verified (세 칸 가르기 · 질문과 중복 없음 · 영향 상자 = 기본값 채우기+엔진(손계산 0.3 → 0.6302) · 입력칸 = 점검이 낸 fix + 기존 레코드를 펼쳐 칸만 덮음 · 저장 코드는 todo-writes.ts 한 곳 · 머리글·서비스 워커·경로 배선).');

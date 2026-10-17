@@ -4,7 +4,7 @@ import type { EuExportIssueFix } from './eu-template-export';
 import type { InternalTransfer, Installation, Product, ProductOutputLine, ProductionProcess, PurchasedPrecursor, ReportingPeriod, SourceStream } from './local-db';
 import { isUnverifiedActualPrecursor, PRECURSOR_ACTUAL_VALUE_RULE } from './precursor-verification';
 import { groupPrecursorsBySupplier } from './supplier-request';
-import { checkOutsourcedStreams, groupOutsourcedStreams, OUTSOURCED_BASIS_LABEL, OUTSOURCED_DATA_REQUEST, outsourcedGroupNeedsData } from './outsourced-process';
+import { checkOutsourcedElectricity, checkOutsourcedStreams, fuelSubcontractorsWithoutElectricity, groupOutsourcedElectricity, groupOutsourcedStreams, OUTSOURCED_BASIS_LABEL, OUTSOURCED_DATA_REQUEST, OUTSOURCED_ELECTRICITY_DATA_REQUEST, outsourcedElectricityGroupNeedsData, outsourcedGroupNeedsData } from './outsourced-process';
 import type { InstallationFieldKey } from './todo-edits';
 import { deriveTalkState, linkProcessesByOutputLines, pickFocusProcess, type TalkQuestionId } from './talk-flow';
 
@@ -279,6 +279,43 @@ export function buildTodoItems(input: TodoInput): TodoResult {
             href: '/',
             hrefLabel: '지도 4단계에서 외주 공정 고치기',
             evidence: '2026-05-27 CBAM Q&A 4.31 · 2025/2547 부속서 II A.1 5항 · 부속서 III A.1·A.2',
+        });
+    }
+
+    // ── 4c) 외주처 전기 몫의 근거 → 외주처에게 받을 것, 그리고 연료만 입력한 외주처의 전기 확인 ──────────
+    const electricIssues = checkOutsourcedElectricity(input.processes);
+    for (const group of groupOutsourcedElectricity(input.processes)) {
+        const memberIds = group.members.map((member) => member.process.id);
+        const mine = electricIssues.filter((issue) => memberIds.includes(issue.processId));
+        const broken = mine.some((issue) => issue.level === 'fix');
+        const name = group.first.subcontractor.trim();
+        if (!broken && !outsourcedElectricityGroupNeedsData(group)) continue;
+        add({
+            id: `oe:${group.key}`,
+            owner: broken ? 'company' : 'supplier',
+            severity: broken ? 'error' : 'notice',
+            area: '외주 공정',
+            title: broken ? `외주 전기 숫자 고치기 — 「${name}」` : `외주처 전기 자료 받기 — 「${name}」`,
+            detail: broken
+                ? mine.filter((issue) => issue.level === 'fix').map((issue) => issue.message).join(' ')
+                : `「${name}」 전기 몫은 ${OUTSOURCED_BASIS_LABEL[group.first.basis]}으로 정했는데 근거·증빙이 부족합니다. 외주처에 받을 것: ${OUTSOURCED_ELECTRICITY_DATA_REQUEST.join(' · ')}.`,
+            href: '/',
+            hrefLabel: '지도 4단계에서 외주처 전기 고치기',
+            evidence: '2026-05-27 CBAM Q&A 4.31 · 2025/2547 부속서 II A.1 5항 · 부속서 III A.1·A.2',
+        });
+    }
+    const withoutElectricity = fuelSubcontractorsWithoutElectricity(input.sourceStreams, input.processes);
+    if (withoutElectricity.length > 0) {
+        add({
+            id: 'oe:missing',
+            owner: 'company',
+            severity: 'notice',
+            area: '외주 공정',
+            title: `외주처가 전기도 썼는지 확인 — ${withoutElectricity.map((name) => `「${name}」`).join('·')}`,
+            detail: '연료 몫만 입력되어 있습니다. 외주처가 우리 부품에 전기도 썼다면(건조로·송풍기·전기로 등) 같은 방법으로 전기 몫을 입력하세요. 쓰지 않았거나 무시할 만하다면 그 이유를 검증인에게 설명할 수 있게 남기세요.',
+            href: '/',
+            hrefLabel: '지도 4단계에서 외주처 전기 입력',
+            evidence: '2026-05-27 CBAM Q&A 4.31',
         });
     }
 

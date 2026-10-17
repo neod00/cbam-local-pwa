@@ -280,8 +280,28 @@ export function groupOutsourcedStreams(streams: SourceStream[]): OutsourcedGroup
     return Array.from(groups.values());
 }
 
-/** 외주 공정 입력이 받지 않는 것 — 화면·서식·보고서·모니터링 계획이 같은 문장을 쓴다(씨밤이 run40 P2-02). */
-export const OUTSOURCED_ELECTRICITY_NOTICE = '외주처가 쓴 전기(간접배출)는 이 입력에 포함되지 않습니다. 외주처 전력 사용량이 있으면 간접배출 처리 방식을 검증인과 따로 정하세요(후속 기능).';
+/**
+ * 외주처의 연료 몫은 입력했는데 그 외주처의 전기(간접배출)는 입력하지 않았을 때 보고서·모니터링 계획에 남기는 문장(씨밤이 run40 P2-02).
+ * 전기를 아예 안 쓰는 외주처도 있으므로 「빠졌다」고 단정하지 않고, 입력 위치와 확인할 일을 알린다. 전기 몫이 이미 있는 외주처는 이름에서 뺀다.
+ */
+export function outsourcedElectricityMissingNotice(subcontractors: string[]): string {
+    if (subcontractors.length === 0) return '';
+    return `외주처 ${subcontractors.map((name) => `「${name}」`).join('·')}의 전기(간접배출)는 입력되지 않았습니다. 외주처가 우리 부품에 전기도 썼다면 지도 4단계 「외주사가 우리 부품에 쓴 전기」(또는 서식 13_외주공정 시트의 에너지 칸 「전기」)에 입력하세요. 쓰지 않았거나 무시할 만하다면 그 이유를 검증인에게 설명할 수 있게 남기세요.`;
+}
+
+/** 연료 몫은 있는데 같은 외주처의 전기 몫이 없는 외주처 이름(입력 순서). 같은 보고기간끼리 비교한다. */
+export function fuelSubcontractorsWithoutElectricity(streams: SourceStream[], processes: Array<Pick<ProductionProcess, 'period_id'> & Partial<Pick<ProductionProcess, 'outsourced_electricity'>>>): string[] {
+    const electric = new Set<string>();
+    for (const process of processes) {
+        for (const share of process.outsourced_electricity ?? []) electric.add(`${share.subcontractor.trim().toLowerCase()}|${process.period_id ?? ''}`);
+    }
+    const names: string[] = [];
+    for (const group of groupOutsourcedStreams(streams)) {
+        if (electric.has(`${group.subcontractor.toLowerCase()}|${group.periodId ?? ''}`)) continue;
+        if (!names.includes(group.subcontractor)) names.push(group.subcontractor);
+    }
+    return names;
+}
 
 /** 외주처에 요청할 최소 증빙자료(검증에서 근거로 쓴다) */
 export const OUTSOURCED_DATA_REQUEST = [
@@ -295,9 +315,29 @@ export const OUTSOURCED_DATA_REQUEST = [
     '배분 계산서와 총량 대사표',
 ];
 
+/** 외주처에 요청할 전기 자료(외주처 전력 몫) */
+export const OUTSOURCED_ELECTRICITY_DATA_REQUEST = [
+    '연간·월별 전력 고지서',
+    '전기 사용 설비 목록과 계량기 계통도',
+    '설비별 정격 전력(kW)·설비 사양서',
+    '설비별 월별·배치별 가동시간',
+    '우리 제품과 타사 제품의 처리량',
+    '설비 시험자료 또는 일시적 실측자료',
+    '배분 계산서와 총량 대사표',
+];
+
 /** 이 외주 몫에 외주처에서 더 받아야 할 자료가 있는가(추정이거나 근거·증빙·분류 근거가 비었다) */
 export function outsourcedGroupNeedsData(group: OutsourcedGroup): boolean {
     const info = group.info;
+    return info.basis === 'CONSERVATIVE_ESTIMATE'
+        || !info.note?.trim()
+        || !info.evidence?.trim()
+        || (NEEDS_TECHNIQUE_EVIDENCE.includes(info.technique) && !info.technique_evidence?.trim());
+}
+
+/** 외주 전력 몫에 외주처에서 더 받아야 할 자료가 있는가(연료 몫과 같은 기준) */
+export function outsourcedElectricityGroupNeedsData(group: OutsourcedElectricityGroup): boolean {
+    const info = group.first;
     return info.basis === 'CONSERVATIVE_ESTIMATE'
         || !info.note?.trim()
         || !info.evidence?.trim()
