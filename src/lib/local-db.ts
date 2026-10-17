@@ -357,6 +357,11 @@ export interface ReportMonitoringPlan {
   doc_no?: string;
   version?: string;
   approved_at?: string;
+  /**
+   * 모니터링 계획 초안에서 앱이 알 수 없어 회사가 직접 쓰는 항목의 답 — 키는 부속서 II A.5 항목 번호("7", "22" …).
+   * 초안(Word)의 해당 항목 「작성 필요」 자리에 실린다. 보고서 입력(report:inputs)에 들어 있어 백업에 함께 담기고 새 프로젝트가 지운다.
+   */
+  answers?: Record<string, string>;
 }
 
 export interface ReportRnrRow {
