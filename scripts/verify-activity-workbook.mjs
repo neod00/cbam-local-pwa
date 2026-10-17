@@ -1100,6 +1100,67 @@ assert.equal(echoRun.result.issues.filter((issue) => /CN 87089997/.test(issue.me
   assert.equal(outsourcedStreams(roundTripImport)[0]?.activity_data, 36000, '채워 쓴 서식을 읽어 가져오면 사례 A의 36,000이 나온다');
   assert.ok(W.createActivityWorkbook, '서식 생성');
 
+  // ── 외주처 전기(에너지 칸 「전기」): 우리 공정의 전력 사용량에 더하고 몫은 공정 기록에 남긴다. 연료 줄·예전 서식은 그대로. ──
+  {
+    const processOf = (run, name) => run.store.data.processes.find((item) => item.name === name);
+    const electric = (patch = {}) => outsourcedRow({ energy: '전기', fuelKind: '', ...reconstructed, companyTotal: '400', ourEquipment: '코팅라인1:600:20', otherEquipment: '타사코팅라인:900:20; 기타:1000:10', sameGrid: '예', note: '정격×가동시간', evidence: '외주처 전력 고지서 2025', ...patch });
+    const ownBolt = processOf(withoutRows, '볼트 공정').electricity_mwh;
+    const e1 = await importOf(withOutsourced([electric()]));
+    const bolt = processOf(e1, '볼트 공정');
+    assert.equal(outsourcedStreams(e1).length, 0, '전기 줄은 연료 행을 만들지 않는다');
+    assert.equal(bolt.outsourced_electricity.length, 1);
+    assert.equal(bolt.outsourced_electricity[0].mwh, 120, '재구성: 우리 설비 12 MWh × 보정계수 10 = 120 MWh (kW ÷ 1,000 환산)');
+    assert.equal(bolt.outsourced_electricity[0].same_grid, true);
+    assert.equal(bolt.outsourced_electricity[0].total_share, 120);
+    assert.ok(Math.abs(bolt.electricity_mwh - (ownBolt + 120)) < 1e-6, `전력 사용량 = 자체 ${ownBolt} + 외주 120: ${bolt.electricity_mwh}`);
+    assert.match(textOf(e1), /\[참고\] 13_외주공정 5번째 줄 — 가상 코팅 B사: 전기 우리 몫 120 MWh를 「볼트 공정」의 전력 사용량에 더했습니다/);
+    assert.ok(!/\[넣지 못함\] 13_외주공정/.test(textOf(e1)), '갖춰진 전기 줄은 오류가 없다');
+    // 엔진 결과: 간접 SEE가 (자체 + 외주) × 계수로 늘어난다
+    const indirectOf = (run) => resultsOf(run.store).find((item) => item.process_name === '볼트 공정').own_indirect_see;
+    assert.ok(indirectOf(e1) > indirectOf(withoutRows), '외주 전기만큼 간접 SEE가 늘어난다');
+    // 공정이 둘이면 생산량 비율로 나눈다(1,000 : 3,000), 합 = 총 몫
+    const e2 = await importOf(withOutsourced([electric({ where: '볼트 공정; 너트 공정' })]));
+    const shares = ['볼트 공정', '너트 공정'].map((name) => processOf(e2, name).outsourced_electricity[0].mwh);
+    assert.deepEqual(plain(shares), [30, 90]);
+    // 같은 줄을 두 번 올려도 한 번만
+    const e3 = await importOf(withOutsourced([electric(), electric()]));
+    assert.equal(processOf(e3, '볼트 공정').outsourced_electricity.length, 1, '같은 외주 전기 몫은 한 번만');
+    // 연료 줄과 전기 줄을 한 외주처가 둘 다: 연료는 연료 행, 전기는 공정 기록
+    const both = await importOf(withOutsourced([outsourcedRow(reconstructed), electric({ row: 6 })]));
+    assert.equal(outsourcedStreams(both).length, 1);
+    assert.equal(processOf(both, '볼트 공정').outsourced_electricity.length, 1);
+    // 처리 중량 비율·보수적 추정도 같은 규칙
+    const byMassElectric = await importOf(withOutsourced([electric({ ...byMass, lineQuantity: '90', ourThroughput: '300', lineThroughput: '1000', ourEquipment: '', otherEquipment: '', companyTotal: '' })]));
+    assert.equal(processOf(byMassElectric, '볼트 공정').outsourced_electricity[0].mwh, 27, '처리 중량 비율: 90 MWh × 300 ÷ 1,000 = 27');
+    // 잘못된 줄은 이유와 함께 넣지 않는다
+    for (const [name, patch, pattern] of [
+      ['같은 나라 확인 없음', { sameGrid: '' }, /외주처도 국내\(같은 나라\) 전력망 전기를 쓰나요/],
+      ['다른 나라', { sameGrid: '아니오' }, /다른 나라 전력망 전기를 쓰면 이 서식으로 받지 않습니다/],
+      ['에너지 모름', { energy: '증기' }, /목록\(연료·전기\)에서 찾지 못했습니다/],
+      ['총량 없음', { companyTotal: '' }, /외주처 전체 전력량/],
+      ['설비 칸 모양', { ourEquipment: '코팅라인1-600-20' }, /이름:가동시간:소비율/],
+      ['전기도금', { technique: W.OUTSOURCED_TECHNIQUE_CHOICES[4].label }, /전기도금\(plating\)은 철강 제품의 시스템 경계 밖/],
+    ]) {
+      const bad = await importOf(withOutsourced([electric(patch)]));
+      assert.equal(processOf(bad, '볼트 공정').outsourced_electricity, undefined, `${name}: 넣지 않는다`);
+      assert.match(textOf(bad), pattern, name);
+    }
+    // 연료 줄의 연료 종류가 비면 지금처럼 오류(에너지 칸을 비우면 연료로 읽는다 = 예전 서식과 같다)
+    const noKind = await importOf(withOutsourced([outsourcedRow({ ...byMass, fuelKind: undefined })]));
+    assert.equal(outsourcedStreams(noKind).length, 0);
+    assert.match(textOf(noKind), /외주처가 쓰는 연료 「빈 칸」/);
+    // 서식 왕복: 새 칸(에너지·같은 나라)이 서식 머리글과 선택 목록에 있고, 예전 서식(칸 없음)도 읽힌다
+    assert.ok(W.OUTSOURCED_COLUMNS.some((column) => column.key === 'energy' && column.list === 'outsourcedEnergy'), '에너지 칸과 선택 목록');
+    assert.ok(W.OUTSOURCED_COLUMNS.some((column) => column.key === 'sameGrid' && column.list === 'yesNo'), '같은 나라 확인 칸');
+    assert.equal(W.OUTSOURCED_COLUMNS[0].key, 'subcontractor', '첫 칸(머리글 찾기)은 그대로');
+    assert.equal(W.OUTSOURCED_COLUMNS.find((column) => column.key === 'fuelKind').required, undefined, '연료 종류는 연료일 때만 필수');
+    const electricRoundTrip = W.parseActivityWorkbook(await bytesOf(W.createActivityWorkbook({ countries, fill: {
+      ...W.ACTIVITY_WORKBOOK_SAMPLE,
+      outsourced: [{ subcontractor: '가상 코팅 B사', technique: W.OUTSOURCED_TECHNIQUE_CHOICES[1].label, energy: '전기', where: 'STS 나사 공정', basis: W.OUTSOURCED_BASIS_CHOICES[1].label, companyTotal: 400, ourEquipment: '코팅라인1:600:20', otherEquipment: '타사:900:20; 기타:1000:10', sameGrid: '예', note: 'n', evidence: 'e' }],
+    } })));
+    assert.deepEqual(plain([electricRoundTrip.outsourced[0].values.energy, electricRoundTrip.outsourced[0].values.sameGrid]), ['전기', '예'], '채워 쓴 서식에서 전기 줄을 읽는다');
+  }
+
   // 설비 칸 읽기
   const O = load('src/lib/outsourced-process.ts');
   assert.deepEqual(plain(O.parseOutsourcedEquipment('A:600:50; B:900:50.5', true)), { items: [{ name: 'A', hours: 600, rate_per_h: 50, ours: true }, { name: 'B', hours: 900, rate_per_h: 50.5, ours: true }] });

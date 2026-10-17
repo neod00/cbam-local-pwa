@@ -12,7 +12,7 @@ import { SHARED_HEAT_RULE } from './measurable-heat';
 import { findDefaultValueReference, hasAmbiguousDefaultValueRoutes } from './reference-workbooks';
 import type { DefaultValueReferenceRow, ImportedDefaultValueReference } from './reference-workbooks';
 import { getSourceStreamEmissionFactorBasis } from './source-stream-calculation';
-import { checkOutsourcedStreams, groupOutsourcedStreams, OUTSOURCED_BASIS_ANCHOR, OUTSOURCED_BASIS_LABEL, OUTSOURCED_ELECTRICITY_NOTICE, OUTSOURCED_TECHNIQUE_LABEL } from './outsourced-process';
+import { checkOutsourcedElectricity, checkOutsourcedStreams, fuelSubcontractorsWithoutElectricity, groupOutsourcedElectricity, groupOutsourcedStreams, OUTSOURCED_BASIS_ANCHOR, OUTSOURCED_BASIS_LABEL, outsourcedElectricityMissingNotice, OUTSOURCED_TECHNIQUE_LABEL } from './outsourced-process';
 import { calculateLocalResults } from './calculation-engine';
 import type { InternalTransferInput, LocalCalculationResult } from './calculation-engine';
 import type {
@@ -1111,31 +1111,65 @@ function activityDataSection(input: CalculationReportInput) {
  */
 function outsourcedProcessSection(input: CalculationReportInput) {
     const streams = cbamSourceStreams(input).filter((stream) => stream.outsourced);
+    const ids = cbamProcessIds(input);
+    const cbamProcesses = input.processes.filter((process) => ids.has(process.id));
+    const electricGroups = groupOutsourcedElectricity(cbamProcesses);
     const gateIssues: ReportGateIssue[] = [];
-    if (streams.length === 0) return { xml: '', gateIssues };
+    if (streams.length === 0 && electricGroups.length === 0) return { xml: '', gateIssues };
     const processName = (id: string | undefined) => input.processes.find((process) => process.id === id)?.name ?? '(공정 미상)';
+    const number = (value: number) => new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 3 }).format(value);
+    const detail = (info: { note?: string; evidence?: string; technique_evidence?: string }) =>
+        [info.note?.trim(), info.evidence?.trim() ? `증빙: ${info.evidence.trim()}` : '', info.technique_evidence?.trim() ? `분류 근거: ${info.technique_evidence.trim()}` : ''].filter(Boolean).join(' / ') || PLACEHOLDER;
     const issues = checkOutsourcedStreams(streams);
-    const rows = groupOutsourcedStreams(streams).map((group) => {
+    const fuelRows = groupOutsourcedStreams(streams).map((group) => {
         const mine = issues.filter((issue) => group.members.some((stream) => stream.id === issue.streamId));
-        const info = group.info;
         return [
             group.subcontractor,
+            '연료',
             OUTSOURCED_TECHNIQUE_LABEL[group.technique],
             group.members.map((stream) => processName(stream.process_id)).join(' · '),
             `${OUTSOURCED_BASIS_LABEL[group.basis]} (${OUTSOURCED_BASIS_ANCHOR[group.basis]})`,
-            `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 3 }).format(group.total)} ${group.unit}`,
-            [info.note?.trim(), info.evidence?.trim() ? `증빙: ${info.evidence.trim()}` : '', info.technique_evidence?.trim() ? `분류 근거: ${info.technique_evidence.trim()}` : ''].filter(Boolean).join(' / ') || PLACEHOLDER,
+            `${number(group.total)} ${group.unit}`,
+            detail(group.info),
             mine.length === 0 ? '근거 갖춤' : '확인 필요',
         ];
     });
     for (const issue of issues) gateIssues.push({ gate: 'G5', severity: 'warn', message: `제6.6장: ${issue.message}` });
+    const electricIssues = checkOutsourcedElectricity(cbamProcesses);
+    const electricRows = electricGroups.map((group) => {
+        const memberIds = group.members.map((member) => member.process.id);
+        const mine = electricIssues.filter((issue) => memberIds.includes(issue.processId));
+        return [
+            group.first.subcontractor.trim(),
+            '전기',
+            OUTSOURCED_TECHNIQUE_LABEL[group.first.technique],
+            group.members.map((member) => member.process.name).join(' · '),
+            `${OUTSOURCED_BASIS_LABEL[group.first.basis]} (${OUTSOURCED_BASIS_ANCHOR[group.first.basis]})`,
+            `${number(group.total)} MWh`,
+            detail(group.first),
+            mine.length === 0 ? '근거 갖춤' : '확인 필요',
+        ];
+    });
+    for (const issue of electricIssues) gateIssues.push({ gate: 'G5', severity: 'warn', message: `제6.6장: ${issue.message}` });
+    const missing = outsourcedElectricityMissingNotice(fuelSubcontractorsWithoutElectricity(streams, cbamProcesses));
+    const closing: string[] = [];
+    if (streams.length > 0) {
+        closing.push('연료의 우리 몫은 배출원 표(제6.2장)에 「(외주)」로 시작하는 연료 행으로 들어 있고, 공정의 직접배출(제4장)에 그대로 합산된다.');
+    }
+    if (electricGroups.length > 0) {
+        closing.push('전기의 우리 몫은 해당 생산공정의 전력 사용량(제7장)에 자체 사용량과 함께 합산되어 있으며(외주 몫은 공정 기록에 따로 남아 있다), 외주처가 공정과 같은 나라의 계통 전력을 쓴다고 보아 공정의 전력 배출계수 하나로 간접배출을 계산했다. 간접배출이 인증서 산정 기준에 들어가는지는 품목별로 제7장에서 따로 판정한다.');
+    }
+    closing.push('보수적 추정은 설비 사양·가동기록 같은 객관적 근거가 있을 때만 쓰며(2025/2547 부속서 II A.1 5항) 검증에서 확인해야 한다.');
+    if (missing) closing.push(missing);
+    const energyWords = electricGroups.length > 0 ? '연료와 전기' : '연료';
+    const targetWords = electricGroups.length > 0 ? '연료 배출원·전력 사용량' : '연료 배출원';
     const body = [
         paragraph('6.6 외주 공정 몫   Outsourced Processes', 'Heading2'),
-        paragraph('열처리·코팅·용융아연도금처럼 철강제품 시스템 경계 안의 공정(2025/2547 부속서 I 3.16.2)을 외주사에서 하고 물건이 돌아오면, 그 공정은 우리 사업장에서 일어난 것으로 다룬다(EC CBAM Questions and Answers, 2026-05-27, 4.31). 외주처가 우리 부품에 쓴 연료의 몫을 우리 생산공정의 연료 배출원으로 넣었으며, 돌아온 부품은 구매 전구물질로 넣지 않았다(이중계산 방지). 전기도금(plating)·절단·용접·마무리는 경계 밖이라 넣지 않았다.'),
-        table(['외주처', '공정', '우리 공정', '우리 몫을 정한 방법(근거)', '우리 몫', '근거·증빙', '상태'], rows, {
-            widths: [1100, 1300, 1300, 2000, 1000, 1700, 600], headerShade: SOFT, headerBold: true, repeatHeader: true,
+        paragraph(`열처리·코팅·용융아연도금처럼 철강제품 시스템 경계 안의 공정(2025/2547 부속서 I 3.16.2)을 외주사에서 하고 물건이 돌아오면, 그 공정은 우리 사업장에서 일어난 것으로 다룬다(EC CBAM Questions and Answers, 2026-05-27, 4.31). 외주처가 우리 부품에 쓴 ${energyWords}의 몫을 우리 생산공정의 ${targetWords}으로 넣었으며, 돌아온 부품은 구매 전구물질로 넣지 않았다(이중계산 방지). 전기도금(plating)·절단·용접·마무리는 경계 밖이라 넣지 않았다.`),
+        table(['외주처', '에너지', '공정', '우리 공정', '우리 몫을 정한 방법(근거)', '우리 몫', '근거·증빙', '상태'], [...fuelRows, ...electricRows], {
+            widths: [950, 600, 1050, 1100, 1600, 900, 1900, 900], headerShade: SOFT, headerBold: true, repeatHeader: true,
         }),
-        paragraph('우리 몫은 배출원 표(제6.2장)에 「(외주)」로 시작하는 연료 행으로 들어 있고, 공정의 직접배출(제4장)에 그대로 합산된다. 보수적 추정은 설비 사양·가동기록 같은 객관적 근거가 있을 때만 쓰며(2025/2547 부속서 II A.1 5항) 검증에서 확인해야 한다. ' + OUTSOURCED_ELECTRICITY_NOTICE),
+        paragraph(closing.join(' ')),
     ];
     return { xml: body.join(''), gateIssues };
 }

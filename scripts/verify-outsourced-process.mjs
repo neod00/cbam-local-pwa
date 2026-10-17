@@ -189,15 +189,24 @@ console.log('Outsourced process verified (사례 A 36,000 · 사례 B 18,000 · 
   const first = { ...withMeta, id: 'zzz-first', created_at: '2026-01-01T00:00:00.000Z', outsourced: { ...withMeta.outsourced, subcontractor: '가상 코팅 B사' } };
   const second = { ...withMeta, id: 'aaa-second', created_at: '2026-01-02T00:00:00.000Z', outsourced: { ...withMeta.outsourced, subcontractor: '가상 열처리 C사', technique: 'HEAT_TREATMENT' } };
   assert.deepEqual(plain(O.groupOutsourcedStreams([second, first]).map((group) => group.subcontractor)), ['가상 코팅 B사', '가상 열처리 C사'], '저장소 순서가 아니라 만든 순');
-  // 같은 안내 문장을 네 곳이 쓴다
-  const notice = O.OUTSOURCED_ELECTRICITY_NOTICE;
-  assert.match(notice, /외주처가 쓴 전기\(간접배출\)는 이 입력에 포함되지 않습니다/);
+  // 연료만 입력한 외주처의 전기 안내 — 전기 몫이 이미 있는 외주처는 빠진다. 보고서·모니터링 계획이 같은 함수를 쓴다.
+  assert.equal(O.outsourcedElectricityMissingNotice([]), '', '안내할 외주처가 없으면 문장도 없다');
+  const missingNotice = O.outsourcedElectricityMissingNotice(['가상 코팅 B사']);
+  assert.match(missingNotice, /외주처 「가상 코팅 B사」의 전기\(간접배출\)는 입력되지 않았습니다/);
+  assert.ok(missingNotice.includes('쓰지 않았거나 무시할 만하다면'), '단정하지 않고 확인할 일을 알린다');
+  const proc = (extra) => ({ id: 'p', period_id: 'per', ...extra });
+  assert.deepEqual(plain(O.fuelSubcontractorsWithoutElectricity([first, second], [proc({})])), ['가상 코팅 B사', '가상 열처리 C사'], '전기 몫이 없으면 모든 외주처');
+  const share = { subcontractor: ' 가상 코팅 B사 ', technique: 'ZINC_FLAKE_COATING', basis: 'RECONSTRUCTED', note: 'n', mwh: 1, same_grid: true };
+  assert.deepEqual(plain(O.fuelSubcontractorsWithoutElectricity([first, second], [proc({ outsourced_electricity: [share] })])), ['가상 열처리 C사'], '전기 몫이 있는 외주처는 빠진다(대소문자·공백 무시)');
   for (const [file, label] of [['src/lib/calculation-report.ts', '산정보고서 6.6'], ['src/lib/monitoring-plan.ts', '모니터링 계획 9번']]) {
-    assert.ok(readFileSync(file, 'utf8').includes('OUTSOURCED_ELECTRICITY_NOTICE'), `${label}이(가) 외주처 전력 안내를 쓴다`);
+    assert.ok(readFileSync(file, 'utf8').includes('outsourcedElectricityMissingNotice'), `${label}이(가) 같은 안내 함수를 쓴다`);
   }
-  assert.ok(/외주처가 쓴 전기\(간접배출\)는 아직 받지 않습니다/.test(readFileSync('src/lib/activity-workbook.ts', 'utf8')), '서식 13번 시트 제목');
-  assert.ok(readFileSync('src/lib/activity-workbook.ts', 'utf8').includes('외주처가 쓴 전기(간접배출)는 이 시트가 받지 않습니다'), '서식 안내 시트');
-  assert.ok(/new Intl\.NumberFormat\('ko-KR', \{ maximumFractionDigits: 3 \}\)\.format\(group\.total\)/.test(readFileSync('src/lib/calculation-report.ts', 'utf8')), '6.6 표의 우리 몫은 천 단위 구분');
+  const workbookSource = readFileSync('src/lib/activity-workbook.ts', 'utf8');
+  assert.ok(/외주처가 우리 부품에 쓴 연료·전기의 우리 몫을 한 줄에 하나씩 적습니다/.test(workbookSource), '서식 13번 시트 제목이 전기도 받는다고 알린다');
+  assert.ok(workbookSource.includes('외주처가 우리 부품에 쓴 전기(간접배출)도 같은 시트에 적습니다'), '서식 안내 시트');
+  assert.ok(!workbookSource.includes('전기(간접배출)는 아직 받지 않습니다') && !workbookSource.includes('이 시트가 받지 않습니다'), '「받지 않는다」는 예전 안내가 남아 있지 않다');
+  const reportSource = readFileSync('src/lib/calculation-report.ts', 'utf8');
+  assert.ok(/const number = \(value: number\) => new Intl\.NumberFormat\('ko-KR', \{ maximumFractionDigits: 3 \}\)\.format\(value\)/.test(reportSource) && reportSource.includes('number(group.total)'), '6.6 표의 우리 몫은 천 단위 구분');
 }
 
 // ── 8) 대화 모드에도 같은 외주 공정 입력(지도 4단계와 같은 컴포넌트·같은 저장 규칙) ──

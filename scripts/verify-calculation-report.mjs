@@ -157,6 +157,7 @@ const prelude = ['const { strToU8, zipSync, strFromU8, unzipSync } = fflate;'].c
     'src/lib/reference-workbooks.ts',
     'src/lib/source-stream-calculation.ts',
     // 엔진이 import 한다 — source-stream-calculation 뒤, 엔진 앞.
+    'src/lib/electricity-own-share.ts',
     'src/lib/allocation-rules.ts',
     'src/lib/measurable-heat.ts',
     'src/lib/precursor-verification.ts',
@@ -1324,7 +1325,22 @@ assertTrue(nonSteelCiteXml.includes('N2O·PFC 등 다른 대상 GHG'), '비철�
     assertTrue(xml.includes('6.6 외주 공정 몫'), '외주 행이 있으면 제6.6장');
     assertTrue(xml.includes('가상 코팅 B사') && xml.includes('아연 플레이크 코팅') && xml.includes('2025/2547 부속서 II A.3(2)(b)'), '외주처·공정 종류·방법의 근거 조항');
     assertTrue(xml.includes('36,000 Nm3'), '우리 몫과 단위(천 단위 구분)');
-    assertTrue(xml.includes('외주처가 쓴 전기(간접배출)는 이 입력에 포함되지 않습니다'), '6.6에 외주처 전력 안내');
+    assertTrue(xml.includes('외주처 「가상 코팅 B사」의 전기(간접배출)는 입력되지 않았습니다'), '6.6에 외주처 전기 미입력 안내(연료만 입력한 외주처)');
+    // 외주처 전기 몫 — 같은 외주처의 전기가 입력되면 표에 한 줄 더, 미입력 안내는 빠진다. 전기만 있어도 6.6이 나온다.
+    const elecShare = { subcontractor: '가상 코팅 B사', technique: 'ZINC_FLAKE_COATING', technique_evidence: '정류기 없음, ISO 10683', basis: 'RECONSTRUCTED', company_total: 400, note: '설비 정격×가동시간', evidence: '외주처 전력 고지서 2025', total_share: 120, mwh: 120, same_grid: true };
+    const baseProcessList = baseInput().processes;
+    const withElectricity = { ...withRow, processes: baseProcessList.map((item, index) => (index === 0 ? { ...item, electricity_mwh: item.electricity_mwh + 120, outsourced_electricity: [elecShare] } : item)) };
+    const electricXml = await xmlOf(withElectricity);
+    assertTrue(electricXml.includes('120 MWh') && electricXml.includes('>전기<'), '6.6 표에 외주처 전기 줄(MWh)');
+    assertTrue(electricXml.includes('연료와 전기') && electricXml.includes('전력 사용량(제7장)에 자체 사용량과 함께 합산'), '6.6 설명이 연료와 전기를 모두 말한다');
+    assertTrue(!electricXml.includes('전기(간접배출)는 입력되지 않았습니다'), '전기 몫이 입력된 외주처에는 미입력 안내가 없다');
+    assertTrue(reportModule.createCalculationReport(withElectricity).issues.filter((issue) => /제6\.6장/.test(issue.message)).length === 0, '갖춰진 외주 전기 몫은 게이트 경고가 없다');
+    const electricOnly = { ...baseInput(), processes: withElectricity.processes };
+    const electricOnlyXml = await xmlOf(electricOnly);
+    assertTrue(electricOnlyXml.includes('6.6 외주 공정 몫') && electricOnlyXml.includes('120 MWh'), '전기 몫만 있어도 제6.6장이 나온다');
+    assertTrue(!electricOnlyXml.includes('「(외주)」로 시작하는 연료 행'), '연료 행이 없으면 연료 문장은 없다');
+    const brokenElectric = { ...electricOnly, processes: electricOnly.processes.map((item, index) => (index === 0 ? { ...item, electricity_mwh: 10 } : item)) };
+    assertTrue(reportModule.createCalculationReport(brokenElectric).issues.some((issue) => /제6\.6장/.test(issue.message) && issue.severity === 'warn'), '외주 전기 합이 공정 전력보다 크면 게이트 경고');
     assertTrue(xml.includes('EC CBAM Questions and Answers, 2026-05-27, 4.31'), 'Q&A 4.31 근거');
     assertTrue(xml.includes('근거 갖춤'), '근거가 갖춰지면 상태');
     assertTrue(withRow.sourceStreams.length === 2 && reportModule.createCalculationReport(withRow).issues.filter((issue) => /제6\.6장/.test(issue.message)).length === 0, '갖춰진 외주 몫은 게이트 경고가 없다');

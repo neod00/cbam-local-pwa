@@ -31,6 +31,7 @@ import {
     SHEET_ELECTRICITY_SOURCES,
     SHEET_OUTSOURCED,
     OUTSOURCED_BASIS_CHOICES,
+    OUTSOURCED_ENERGY_CHOICES,
     OUTSOURCED_TECHNIQUE_CHOICES,
     VERIFICATION_CHOICES,
     YES,
@@ -79,7 +80,7 @@ import type { ImportedDefaultValueReference } from './reference-workbooks';
 import { getSectorParameters } from './sector-parameters';
 import { createSourceStreamValidationErrors, firstSourceStreamError, GUIDED_STREAM_KINDS, type GuidedStreamKind } from './source-stream-input';
 import { looksLikeExcludedStepFuel, STEEL_BOUNDARY_ANCHOR } from './steel-boundary';
-import { buildOutsourcedStreamDrafts, computeOutsourcedShare, parseOutsourcedEquipment, validateOutsourcedInfo } from './outsourced-process';
+import { buildOutsourcedElectricityUpdates, buildOutsourcedStreamDrafts, computeOutsourcedShare, outsourcedElectricityKey, parseOutsourcedEquipment, validateOutsourcedInfo } from './outsourced-process';
 
 export { STEEL_BOUNDARY_ANCHOR };
 
@@ -1012,13 +1013,13 @@ export async function importActivityWorkbook(
         const tell = (level: ActivityImportIssue['level'], message: string) => note(level, SHEET_OUTSOURCED, `${subcontractor || '(외주처 이름 없음)'}: ${message}`, row.row);
         const technique = labelValue(OUTSOURCED_TECHNIQUE_CHOICES, row.values.technique);
         const basis = labelValue(OUTSOURCED_BASIS_CHOICES, row.values.basis);
+        const energy = row.values.energy ? labelValue(OUTSOURCED_ENERGY_CHOICES, row.values.energy) : 'FUEL';
         const choice = FUEL_KIND_CHOICES.find((item) => key(item.label) === key(row.values.fuelKind) || key(item.label.split(' (')[0]) === key(row.values.fuelKind));
         const kind = GUIDED_STREAM_KINDS.find((item) => item.key === choice?.key);
         if (!subcontractor) { tell('error', '외주처 이름이 비어 있어 넣지 못했습니다.'); continue; }
         if (!technique) { tell('error', `어떤 공정인지 「${row.values.technique ?? '빈 칸'}」을(를) 목록에서 찾지 못했습니다. 목록에서 골라 주세요.`); continue; }
         if (!basis) { tell('error', `우리 몫을 정한 방법 「${row.values.basis ?? '빈 칸'}」을(를) 목록에서 찾지 못했습니다. 목록에서 골라 주세요.`); continue; }
-        if (!kind || !choice) { tell('error', `외주처가 쓰는 연료 「${row.values.fuelKind ?? '빈 칸'}」을(를) 목록에서 찾지 못했습니다. 목록에서 골라 주세요.`); continue; }
-        if (kind.litres) { tell('error', '리터 단위 연료는 외주 공정 몫으로 받지 않습니다 — 외주처 고지서의 Nm³·t 단위 연료를 고르세요.'); continue; }
+        if (!energy) { tell('error', `외주처가 쓴 에너지 「${row.values.energy}」을(를) 목록(연료·전기)에서 찾지 못했습니다. 목록에서 골라 주세요.`); continue; }
         const numbers = {
             line_quantity: numberOf(row.values.lineQuantity),
             our_throughput_t: numberOf(row.values.ourThroughput),
@@ -1062,6 +1063,43 @@ export async function importActivityWorkbook(
         // 전기도금은 경계 밖이라 넣지 않는 것이 맞다 — 자료가 빠진 것이 아니므로 「넣지 못함」이 아니라 참고로 알린다(제출 화면이 「자료가 덜 들어왔다」고 하지 않게; 씨밤이 run41).
         if (technique === 'ELECTROPLATING') { tell('info', `${validation.errors[0]} 그래서 이 줄은 넣지 않았고 배출에도 들어가지 않습니다(정상).`); continue; }
         if (validation.errors.length > 0) { tell('error', validation.errors[0]); continue; }
+        if (energy === 'ELECTRICITY') {
+            // 외주처 전기 — 우리 공정의 전력 사용량에 더하고 몫은 공정 기록에 따로 남긴다(지도 4단계 「외주사가 우리 부품에 쓴 전기」와 같은 계산·검사·저장).
+            const sameGrid = yesNo(row.values.sameGrid);
+            if (sameGrid === undefined) { tell('error', '전기는 「외주처도 국내(같은 나라) 전력망 전기를 쓰나요?」를 「예」로 골라야 넣습니다 — 전력 배출계수가 하나라서 같은 나라일 때만 받습니다.'); continue; }
+            if (sameGrid === 'NO') { tell('error', '외주처가 다른 나라 전력망 전기를 쓰면 이 서식으로 받지 않습니다 — 계수가 달라서 검증인과 처리 방식을 따로 정하세요.'); continue; }
+            if (numbers.ncv !== undefined || numbers.factor !== undefined || row.values.fuelKind) tell('info', '전기 줄에서는 연료 종류·순발열량·배출계수 칸을 쓰지 않습니다(무시했습니다). 전력 배출계수는 공정의 것을 씁니다.');
+            // 서식의 설비 소비율 자리에는 정격 전력(kW)을 적는다 → MWh/h로 환산(지도 입력과 같다)
+            const electricInfo: OutsourcedProcessInfo = { ...info, equipment: info.equipment?.map((item) => ({ ...item, rate_per_h: item.rate_per_h / 1000 })) };
+            const electricResult = computeOutsourcedShare(electricInfo, 'electricity');
+            if (!electricResult.ok) { tell('error', electricResult.reason); continue; }
+            const electricWeights = targets.map((item) => Math.max(item.output_mass_t, 0));
+            const electricWeightSum = electricWeights.reduce((sum, value) => sum + value, 0);
+            const wanted = { ...electricInfo, mwh: electricResult.share, same_grid: true, total_share: electricResult.share };
+            if (targets.some((item) => (item.outsourced_electricity ?? []).some((share) => outsourcedElectricityKey(share, item.period_id) === outsourcedElectricityKey(wanted, item.period_id)))) { tell('info', '같은 외주 전기 몫이 이 공정에 이미 있어 건너뛰었습니다.'); continue; }
+            const built = buildOutsourcedElectricityUpdates(targets, {
+                info: electricInfo,
+                sameGrid: true,
+                total: electricResult.share,
+                targets: targets.map((item, index) => ({ processId: item.id, fraction: electricWeightSum > 0 ? electricWeights[index] / electricWeightSum : 1 / targets.length })),
+            });
+            if (!built.ok) { tell('error', built.reason); continue; }
+            for (const text of electricResult.warnings) tell('warning', text);
+            for (const text of validation.reviews) tell('warning', text);
+            // 외주 전기만 있는 공정은 전력 배출계수가 비어 있을 수 있다 — 같은 공장의 다른 공정 계수를 이어 준다(공장 하나의 전력망이므로). 없으면 점검 OUTE05가 알린다.
+            const reference = freshList().find((item) => item.electricity_ef_tco2e_per_mwh > 0 && (item.electricity_mwh - (item.outsourced_electricity ?? []).reduce((sum, share) => sum + share.mwh, 0)) > 0);
+            for (const update of built.updates) {
+                const withFactor = !(update.electricity_ef_tco2e_per_mwh > 0) && reference
+                    ? { ...update, electricity_ef_tco2e_per_mwh: reference.electricity_ef_tco2e_per_mwh, electricity_ef_source: reference.electricity_ef_source }
+                    : update;
+                await saveProcess(withFactor);
+                if (!(withFactor.electricity_ef_tco2e_per_mwh > 0)) tell('warning', `「${withFactor.name}」의 전력 배출계수가 비어 있어 외주 전기가 0 배출로 계산됩니다. 1_사업장의 전력 배출계수를 적거나 지도 5단계에서 넣으세요.`);
+            }
+            tell('info', `전기 우리 몫 ${fmt(electricResult.share)} MWh를 ${targets.map((item) => `「${item.name}」`).join(', ')}의 전력 사용량에 더했습니다(${electricResult.formula}).`);
+            continue;
+        }
+        if (!kind || !choice) { tell('error', `외주처가 쓰는 연료 「${row.values.fuelKind ?? '빈 칸'}」을(를) 목록에서 찾지 못했습니다. 목록에서 골라 주세요.`); continue; }
+        if (kind.litres) { tell('error', '리터 단위 연료는 외주 공정 몫으로 받지 않습니다 — 외주처 고지서의 Nm³·t 단위 연료를 고르세요.'); continue; }
         const result = computeOutsourcedShare(info);
         if (!result.ok) { tell('error', result.reason); continue; }
         const weights = targets.map((item) => Math.max(item.output_mass_t, 0));

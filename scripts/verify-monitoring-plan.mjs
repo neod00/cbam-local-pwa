@@ -134,9 +134,19 @@ assert.ok(readFileSync('src/lib/delivery-package.ts', 'utf8').includes('monitori
   const withOutsourced = P.buildMonitoringPlan({ ...input, sourceStreams: [...store.source_streams, row] });
   const outsourcedText = text(withOutsourced.sections.find((item) => item.no === 9));
   assert.match(outsourcedText, /외주 공정: 철강제품 경계 안의 공정을 외주사에서 하고 물건이 돌아오면 우리 사업장에서 일어난 것으로 다루며\(EC CBAM Q&A 2026-05-27, 4\.31\)/);
-  assert.match(outsourcedText, /가상 코팅 B사 — 아연 플레이크 코팅\(다크로·지오메트 등, 비전해\): 우리 몫 36,000 Nm3, 방법 「설비 소비율 × 가동시간으로 재구성 \(고지서 총량에 맞춤\)」/);
+  assert.match(outsourcedText, /가상 코팅 B사 — 아연 플레이크 코팅\(다크로·지오메트 등, 비전해\) 연료: 우리 몫 36,000 Nm3, 방법 「설비 소비율 × 가동시간으로 재구성 \(고지서 총량에 맞춤\)」/);
   assert.match(outsourcedText, /근거: 사례 A\. 증빙: 외주처 가스 고지서 2025\./);
   assert.match(outsourcedText, /부속서 II A\.5 22\(g\)/, '외주 공정의 통제 문장');
+  assert.match(outsourcedText, /외주처 「가상 코팅 B사」의 전기\(간접배출\)는 입력되지 않았습니다/, '연료만 입력한 외주처는 전기 미입력 안내');
+  const elecShare = { subcontractor: '가상 코팅 B사', technique: 'ZINC_FLAKE_COATING', basis: 'RECONSTRUCTED', company_total: 400, note: '설비 정격×가동시간', evidence: '외주처 전력 고지서 2025', total_share: 120, mwh: 120, same_grid: true };
+  const withElectric = P.buildMonitoringPlan({ ...input, sourceStreams: [...store.source_streams, row], processes: input.processes.map((item, index) => (index === 0 ? { ...item, electricity_mwh: item.electricity_mwh + 120, outsourced_electricity: [elecShare] } : item)) });
+  const electricText = text(withElectric.sections.find((item) => item.no === 9));
+  assert.match(electricText, /연료와 전기의 몫을 해당 생산공정의 연료 배출원·전력 사용량으로 넣습니다/);
+  assert.match(electricText, /가상 코팅 B사 — 아연 플레이크 코팅\(다크로·지오메트 등, 비전해\) 전기: 우리 몫 120 MWh\(같은 나라 계통 전력, 공정의 전력 배출계수 사용\)/);
+  assert.match(electricText, /근거: 설비 정격×가동시간\. 증빙: 외주처 전력 고지서 2025\./);
+  assert.ok(!/전기\(간접배출\)는 입력되지 않았습니다/.test(electricText), '전기가 입력된 외주처에는 미입력 안내가 없다');
+  const onlyElectric = P.buildMonitoringPlan({ ...input, processes: input.processes.map((item, index) => (index === 0 ? { ...item, electricity_mwh: item.electricity_mwh + 120, outsourced_electricity: [elecShare] } : item)) });
+  assert.match(text(onlyElectric.sections.find((item) => item.no === 9)), /외주 공정:/, '전기 몫만 있어도 외주 문단이 나온다');
   const noEvidence = P.buildMonitoringPlan({ ...input, sourceStreams: [...store.source_streams, { ...row, outsourced: { ...row.outsourced, evidence: '' } }] });
   assert.match(text(noEvidence.sections.find((item) => item.no === 9)), /증빙: .*작성 필요/, '비어 있는 증빙은 지어내지 않고 작성 필요');
 }

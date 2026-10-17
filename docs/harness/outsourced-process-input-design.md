@@ -104,7 +104,7 @@ export interface OutsourcedProcessInfo {
 | 2 | 지도 4단계 · 대화 모드 입력 화면 | 화면 확인, 같은 저장 함수 사용 |
 | 3 | 서식 시트 13, 가져오기, 구매 강재 시트 안내 | 서식 시험(`verify-activity-workbook`), 기존 서식 회귀 |
 | 4 | 산정보고서 표 · 모니터링 계획 · 할 일 항목 | 보고서 시험 |
-| 5(후속) | 외주처 전력(간접배출) — 같은 구조로 `electricity_mwh`에 더한다 | — |
+| 5(구현됨 2026-10-17) | 외주처 전력(간접배출) — 합계는 `electricity_mwh`, 외주 몫은 공정의 `outsourced_electricity`. 설계: `outsourced-electricity-design.md` | PR #164~ |
 
 각 단계는 독립 PR로 올린다. 1단계만으로도 계산·저장·점검은 쓸 수 있다(입력은 개발자 화면 없이는 불가하므로 2단계와 한 묶음으로 보여 줄 수도 있다).
 
