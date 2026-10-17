@@ -5,6 +5,7 @@ import { productWithCn } from '@/lib/product-label';
 import { ElectricitySplit } from '@/components/guided/ElectricitySplit';
 import { FuelSplit } from '@/components/guided/FuelSplit';
 import { SharedHeat } from '@/components/guided/SharedHeat';
+import { OutsourcedProcess } from '@/components/guided/OutsourcedProcess';
 import { Button } from '@/components/ui';
 import { calculateLocalResults } from '@/lib/calculation-engine';
 import { summarizeEnergySplits } from '@/lib/energy-split-summary';
@@ -1072,6 +1073,7 @@ export function TalkWorkspace() {
                         <ElectricitySplit processes={periodProcesses} results={data.results} onApplied={reload} />
                         <FuelSplit processes={periodProcesses} sourceStreams={data.sourceStreams} results={data.results} onApplied={reload} />
                         <SharedHeat processes={periodProcesses} sourceStreams={data.sourceStreams} onApplied={reload} />
+                        <OutsourcedProcess processes={periodProcesses} sourceStreams={data.sourceStreams} precursors={data.precursors} results={data.results} onApplied={reload} />
                     </div>
                 </section>
             )}
