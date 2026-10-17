@@ -52,7 +52,7 @@ assert.ok(settingsPage.includes('업데이트 확인은 배포 정책과 공지�
 assert.ok(settingsPage.includes('CBAM 입력자료, EU 템플릿, .cbam 백업 파일은 전송하지 않습니다'), 'settings should repeat the update data boundary');
 
 assert.ok(releaseNotesPage.includes('CBAM Local v0.1.0'), 'release notes page should document the current release');
-assert.ok(releaseNotesPage.includes('공식 EU 템플릿은 앱에 내장하지 않으며'), 'release notes should restate official template handling');
+assert.ok(releaseNotesPage.includes('공식 EU 템플릿(2024-12-13판)은 편의용 사본이 내장되어 있습니다'), 'release notes should restate official template handling (bundled convenience copy)');
 assert.ok(releaseNotesPage.includes('CBAM 계산 데이터는 수집하지 않습니다'), 'release notes should restate update data boundary');
 
 for (const required of ['optional', 'recommended', 'required', 'service worker', 'IndexedDB']) {
