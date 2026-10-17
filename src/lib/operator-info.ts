@@ -40,7 +40,7 @@ export const OPERATOR_INFO: OperatorInfo = {
     business_registration_no: '없음',
     address: '비공개',
     contact_email: 'openbrain.main@gmail.com',
-    privacy_officer: 'OpenBrain Inc.',
+    privacy_officer: 'OpenBrain Inc. 대표',
     governing_law: '대한민국 법',
     jurisdiction: '서울중앙지방법원',
     terms_effective_date: '2026-11-01',
